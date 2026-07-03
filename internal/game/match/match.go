@@ -345,6 +345,11 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 		return
 	}
 
+	// freeze_bomb: frozen players cannot shoot, they can only EndTurn
+	if HasEffect(player, "freeze") {
+		return
+	}
+
 	charConfig, exists := gamedata.Data.Characters[player.CharacterID]
 	if !exists {
 		return
@@ -355,16 +360,32 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 		return
 	}
 
+	// Determine projectile origin, angle, and power — may be overridden by air_strike
+	shootOrigin := player.Position
+	shootAngle := action.Angle
+	shootPower := action.Power
+
+	// air_strike: fire from top of map straight down at TargetX
+	if HasEffect(player, "air_strike") {
+		shootOrigin = Vector2{X: action.TargetX, Y: 0}
+		shootAngle = 270.0  // straight down in Y-down coords (270° = negative Y direction conventionally, handled by sin)
+		shootPower = 80.0   // fixed high power for airstrike
+	}
+
+	// drill_bomb: projectile passes through first terrain hit
+	drillMode := HasEffect(player, "drill_bomb")
+
 	// 1. Simulate Projectile Trajectory
 	result := SimulateProjectile(
 		player.PlayerID,
-		player.Position,
-		action.Angle,
-		action.Power,
+		shootOrigin,
+		shootAngle,
+		shootPower,
 		weaponConfig,
 		m.State.Wind,
 		m.Terrain,
 		m.State.Players,
+		drillMode,
 	)
 
 	// Calculate base damage multiplication factor (e.g. from Power Shot item)
@@ -445,6 +466,18 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 					})
 				}
 			}
+		}
+	}
+
+	// spider_net: apply "net" effect (reduces MoveEnergy to 50) to all players hit by the explosion
+	if HasEffect(player, "spider_net") && result.HitPlayerID != "" {
+		if target, ok := m.State.Players[result.HitPlayerID]; ok && target.IsAlive {
+			ApplyStatusEffect(target, StatusEffect{
+				EffectID:       "net",
+				TargetPlayerID: target.PlayerID,
+				DurationTurn:   1,
+				SourcePlayerID: player.PlayerID,
+			})
 		}
 	}
 

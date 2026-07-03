@@ -22,6 +22,7 @@ func SimulateProjectile(
 	wind WindState,
 	terrain *Terrain,
 	players map[string]*BattlePlayerState,
+	drillMode bool,
 ) *ProjectileResult {
 	// 1. Calculate initial velocity vector
 	// Math angles in standard coordinates where X is right, Y is up, but here Y is down.
@@ -58,6 +59,7 @@ func SimulateProjectile(
 	maxDuration := 6.0 // max 6 seconds flight time
 	hitPlayerID := ""
 	var explosionPoint *Vector2
+	terrainPassCount := 0 // tracks how many terrain collisions have been skipped (drill_bomb)
 
 	for t < maxDuration {
 		// Record current step
@@ -104,9 +106,14 @@ func SimulateProjectile(
 
 		// Check terrain collision
 		if terrain.IsSolid(position.X, position.Y) {
-			expPt := position
-			explosionPoint = &expPt
-			break
+			if drillMode && terrainPassCount == 0 {
+				// drill_bomb: pass through the first terrain hit
+				terrainPassCount++
+			} else {
+				expPt := position
+				explosionPoint = &expPt
+				break
+			}
 		}
 
 		// Check out of bounds (left, right, bottom)

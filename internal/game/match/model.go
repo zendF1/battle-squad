@@ -52,11 +52,12 @@ type MatchState struct {
 }
 
 type ShootAction struct {
-	Angle           float64 `json:"angle"`
-	Power           float64 `json:"power"`
-	ActionMode      string  `json:"actionMode"` // weapon, skill, item
-	ItemID          *string `json:"itemId,omitempty"`
-	ClientTimestamp int64   `json:"clientTimestamp"`
+	Angle           float64  `json:"angle"`
+	Power           float64  `json:"power"`
+	ActionMode      string   `json:"actionMode"` // weapon, skill, item
+	ItemID          *string  `json:"itemId,omitempty"`
+	TargetX         float64  `json:"targetX,omitempty"` // used by air_strike to specify drop column
+	ClientTimestamp int64    `json:"clientTimestamp"`
 }
 
 type MoveAction struct {

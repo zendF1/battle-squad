@@ -24,6 +24,11 @@ func ApplyStatusEffect(player *BattlePlayerState, effect StatusEffect) {
 		}
 	case "freeze":
 		player.MoveEnergy = 0
+	case "net":
+		// net slows the target: MoveEnergy capped at 50 on their next turn
+		if player.MoveEnergy > 50 {
+			player.MoveEnergy = 50
+		}
 	}
 }
 
