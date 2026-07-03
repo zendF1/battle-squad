@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"battle-squad/internal/api/economy"
@@ -296,7 +297,38 @@ func (r *Room) processSelectItems(client *ws.Client, items []string) {
 		return // max 3 items
 	}
 
-	// In production, we'd verify item ownership/availability. For MVP we trust.
+	// If items are selected, validate ownership against inventory_items
+	if len(items) > 0 {
+		query := `
+			SELECT item_id FROM inventory_items
+			WHERE player_id = $1 AND item_id = ANY($2) AND quantity > 0 AND (expires_at IS NULL OR expires_at > NOW())
+		`
+		rows, err := r.db.Pool.Query(context.Background(), query, client.PlayerID, items)
+		if err != nil {
+			observability.Log.Error().Err(err).Str("playerId", client.PlayerID).Msg("failed to query inventory for item validation")
+			r.sendError(client, "Failed to validate items")
+			return
+		}
+		defer rows.Close()
+
+		ownedSet := make(map[string]bool)
+		for rows.Next() {
+			var itemID string
+			if err := rows.Scan(&itemID); err != nil {
+				continue
+			}
+			ownedSet[itemID] = true
+		}
+		rows.Close()
+
+		for _, itemID := range items {
+			if !ownedSet[itemID] {
+				r.sendError(client, fmt.Sprintf("You do not own item: %s", itemID))
+				return
+			}
+		}
+	}
+
 	for idx, p := range r.State.Players {
 		if p.PlayerID == client.PlayerID {
 			r.State.Players[idx].Items = items
@@ -304,8 +336,7 @@ func (r *Room) processSelectItems(client *ws.Client, items []string) {
 		}
 	}
 
-	r.broadcastRoomUpdated()
-}
+	r.broadcastRoomUpdated()}
 
 func (r *Room) processReady(client *ws.Client) {
 	for idx, p := range r.State.Players {
@@ -338,6 +369,14 @@ func (r *Room) processStartMatch(client *ws.Client) {
 		if !p.IsHost && !p.IsReady {
 			return
 		}
+	}
+
+	// Re-verify item ownership and reserve items for all players in a transaction
+	matchID := generateID()
+	if err := r.reservePlayerItems(matchID); err != nil {
+		observability.Log.Error().Err(err).Str("roomId", r.ID).Msg("failed to reserve player items before match start")
+		r.sendError(client, "Failed to start match: "+err.Error())
+		return
 	}
 
 	// Transition status to in_match
@@ -382,7 +421,7 @@ func (r *Room) processStartMatch(client *ws.Client) {
 
 	// Instantiate match engine
 	r.match = match.NewMatch(
-		generateID(),
+		matchID,
 		r.ID,
 		r.State.Mode,
 		r.State.MapID,
@@ -399,6 +438,70 @@ func (r *Room) processStartMatch(client *ws.Client) {
 
 	// Notify room hub of status change
 	r.hub.SyncRoomState(context.Background(), &r.State)
+}
+
+func (r *Room) sendError(client *ws.Client, message string) {
+	payload, _ := json.Marshal(map[string]string{"error": message})
+	select {
+	case client.Send <- ws.Message{Event: "Error", Data: payload}:
+	default:
+	}
+}
+
+// reservePlayerItems verifies all players own their selected items and creates reservations
+// atomically. If any item is not owned or reservation fails, the transaction is rolled back.
+func (r *Room) reservePlayerItems(matchID string) error {
+	ctx := context.Background()
+	tx, err := r.db.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	for _, p := range r.State.Players {
+		if len(p.Items) == 0 {
+			continue
+		}
+
+		// Re-verify ownership
+		ownershipQuery := `
+			SELECT item_id FROM inventory_items
+			WHERE player_id = $1 AND item_id = ANY($2) AND quantity > 0 AND (expires_at IS NULL OR expires_at > NOW())
+		`
+		rows, err := tx.Query(ctx, ownershipQuery, p.PlayerID, p.Items)
+		if err != nil {
+			return fmt.Errorf("failed to verify items for player %s: %w", p.PlayerID, err)
+		}
+		ownedSet := make(map[string]bool)
+		for rows.Next() {
+			var itemID string
+			if scanErr := rows.Scan(&itemID); scanErr == nil {
+				ownedSet[itemID] = true
+			}
+		}
+		rows.Close()
+
+		for _, itemID := range p.Items {
+			if !ownedSet[itemID] {
+				return fmt.Errorf("player %s does not own item %s", p.PlayerID, itemID)
+			}
+		}
+
+		// Reserve each item (quantity 1 per selection)
+		for _, itemID := range p.Items {
+			reservationID := generateID()
+			reserveQuery := `
+				INSERT INTO inventory_reservations (reservation_id, player_id, match_id, item_id, quantity, status)
+				VALUES ($1, $2, $3, $4, 1, 'reserved')
+			`
+			_, err := tx.Exec(ctx, reserveQuery, reservationID, p.PlayerID, matchID, itemID)
+			if err != nil {
+				return fmt.Errorf("failed to reserve item %s for player %s: %w", itemID, p.PlayerID, err)
+			}
+		}
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (r *Room) broadcastRoomUpdated() {

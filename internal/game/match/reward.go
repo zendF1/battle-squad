@@ -41,12 +41,51 @@ func ProcessMatchRewards(
 	mode string,
 	mapID string,
 	stats map[string]*PlayerStats,
+	playerItems map[string][]string,
 ) (map[string]RewardResult, error) {
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
+
+	// Consume item reservations for all players inside this transaction
+	for playerID, items := range playerItems {
+		for _, itemID := range items {
+			// Get reservation
+			var reservationID string
+			var quantity int
+			querySelect := `
+				SELECT reservation_id, quantity
+				FROM inventory_reservations
+				WHERE player_id = $1 AND match_id = $2 AND item_id = $3 AND status = 'reserved'
+				LIMIT 1
+			`
+			err := tx.QueryRow(ctx, querySelect, playerID, matchID, itemID).Scan(&reservationID, &quantity)
+			if err != nil {
+				// No reservation found — skip silently (item may not have been reserved)
+				continue
+			}
+
+			// Deduct from inventory
+			_, err = tx.Exec(ctx,
+				`UPDATE inventory_items SET quantity = quantity - $1 WHERE player_id = $2 AND item_id = $3`,
+				quantity, playerID, itemID,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deduct item %s for player %s: %w", itemID, playerID, err)
+			}
+
+			// Mark reservation as consumed
+			_, err = tx.Exec(ctx,
+				`UPDATE inventory_reservations SET status = 'consumed', updated_at = CURRENT_TIMESTAMP WHERE reservation_id = $1`,
+				reservationID,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to mark reservation consumed for item %s player %s: %w", itemID, playerID, err)
+			}
+		}
+	}
 
 	results := make(map[string]RewardResult)
 

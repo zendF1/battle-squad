@@ -565,7 +565,15 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 			}
 		}
 
-		rewards, err := ProcessMatchRewards(ctx, m.db, m.economyRepo, m.State.MatchID, m.State.Mode, m.State.MapID, stats)
+		// Collect per-player items for reservation consumption
+		playerItems := make(map[string][]string)
+		for _, p := range m.State.Players {
+			if len(p.Items) > 0 {
+				playerItems[p.PlayerID] = p.Items
+			}
+		}
+
+		rewards, err := ProcessMatchRewards(ctx, m.db, m.economyRepo, m.State.MatchID, m.State.Mode, m.State.MapID, stats, playerItems)
 		if err != nil {
 			observability.Log.Error().Err(err).Msg("failed to process match rewards")
 		}
@@ -621,6 +629,41 @@ func (m *Match) updateWind() {
 
 func (m *Match) endAsNoContest() {
 	m.State.Status = "ended"
+
+	// Release all item reservations so players get their items back
+	ctx := context.Background()
+	tx, err := m.db.Pool.Begin(ctx)
+	if err != nil {
+		observability.Log.Error().Err(err).Str("matchId", m.State.MatchID).Msg("failed to begin tx for reservation release")
+	} else {
+		releaseOk := true
+		for _, p := range m.State.Players {
+			for _, itemID := range p.Items {
+				_, execErr := tx.Exec(ctx,
+					`UPDATE inventory_reservations SET status = 'released', updated_at = CURRENT_TIMESTAMP
+					 WHERE player_id = $1 AND match_id = $2 AND item_id = $3 AND status = 'reserved'`,
+					p.PlayerID, m.State.MatchID, itemID,
+				)
+				if execErr != nil {
+					observability.Log.Error().Err(execErr).
+						Str("matchId", m.State.MatchID).
+						Str("playerId", p.PlayerID).
+						Str("itemId", itemID).
+						Msg("failed to release item reservation")
+					releaseOk = false
+				}
+			}
+		}
+		if releaseOk {
+			if commitErr := tx.Commit(ctx); commitErr != nil {
+				observability.Log.Error().Err(commitErr).Str("matchId", m.State.MatchID).Msg("failed to commit reservation release")
+				tx.Rollback(ctx)
+			}
+		} else {
+			tx.Rollback(ctx)
+		}
+	}
+
 	payload, _ := json.Marshal(map[string]interface{}{
 		"winningTeam": 0,
 		"result":      "no_contest",
