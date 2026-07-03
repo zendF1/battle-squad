@@ -6,8 +6,10 @@
   terrainLayers:
     - type: dirt
       hardness: 20
+      yRange: [550, 750]
     - type: rock
       hardness: 60
+      yRange: [750, 900]
   spawnPoints:
     - x: 200
       y: 400
@@ -26,8 +28,10 @@
   terrainLayers:
     - type: ice
       hardness: 10
+      yRange: [450, 650]
     - type: rock
       hardness: 70
+      yRange: [650, 900]
   spawnPoints:
     - x: 300
       y: 350
@@ -44,10 +48,12 @@
   height: 900
   defaultWindPowerRange: [0, 2]
   terrainLayers:
-    - type: steel
+    - type: lava
       hardness: 90
-    - type: rock
-      hardness: 60
+      yRange: [700, 900]
+    - type: fragile
+      hardness: 30
+      yRange: [500, 700]
   spawnPoints:
     - x: 250
       y: 300

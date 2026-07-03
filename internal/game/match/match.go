@@ -237,6 +237,30 @@ func (m *Match) startTurn(ctx context.Context) {
 	UpdatePlayerStatusEffects(player)
 	TickPlayerStatusEffects(player)
 
+	// Lava terrain: deal 5 damage to the current player at the start of their turn
+	terrainType := m.Terrain.GetTerrainTypeAt(player.Position.X, player.Position.Y)
+	if terrainType == "lava" {
+		lavaDamage := 5
+		player.HP -= lavaDamage
+		if player.HP <= 0 {
+			player.HP = 0
+			player.IsAlive = false
+		}
+		lavaPayload, _ := json.Marshal([]map[string]interface{}{
+			{
+				"playerId": player.PlayerID,
+				"damage":   lavaDamage,
+				"hp":       player.HP,
+				"isAlive":  player.IsAlive,
+				"type":     "lava",
+			},
+		})
+		m.broadcast(ws.Message{
+			Event: "PlayerDamaged",
+			Data:  lavaPayload,
+		})
+	}
+
 	// Update wind: direction (-1 to 1), power (0 to 4)
 	m.updateWind()
 
@@ -336,9 +360,20 @@ func (m *Match) processMove(ctx context.Context, client *ws.Client, action MoveA
 
 	player.MoveEnergy -= energyCost
 	player.Position.X = action.TargetX
-	
+
 	// Landing check Y position on terrain
 	player.Position.Y = m.Terrain.GetLandingY(player.Position.X, player.Position.Y)
+
+	// Ice terrain: slide 50px in the movement direction
+	iceTerrainType := m.Terrain.GetTerrainTypeAt(player.Position.X, player.Position.Y)
+	if iceTerrainType == "ice" {
+		slideDir := 50.0
+		if action.TargetX < player.Position.X {
+			slideDir = -50.0
+		}
+		player.Position.X += slideDir
+		player.Position.Y = m.Terrain.GetLandingY(player.Position.X, player.Position.Y)
+	}
 
 	// Broadcast PlayerMoved
 	payload, _ := json.Marshal(map[string]interface{}{
@@ -624,6 +659,11 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 	// 2. Resolve hit and damage
 	var damagedPlayers []map[string]interface{}
 	if result.ExplosionPoint != nil {
+		// Fragile terrain: double the explosion radius
+		if m.Terrain.GetTerrainTypeAt(result.ExplosionPoint.X, result.ExplosionPoint.Y) == "fragile" {
+			result.ExplosionRadius *= 2
+		}
+
 		// Destroy terrain
 		m.Terrain.DestroyCircle(result.ExplosionPoint.X, result.ExplosionPoint.Y, result.ExplosionRadius)
 		result.TerrainDestroyed = true
