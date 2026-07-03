@@ -34,6 +34,7 @@ type Match struct {
 	lastActivity time.Time
 	ctx          context.Context
 	cancel       context.CancelFunc
+	el           *EventLogger
 }
 
 type RoomHubInterface interface {
@@ -104,6 +105,7 @@ func NewMatch(
 		lastActivity: time.Now(),
 		ctx:          ctx,
 		cancel:       cancel,
+		el:           NewEventLogger(matchID, db),
 	}
 }
 
@@ -120,6 +122,7 @@ func (m *Match) Run() {
 		}
 	}()
 
+	m.el.Start(m.ctx)
 	m.lastActivity = time.Now()
 	m.broadcastMatchStarted()
 
@@ -184,23 +187,33 @@ func (m *Match) handleEvent(ev matchEvent) {
 
 	log.Debug().Str("event", msg.Event).Str("matchId", m.State.MatchID).Msg("processing match event")
 
+	// Resolve the acting player ID — bots send events with a nil client.
+	actorID := m.State.CurrentPlayerID
+	if client != nil {
+		actorID = client.PlayerID
+	}
+
 	switch msg.Event {
 	case "Move":
 		var action MoveAction
 		if err := json.Unmarshal(msg.Data, &action); err == nil {
+			m.el.Log("Move", actorID, action)
 			m.processMove(ev.ctx, client, action)
 		}
 	case "Shoot":
 		var action ShootAction
 		if err := json.Unmarshal(msg.Data, &action); err == nil {
+			m.el.Log("Shoot", actorID, action)
 			m.processShoot(ev.ctx, client, action)
 		}
 	case "UseItem":
 		var action UseItemAction
 		if err := json.Unmarshal(msg.Data, &action); err == nil {
+			m.el.Log("UseItem", actorID, action)
 			m.processUseItem(ev.ctx, client, action)
 		}
 	case "EndTurn":
+		m.el.Log("EndTurn", actorID, nil)
 		m.processEndTurn(ev.ctx, client)
 	case "Reconnect":
 		m.processReconnect(ev.ctx, client)
@@ -560,6 +573,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 		if len(damagedPlayers) > 0 {
 			payloadDamaged, _ := json.Marshal(damagedPlayers)
 			m.broadcast(ws.Message{Event: "PlayerDamaged", Data: payloadDamaged})
+			m.el.Log("PlayerDamaged", "", damagedPlayers)
 		}
 
 		m.checkWinCondition(ctx)
@@ -716,6 +730,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 			Event: "PlayerDamaged",
 			Data:  payloadDamaged,
 		})
+		m.el.Log("PlayerDamaged", "", damagedPlayers)
 	}
 
 	// 3. Complete shooting event, check win conditions, end turn
@@ -842,6 +857,10 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 			Event: "MatchEnded",
 			Data:  payload,
 		})
+		m.el.Log("MatchEnded", "", map[string]interface{}{
+			"winningTeam": winningTeam,
+			"rewards":     rewards,
+		})
 
 		// Cleanup connections
 		for _, client := range m.Clients {
@@ -965,4 +984,5 @@ func (m *Match) broadcastMatchStarted() {
 		Event: "MatchStarted",
 		Data:  payload,
 	})
+	m.el.Log("MatchStarted", "", m.State)
 }
