@@ -386,12 +386,41 @@ func (r *Room) processStartMatch(client *ws.Client) {
 	// Launch Match engine
 	observability.Log.Info().Str("roomId", r.ID).Msg("trigger start match - launch match engine")
 
+	// Build team spawn point queues from map config
+	team1Spawns := []gamedata.SpawnPoint{}
+	team2Spawns := []gamedata.SpawnPoint{}
+	if mapCfg, ok := gamedata.Data.Maps[r.State.MapID]; ok {
+		mid := len(mapCfg.SpawnPoints) / 2
+		for i, sp := range mapCfg.SpawnPoints {
+			if i < mid {
+				team1Spawns = append(team1Spawns, sp)
+			} else {
+				team2Spawns = append(team2Spawns, sp)
+			}
+		}
+	}
+	// Fallback defaults if map not found or no spawn points
+	if len(team1Spawns) == 0 {
+		team1Spawns = append(team1Spawns, gamedata.SpawnPoint{X: 200, Y: 0})
+	}
+	if len(team2Spawns) == 0 {
+		team2Spawns = append(team2Spawns, gamedata.SpawnPoint{X: 1400, Y: 0})
+	}
+	team1Idx := 0
+	team2Idx := 0
+
 	matchPlayers := []*match.BattlePlayerState{}
 	for _, p := range r.State.Players {
-		// Spawn positions: Team 1 on left side, Team 2 on right side
-		spawnX := 200.0
+		// Assign spawn position from map config spawn points per team
+		var spawnPos match.Vector2
 		if p.TeamID == 2 {
-			spawnX = 1400.0
+			sp := team2Spawns[team2Idx%len(team2Spawns)]
+			spawnPos = match.Vector2{X: sp.X, Y: sp.Y}
+			team2Idx++
+		} else {
+			sp := team1Spawns[team1Idx%len(team1Spawns)]
+			spawnPos = match.Vector2{X: sp.X, Y: sp.Y}
+			team1Idx++
 		}
 
 		charData, ok := gamedata.Data.Characters[p.CharacterID]
@@ -410,7 +439,7 @@ func (r *Room) processStartMatch(client *ws.Client) {
 			HP:            hp,
 			MaxHP:         hp,
 			Defense:       defense,
-			Position:      match.Vector2{X: spawnX, Y: 100},
+			Position:      spawnPos,
 			MoveEnergy:    100,
 			Items:         p.Items,
 			StatusEffects: []match.StatusEffect{},

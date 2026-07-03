@@ -456,6 +456,9 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 			r.SkillID = skillID
 			r.ExplosionRadius = shot.radius
 
+			// Track shot fired for each projectile in the skill
+			player.ShotsFired++
+
 			if r.ExplosionPoint != nil {
 				m.Terrain.DestroyCircle(r.ExplosionPoint.X, r.ExplosionPoint.Y, r.ExplosionRadius)
 				r.TerrainDestroyed = true
@@ -479,6 +482,16 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 							p.IsAlive = false
 							isKilled = true
 						}
+
+						// Track stats for shooter (only damage to other players)
+						if p.PlayerID != player.PlayerID {
+							player.DamageDealt += damage
+							player.ShotsHit++
+							if isKilled {
+								player.KillCount++
+							}
+						}
+
 						damagedPlayers = append(damagedPlayers, map[string]interface{}{
 							"playerId": p.PlayerID,
 							"damage":   damage,
@@ -585,6 +598,9 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 		drillMode,
 	)
 
+	// Track shot fired
+	player.ShotsFired++
+
 	// Calculate base damage multiplication factor (e.g. from Power Shot item)
 	damageFactor := 1.0
 	if HasEffect(player, "power_shot") {
@@ -619,6 +635,15 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 					p.HP = 0
 					p.IsAlive = false
 					isKilled = true
+				}
+
+				// Track stats for shooter (only damage to other players)
+				if p.PlayerID != player.PlayerID {
+					player.DamageDealt += damage
+					player.ShotsHit++
+					if isKilled {
+						player.KillCount++
+					}
 				}
 
 				damagedPlayers = append(damagedPlayers, map[string]interface{}{
@@ -787,9 +812,9 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 			stats[p.PlayerID] = &PlayerStats{
 				PlayerID: p.PlayerID,
 				TeamID:   p.TeamID,
-				Damage:   100, // mock match stats for exp calculation
-				Kills:    0,
-				Accuracy: 1.0,
+				Damage:   p.DamageDealt,
+				Kills:    p.KillCount,
+				Accuracy: calculateAccuracy(p.ShotsFired, p.ShotsHit),
 				IsWinner: isWinner,
 				IsDraw:   winningTeam == 0,
 			}
@@ -843,9 +868,21 @@ func (m *Match) updateWind() {
 		return
 	}
 
+	// Determine wind power range from map config
+	windMin := 0
+	windMax := 4
+	if mapCfg, ok := gamedata.Data.Maps[m.State.MapID]; ok && len(mapCfg.DefaultWindPowerRange) == 2 {
+		windMin = mapCfg.DefaultWindPowerRange[0]
+		windMax = mapCfg.DefaultWindPowerRange[1]
+	}
+	windRange := windMax - windMin + 1
+	if windRange < 1 {
+		windRange = 1
+	}
+
 	// Random wind power and direction
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	m.State.Wind.Power = r.Intn(5) // 0 to 4
+	m.State.Wind.Power = windMin + r.Intn(windRange)
 	if m.State.Wind.Power == 0 {
 		m.State.Wind.Direction = 0
 	} else {
@@ -904,6 +941,13 @@ func (m *Match) endAsNoContest() {
 		Data:  payload,
 	})
 	m.cancel()
+}
+
+func calculateAccuracy(fired, hit int) float64 {
+	if fired == 0 {
+		return 0
+	}
+	return float64(hit) / float64(fired)
 }
 
 func (m *Match) broadcast(msg ws.Message) {

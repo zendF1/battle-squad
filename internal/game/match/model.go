@@ -30,6 +30,10 @@ type BattlePlayerState struct {
 	IsAlive       bool           `json:"isAlive"`
 	IsBot         bool           `json:"isBot"`
 	SkillCooldown int            `json:"skillCooldown"`
+	DamageDealt   int            `json:"damageDealt"`
+	KillCount     int            `json:"killCount"`
+	ShotsFired    int            `json:"shotsFired"`
+	ShotsHit      int            `json:"shotsHit"`
 }
 
 type WindState struct {
