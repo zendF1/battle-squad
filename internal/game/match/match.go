@@ -215,6 +215,11 @@ func (m *Match) startTurn(ctx context.Context) {
 	player := m.State.Players[m.State.CurrentPlayerID]
 	player.MoveEnergy = 100 // Reset move energy to full
 
+	// Decrement skill cooldown at the start of each turn
+	if player.SkillCooldown > 0 {
+		player.SkillCooldown--
+	}
+
 	// Reset shot modifiers
 	UpdatePlayerStatusEffects(player)
 	TickPlayerStatusEffects(player)
@@ -360,6 +365,198 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 		return
 	}
 
+	// ── Skill mode ──────────────────────────────────────────────────────────
+	if action.ActionMode == "skill" {
+		skillID := charConfig.SkillID
+		skillConfig, skillExists := gamedata.Data.Skills[skillID]
+		if !skillExists {
+			return
+		}
+
+		// Reject if on cooldown
+		if player.SkillCooldown > 0 {
+			return
+		}
+
+		// healing_bloom: no projectile — just heal self and end turn
+		if skillConfig.EffectType == "heal" {
+			healAmount := 30
+			player.HP += healAmount
+			if player.HP > player.MaxHP {
+				player.HP = player.MaxHP
+			}
+			ApplyStatusEffect(player, StatusEffect{
+				EffectID:       skillConfig.StatusEffectID,
+				TargetPlayerID: player.PlayerID,
+				DurationTurn:   1,
+				Value:          0,
+				SourcePlayerID: player.PlayerID,
+			})
+			player.SkillCooldown = skillConfig.CooldownTurn
+
+			payload, _ := json.Marshal(map[string]interface{}{
+				"playerId": player.PlayerID,
+				"skillId":  skillID,
+				"hp":       player.HP,
+			})
+			m.broadcast(ws.Message{Event: "SkillUsed", Data: payload})
+
+			m.checkWinCondition(ctx)
+			if m.State.Status == "in_progress" {
+				m.endTurn(ctx)
+			}
+			return
+		}
+
+		// Calculate base damage factor (power_shot item still applies)
+		damageFactor := 1.0
+		if HasEffect(player, "power_shot") {
+			damageFactor = 1.5
+		}
+		damageFactor *= skillConfig.DamageMultiplier
+
+		// Build list of (angle, explosionRadius) pairs per projectile
+		type shotParams struct {
+			angle  float64
+			radius float64
+		}
+		var shots []shotParams
+
+		switch skillConfig.EffectType {
+		case "multi_projectile":
+			// triple_shot: fire 3 projectiles at angle-10, angle, angle+10
+			for _, offset := range []float64{-10, 0, 10} {
+				shots = append(shots, shotParams{angle: action.Angle + offset, radius: float64(weaponConfig.ExplosionRadius)})
+			}
+		case "single_large_bomb":
+			// heavy_bomb: single projectile, explosion radius * 1.5
+			shots = append(shots, shotParams{angle: action.Angle, radius: float64(weaponConfig.ExplosionRadius) * 1.5})
+		default:
+			// shock_field and any other types: single normal projectile
+			shots = append(shots, shotParams{angle: action.Angle, radius: float64(weaponConfig.ExplosionRadius)})
+		}
+
+		drillMode := HasEffect(player, "drill_bomb")
+
+		var results []*ProjectileResult
+		var damagedPlayers []map[string]interface{}
+
+		for _, shot := range shots {
+			r := SimulateProjectile(
+				player.PlayerID,
+				player.Position,
+				shot.angle,
+				action.Power,
+				weaponConfig,
+				m.State.Wind,
+				m.Terrain,
+				m.State.Players,
+				drillMode,
+			)
+			r.SkillID = skillID
+			r.ExplosionRadius = shot.radius
+
+			if r.ExplosionPoint != nil {
+				m.Terrain.DestroyCircle(r.ExplosionPoint.X, r.ExplosionPoint.Y, r.ExplosionRadius)
+				r.TerrainDestroyed = true
+
+				for _, p := range m.State.Players {
+					if !p.IsAlive {
+						continue
+					}
+					damage := CalculateExplosionDamage(
+						p.Position,
+						*r.ExplosionPoint,
+						float64(weaponConfig.Damage)*damageFactor,
+						r.ExplosionRadius,
+						p.Defense,
+					)
+					if damage > 0 {
+						p.HP -= damage
+						isKilled := false
+						if p.HP <= 0 {
+							p.HP = 0
+							p.IsAlive = false
+							isKilled = true
+						}
+						damagedPlayers = append(damagedPlayers, map[string]interface{}{
+							"playerId": p.PlayerID,
+							"damage":   damage,
+							"hp":       p.HP,
+							"isAlive":  p.IsAlive,
+							"isKilled": isKilled,
+						})
+					}
+				}
+
+				// shock_field: apply "net" status to hit player
+				if skillConfig.EffectType == "debuff" && skillConfig.StatusEffectID != "" && r.HitPlayerID != "" {
+					if target, ok := m.State.Players[r.HitPlayerID]; ok && target.IsAlive {
+						ApplyStatusEffect(target, StatusEffect{
+							EffectID:       skillConfig.StatusEffectID,
+							TargetPlayerID: target.PlayerID,
+							DurationTurn:   1,
+							SourcePlayerID: player.PlayerID,
+						})
+					}
+				}
+
+				// Handle terrain collapse / fall damage
+				for _, p := range m.State.Players {
+					if !p.IsAlive {
+						continue
+					}
+					landY := m.Terrain.GetLandingY(p.Position.X, p.Position.Y)
+					if landY > p.Position.Y {
+						fallDistance := landY - p.Position.Y
+						p.Position.Y = landY
+						fallDamage := CalculateFallDamage(fallDistance)
+						if fallDamage > 0 {
+							p.HP -= fallDamage
+							isKilled := false
+							if p.HP <= 0 {
+								p.HP = 0
+								p.IsAlive = false
+								isKilled = true
+							}
+							damagedPlayers = append(damagedPlayers, map[string]interface{}{
+								"playerId": p.PlayerID,
+								"damage":   fallDamage,
+								"hp":       p.HP,
+								"isAlive":  p.IsAlive,
+								"isKilled": isKilled,
+								"type":     "fall",
+							})
+						}
+					}
+				}
+			}
+
+			results = append(results, r)
+		}
+
+		// Set cooldown after use
+		player.SkillCooldown = skillConfig.CooldownTurn
+
+		// Broadcast each projectile result
+		for _, r := range results {
+			payloadResult, _ := json.Marshal(r)
+			m.broadcast(ws.Message{Event: "ProjectileResult", Data: payloadResult})
+		}
+
+		if len(damagedPlayers) > 0 {
+			payloadDamaged, _ := json.Marshal(damagedPlayers)
+			m.broadcast(ws.Message{Event: "PlayerDamaged", Data: payloadDamaged})
+		}
+
+		m.checkWinCondition(ctx)
+		if m.State.Status == "in_progress" {
+			m.endTurn(ctx)
+		}
+		return
+	}
+	// ── End skill mode ───────────────────────────────────────────────────────
+
 	// Determine projectile origin, angle, and power — may be overridden by air_strike
 	shootOrigin := player.Position
 	shootAngle := action.Angle
@@ -445,7 +642,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 				// Player fell down
 				fallDistance := landY - p.Position.Y
 				p.Position.Y = landY
-				
+
 				fallDamage := CalculateFallDamage(fallDistance)
 				if fallDamage > 0 {
 					p.HP -= fallDamage
@@ -455,7 +652,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 						p.IsAlive = false
 						isKilled = true
 					}
-					
+
 					damagedPlayers = append(damagedPlayers, map[string]interface{}{
 						"playerId": p.PlayerID,
 						"damage":   fallDamage,

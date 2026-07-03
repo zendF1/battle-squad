@@ -29,6 +29,7 @@ type BattlePlayerState struct {
 	StatusEffects []StatusEffect `json:"statusEffects"`
 	IsAlive       bool           `json:"isAlive"`
 	IsBot         bool           `json:"isBot"`
+	SkillCooldown int            `json:"skillCooldown"`
 }
 
 type WindState struct {
@@ -79,13 +80,14 @@ type ProjectileStep struct {
 }
 
 type ProjectileResult struct {
-	ProjectileID   string           `json:"projectileId"`
-	OwnerPlayerID  string           `json:"ownerPlayerId"`
-	Path           []ProjectileStep `json:"path"`
-	HitPlayerID    string           `json:"hitPlayerId,omitempty"` // empty if missed or hit terrain
-	ExplosionPoint *Vector2         `json:"explosionPoint,omitempty"`
-	ExplosionRadius float64         `json:"explosionRadius"`
-	TerrainDestroyed bool           `json:"terrainDestroyed"`
+	ProjectileID    string           `json:"projectileId"`
+	OwnerPlayerID   string           `json:"ownerPlayerId"`
+	SkillID         string           `json:"skillId,omitempty"` // set when fired via skill action
+	Path            []ProjectileStep `json:"path"`
+	HitPlayerID     string           `json:"hitPlayerId,omitempty"` // empty if missed or hit terrain
+	ExplosionPoint  *Vector2         `json:"explosionPoint,omitempty"`
+	ExplosionRadius float64          `json:"explosionRadius"`
+	TerrainDestroyed bool            `json:"terrainDestroyed"`
 }
 
 type MatchHistoryRecord struct {
