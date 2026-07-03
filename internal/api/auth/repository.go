@@ -55,7 +55,7 @@ func (r *Repository) FindIdentity(ctx context.Context, provider, providerUserID 
 
 func (r *Repository) FindAccountByID(ctx context.Context, accountID string) (*Account, error) {
 	query := `
-		SELECT account_id, account_type, status, primary_player_id, created_at, last_login_at, deleted_at
+		SELECT account_id, account_type, status, role, primary_player_id, created_at, last_login_at, deleted_at
 		FROM accounts
 		WHERE account_id = $1
 	`
@@ -64,6 +64,7 @@ func (r *Repository) FindAccountByID(ctx context.Context, accountID string) (*Ac
 		&acc.AccountID,
 		&acc.AccountType,
 		&acc.Status,
+		&acc.Role,
 		&acc.PrimaryPlayerID,
 		&acc.CreatedAt,
 		&acc.LastLoginAt,
@@ -93,13 +94,14 @@ func (r *Repository) CreateGuestAccount(ctx context.Context, deviceInstallID str
 	accQuery := `
 		INSERT INTO accounts (account_id, account_type, status, primary_player_id)
 		VALUES ($1, 'guest', 'active', $2)
-		RETURNING account_id, account_type, status, primary_player_id, created_at, last_login_at
+		RETURNING account_id, account_type, status, role, primary_player_id, created_at, last_login_at
 	`
 	var acc Account
 	err = tx.QueryRow(ctx, accQuery, accountID, playerID).Scan(
 		&acc.AccountID,
 		&acc.AccountType,
 		&acc.Status,
+		&acc.Role,
 		&acc.PrimaryPlayerID,
 		&acc.CreatedAt,
 		&acc.LastLoginAt,
@@ -184,13 +186,14 @@ func (r *Repository) CreateProviderAccount(ctx context.Context, provider, provid
 	accQuery := `
 		INSERT INTO accounts (account_id, account_type, status, primary_player_id)
 		VALUES ($1, $2, 'active', $3)
-		RETURNING account_id, account_type, status, primary_player_id, created_at, last_login_at
+		RETURNING account_id, account_type, status, role, primary_player_id, created_at, last_login_at
 	`
 	var acc Account
 	err = tx.QueryRow(ctx, accQuery, accountID, provider, playerID).Scan(
 		&acc.AccountID,
 		&acc.AccountType,
 		&acc.Status,
+		&acc.Role,
 		&acc.PrimaryPlayerID,
 		&acc.CreatedAt,
 		&acc.LastLoginAt,

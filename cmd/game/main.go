@@ -15,6 +15,8 @@ import (
 	"battle-squad/internal/shared/config"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -71,6 +73,7 @@ func main() {
 
 	// Expose operational metrics/health checks on game server as well
 	healthHandler := observability.NewHealthHandler(db, redisClient)
+	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/healthz", healthHandler.Healthz)
 	mux.HandleFunc("/readyz", healthHandler.Readyz)
 	mux.HandleFunc("/livez", healthHandler.Livez)

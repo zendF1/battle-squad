@@ -46,6 +46,7 @@ var (
 	ErrInternalServer = AppError{Code: "INTERNAL_SERVER_ERROR", Message: "Something went wrong on our end", Status: http.StatusInternalServerError}
 	ErrUnauthorized   = AppError{Code: "AUTH_UNAUTHORIZED", Message: "Unauthorized access", Status: http.StatusUnauthorized}
 	ErrForbidden      = AppError{Code: "AUTH_FORBIDDEN", Message: "Access denied", Status: http.StatusForbidden}
+	ErrAdminRequired  = AppError{Code: "AUTH_ADMIN_REQUIRED", Message: "Admin role required", Status: http.StatusForbidden}
 	ErrBadRequest     = AppError{Code: "BAD_REQUEST", Message: "Invalid parameters", Status: http.StatusBadRequest}
 	ErrNotFound       = AppError{Code: "NOT_FOUND", Message: "Resource not found", Status: http.StatusNotFound}
 	

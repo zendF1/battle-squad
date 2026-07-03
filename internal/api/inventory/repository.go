@@ -83,7 +83,7 @@ func (r *Repository) AddItemsTx(ctx context.Context, tx pgx.Tx, playerID, itemID
 }
 
 func (r *Repository) ReserveItemsTx(ctx context.Context, tx pgx.Tx, playerID, matchID, itemID string, quantity int) error {
-	// Check available quantity first
+	// Check available quantity first — FOR UPDATE locks the inventory_items row to prevent TOCTOU
 	var availableQty int
 	queryCheck := `
 		SELECT i.quantity - COALESCE(SUM(r.quantity), 0) AS available_quantity
@@ -91,6 +91,7 @@ func (r *Repository) ReserveItemsTx(ctx context.Context, tx pgx.Tx, playerID, ma
 		LEFT JOIN inventory_reservations r ON i.player_id = r.player_id AND i.item_id = r.item_id AND r.status = 'reserved'
 		WHERE i.player_id = $1 AND i.item_id = $2
 		GROUP BY i.quantity
+		FOR UPDATE OF i
 	`
 	err := tx.QueryRow(ctx, queryCheck, playerID, itemID).Scan(&availableQty)
 	if err != nil {

@@ -2,12 +2,23 @@ package match
 
 import (
 	"math"
+
+	"battle-squad/internal/game/gamedata"
 )
+
+type TerrainZone struct {
+	Type string  // "lava", "ice", "fragile"
+	MinX float64
+	MaxX float64
+	MinY float64
+	MaxY float64
+}
 
 type Terrain struct {
 	Width  int
 	Height int
 	Mask   []bool // true = solid, false = empty/destroyed
+	Zones  []TerrainZone
 }
 
 func NewTerrain(width, height int, mapID string) *Terrain {
@@ -50,7 +61,41 @@ func NewTerrain(width, height int, mapID string) *Terrain {
 		}
 	}
 
+	// Build terrain zones from map config for special terrain types
+	specialTypes := map[string]bool{"lava": true, "ice": true, "fragile": true}
+	if gamedata.Data != nil {
+		if mapCfg, ok := gamedata.Data.Maps[mapID]; ok {
+			for _, layer := range mapCfg.TerrainLayers {
+				if !specialTypes[layer.Type] {
+					continue
+				}
+				if len(layer.YRange) != 2 {
+					continue
+				}
+				zone := TerrainZone{
+					Type: layer.Type,
+					MinX: 0,
+					MaxX: float64(width),
+					MinY: float64(layer.YRange[0]),
+					MaxY: float64(layer.YRange[1]),
+				}
+				t.Zones = append(t.Zones, zone)
+			}
+		}
+	}
+
 	return t
+}
+
+// GetTerrainTypeAt returns the special terrain type at position (x, y),
+// or "normal" if no special zone matches.
+func (t *Terrain) GetTerrainTypeAt(x, y float64) string {
+	for _, zone := range t.Zones {
+		if x >= zone.MinX && x <= zone.MaxX && y >= zone.MinY && y <= zone.MaxY {
+			return zone.Type
+		}
+	}
+	return "normal"
 }
 
 func (t *Terrain) IsSolid(x, y float64) bool {

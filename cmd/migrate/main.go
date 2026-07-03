@@ -27,17 +27,22 @@ func main() {
 	}
 	defer db.Close()
 
-	// Read migration file
-	migrationPath := filepath.Join("migrations", "001_init_schema.up.sql")
-	content, err := os.ReadFile(migrationPath)
-	if err != nil {
-		log.Fatal().Err(err).Str("path", migrationPath).Msg("failed to read migration file")
+	migrations := []string{
+		filepath.Join("migrations", "001_init_schema.up.sql"),
+		filepath.Join("migrations", "002_add_account_role.up.sql"),
 	}
 
-	log.Info().Msg("applying 001_init_schema.up.sql...")
-	_, err = db.Pool.Exec(ctx, string(content))
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to execute migrations SQL script")
+	for _, migrationPath := range migrations {
+		content, err := os.ReadFile(migrationPath)
+		if err != nil {
+			log.Fatal().Err(err).Str("path", migrationPath).Msg("failed to read migration file")
+		}
+
+		log.Info().Str("file", filepath.Base(migrationPath)).Msg("applying migration...")
+		_, err = db.Pool.Exec(ctx, string(content))
+		if err != nil {
+			log.Fatal().Err(err).Str("file", filepath.Base(migrationPath)).Msg("failed to execute migration")
+		}
 	}
 
 	log.Info().Msg("database schema migrated successfully!")

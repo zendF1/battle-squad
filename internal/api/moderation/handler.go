@@ -45,8 +45,15 @@ func (h *Handler) CreateReport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) BanPlayer(w http.ResponseWriter, r *http.Request) {
-	// For MVP, we allow admin actions through custom check or basic verification
-	// In production, we'd verify admin role from context claims
+	role, ok := r.Context().Value(observability.RoleKey).(string)
+	if !ok {
+		observability.Log.Warn().Msg("role not found in context - possible middleware misconfiguration")
+	}
+	if role != "admin" {
+		model.WriteError(w, r, model.ErrAdminRequired)
+		return
+	}
+
 	var req BanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		model.WriteError(w, r, model.ErrBadRequest)
@@ -69,6 +76,15 @@ func (h *Handler) BanPlayer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) RevokeBan(w http.ResponseWriter, r *http.Request) {
+	role, ok := r.Context().Value(observability.RoleKey).(string)
+	if !ok {
+		observability.Log.Warn().Msg("role not found in context - possible middleware misconfiguration")
+	}
+	if role != "admin" {
+		model.WriteError(w, r, model.ErrAdminRequired)
+		return
+	}
+
 	var req RevokeBanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		model.WriteError(w, r, model.ErrBadRequest)

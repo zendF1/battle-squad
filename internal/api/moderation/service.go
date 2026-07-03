@@ -51,8 +51,15 @@ func (s *Service) BanPlayer(ctx context.Context, playerID string, reasonCode, re
 		return errors.New("player ID and reason code are required")
 	}
 
-	// 1. Get Account ID
-	accountID, err := s.repo.GetAccountIDByPlayerID(ctx, playerID)
+	// 1. Start PostgreSQL transaction — account lookup and ban write are atomic
+	tx, err := s.db.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// 2. Get and lock Account ID row (FOR UPDATE prevents concurrent profile changes)
+	accountID, err := s.repo.GetAccountIDByPlayerIDTx(ctx, tx, playerID)
 	if err != nil {
 		return fmt.Errorf("player not found: %w", err)
 	}
@@ -73,13 +80,6 @@ func (s *Service) BanPlayer(ctx context.Context, playerID string, reasonCode, re
 		Status:     "active",
 		EndsAt:     endsAt,
 	}
-
-	// 2. Start PostgreSQL transaction
-	tx, err := s.db.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
 
 	err = s.repo.BanAccountTx(ctx, tx, ban)
 	if err != nil {

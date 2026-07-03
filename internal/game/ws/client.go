@@ -33,6 +33,7 @@ type HandlerInterface interface {
 
 func (c *Client) ReadPump() {
 	defer func() {
+		observability.ActiveConnections.Dec()
 		c.WSHandHandler.Unregister(c)
 		c.Conn.Close()
 	}()

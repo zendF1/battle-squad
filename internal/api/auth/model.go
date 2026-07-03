@@ -6,6 +6,7 @@ type Account struct {
 	AccountID        string     `json:"accountId"`
 	AccountType      string     `json:"accountType"`
 	Status           string     `json:"status"`
+	Role             string     `json:"role"`
 	PrimaryPlayerID  string     `json:"primaryPlayerId"`
 	CreatedAt        time.Time  `json:"createdAt"`
 	LastLoginAt      time.Time  `json:"lastLoginAt"`

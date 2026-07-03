@@ -46,7 +46,7 @@ func TestSimulateProjectile(t *testing.T) {
 	}
 
 	// Run simulation
-	result := SimulateProjectile(ownerID, origin, angleDeg, power, weapon, wind, terrain, players)
+	result := SimulateProjectile(ownerID, origin, angleDeg, power, weapon, wind, terrain, players, false)
 
 	if len(result.Path) == 0 {
 		t.Fatal("Expected projectile path to contain simulated steps, got 0")

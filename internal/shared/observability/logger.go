@@ -15,6 +15,7 @@ const (
 	CorrelationIDKey contextKey = "correlation_id"
 	PlayerIDKey      contextKey = "player_id"
 	MatchIDKey       contextKey = "match_id"
+	RoleKey          contextKey = "role"
 )
 
 var Log zerolog.Logger

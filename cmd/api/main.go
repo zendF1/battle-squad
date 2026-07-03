@@ -19,6 +19,8 @@ import (
 	"battle-squad/internal/api/rank"
 	"battle-squad/internal/api/moderation"
 	"battle-squad/internal/api/appconfig"
+	"battle-squad/internal/api/matchhistory"
+	"battle-squad/internal/api/rooms"
 	"battle-squad/internal/shared/idempotency"
 	"battle-squad/internal/shared/config"
 	"battle-squad/internal/shared/database"
@@ -28,6 +30,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/time/rate"
 )
 
@@ -105,6 +108,12 @@ func main() {
 	appconfigService := appconfig.NewService(db, cfg)
 	appconfigHandler := appconfig.NewHandler(appconfigService)
 
+	matchhistoryRepo := matchhistory.NewRepository(db)
+	matchhistoryService := matchhistory.NewService(matchhistoryRepo)
+	matchhistoryHandler := matchhistory.NewHandler(matchhistoryService)
+
+	roomsHandler := rooms.NewHandler(redisClient)
+
 	healthHandler := observability.NewHealthHandler(db, redisClient)
 
 	// 6. Router Setup
@@ -115,12 +124,14 @@ func main() {
 	r.Use(middleware.CorrelationID)
 	r.Use(chiMiddleware.Recoverer)
 	r.Use(middleware.VersionCheck(cfg))
+	r.Use(observability.MetricsMiddleware)
 
 	// Rate limiter: 10 req/sec rate, burst of 20
 	limiter := middleware.NewRateLimiter(rate.Limit(10), 20)
 	r.Use(limiter.Limit)
 
 	// 8. Public Endpoints
+	r.Handle("/metrics", promhttp.Handler())
 	r.HandleFunc("/healthz", healthHandler.Healthz)
 	r.HandleFunc("/readyz", healthHandler.Readyz)
 	r.HandleFunc("/livez", healthHandler.Livez)
@@ -168,6 +179,9 @@ func main() {
 		r.Post("/report/player", moderationHandler.CreateReport)
 		r.Post("/moderation/ban", moderationHandler.BanPlayer)
 		r.Post("/moderation/ban/revoke", moderationHandler.RevokeBan)
+
+		r.Get("/player/match-history", matchhistoryHandler.GetHistory)
+		r.Get("/rooms", roomsHandler.GetRooms)
 	})
 
 	// 10. Start Server

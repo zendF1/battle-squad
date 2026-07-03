@@ -29,6 +29,11 @@ type BattlePlayerState struct {
 	StatusEffects []StatusEffect `json:"statusEffects"`
 	IsAlive       bool           `json:"isAlive"`
 	IsBot         bool           `json:"isBot"`
+	SkillCooldown int            `json:"skillCooldown"`
+	DamageDealt   int            `json:"damageDealt"`
+	KillCount     int            `json:"killCount"`
+	ShotsFired    int            `json:"shotsFired"`
+	ShotsHit      int            `json:"shotsHit"`
 }
 
 type WindState struct {
@@ -52,11 +57,12 @@ type MatchState struct {
 }
 
 type ShootAction struct {
-	Angle           float64 `json:"angle"`
-	Power           float64 `json:"power"`
-	ActionMode      string  `json:"actionMode"` // weapon, skill, item
-	ItemID          *string `json:"itemId,omitempty"`
-	ClientTimestamp int64   `json:"clientTimestamp"`
+	Angle           float64  `json:"angle"`
+	Power           float64  `json:"power"`
+	ActionMode      string   `json:"actionMode"` // weapon, skill, item
+	ItemID          *string  `json:"itemId,omitempty"`
+	TargetX         float64  `json:"targetX,omitempty"` // used by air_strike to specify drop column
+	ClientTimestamp int64    `json:"clientTimestamp"`
 }
 
 type MoveAction struct {
@@ -78,13 +84,14 @@ type ProjectileStep struct {
 }
 
 type ProjectileResult struct {
-	ProjectileID   string           `json:"projectileId"`
-	OwnerPlayerID  string           `json:"ownerPlayerId"`
-	Path           []ProjectileStep `json:"path"`
-	HitPlayerID    string           `json:"hitPlayerId,omitempty"` // empty if missed or hit terrain
-	ExplosionPoint *Vector2         `json:"explosionPoint,omitempty"`
-	ExplosionRadius float64         `json:"explosionRadius"`
-	TerrainDestroyed bool           `json:"terrainDestroyed"`
+	ProjectileID    string           `json:"projectileId"`
+	OwnerPlayerID   string           `json:"ownerPlayerId"`
+	SkillID         string           `json:"skillId,omitempty"` // set when fired via skill action
+	Path            []ProjectileStep `json:"path"`
+	HitPlayerID     string           `json:"hitPlayerId,omitempty"` // empty if missed or hit terrain
+	ExplosionPoint  *Vector2         `json:"explosionPoint,omitempty"`
+	ExplosionRadius float64          `json:"explosionRadius"`
+	TerrainDestroyed bool            `json:"terrainDestroyed"`
 }
 
 type MatchHistoryRecord struct {

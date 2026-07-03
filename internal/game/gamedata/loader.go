@@ -63,6 +63,7 @@ type SpawnPoint struct {
 type TerrainLayer struct {
 	Type     string `yaml:"type"`
 	Hardness int    `yaml:"hardness"`
+	YRange   []int  `yaml:"yRange"`
 }
 
 type MapConfig struct {

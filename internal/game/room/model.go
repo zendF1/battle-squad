@@ -18,7 +18,7 @@ type RoomState struct {
 	MaxPlayers   int          `json:"maxPlayers"`
 	Players      []RoomPlayer `json:"players"`
 	IsLocked     bool         `json:"isLocked"`
-	PasswordHash *string      `json:"-"`
+	PasswordHash string       `json:"-"`
 	Status       string       `json:"status"` // waiting, in_match
 }
 

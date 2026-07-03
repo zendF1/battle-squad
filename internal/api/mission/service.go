@@ -28,8 +28,15 @@ func (s *Service) GetMissions(ctx context.Context, playerID string, missionType 
 }
 
 func (s *Service) ClaimReward(ctx context.Context, playerID, missionID string) error {
-	// 1. Fetch current progress
-	progress, err := s.repo.GetMissionProgress(ctx, playerID, missionID)
+	// 1. Start transaction — all checks and writes happen inside
+	tx, err := s.db.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// 2. Fetch and lock the mission progress row (FOR UPDATE prevents double-claim)
+	progress, err := s.repo.GetMissionProgressTx(ctx, tx, playerID, missionID)
 	if err != nil {
 		return err
 	}
@@ -37,20 +44,13 @@ func (s *Service) ClaimReward(ctx context.Context, playerID, missionID string) e
 		return errors.New("mission not found")
 	}
 
-	// 2. Validate claim criteria
+	// 3. Validate claim criteria
 	if progress.IsClaimed {
 		return errors.New("reward already claimed")
 	}
 	if progress.CurrentValue < progress.RequiredValue {
 		return errors.New("mission criteria not completed yet")
 	}
-
-	// 3. Start transaction
-	tx, err := s.db.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
 
 	// 4. Grant rewards
 	// Coin

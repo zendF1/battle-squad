@@ -25,6 +25,49 @@ services:
     networks:
       - battlesquad_network
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8080:8080"
+    environment:
+      - POSTGRES_DSN=postgres://postgres:postgres@postgres:5432/battlesquad?sslmode=disable
+      - REDIS_ADDR=redis:6379
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - battlesquad_network
+
+  game:
+    build:
+      context: .
+      dockerfile: Dockerfile.game
+    ports:
+      - "8081:8081"
+    environment:
+      - POSTGRES_DSN=postgres://postgres:postgres@postgres:5432/battlesquad?sslmode=disable
+      - REDIS_ADDR=redis:6379
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - battlesquad_network
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    environment:
+      - POSTGRES_DSN=postgres://postgres:postgres@postgres:5432/battlesquad?sslmode=disable
+      - REDIS_ADDR=redis:6379
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - battlesquad_network
+
 volumes:
   postgres_data:
   redis_data:

@@ -80,7 +80,7 @@ func (s *Service) GuestLogin(ctx context.Context, deviceInstallID string) (*Logi
 		return nil, errors.New("banned")
 	}
 
-	return s.generateLoginTokens(ctx, accountID, playerID, displayName, level)
+	return s.generateLoginTokens(ctx, accountID, playerID, acc.Role, displayName, level)
 }
 
 func (s *Service) ProviderLogin(ctx context.Context, provider, idToken string) (*LoginResponse, error) {
@@ -137,7 +137,7 @@ func (s *Service) ProviderLogin(ctx context.Context, provider, idToken string) (
 		return nil, errors.New("banned")
 	}
 
-	return s.generateLoginTokens(ctx, accountID, playerID, displayName, level)
+	return s.generateLoginTokens(ctx, accountID, playerID, acc.Role, displayName, level)
 }
 
 func (s *Service) LinkProvider(ctx context.Context, accountID, provider, idToken string) error {
@@ -167,6 +167,18 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*Login
 		return nil, errors.New("invalid or expired session")
 	}
 
+	// Get account details (for role)
+	acc, err := s.repo.FindAccountByID(ctx, claims.AccountID)
+	if err != nil {
+		return nil, err
+	}
+	if acc == nil {
+		return nil, errors.New("account not found")
+	}
+	if acc.Status == "banned" {
+		return nil, fmt.Errorf("account banned")
+	}
+
 	// Get player details
 	playerID, displayName, level, err := s.repo.GetPlayerProfileByAccountID(ctx, claims.AccountID)
 	if err != nil {
@@ -176,7 +188,7 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*Login
 	// Revoke old session and generate new tokens
 	s.redis.Client.Del(ctx, redisKey)
 
-	return s.generateLoginTokens(ctx, claims.AccountID, playerID, displayName, level)
+	return s.generateLoginTokens(ctx, claims.AccountID, playerID, acc.Role, displayName, level)
 }
 
 func (s *Service) Logout(ctx context.Context, refreshToken string) error {
@@ -184,13 +196,17 @@ func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 	return s.redis.Client.Del(ctx, redisKey).Err()
 }
 
-func (s *Service) generateLoginTokens(ctx context.Context, accountID, playerID, displayName string, level int) (*LoginResponse, error) {
-	accessToken, err := s.jwtAccess.Generate(accountID, playerID)
+func (s *Service) generateLoginTokens(ctx context.Context, accountID, playerID, role, displayName string, level int) (*LoginResponse, error) {
+	if role == "" {
+		role = "player"
+	}
+
+	accessToken, err := s.jwtAccess.Generate(accountID, playerID, role)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, err := s.jwtRefresh.Generate(accountID, playerID)
+	refreshToken, err := s.jwtRefresh.Generate(accountID, playerID, role)
 	if err != nil {
 		return nil, err
 	}
