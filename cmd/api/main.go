@@ -143,6 +143,7 @@ func main() {
 
 	r.Get("/app/version-policy", appconfigHandler.GetVersionPolicy)
 	r.Get("/app/config", appconfigHandler.GetRemoteConfig)
+	r.Get("/app/gamedata", appconfigHandler.GetGameData)
 
 	// 9. Protected Endpoints (Auth Required)
 	r.Group(func(r chi.Router) {

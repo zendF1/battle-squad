@@ -32,6 +32,19 @@ func (h *Handler) GetVersionPolicy(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(policy)
 }
 
+func (h *Handler) GetGameData(w http.ResponseWriter, r *http.Request) {
+	data, err := h.service.GetGameData()
+	if err != nil {
+		model.WriteError(w, r, model.ErrInternalServer)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(data)
+}
+
 func (h *Handler) GetRemoteConfig(w http.ResponseWriter, r *http.Request) {
 	config, err := h.service.GetRemoteConfig(r.Context())
 	if err != nil {
