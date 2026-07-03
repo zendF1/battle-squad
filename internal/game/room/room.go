@@ -93,10 +93,10 @@ func (r *Room) Join(client *ws.Client, password *string) error {
 		}
 	}
 
-	// Queue join event
+	// Queue internal join event (uses internal name to prevent bypass via WebSocket)
 	r.Events <- roomEvent{
 		client: client,
-		msg:    ws.Message{Event: "Join"},
+		msg:    ws.Message{Event: "__internal_join"},
 		ctx:    context.Background(),
 	}
 	return nil
@@ -105,7 +105,7 @@ func (r *Room) Join(client *ws.Client, password *string) error {
 func (r *Room) Leave(client *ws.Client) {
 	r.Events <- roomEvent{
 		client: client,
-		msg:    ws.Message{Event: "Leave"},
+		msg:    ws.Message{Event: "__internal_leave"},
 		ctx:    context.Background(),
 	}
 }
@@ -137,9 +137,9 @@ func (r *Room) handleEvent(ev roomEvent) {
 	}
 
 	switch msg.Event {
-	case "Join":
+	case "__internal_join":
 		r.processJoin(client)
-	case "Leave":
+	case "__internal_leave", "Leave":
 		r.processLeave(client)
 	case "ChangeTeam":
 		var payload ChangeTeamPayload
