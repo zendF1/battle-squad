@@ -55,7 +55,7 @@ func (r *Repository) FindIdentity(ctx context.Context, provider, providerUserID 
 
 func (r *Repository) FindAccountByID(ctx context.Context, accountID string) (*Account, error) {
 	query := `
-		SELECT account_id, account_type, status, primary_player_id, created_at, last_login_at, deleted_at
+		SELECT account_id, account_type, status, role, primary_player_id, created_at, last_login_at, deleted_at
 		FROM accounts
 		WHERE account_id = $1
 	`
@@ -64,6 +64,7 @@ func (r *Repository) FindAccountByID(ctx context.Context, accountID string) (*Ac
 		&acc.AccountID,
 		&acc.AccountType,
 		&acc.Status,
+		&acc.Role,
 		&acc.PrimaryPlayerID,
 		&acc.CreatedAt,
 		&acc.LastLoginAt,

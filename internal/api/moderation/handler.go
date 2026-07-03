@@ -45,8 +45,12 @@ func (h *Handler) CreateReport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) BanPlayer(w http.ResponseWriter, r *http.Request) {
-	// For MVP, we allow admin actions through custom check or basic verification
-	// In production, we'd verify admin role from context claims
+	role, _ := r.Context().Value("role").(string)
+	if role != "admin" {
+		model.WriteError(w, r, model.ErrAdminRequired)
+		return
+	}
+
 	var req BanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		model.WriteError(w, r, model.ErrBadRequest)
@@ -69,6 +73,12 @@ func (h *Handler) BanPlayer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) RevokeBan(w http.ResponseWriter, r *http.Request) {
+	role, _ := r.Context().Value("role").(string)
+	if role != "admin" {
+		model.WriteError(w, r, model.ErrAdminRequired)
+		return
+	}
+
 	var req RevokeBanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		model.WriteError(w, r, model.ErrBadRequest)
