@@ -19,6 +19,8 @@ import (
 	"battle-squad/internal/api/rank"
 	"battle-squad/internal/api/moderation"
 	"battle-squad/internal/api/appconfig"
+	"battle-squad/internal/api/matchhistory"
+	"battle-squad/internal/api/rooms"
 	"battle-squad/internal/shared/idempotency"
 	"battle-squad/internal/shared/config"
 	"battle-squad/internal/shared/database"
@@ -105,6 +107,12 @@ func main() {
 	appconfigService := appconfig.NewService(db, cfg)
 	appconfigHandler := appconfig.NewHandler(appconfigService)
 
+	matchhistoryRepo := matchhistory.NewRepository(db)
+	matchhistoryService := matchhistory.NewService(matchhistoryRepo)
+	matchhistoryHandler := matchhistory.NewHandler(matchhistoryService)
+
+	roomsHandler := rooms.NewHandler(redisClient)
+
 	healthHandler := observability.NewHealthHandler(db, redisClient)
 
 	// 6. Router Setup
@@ -168,6 +176,9 @@ func main() {
 		r.Post("/report/player", moderationHandler.CreateReport)
 		r.Post("/moderation/ban", moderationHandler.BanPlayer)
 		r.Post("/moderation/ban/revoke", moderationHandler.RevokeBan)
+
+		r.Get("/player/match-history", matchhistoryHandler.GetHistory)
+		r.Get("/rooms", roomsHandler.GetRooms)
 	})
 
 	// 10. Start Server
