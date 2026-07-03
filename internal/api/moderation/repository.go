@@ -43,6 +43,13 @@ func (r *Repository) GetAccountIDByPlayerID(ctx context.Context, playerID string
 	return accID, err
 }
 
+func (r *Repository) GetAccountIDByPlayerIDTx(ctx context.Context, tx pgx.Tx, playerID string) (string, error) {
+	query := "SELECT account_id FROM player_profiles WHERE player_id = $1 FOR UPDATE"
+	var accID string
+	err := tx.QueryRow(ctx, query, playerID).Scan(&accID)
+	return accID, err
+}
+
 func (r *Repository) BanAccountTx(ctx context.Context, tx pgx.Tx, ban *AccountBan) error {
 	// 1. Insert ban record
 	queryBan := `

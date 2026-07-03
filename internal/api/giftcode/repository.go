@@ -65,6 +65,53 @@ func (r *Repository) HasRedeemed(ctx context.Context, playerID, code string) (bo
 	return exists, err
 }
 
+func (r *Repository) GetGiftCodeTx(ctx context.Context, tx pgx.Tx, code string) (*GiftCode, error) {
+	query := `
+		SELECT code, reward_coin, reward_gem, reward_items, max_uses, used_count, expired_at, is_active
+		FROM gift_codes
+		WHERE code = $1
+		FOR UPDATE
+	`
+	var gc GiftCode
+	var itemsBytes []byte
+	var expiredAt sql.NullTime
+	err := tx.QueryRow(ctx, query, code).Scan(
+		&gc.Code,
+		&gc.RewardCoin,
+		&gc.RewardGem,
+		&itemsBytes,
+		&gc.MaxUses,
+		&gc.UsedCount,
+		&expiredAt,
+		&gc.IsActive,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if err := json.Unmarshal(itemsBytes, &gc.RewardItems); err != nil {
+		return nil, err
+	}
+	if expiredAt.Valid {
+		gc.ExpiredAt = &expiredAt.Time
+	}
+	return &gc, nil
+}
+
+func (r *Repository) HasRedeemedTx(ctx context.Context, tx pgx.Tx, playerID, code string) (bool, error) {
+	query := `
+		SELECT EXISTS(
+			SELECT 1 FROM gift_code_redemptions
+			WHERE player_id = $1 AND code = $2
+		)
+	`
+	var exists bool
+	err := tx.QueryRow(ctx, query, playerID, code).Scan(&exists)
+	return exists, err
+}
+
 func (r *Repository) RedeemTx(ctx context.Context, tx pgx.Tx, playerID, code string) error {
 	// 1. Increment used count
 	queryInc := `

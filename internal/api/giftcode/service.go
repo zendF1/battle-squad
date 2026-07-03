@@ -37,8 +37,15 @@ func (s *Service) RedeemCode(ctx context.Context, playerID, code string) error {
 		return errors.New("code is required")
 	}
 
-	// 1. Fetch gift code config
-	gc, err := s.repo.GetGiftCode(ctx, code)
+	// 1. Start Postgres transaction — all checks and writes happen inside
+	tx, err := s.db.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// 2. Fetch and lock the gift code row (FOR UPDATE prevents concurrent redemptions)
+	gc, err := s.repo.GetGiftCodeTx(ctx, tx, code)
 	if err != nil {
 		return err
 	}
@@ -56,21 +63,14 @@ func (s *Service) RedeemCode(ctx context.Context, playerID, code string) error {
 		return errors.New("gift code usage limit reached")
 	}
 
-	// 2. Check if player has already redeemed this code
-	alreadyRedeemed, err := s.repo.HasRedeemed(ctx, playerID, code)
+	// 3. Check if player has already redeemed this code (inside TX)
+	alreadyRedeemed, err := s.repo.HasRedeemedTx(ctx, tx, playerID, code)
 	if err != nil {
 		return err
 	}
 	if alreadyRedeemed {
 		return errors.New("you have already redeemed this code")
 	}
-
-	// 3. Start Postgres transaction
-	tx, err := s.db.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
 
 	// 4. Grant rewards inside transaction
 	// Coin reward

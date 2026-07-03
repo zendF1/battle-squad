@@ -83,6 +83,35 @@ func (r *Repository) GetMissionProgress(ctx context.Context, playerID, missionID
 	return &p, nil
 }
 
+func (r *Repository) GetMissionProgressTx(ctx context.Context, tx pgx.Tx, playerID, missionID string) (*MissionProgress, error) {
+	query := `
+		SELECT m.mission_id, m.type, m.required_value, m.reward_coin, m.reward_gem,
+		       COALESCE(p.current_value, 0) as current_value, COALESCE(p.is_claimed, FALSE) as is_claimed
+		FROM missions m
+		LEFT JOIN mission_progress p ON m.mission_id = p.mission_id AND p.player_id = $1
+		WHERE m.mission_id = $2
+		FOR UPDATE OF p
+	`
+	var p MissionProgress
+	p.PlayerID = playerID
+	err := tx.QueryRow(ctx, query, playerID, missionID).Scan(
+		&p.MissionID,
+		&p.Type,
+		&p.RequiredValue,
+		&p.RewardCoin,
+		&p.RewardGem,
+		&p.CurrentValue,
+		&p.IsClaimed,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &p, nil
+}
+
 func (r *Repository) IncrementProgressTx(ctx context.Context, tx pgx.Tx, playerID, target string, value int) error {
 	// Increment progress of active missions matching the target event
 	query := `
