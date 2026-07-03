@@ -4,7 +4,6 @@ CREATE TABLE IF NOT EXISTS accounts (
     account_id VARCHAR(64) PRIMARY KEY,
     account_type VARCHAR(20) NOT NULL, -- guest, google, apple, linked
     status VARCHAR(20) NOT NULL, -- active, banned, deleted, pending_deletion
-    role VARCHAR(20) NOT NULL DEFAULT 'player', -- player, admin
     primary_player_id VARCHAR(64),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     last_login_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

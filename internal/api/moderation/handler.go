@@ -45,7 +45,10 @@ func (h *Handler) CreateReport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) BanPlayer(w http.ResponseWriter, r *http.Request) {
-	role, _ := r.Context().Value("role").(string)
+	role, ok := r.Context().Value(observability.RoleKey).(string)
+	if !ok {
+		observability.Log.Warn().Msg("role not found in context - possible middleware misconfiguration")
+	}
 	if role != "admin" {
 		model.WriteError(w, r, model.ErrAdminRequired)
 		return
@@ -73,7 +76,10 @@ func (h *Handler) BanPlayer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) RevokeBan(w http.ResponseWriter, r *http.Request) {
-	role, _ := r.Context().Value("role").(string)
+	role, ok := r.Context().Value(observability.RoleKey).(string)
+	if !ok {
+		observability.Log.Warn().Msg("role not found in context - possible middleware misconfiguration")
+	}
 	if role != "admin" {
 		model.WriteError(w, r, model.ErrAdminRequired)
 		return

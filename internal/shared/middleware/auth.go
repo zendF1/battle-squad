@@ -35,7 +35,7 @@ func AuthMiddleware(jwtManager *auth.JWTManager) func(http.Handler) http.Handler
 			// Add account, player ID, and role to context
 			ctx := context.WithValue(r.Context(), observability.PlayerIDKey, claims.PlayerID)
 			ctx = context.WithValue(ctx, "accountId", claims.AccountID)
-			ctx = context.WithValue(ctx, "role", claims.Role)
+			ctx = context.WithValue(ctx, observability.RoleKey, claims.Role)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

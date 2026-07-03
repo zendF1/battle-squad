@@ -175,6 +175,9 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*Login
 	if acc == nil {
 		return nil, errors.New("account not found")
 	}
+	if acc.Status == "banned" {
+		return nil, fmt.Errorf("account banned")
+	}
 
 	// Get player details
 	playerID, displayName, level, err := s.repo.GetPlayerProfileByAccountID(ctx, claims.AccountID)
