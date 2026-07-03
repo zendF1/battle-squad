@@ -11,6 +11,7 @@ import (
 
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Hub struct {
@@ -66,8 +67,12 @@ func (h *Hub) CreateRoom(ctx context.Context, hostPlayerID, hostDisplayName stri
 	}
 
 	if payload.Password != nil && *payload.Password != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(*payload.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, errors.New("failed to hash room password")
+		}
 		roomState.IsLocked = true
-		roomState.PasswordHash = payload.Password
+		roomState.PasswordHash = string(hash)
 	}
 
 	room := NewRoom(roomID, roomState, h, h.db)

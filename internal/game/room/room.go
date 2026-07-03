@@ -6,12 +6,13 @@ import (
 	"errors"
 	"time"
 
-	"battle-squad/internal/game/ws"
-	"battle-squad/internal/game/match"
-	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/api/economy"
+	"battle-squad/internal/game/gamedata"
+	"battle-squad/internal/game/match"
+	"battle-squad/internal/game/ws"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type roomEvent struct {
@@ -84,7 +85,10 @@ func (r *Room) Join(client *ws.Client, password *string) error {
 	}
 
 	if r.State.IsLocked {
-		if password == nil || r.State.PasswordHash == nil || *password != *r.State.PasswordHash {
+		if password == nil {
+			return errors.New("incorrect password")
+		}
+		if err := bcrypt.CompareHashAndPassword([]byte(r.State.PasswordHash), []byte(*password)); err != nil {
 			return errors.New("incorrect password")
 		}
 	}
