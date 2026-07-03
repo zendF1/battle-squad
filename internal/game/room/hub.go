@@ -78,6 +78,8 @@ func (h *Hub) CreateRoom(ctx context.Context, hostPlayerID, hostDisplayName stri
 	room := NewRoom(roomID, roomState, h, h.db)
 	h.rooms[roomID] = room
 
+	observability.ActiveRooms.Inc()
+
 	// Spawn room goroutine
 	go room.Run()
 
@@ -102,6 +104,8 @@ func (h *Hub) UnregisterRoom(ctx context.Context, roomID string) {
 	h.Lock()
 	delete(h.rooms, roomID)
 	h.Unlock()
+
+	observability.ActiveRooms.Dec()
 
 	// Remove from Redis
 	if h.redis != nil {

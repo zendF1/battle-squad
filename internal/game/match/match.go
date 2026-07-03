@@ -113,6 +113,7 @@ func (m *Match) Run() {
 	// Pattern 1: Panic Recovery per Match
 	defer func() {
 		if r := recover(); r != nil {
+			observability.MatchPanicTotal.Inc()
 			observability.Log.Error().
 				Str("matchId", m.State.MatchID).
 				Interface("panic", r).
@@ -121,6 +122,10 @@ func (m *Match) Run() {
 			m.endAsNoContest()
 		}
 	}()
+
+	observability.ActiveMatches.Inc()
+	observability.MatchStartedTotal.Inc()
+	defer observability.ActiveMatches.Dec()
 
 	m.el.Start(m.ctx)
 	m.lastActivity = time.Now()
@@ -852,6 +857,7 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 	if !team1Alive || !team2Alive {
 		// Match is over!
 		m.State.Status = "ended"
+		observability.MatchEndedTotal.WithLabelValues("normal").Inc()
 		
 		winningTeam := 0
 		if team1Alive {
@@ -955,6 +961,7 @@ func (m *Match) updateWind() {
 
 func (m *Match) endAsNoContest() {
 	m.State.Status = "ended"
+	observability.MatchEndedTotal.WithLabelValues("no_contest").Inc()
 
 	// Release all item reservations so players get their items back
 	ctx := context.Background()

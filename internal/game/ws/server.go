@@ -102,6 +102,9 @@ func (s *Server) HandleUpgrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	observability.WSConnectionsTotal.Inc()
+	observability.ActiveConnections.Inc()
+
 	client := &Client{
 		Conn:          conn,
 		Send:          make(chan Message, 256),

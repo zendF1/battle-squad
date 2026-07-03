@@ -30,6 +30,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/time/rate"
 )
 
@@ -123,12 +124,14 @@ func main() {
 	r.Use(middleware.CorrelationID)
 	r.Use(chiMiddleware.Recoverer)
 	r.Use(middleware.VersionCheck(cfg))
+	r.Use(observability.MetricsMiddleware)
 
 	// Rate limiter: 10 req/sec rate, burst of 20
 	limiter := middleware.NewRateLimiter(rate.Limit(10), 20)
 	r.Use(limiter.Limit)
 
 	// 8. Public Endpoints
+	r.Handle("/metrics", promhttp.Handler())
 	r.HandleFunc("/healthz", healthHandler.Healthz)
 	r.HandleFunc("/readyz", healthHandler.Readyz)
 	r.HandleFunc("/livez", healthHandler.Livez)
