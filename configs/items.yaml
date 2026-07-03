@@ -1,0 +1,63 @@
+- itemId: medkit
+  name: Medkit
+  type: heal
+  targetType: self
+  value: 30.0
+  maxUsePerMatch: 1
+  cooldown: 0
+
+- itemId: teleport
+  name: Teleport
+  type: teleport
+  targetType: position
+  value: 0.0
+  maxUsePerMatch: 1
+  cooldown: 0
+
+- itemId: power_shot
+  name: Power Shot
+  type: attack_boost
+  targetType: self
+  value: 1.5
+  maxUsePerMatch: 1
+  cooldown: 0
+
+- itemId: drill_bomb
+  name: Drill Bomb
+  type: terrain_pierce
+  targetType: shoot
+  value: 50.0
+  maxUsePerMatch: 1
+  cooldown: 0
+
+- itemId: spider_net
+  name: Spider Net
+  type: move_debuff
+  targetType: shoot
+  value: 50.0
+  maxUsePerMatch: 1
+  cooldown: 0
+
+- itemId: freeze_bomb
+  name: Freeze Bomb
+  type: freeze
+  targetType: shoot
+  value: 1.0
+  maxUsePerMatch: 1
+  cooldown: 0
+
+- itemId: air_strike
+  name: Air Strike
+  type: air_attack
+  targetType: position
+  value: 30.0
+  maxUsePerMatch: 1
+  cooldown: 0
+
+- itemId: wind_stopper
+  name: Wind Stopper
+  type: wind_cancel
+  targetType: self
+  value: 2.0
+  maxUsePerMatch: 1
+  cooldown: 0

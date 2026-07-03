@@ -1,0 +1,31 @@
+# Binaries and packaging
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test and coverage
+*.out
+*.test
+*.prof
+
+# IDEs
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+.DS_Store
+
+# Local env files
+.env
+.env.local
+
+# Go package lock
+go.work

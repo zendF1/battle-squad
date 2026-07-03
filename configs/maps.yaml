@@ -1,0 +1,59 @@
+- mapId: grassland_valley
+  name: Grassland Valley
+  width: 1600
+  height: 900
+  defaultWindPowerRange: [0, 4]
+  terrainLayers:
+    - type: dirt
+      hardness: 20
+    - type: rock
+      hardness: 60
+  spawnPoints:
+    - x: 200
+      y: 400
+    - x: 1400
+      y: 400
+    - x: 400
+      y: 500
+    - x: 1200
+      y: 500
+
+- mapId: frozen_peak
+  name: Frozen Peak
+  width: 1600
+  height: 900
+  defaultWindPowerRange: [1, 4]
+  terrainLayers:
+    - type: ice
+      hardness: 10
+    - type: rock
+      hardness: 70
+  spawnPoints:
+    - x: 300
+      y: 350
+    - x: 1300
+      y: 350
+    - x: 500
+      y: 450
+    - x: 1100
+      y: 450
+
+- mapId: steel_base
+  name: Steel Base
+  width: 1600
+  height: 900
+  defaultWindPowerRange: [0, 2]
+  terrainLayers:
+    - type: steel
+      hardness: 90
+    - type: rock
+      hardness: 60
+  spawnPoints:
+    - x: 250
+      y: 300
+    - x: 1350
+      y: 300
+    - x: 450
+      y: 400
+    - x: 1150
+      y: 400

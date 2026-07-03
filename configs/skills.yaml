@@ -1,0 +1,33 @@
+- skillId: triple_shot
+  characterId: rookie
+  name: Triple Shot
+  cooldownTurn: 2
+  effectType: multi_projectile
+  projectileCount: 3
+  damageMultiplier: 0.7
+
+- skillId: heavy_bomb
+  characterId: tanko
+  name: Heavy Bomb
+  cooldownTurn: 3
+  effectType: single_large_bomb
+  projectileCount: 1
+  damageMultiplier: 1.3
+
+- skillId: shock_field
+  characterId: spark
+  name: Shock Field
+  cooldownTurn: 3
+  effectType: debuff
+  projectileCount: 1
+  statusEffectId: net
+  damageMultiplier: 0.9
+
+- skillId: healing_bloom
+  characterId: flora
+  name: Healing Bloom
+  cooldownTurn: 3
+  effectType: heal
+  projectileCount: 1
+  statusEffectId: heal
+  damageMultiplier: 0.0

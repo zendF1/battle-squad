@@ -1,0 +1,25 @@
+-- 001_init_schema.down.sql
+
+DROP TABLE IF EXISTS client_version_policies CASCADE;
+DROP TABLE IF EXISTS match_recovery_logs CASCADE;
+DROP TABLE IF EXISTS match_snapshots CASCADE;
+DROP TABLE IF EXISTS match_histories CASCADE;
+DROP TABLE IF EXISTS season_reward_claims CASCADE;
+DROP TABLE IF EXISTS player_ranks CASCADE;
+DROP TABLE IF EXISTS rank_seasons CASCADE;
+DROP TABLE IF EXISTS account_bans CASCADE;
+DROP TABLE IF EXISTS player_reports CASCADE;
+DROP TABLE IF EXISTS mission_progress CASCADE;
+DROP TABLE IF EXISTS missions CASCADE;
+DROP TABLE IF EXISTS gift_code_redemptions CASCADE;
+DROP TABLE IF EXISTS gift_codes CASCADE;
+DROP TABLE IF EXISTS economy_transactions CASCADE;
+DROP TABLE IF EXISTS payment_transactions CASCADE;
+DROP TABLE IF EXISTS iap_products CASCADE;
+DROP TABLE IF EXISTS shop_purchases CASCADE;
+DROP TABLE IF EXISTS shop_offers CASCADE;
+DROP TABLE IF EXISTS inventory_reservations CASCADE;
+DROP TABLE IF EXISTS inventory_items CASCADE;
+DROP TABLE IF EXISTS player_profiles CASCADE;
+DROP TABLE IF EXISTS auth_identities CASCADE;
+DROP TABLE IF EXISTS accounts CASCADE;
