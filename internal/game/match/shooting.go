@@ -1,17 +1,29 @@
 package match
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"math"
 
 	"battle-squad/internal/game/gamedata"
 )
 
-const (
-	physicsTimeStep = 0.05 // 50ms fixed delta time
-	gravityForce    = 200.0 // gravity pulling down (Y-down)
-	windScaleFactor = 30.0  // scaling wind force to screen coords
-	playerHitRadius = 24.0  // bounding circle of players
-)
+func generateProjectileID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "proj-fallback"
+	}
+	return "proj-" + hex.EncodeToString(b)
+}
+
+// getPhysics returns physics constants from gamedata.Physics if loaded, otherwise defaults.
+func getPhysics() (timeStep, gravity, windScale, hitRadius, recordStep, maxFlight float64) {
+	if gamedata.Physics != nil {
+		return gamedata.Physics.TimeStep, gamedata.Physics.Gravity, gamedata.Physics.WindScale,
+			gamedata.Physics.PlayerHitRadius, gamedata.Physics.PathRecordStep, gamedata.Physics.MaxFlightSeconds
+	}
+	return 0.02, 200.0, 30.0, 24.0, 0.05, 6.0
+}
 
 func SimulateProjectile(
 	ownerID string,
@@ -24,18 +36,14 @@ func SimulateProjectile(
 	players map[string]*BattlePlayerState,
 	drillMode bool,
 ) *ProjectileResult {
-	// 1. Calculate initial velocity vector
-	// Math angles in standard coordinates where X is right, Y is up, but here Y is down.
-	// So we convert angle to radians and negative sin for Y if we want to fire upwards.
-	// Firing upwards in Y-down coordinates means Y velocity is negative!
+	timeStep, gravity, windScale, hitRadius, recordStep, maxFlight := getPhysics()
+
 	angleRad := angleDeg * math.Pi / 180.0
-	
-	// Speed proportional to power
 	initialSpeed := power * 6.0
-	
+
 	velocity := Vector2{
 		X: initialSpeed * math.Cos(angleRad),
-		Y: -initialSpeed * math.Sin(angleRad), // Negative because firing up decreases Y
+		Y: -initialSpeed * math.Sin(angleRad),
 	}
 
 	position := origin
@@ -44,86 +52,134 @@ func SimulateProjectile(
 		mass = 1.0
 	}
 
-	// Wind force vector (horizontal wind)
-	windForceX := float64(wind.Direction) * float64(wind.Power) * windScaleFactor * weapon.WindInfluence
+	windForceX := float64(wind.Direction) * float64(wind.Power) * windScale * weapon.WindInfluence
 
 	result := &ProjectileResult{
+		ProjectileID:     generateProjectileID(),
 		OwnerPlayerID:    ownerID,
 		ExplosionRadius:  float64(weapon.ExplosionRadius),
 		TerrainDestroyed: false,
 		Path:             []ProjectileStep{},
 	}
 
-	// 2. Main Simulation Loop
 	t := 0.0
-	maxDuration := 6.0 // max 6 seconds flight time
 	hitPlayerID := ""
 	var explosionPoint *Vector2
-	terrainPassCount := 0 // tracks how many terrain collisions have been skipped (drill_bomb)
+	terrainPassCount := 0
+	lastRecordedTime := -recordStep // force first record
 
-	for t < maxDuration {
-		// Record current step
+	for t < maxFlight {
+		// Record path at intervals for client animation
+		if t-lastRecordedTime >= recordStep {
+			result.Path = append(result.Path, ProjectileStep{
+				Position: position,
+				Velocity: velocity,
+				Time:     t,
+			})
+			lastRecordedTime = t
+		}
+
+		prevPos := position
+
+		// Apply physics
+		velocity.X += (windForceX / mass) * timeStep
+		velocity.Y += gravity * timeStep
+		position.X += velocity.X * timeStep
+		position.Y += velocity.Y * timeStep
+		t += timeStep
+
+		// --- Sub-step collision along movement segment ---
+		hit, hitPos, hitPlayer := checkSegmentCollisions(
+			prevPos, position, ownerID, t, terrain, players, drillMode, &terrainPassCount, hitRadius,
+		)
+
+		if hit {
+			if hitPlayer != "" {
+				hitPlayerID = hitPlayer
+			}
+			ep := hitPos
+			explosionPoint = &ep
+			// Record final position
+			result.Path = append(result.Path, ProjectileStep{
+				Position: hitPos,
+				Velocity: velocity,
+				Time:     t,
+			})
+			break
+		}
+
+		// Check out of bounds
+		if position.X < -100 || position.X > float64(terrain.Width)+100 || position.Y > float64(terrain.Height)+50 {
+			break
+		}
+	}
+
+	// Record final position if not already recorded
+	if len(result.Path) == 0 || result.Path[len(result.Path)-1].Time < t-timeStep {
 		result.Path = append(result.Path, ProjectileStep{
 			Position: position,
 			Velocity: velocity,
 			Time:     t,
 		})
-
-		// Apply physics integration
-		velocity.X += (windForceX / mass) * physicsTimeStep
-		velocity.Y += gravityForce * physicsTimeStep
-
-		position.X += velocity.X * physicsTimeStep
-		position.Y += velocity.Y * physicsTimeStep
-		t += physicsTimeStep
-
-		// Check player collisions (excluding owner for first 0.2s of flight to prevent self-collision at origin)
-		collisionDetected := false
-		for _, p := range players {
-			if !p.IsAlive {
-				continue
-			}
-			if p.PlayerID == ownerID && t < 0.2 {
-				continue
-			}
-
-			// 2D distance check
-			dx := position.X - p.Position.X
-			dy := position.Y - p.Position.Y
-			dist := math.Sqrt(dx*dx + dy*dy)
-			if dist <= playerHitRadius {
-				hitPlayerID = p.PlayerID
-				collisionDetected = true
-				expPt := position
-				explosionPoint = &expPt
-				break
-			}
-		}
-
-		if collisionDetected {
-			break
-		}
-
-		// Check terrain collision
-		if terrain.IsSolid(position.X, position.Y) {
-			if drillMode && terrainPassCount == 0 {
-				// drill_bomb: pass through the first terrain hit
-				terrainPassCount++
-			} else {
-				expPt := position
-				explosionPoint = &expPt
-				break
-			}
-		}
-
-		// Check out of bounds (left, right, bottom)
-		if position.X < -100 || position.X > float64(terrain.Width)+100 || position.Y > float64(terrain.Height)+50 {
-			break
-		}
 	}
 
 	result.HitPlayerID = hitPlayerID
 	result.ExplosionPoint = explosionPoint
 
 	return result
+}
+
+// checkSegmentCollisions checks for terrain and player hits along the line from prev to curr.
+// Uses sub-sampling with 4-pixel steps for precision.
+func checkSegmentCollisions(
+	prev, curr Vector2,
+	ownerID string,
+	t float64,
+	terrain *Terrain,
+	players map[string]*BattlePlayerState,
+	drillMode bool,
+	terrainPassCount *int,
+	hitRadius float64,
+) (hit bool, hitPos Vector2, hitPlayerID string) {
+	dx := curr.X - prev.X
+	dy := curr.Y - prev.Y
+	dist := math.Sqrt(dx*dx + dy*dy)
+
+	steps := int(math.Ceil(dist / 4.0)) // check every 4 pixels
+	if steps < 1 {
+		steps = 1
+	}
+
+	for i := 1; i <= steps; i++ {
+		frac := float64(i) / float64(steps)
+		px := prev.X + dx*frac
+		py := prev.Y + dy*frac
+
+		// Check player collisions
+		for _, p := range players {
+			if !p.IsAlive {
+				continue
+			}
+			if p.PlayerID == ownerID && t < 0.3 {
+				continue // skip self for first 0.3s
+			}
+			ddx := px - p.Position.X
+			ddy := py - (p.Position.Y - 20) // center of player body (sprite is 48px tall, anchor bottom)
+			d := math.Sqrt(ddx*ddx + ddy*ddy)
+			if d <= hitRadius {
+				return true, Vector2{X: px, Y: py}, p.PlayerID
+			}
+		}
+
+		// Check terrain collision
+		if terrain.IsSolid(px, py) {
+			if drillMode && *terrainPassCount == 0 {
+				*terrainPassCount++
+			} else {
+				return true, Vector2{X: px, Y: py}, ""
+			}
+		}
+	}
+
+	return false, Vector2{}, ""
 }

@@ -28,15 +28,7 @@ func main() {
 	log := observability.Log
 	log.Info().Msg("starting Game Server...")
 
-	// 3. Load static game data configurations
-	// Configs are located at "configs/" relative to workspace root
-	err := gamedata.LoadGameData("configs")
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to load game data configuration files")
-	}
-	log.Info().Msg("game configurations loaded successfully")
-
-	// 4. Init DB & Redis connections
+	// 3. Init DB & Redis connections (moved before game data loading for DB config support)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -45,6 +37,15 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to connect to Postgres")
 	}
 	defer db.Close()
+
+	// 4. Load static game data configurations — try DB first, fall back to YAML
+	if err := gamedata.LoadGameDataFromDB(db); err != nil {
+		log.Warn().Err(err).Msg("failed to load config from DB, falling back to YAML")
+		if err := gamedata.LoadGameData("configs"); err != nil {
+			log.Fatal().Err(err).Msg("failed to load game data")
+		}
+	}
+	log.Info().Msg("game configurations loaded successfully")
 
 	redisClient, err := database.NewRedisClient(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
 	if err != nil {

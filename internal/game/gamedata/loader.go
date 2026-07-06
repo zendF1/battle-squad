@@ -1,9 +1,14 @@
 package gamedata
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+
+	"battle-squad/internal/shared/database"
 
 	"gopkg.in/yaml.v3"
 )
@@ -84,7 +89,25 @@ type GameData struct {
 	Maps       map[string]MapConfig
 }
 
+// PhysicsConfig holds physics constants loaded from game_settings table
+type PhysicsConfig struct {
+	Gravity                   float64
+	ProjectileSpeedMultiplier float64
+	WindScale                 float64
+	PlayerHitRadius           float64
+	TimeStep                  float64
+	PathRecordStep            float64
+	MaxFlightSeconds          float64
+	TurnTimeSeconds           int
+	IdleTimeoutMinutes        int
+	MoveStepPixels            int
+	MoveEnergyCostPer2px      float64
+	FallDamageThreshold       float64
+	FallDamagePerPixel        float64
+}
+
 var Data *GameData
+var Physics *PhysicsConfig
 
 func LoadGameData(configDir string) error {
 	gData := &GameData{
@@ -160,6 +183,252 @@ func loadYAMLFile(path string, target interface{}) error {
 	}
 
 	return nil
+}
+
+// LoadGameDataFromDB loads all game config from database tables instead of YAML files.
+// Returns error if any config table is empty so caller can fall back to YAML.
+func LoadGameDataFromDB(db *database.PostgresDB) error {
+	ctx := context.Background()
+
+	gData := &GameData{
+		Characters: make(map[string]CharacterConfig),
+		Weapons:    make(map[string]WeaponConfig),
+		Skills:     make(map[string]SkillConfig),
+		Items:      make(map[string]ItemConfig),
+		Maps:       make(map[string]MapConfig),
+	}
+
+	// 1. Load characters
+	rows, err := db.Pool.Query(ctx, `SELECT character_id, name, role, hp, damage, mobility, defense, skill_power, terrain_damage, difficulty, weapon_id, skill_id FROM config_characters`)
+	if err != nil {
+		return fmt.Errorf("failed to query config_characters: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c CharacterConfig
+		if err := rows.Scan(&c.CharacterID, &c.Name, &c.Role, &c.HP, &c.Damage, &c.Mobility, &c.Defense, &c.SkillPower, &c.TerrainDamage, &c.Difficulty, &c.WeaponID, &c.SkillID); err != nil {
+			return fmt.Errorf("failed to scan config_characters row: %w", err)
+		}
+		gData.Characters[c.CharacterID] = c
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating config_characters: %w", err)
+	}
+	if len(gData.Characters) == 0 {
+		return fmt.Errorf("config_characters table is empty")
+	}
+
+	// 2. Load weapons
+	rows, err = db.Pool.Query(ctx, `SELECT weapon_id, name, damage, explosion_radius, terrain_damage, projectile_weight, wind_influence, multi_hit FROM config_weapons`)
+	if err != nil {
+		return fmt.Errorf("failed to query config_weapons: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var w WeaponConfig
+		if err := rows.Scan(&w.WeaponID, &w.Name, &w.Damage, &w.ExplosionRadius, &w.TerrainDamage, &w.ProjectileWeight, &w.WindInfluence, &w.MultiHit); err != nil {
+			return fmt.Errorf("failed to scan config_weapons row: %w", err)
+		}
+		gData.Weapons[w.WeaponID] = w
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating config_weapons: %w", err)
+	}
+	if len(gData.Weapons) == 0 {
+		return fmt.Errorf("config_weapons table is empty")
+	}
+
+	// 3. Load skills
+	rows, err = db.Pool.Query(ctx, `SELECT skill_id, character_id, name, cooldown_turn, effect_type, projectile_count, status_effect_id, damage_multiplier FROM config_skills`)
+	if err != nil {
+		return fmt.Errorf("failed to query config_skills: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var s SkillConfig
+		if err := rows.Scan(&s.SkillID, &s.CharacterID, &s.Name, &s.CooldownTurn, &s.EffectType, &s.ProjectileCount, &s.StatusEffectID, &s.DamageMultiplier); err != nil {
+			return fmt.Errorf("failed to scan config_skills row: %w", err)
+		}
+		gData.Skills[s.SkillID] = s
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating config_skills: %w", err)
+	}
+	if len(gData.Skills) == 0 {
+		return fmt.Errorf("config_skills table is empty")
+	}
+
+	// 4. Load items
+	rows, err = db.Pool.Query(ctx, `SELECT item_id, name, type, target_type, value, max_use_per_match, cooldown FROM config_items`)
+	if err != nil {
+		return fmt.Errorf("failed to query config_items: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var it ItemConfig
+		if err := rows.Scan(&it.ItemID, &it.Name, &it.Type, &it.TargetType, &it.Value, &it.MaxUsePerMatch, &it.Cooldown); err != nil {
+			return fmt.Errorf("failed to scan config_items row: %w", err)
+		}
+		gData.Items[it.ItemID] = it
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating config_items: %w", err)
+	}
+	if len(gData.Items) == 0 {
+		return fmt.Errorf("config_items table is empty")
+	}
+
+	// 5. Load maps (with JSONB fields)
+	rows, err = db.Pool.Query(ctx, `SELECT map_id, name, width, height, default_wind_power_range, terrain_layers, spawn_points FROM config_maps`)
+	if err != nil {
+		return fmt.Errorf("failed to query config_maps: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var m MapConfig
+		var windRangeJSON, terrainJSON, spawnJSON []byte
+		if err := rows.Scan(&m.MapID, &m.Name, &m.Width, &m.Height, &windRangeJSON, &terrainJSON, &spawnJSON); err != nil {
+			return fmt.Errorf("failed to scan config_maps row: %w", err)
+		}
+		if err := json.Unmarshal(windRangeJSON, &m.DefaultWindPowerRange); err != nil {
+			return fmt.Errorf("failed to unmarshal wind_power_range for map %s: %w", m.MapID, err)
+		}
+		if err := json.Unmarshal(terrainJSON, &m.TerrainLayers); err != nil {
+			return fmt.Errorf("failed to unmarshal terrain_layers for map %s: %w", m.MapID, err)
+		}
+		if err := json.Unmarshal(spawnJSON, &m.SpawnPoints); err != nil {
+			return fmt.Errorf("failed to unmarshal spawn_points for map %s: %w", m.MapID, err)
+		}
+		gData.Maps[m.MapID] = m
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating config_maps: %w", err)
+	}
+	if len(gData.Maps) == 0 {
+		return fmt.Errorf("config_maps table is empty")
+	}
+
+	// 6. Load physics settings from game_settings
+	physics, err := loadPhysicsFromDB(ctx, db)
+	if err != nil {
+		return fmt.Errorf("failed to load game_settings: %w", err)
+	}
+
+	// Validate configuration relationships
+	if err := gData.validate(); err != nil {
+		return fmt.Errorf("game data validation failed: %w", err)
+	}
+
+	Data = gData
+	Physics = physics
+	return nil
+}
+
+// loadPhysicsFromDB reads game_settings rows and maps them to PhysicsConfig.
+// Uses sensible defaults if a key is not found in the table.
+func loadPhysicsFromDB(ctx context.Context, db *database.PostgresDB) (*PhysicsConfig, error) {
+	settings := make(map[string]string)
+
+	rows, err := db.Pool.Query(ctx, `SELECT key, value FROM game_settings`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query game_settings: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			return nil, fmt.Errorf("failed to scan game_settings row: %w", err)
+		}
+		settings[k] = v
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating game_settings: %w", err)
+	}
+
+	p := &PhysicsConfig{
+		// Defaults
+		Gravity:                   200.0,
+		ProjectileSpeedMultiplier: 6.0,
+		WindScale:                 30.0,
+		PlayerHitRadius:           24.0,
+		TimeStep:                  0.02,
+		PathRecordStep:            0.05,
+		MaxFlightSeconds:          6.0,
+		TurnTimeSeconds:           20,
+		IdleTimeoutMinutes:        2,
+		MoveStepPixels:            2,
+		MoveEnergyCostPer2px:      1.0,
+		FallDamageThreshold:       50.0,
+		FallDamagePerPixel:        0.5,
+	}
+
+	if v, ok := settings["gravity"]; ok {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			p.Gravity = f
+		}
+	}
+	if v, ok := settings["projectile_speed_multiplier"]; ok {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			p.ProjectileSpeedMultiplier = f
+		}
+	}
+	if v, ok := settings["wind_scale"]; ok {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			p.WindScale = f
+		}
+	}
+	if v, ok := settings["player_hit_radius"]; ok {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			p.PlayerHitRadius = f
+		}
+	}
+	if v, ok := settings["time_step"]; ok {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			p.TimeStep = f
+		}
+	}
+	if v, ok := settings["path_record_step"]; ok {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			p.PathRecordStep = f
+		}
+	}
+	if v, ok := settings["max_flight_seconds"]; ok {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			p.MaxFlightSeconds = f
+		}
+	}
+	if v, ok := settings["turn_time_seconds"]; ok {
+		if i, err := strconv.Atoi(v); err == nil {
+			p.TurnTimeSeconds = i
+		}
+	}
+	if v, ok := settings["idle_timeout_minutes"]; ok {
+		if i, err := strconv.Atoi(v); err == nil {
+			p.IdleTimeoutMinutes = i
+		}
+	}
+	if v, ok := settings["move_step_pixels"]; ok {
+		if i, err := strconv.Atoi(v); err == nil {
+			p.MoveStepPixels = i
+		}
+	}
+	if v, ok := settings["move_energy_cost_per_2px"]; ok {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			p.MoveEnergyCostPer2px = f
+		}
+	}
+	if v, ok := settings["fall_damage_threshold"]; ok {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			p.FallDamageThreshold = f
+		}
+	}
+	if v, ok := settings["fall_damage_per_pixel"]; ok {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			p.FallDamagePerPixel = f
+		}
+	}
+
+	return p, nil
 }
 
 func (gd *GameData) validate() error {
