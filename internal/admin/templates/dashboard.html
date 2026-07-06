@@ -1,0 +1,17 @@
+{{define "dashboard"}}
+{{template "layout" .}}
+{{end}}
+
+{{define "content"}}
+<h1>Dashboard</h1>
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="value">{{.Stats.ActiveRooms}}</div>
+        <div class="label">Active Rooms</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{.Stats.TotalPlayers}}</div>
+        <div class="label">Total Players</div>
+    </div>
+</div>
+{{end}}

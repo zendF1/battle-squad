@@ -1,0 +1,30 @@
+{{define "physics"}}
+{{template "layout" .}}
+{{end}}
+
+{{define "content"}}
+<h1>Physics &amp; Game Settings</h1>
+{{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+<div class="card">
+<form method="POST" action="/physics/save">
+<table>
+<thead><tr><th>Category</th><th>Key</th><th>Value</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+{{range .Settings}}
+<tr>
+    <td><span class="badge badge-success">{{.Category}}</span></td>
+    <td><strong>{{.Key}}</strong></td>
+    <td><input type="text" name="setting_{{.Key}}" value="{{.Value}}" style="width:120px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;"></td>
+    <td>{{.ValueType}}</td>
+    <td style="font-size:12px;color:#666;">{{.Description}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+<div style="margin-top:16px;">
+<button type="submit" class="btn btn-primary">Save All Settings</button>
+</div>
+</form>
+</div>
+{{end}}

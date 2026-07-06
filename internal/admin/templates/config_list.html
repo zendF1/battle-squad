@@ -1,0 +1,97 @@
+{{define "config_list"}}
+{{template "layout" .}}
+{{end}}
+
+{{define "content"}}
+<div class="top-bar">
+    <h1>{{.Title}}</h1>
+    <a href="/{{.ConfigType}}/edit" class="btn btn-primary">+ Add New</a>
+</div>
+{{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+<div class="card">
+<table>
+{{if eq .ConfigType "characters"}}
+<thead><tr><th>ID</th><th>Name</th><th>Role</th><th>HP</th><th>Damage</th><th>Mobility</th><th>Defense</th><th>Weapon</th><th>Skill</th><th>Actions</th></tr></thead>
+<tbody>
+{{range .Items}}
+<tr>
+    <td>{{.CharacterID}}</td><td>{{.Name}}</td><td>{{.Role}}</td><td>{{.HP}}</td><td>{{.Damage}}</td><td>{{.Mobility}}</td><td>{{.Defense}}</td><td>{{.WeaponID}}</td><td>{{.SkillID}}</td>
+    <td>
+        <a href="/characters/edit?id={{.CharacterID}}" class="btn btn-primary btn-sm">Edit</a>
+        <form method="POST" action="/characters/delete" style="display:inline" onsubmit="return confirm('Delete this character?')">
+            <input type="hidden" name="id" value="{{.CharacterID}}">
+            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+        </form>
+    </td>
+</tr>
+{{end}}
+</tbody>
+{{else if eq .ConfigType "weapons"}}
+<thead><tr><th>ID</th><th>Name</th><th>Damage</th><th>Explosion Radius</th><th>Terrain Dmg</th><th>Proj Weight</th><th>Wind Infl</th><th>Multi Hit</th><th>Actions</th></tr></thead>
+<tbody>
+{{range .Items}}
+<tr>
+    <td>{{.WeaponID}}</td><td>{{.Name}}</td><td>{{.Damage}}</td><td>{{.ExplosionRadius}}</td><td>{{.TerrainDamage}}</td><td>{{.ProjectileWeight}}</td><td>{{.WindInfluence}}</td><td>{{.MultiHit}}</td>
+    <td>
+        <a href="/weapons/edit?id={{.WeaponID}}" class="btn btn-primary btn-sm">Edit</a>
+        <form method="POST" action="/weapons/delete" style="display:inline" onsubmit="return confirm('Delete this weapon?')">
+            <input type="hidden" name="id" value="{{.WeaponID}}">
+            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+        </form>
+    </td>
+</tr>
+{{end}}
+</tbody>
+{{else if eq .ConfigType "skills"}}
+<thead><tr><th>ID</th><th>Character</th><th>Name</th><th>Cooldown</th><th>Effect</th><th>Proj Count</th><th>Dmg Mult</th><th>Actions</th></tr></thead>
+<tbody>
+{{range .Items}}
+<tr>
+    <td>{{.SkillID}}</td><td>{{.CharacterID}}</td><td>{{.Name}}</td><td>{{.CooldownTurn}}</td><td>{{.EffectType}}</td><td>{{.ProjectileCount}}</td><td>{{.DamageMultiplier}}</td>
+    <td>
+        <a href="/skills/edit?id={{.SkillID}}" class="btn btn-primary btn-sm">Edit</a>
+        <form method="POST" action="/skills/delete" style="display:inline" onsubmit="return confirm('Delete this skill?')">
+            <input type="hidden" name="id" value="{{.SkillID}}">
+            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+        </form>
+    </td>
+</tr>
+{{end}}
+</tbody>
+{{else if eq .ConfigType "items"}}
+<thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Target</th><th>Value</th><th>Max Use</th><th>Cooldown</th><th>Actions</th></tr></thead>
+<tbody>
+{{range .Items}}
+<tr>
+    <td>{{.ItemID}}</td><td>{{.Name}}</td><td>{{.Type}}</td><td>{{.TargetType}}</td><td>{{.Value}}</td><td>{{.MaxUsePerMatch}}</td><td>{{.Cooldown}}</td>
+    <td>
+        <a href="/items/edit?id={{.ItemID}}" class="btn btn-primary btn-sm">Edit</a>
+        <form method="POST" action="/items/delete" style="display:inline" onsubmit="return confirm('Delete this item?')">
+            <input type="hidden" name="id" value="{{.ItemID}}">
+            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+        </form>
+    </td>
+</tr>
+{{end}}
+</tbody>
+{{else if eq .ConfigType "maps"}}
+<thead><tr><th>ID</th><th>Name</th><th>Width</th><th>Height</th><th>Description</th><th>Actions</th></tr></thead>
+<tbody>
+{{range .Items}}
+<tr>
+    <td>{{.MapID}}</td><td>{{.Name}}</td><td>{{.Width}}</td><td>{{.Height}}</td><td>{{.Description}}</td>
+    <td>
+        <a href="/maps/edit?id={{.MapID}}" class="btn btn-primary btn-sm">Edit</a>
+        <form method="POST" action="/maps/delete" style="display:inline" onsubmit="return confirm('Delete this map?')">
+            <input type="hidden" name="id" value="{{.MapID}}">
+            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+        </form>
+    </td>
+</tr>
+{{end}}
+</tbody>
+{{end}}
+</table>
+</div>
+{{end}}

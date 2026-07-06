@@ -1,0 +1,38 @@
+{{define "shop"}}
+{{template "layout" .}}
+{{end}}
+
+{{define "content"}}
+<div class="top-bar">
+    <h1>Shop Offers</h1>
+    <a href="/shop/edit" class="btn btn-primary">+ Add New Offer</a>
+</div>
+{{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+<div class="card">
+<table>
+<thead><tr><th>Offer ID</th><th>Item ID</th><th>Type</th><th>Currency</th><th>Price</th><th>Qty</th><th>Limit</th><th>Active</th><th>Actions</th></tr></thead>
+<tbody>
+{{range .Offers}}
+<tr>
+    <td>{{.OfferID}}</td>
+    <td>{{.ItemID}}</td>
+    <td>{{.OfferType}}</td>
+    <td>{{.PriceCurrency}}</td>
+    <td>{{.PriceAmount}}</td>
+    <td>{{.Quantity}}</td>
+    <td>{{if .LimitPerPlayer}}{{deref .LimitPerPlayer}}{{else}}-{{end}}</td>
+    <td>{{if .IsActive}}<span class="badge badge-success">Yes</span>{{else}}<span class="badge badge-danger">No</span>{{end}}</td>
+    <td>
+        <a href="/shop/edit?id={{.OfferID}}" class="btn btn-primary btn-sm">Edit</a>
+        <form method="POST" action="/shop/delete" style="display:inline" onsubmit="return confirm('Delete this offer?')">
+            <input type="hidden" name="id" value="{{.OfferID}}">
+            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+        </form>
+    </td>
+</tr>
+{{end}}
+</tbody>
+</table>
+</div>
+{{end}}

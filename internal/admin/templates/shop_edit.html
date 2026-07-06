@@ -1,0 +1,59 @@
+{{define "shop_edit"}}
+{{template "layout" .}}
+{{end}}
+
+{{define "content"}}
+<div class="top-bar">
+    <h1>{{if .IsNew}}New{{else}}Edit{{end}} Shop Offer</h1>
+    <a href="/shop" class="btn btn-primary">Back to List</a>
+</div>
+<div class="card">
+<form method="POST" action="/shop/save">
+{{if not .IsNew}}<input type="hidden" name="_original_id" value="{{.Offer.OfferID}}">{{end}}
+<div class="form-group">
+    <label>Offer ID</label>
+    <input type="text" name="offer_id" value="{{.Offer.OfferID}}">
+    <div class="desc">Unique identifier for this shop offer</div>
+</div>
+<div class="form-group">
+    <label>Item ID</label>
+    <input type="text" name="item_id" value="{{.Offer.ItemID}}">
+    <div class="desc">ID of the item being sold</div>
+</div>
+<div class="form-group">
+    <label>Offer Type</label>
+    <input type="text" name="offer_type" value="{{.Offer.OfferType}}">
+    <div class="desc">Type of offer (e.g. normal, bundle, limited)</div>
+</div>
+<div class="form-group">
+    <label>Price Currency</label>
+    <input type="text" name="price_currency" value="{{.Offer.PriceCurrency}}">
+    <div class="desc">Currency type: coins or gems</div>
+</div>
+<div class="form-group">
+    <label>Price Amount</label>
+    <input type="number" name="price_amount" value="{{.Offer.PriceAmount}}" step="1">
+    <div class="desc">Cost of the offer</div>
+</div>
+<div class="form-group">
+    <label>Quantity</label>
+    <input type="number" name="quantity" value="{{.Offer.Quantity}}" step="1">
+    <div class="desc">Number of items included</div>
+</div>
+<div class="form-group">
+    <label>Limit Per Player</label>
+    <input type="number" name="limit_per_player" value="{{if .Offer.LimitPerPlayer}}{{deref .Offer.LimitPerPlayer}}{{end}}" step="1">
+    <div class="desc">Max purchases per player (leave empty for unlimited)</div>
+</div>
+<div class="form-group">
+    <label>Active</label>
+    <select name="is_active">
+        <option value="true" {{if .Offer.IsActive}}selected{{end}}>Yes</option>
+        <option value="false" {{if not .Offer.IsActive}}selected{{end}}>No</option>
+    </select>
+    <div class="desc">Whether this offer is visible in the shop</div>
+</div>
+<button type="submit" class="btn btn-primary">{{if .IsNew}}Create{{else}}Save Changes{{end}}</button>
+</form>
+</div>
+{{end}}

@@ -1,0 +1,33 @@
+{{define "devtools"}}
+{{template "layout" .}}
+{{end}}
+
+{{define "content"}}
+<h1>Dev Tools</h1>
+{{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+
+<div class="card">
+    <h3 style="margin-bottom:8px;">Clear Active Rooms</h3>
+    <p style="font-size:14px;color:#666;margin-bottom:12px;">Remove all active room entries from Redis. Use when rooms are stuck or after a game server crash.</p>
+    <form method="POST" action="/devtools/clear-rooms" onsubmit="return confirm('Clear all active rooms from Redis?')">
+        <button type="submit" class="btn btn-warning">Clear Rooms</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3 style="margin-bottom:8px;">Seed Config Data</h3>
+    <p style="font-size:14px;color:#666;margin-bottom:12px;">Re-seed game settings and config tables from YAML files. Uses ON CONFLICT DO NOTHING so existing data is preserved.</p>
+    <form method="POST" action="/devtools/seed-config" onsubmit="return confirm('Seed config data from YAML files?')">
+        <button type="submit" class="btn btn-primary">Seed Config</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3 style="margin-bottom:8px;color:#e74c3c;">Reset All Player Data</h3>
+    <p style="font-size:14px;color:#666;margin-bottom:12px;">DELETE all player data from the database (accounts, profiles, inventories, match history, bans, etc.) and clear Redis keys. Config tables are NOT affected. This action is irreversible!</p>
+    <form method="POST" action="/devtools/reset-data" onsubmit="return confirm('WARNING: This will DELETE ALL player data. This cannot be undone. Are you sure?')">
+        <button type="submit" class="btn btn-danger">Reset All Data</button>
+    </form>
+</div>
+{{end}}

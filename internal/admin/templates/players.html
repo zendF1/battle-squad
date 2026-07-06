@@ -1,0 +1,58 @@
+{{define "players"}}
+{{template "layout" .}}
+{{end}}
+
+{{define "content"}}
+<h1>Players</h1>
+{{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+<div class="card">
+<form method="GET" action="/players" class="search-bar">
+    <input type="text" name="search" value="{{.Search}}" placeholder="Search by display name...">
+    <button type="submit" class="btn btn-primary">Search</button>
+</form>
+<table>
+<thead><tr><th>Player ID</th><th>Display Name</th><th>Level</th><th>Coins</th><th>Gems</th><th>Created</th><th>Status</th><th>Actions</th></tr></thead>
+<tbody>
+{{range .Players}}
+<tr>
+    <td style="font-size:12px;font-family:monospace;">{{.PlayerID}}</td>
+    <td><strong>{{.DisplayName}}</strong></td>
+    <td>{{.Level}}</td>
+    <td>{{.Coins}}</td>
+    <td>{{.Gems}}</td>
+    <td style="font-size:12px;">{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
+    <td>
+        {{if .IsBanned}}<span class="badge badge-danger">Banned</span>{{else}}<span class="badge badge-success">Active</span>{{end}}
+    </td>
+    <td>
+        {{if .IsBanned}}
+        <form method="POST" action="/players/unban" style="display:inline" onsubmit="return confirm('Unban this player?')">
+            <input type="hidden" name="account_id" value="{{.AccountID}}">
+            <button type="submit" class="btn btn-success btn-sm">Unban</button>
+        </form>
+        {{else}}
+        <form method="POST" action="/players/ban" style="display:inline" onsubmit="return confirm('Ban this player?')">
+            <input type="hidden" name="account_id" value="{{.AccountID}}">
+            <input type="hidden" name="reason" value="Admin ban from dashboard">
+            <button type="submit" class="btn btn-danger btn-sm">Ban</button>
+        </form>
+        {{end}}
+    </td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{if gt .TotalPages 1}}
+<div class="pagination">
+    {{if gt .Page 1}}
+    <a href="/players?search={{.Search}}&page={{sub .Page 1}}">Prev</a>
+    {{end}}
+    <span class="current">Page {{.Page}} of {{.TotalPages}}</span>
+    {{if lt .Page .TotalPages}}
+    <a href="/players?search={{.Search}}&page={{add .Page 1}}">Next</a>
+    {{end}}
+</div>
+{{end}}
+</div>
+{{end}}

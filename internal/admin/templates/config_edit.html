@@ -1,0 +1,29 @@
+{{define "config_edit"}}
+{{template "layout" .}}
+{{end}}
+
+{{define "content"}}
+<div class="top-bar">
+    <h1>{{if .IsNew}}New{{else}}Edit{{end}} {{.Title}}</h1>
+    <a href="/{{.ConfigType}}" class="btn btn-primary">Back to List</a>
+</div>
+<div class="card">
+<form method="POST" action="/{{.ConfigType}}/save">
+{{if not .IsNew}}<input type="hidden" name="_original_id" value="{{.OriginalID}}">{{end}}
+{{range .Fields}}
+<div class="form-group">
+    <label>{{.Label}}</label>
+    {{if eq .Type "textarea"}}
+    <textarea name="{{.Name}}" rows="4">{{.Value}}</textarea>
+    {{else if eq .Type "number"}}
+    <input type="number" name="{{.Name}}" value="{{.Value}}" step="{{.Step}}">
+    {{else}}
+    <input type="text" name="{{.Name}}" value="{{.Value}}">
+    {{end}}
+    {{if .Description}}<div class="desc">{{.Description}}</div>{{end}}
+</div>
+{{end}}
+<button type="submit" class="btn btn-primary">{{if .IsNew}}Create{{else}}Save Changes{{end}}</button>
+</form>
+</div>
+{{end}}
