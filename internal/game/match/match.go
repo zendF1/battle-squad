@@ -4,15 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"battle-squad/internal/api/economy"
 	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/game/ws"
 	"battle-squad/internal/shared/database"
-	"math"
 	"battle-squad/internal/shared/observability"
 )
 
@@ -285,6 +286,17 @@ func (m *Match) startTurn(ctx context.Context) {
 	if player.IsBot {
 		go func() {
 			time.Sleep(1500 * time.Millisecond) // wait for player to realize it's bot turn
+
+			// Idle bots (tutorial) just end their turn
+			if strings.HasPrefix(player.PlayerID, "bot_") && player.DisplayName == "Target Bot" {
+				m.Events <- matchEvent{
+					client: nil,
+					msg:    ws.Message{Event: "EndTurn"},
+					ctx:    context.Background(),
+				}
+				return
+			}
+
 			brain := NewBotBrain("normal")
 			action := brain.DecideAction(player, &m.State)
 			if act, ok := action.(ShootAction); ok {
@@ -776,6 +788,21 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 			Data:  payloadDamaged,
 		})
 		m.el.Log("PlayerDamaged", "", damagedPlayers)
+	}
+
+	// Broadcast updated positions for all players (handles terrain fall)
+	if result.TerrainDestroyed {
+		for _, p := range m.State.Players {
+			if !p.IsAlive {
+				continue
+			}
+			posPayload, _ := json.Marshal(map[string]interface{}{
+				"playerId":   p.PlayerID,
+				"position":   p.Position,
+				"moveEnergy": p.MoveEnergy,
+			})
+			m.broadcast(ws.Message{Event: "PlayerMoved", Data: posPayload})
+		}
 	}
 
 	// 3. Complete shooting event, check win conditions, end turn

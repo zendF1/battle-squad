@@ -161,6 +161,8 @@ func (r *Room) handleEvent(ev roomEvent) {
 		r.processReady(client)
 	case "StartMatch":
 		r.processStartMatch(client)
+	case "__start_tutorial":
+		r.processStartTutorial(client)
 	}
 }
 
@@ -168,6 +170,14 @@ func (r *Room) processJoin(client *ws.Client) {
 	// Add client
 	r.Clients[client.PlayerID] = client
 	client.RoomID = r.ID
+
+	// Check if player already exists in state (e.g., host added at room creation)
+	for _, p := range r.State.Players {
+		if p.PlayerID == client.PlayerID {
+			r.broadcastRoomUpdated()
+			return
+		}
+	}
 
 	// Query player display name
 	var displayName string
@@ -274,12 +284,15 @@ func (r *Room) processSelectCharacter(client *ws.Client, characterID string) {
 		return
 	}
 
-	// Verify player has unlocked character
-	var exists bool
-	query := "SELECT EXISTS(SELECT 1 FROM player_characters WHERE player_id = $1 AND character_id = $2)"
-	err := r.db.Pool.QueryRow(context.Background(), query, client.PlayerID, characterID).Scan(&exists)
-	if err != nil || !exists {
-		return // Not unlocked
+	// Rookie is the default character — always available
+	if characterID != "rookie" {
+		// Verify player has unlocked character
+		var exists bool
+		query := "SELECT EXISTS(SELECT 1 FROM player_characters WHERE player_id = $1 AND character_id = $2)"
+		err := r.db.Pool.QueryRow(context.Background(), query, client.PlayerID, characterID).Scan(&exists)
+		if err != nil || !exists {
+			return // Not unlocked
+		}
 	}
 
 	for idx, p := range r.State.Players {
@@ -466,6 +479,79 @@ func (r *Room) processStartMatch(client *ws.Client) {
 	go r.match.Run()
 
 	// Notify room hub of status change
+	r.hub.SyncRoomState(context.Background(), &r.State)
+}
+
+func (r *Room) processStartTutorial(client *ws.Client) {
+	matchID := generateID()
+
+	// Add idle bot to room state
+	r.State.Players = append(r.State.Players, RoomPlayer{
+		PlayerID:    "bot_" + matchID[:8],
+		DisplayName: "Target Bot",
+		TeamID:      2,
+		CharacterID: "rookie",
+		Items:       []string{},
+		IsReady:     true,
+		IsHost:      false,
+	})
+
+	r.State.Status = "in_match"
+	r.broadcastRoomUpdated()
+
+	observability.Log.Info().Str("roomId", r.ID).Msg("starting tutorial match with idle bot")
+
+	// Build players for match
+	matchPlayers := []*match.BattlePlayerState{}
+	for _, p := range r.State.Players {
+		var spawnPos match.Vector2
+		if p.TeamID == 2 {
+			spawnPos = match.Vector2{X: 1200, Y: 0}
+		} else {
+			spawnPos = match.Vector2{X: 400, Y: 0}
+		}
+
+		charData, ok := gamedata.Data.Characters[p.CharacterID]
+		hp := 100
+		defense := 50
+		if ok {
+			hp = charData.HP
+			defense = charData.Defense
+		}
+
+		isBot := p.PlayerID[:4] == "bot_"
+
+		matchPlayers = append(matchPlayers, &match.BattlePlayerState{
+			PlayerID:      p.PlayerID,
+			DisplayName:   p.DisplayName,
+			TeamID:        p.TeamID,
+			CharacterID:   p.CharacterID,
+			HP:            hp,
+			MaxHP:         hp,
+			Defense:       defense,
+			Position:      spawnPos,
+			MoveEnergy:    100,
+			Items:         p.Items,
+			StatusEffects: []match.StatusEffect{},
+			IsAlive:       true,
+			IsBot:         isBot,
+		})
+	}
+
+	r.match = match.NewMatch(
+		matchID,
+		r.ID,
+		r.State.Mode,
+		r.State.MapID,
+		matchPlayers,
+		r.Clients,
+		r.db,
+		r.hub.redis,
+		economy.NewRepository(),
+		r.hub,
+	)
+
+	go r.match.Run()
 	r.hub.SyncRoomState(context.Background(), &r.State)
 }
 

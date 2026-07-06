@@ -51,6 +51,39 @@ func (h *WSHandler) HandleMessage(ctx context.Context, client *ws.Client, msg ws
 			h.sendError(client, errResp)
 		}
 
+	case "QuickPlay":
+		// Create a tutorial room with an idle bot and start match immediately
+		var displayName string
+		query := "SELECT display_name FROM player_profiles WHERE player_id = $1"
+		err := h.hub.db.Pool.QueryRow(ctx, query, client.PlayerID).Scan(&displayName)
+		if err != nil {
+			displayName = "Player_" + client.PlayerID[:6]
+		}
+
+		room, err := h.hub.CreateRoom(ctx, client.PlayerID, displayName, CreateRoomPayload{
+			Mode:  "pvp_1v1",
+			MapID: "grassland_valley",
+		})
+		if err != nil {
+			errResp := model.AppError{Code: "ROOM_CREATE_FAILED", Message: err.Error(), Status: 400}
+			h.sendError(client, errResp)
+			return
+		}
+
+		// Join host
+		if err = room.Join(client, nil); err != nil {
+			errResp := model.AppError{Code: "ROOM_JOIN_FAILED", Message: err.Error(), Status: 400}
+			h.sendError(client, errResp)
+			return
+		}
+
+		// Add idle bot and start match via room event
+		room.Events <- roomEvent{
+			client: client,
+			msg:    ws.Message{Event: "__start_tutorial"},
+			ctx:    ctx,
+		}
+
 	case "JoinRoom":
 		var payload JoinRoomPayload
 		if err := json.Unmarshal(msg.Data, &payload); err != nil {

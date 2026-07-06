@@ -21,6 +21,7 @@ import (
 	"battle-squad/internal/api/appconfig"
 	"battle-squad/internal/api/matchhistory"
 	"battle-squad/internal/api/rooms"
+	"battle-squad/internal/api/dev"
 	"battle-squad/internal/shared/idempotency"
 	"battle-squad/internal/shared/config"
 	"battle-squad/internal/shared/database"
@@ -30,6 +31,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/time/rate"
 )
@@ -114,12 +116,22 @@ func main() {
 
 	roomsHandler := rooms.NewHandler(redisClient)
 
+	devHandler := dev.NewHandler(db, redisClient)
+
 	healthHandler := observability.NewHealthHandler(db, redisClient)
 
 	// 6. Router Setup
 	r := chi.NewRouter()
 
 	// 7. Middlewares
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Protocol-Version", "X-Correlation-ID"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: false,
+		MaxAge:           300,
+	}))
 	r.Use(chiMiddleware.RealIP)
 	r.Use(middleware.CorrelationID)
 	r.Use(chiMiddleware.Recoverer)
@@ -183,6 +195,13 @@ func main() {
 		r.Get("/player/match-history", matchhistoryHandler.GetHistory)
 		r.Get("/rooms", roomsHandler.GetRooms)
 	})
+
+	// Dev-only endpoints (only available in development)
+	if cfg.Env == "development" {
+		r.Post("/dev/clear-rooms", devHandler.ClearRooms)
+		r.Post("/dev/reset-data", devHandler.ResetData)
+		log.Warn().Msg("DEV endpoints enabled: /dev/clear-rooms, /dev/reset-data")
+	}
 
 	// 10. Start Server
 	srv := &http.Server{

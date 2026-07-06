@@ -18,34 +18,28 @@ type Server struct {
 	repo      *Repository
 	db        *database.PostgresDB
 	redis     *database.RedisClient
-	templates *template.Template
 	configDir string
 }
 
 // NewServer creates a new admin Server with parsed templates and repository.
 func NewServer(db *database.PostgresDB, redis *database.RedisClient, configDir string) *Server {
-	funcMap := template.FuncMap{
-		"add": func(a, b int) int { return a + b },
-		"sub": func(a, b int) int { return a - b },
-		"deref": func(p *int) int {
-			if p == nil {
-				return 0
-			}
-			return *p
-		},
-	}
-
-	tmpl := template.Must(
-		template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.html"),
-	)
-
 	return &Server{
 		repo:      NewRepository(db, redis),
 		db:        db,
 		redis:     redis,
-		templates: tmpl,
 		configDir: configDir,
 	}
+}
+
+var tmplFuncMap = template.FuncMap{
+	"add": func(a, b int) int { return a + b },
+	"sub": func(a, b int) int { return a - b },
+	"deref": func(p *int) int {
+		if p == nil {
+			return 0
+		}
+		return *p
+	},
 }
 
 // Routes returns the chi router with all admin dashboard routes.
@@ -104,10 +98,16 @@ func (s *Server) Routes() http.Handler {
 	return r
 }
 
-// render executes the named template with the given data.
+// render parses layout.html + the specific page template together to avoid
+// {{define "content"}} collisions between page templates, then executes "layout".
 func (s *Server) render(w http.ResponseWriter, tmplName string, data interface{}) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.templates.ExecuteTemplate(w, tmplName, data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	tmpl, err := template.New("").Funcs(tmplFuncMap).ParseFS(templateFS, "templates/layout.html", "templates/"+tmplName+".html")
+	if err != nil {
+		http.Error(w, "template parse error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := tmpl.ExecuteTemplate(w, "layout", data); err != nil {
+		http.Error(w, "template exec error: "+err.Error(), http.StatusInternalServerError)
 	}
 }
