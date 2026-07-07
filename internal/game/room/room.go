@@ -10,6 +10,7 @@ import (
 	"battle-squad/internal/api/economy"
 	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/game/match"
+	"battle-squad/internal/game/matchmaker"
 	"battle-squad/internal/game/ws"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
@@ -589,6 +590,140 @@ func (r *Room) processStartTutorial(client *ws.Client) {
 
 	go r.match.Run()
 	r.hub.SyncRoomState(context.Background(), &r.State)
+}
+
+func (r *Room) startRankedMatch(matchID string, botTierConfig matchmaker.BotTierConfig, eloConfig matchmaker.EloConfig, matchResult matchmaker.MatchResult) {
+	// Build team spawn point queues from map config
+	team1Spawns := []gamedata.SpawnPoint{}
+	team2Spawns := []gamedata.SpawnPoint{}
+	if mapCfg, ok := gamedata.Data.Maps[r.State.MapID]; ok {
+		mid := len(mapCfg.SpawnPoints) / 2
+		for i, sp := range mapCfg.SpawnPoints {
+			if i < mid {
+				team1Spawns = append(team1Spawns, sp)
+			} else {
+				team2Spawns = append(team2Spawns, sp)
+			}
+		}
+	}
+	if len(team1Spawns) == 0 {
+		team1Spawns = append(team1Spawns, gamedata.SpawnPoint{X: 200, Y: 0})
+	}
+	if len(team2Spawns) == 0 {
+		team2Spawns = append(team2Spawns, gamedata.SpawnPoint{X: 1400, Y: 0})
+	}
+	team1Idx := 0
+	team2Idx := 0
+
+	// Build match players
+	matchPlayers := []*match.BattlePlayerState{}
+	for _, p := range r.State.Players {
+		var spawnPos match.Vector2
+		if p.TeamID == 2 {
+			sp := team2Spawns[team2Idx%len(team2Spawns)]
+			spawnPos = match.Vector2{X: sp.X, Y: sp.Y}
+			team2Idx++
+		} else {
+			sp := team1Spawns[team1Idx%len(team1Spawns)]
+			spawnPos = match.Vector2{X: sp.X, Y: sp.Y}
+			team1Idx++
+		}
+
+		charData, ok := gamedata.Data.Characters[p.CharacterID]
+		hp := 100
+		defense := 50
+		if ok {
+			hp = charData.HP
+			defense = charData.Defense
+		}
+
+		isBot := len(p.PlayerID) >= 4 && p.PlayerID[:4] == "bot_"
+
+		matchPlayers = append(matchPlayers, &match.BattlePlayerState{
+			PlayerID:      p.PlayerID,
+			DisplayName:   p.DisplayName,
+			TeamID:        p.TeamID,
+			CharacterID:   p.CharacterID,
+			HP:            hp,
+			MaxHP:         hp,
+			Defense:       defense,
+			Position:      spawnPos,
+			MoveEnergy:    100,
+			Items:         p.Items,
+			StatusEffects: []match.StatusEffect{},
+			IsAlive:       true,
+			IsBot:         isBot,
+		})
+	}
+
+	// Collect per-team ratings for Elo calculation
+	team1Ratings := []int{}
+	team2Ratings := []int{}
+	for _, pid := range matchResult.Entry1.PlayerIDs {
+		if r, ok := matchResult.Entry1.PlayerRatings[pid]; ok {
+			team1Ratings = append(team1Ratings, r)
+		}
+	}
+	for _, pid := range matchResult.Entry2.PlayerIDs {
+		if r, ok := matchResult.Entry2.PlayerRatings[pid]; ok {
+			team2Ratings = append(team2Ratings, r)
+		}
+	}
+
+	avgTeam1 := match.TeamAvgRating(team1Ratings)
+	avgTeam2 := match.TeamAvgRating(team2Ratings)
+
+	// Build Elo params
+	botModifier := 1.0
+	if matchResult.HasBot {
+		// Load bot rating modifier from matchmaking config
+		mmCfg := matchmaker.LoadMatchmakingConfig(context.Background(), r.db)
+		botModifier = mmCfg.BotRatingModifier
+	}
+
+	eloParams := match.EloParams{
+		KFactor:     eloConfig.KFactor,
+		RatingFloor: eloConfig.RatingFloor,
+		BotModifier: botModifier,
+		HasBot:      matchResult.HasBot,
+	}
+
+	// Create match
+	r.match = match.NewMatch(
+		matchID,
+		r.ID,
+		r.State.Mode,
+		r.State.MapID,
+		matchPlayers,
+		r.Clients,
+		r.db,
+		r.hub.redis,
+		economy.NewRepository(),
+		r.hub,
+	)
+
+	// Set Elo data on match
+	r.match.TeamRatings = map[int]int{
+		1: avgTeam1,
+		2: avgTeam2,
+	}
+	r.match.EloParams = eloParams
+
+	// Track match completion
+	r.matchDone = r.match.MatchDone
+
+	// Run match loop
+	go r.match.Run()
+
+	// Sync room state
+	r.hub.SyncRoomState(context.Background(), &r.State)
+
+	observability.Log.Info().
+		Str("roomId", r.ID).
+		Str("matchId", matchID).
+		Int("team1Rating", avgTeam1).
+		Int("team2Rating", avgTeam2).
+		Msg("ranked match started")
 }
 
 func (r *Room) sendError(client *ws.Client, message string) {
