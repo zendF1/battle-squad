@@ -4,17 +4,19 @@ import (
 	"context"
 	"encoding/json"
 
+	"battle-squad/internal/game/matchmaker"
 	"battle-squad/internal/game/ws"
 	"battle-squad/internal/shared/model"
 	"battle-squad/internal/shared/observability"
 )
 
 type WSHandler struct {
-	hub *LobbyHub
+	hub        *LobbyHub
+	matchmaker *matchmaker.Matchmaker
 }
 
-func NewWSHandler(hub *LobbyHub) *WSHandler {
-	return &WSHandler{hub: hub}
+func NewWSHandler(hub *LobbyHub, mm *matchmaker.Matchmaker) *WSHandler {
+	return &WSHandler{hub: hub, matchmaker: mm}
 }
 
 // HandleLobbyMessage returns true if the event was handled, false if not a lobby event.
@@ -42,6 +44,22 @@ func (h *WSHandler) HandleLobbyMessage(ctx context.Context, client *ws.Client, m
 			return true
 		}
 		lobby.ProcessEvent(ctx, client, msg)
+		return true
+
+	case "StartQueue":
+		if client.LobbyID == "" {
+			h.sendError(client, "LOBBY_REQUIRED", "You must be in a lobby")
+			return true
+		}
+		h.handleStartQueue(ctx, client)
+		return true
+
+	case "CancelQueue":
+		if client.LobbyID == "" {
+			h.sendError(client, "LOBBY_REQUIRED", "You must be in a lobby")
+			return true
+		}
+		h.handleCancelQueue(ctx, client)
 		return true
 	}
 	return false
@@ -95,8 +113,96 @@ func (h *WSHandler) handleJoinLobby(ctx context.Context, client *ws.Client, payl
 	lobby.Join(client)
 }
 
+func (h *WSHandler) handleStartQueue(ctx context.Context, client *ws.Client) {
+	lobby, err := h.hub.FindLobby(client.LobbyID)
+	if err != nil {
+		h.sendError(client, "LOBBY_NOT_FOUND", "Lobby not found")
+		return
+	}
+
+	if lobby.State.HostPlayerID != client.PlayerID {
+		h.sendError(client, "NOT_HOST", "Only the host can start queue")
+		return
+	}
+
+	if lobby.State.Status != "preparing" {
+		h.sendError(client, "INVALID_STATUS", "Lobby is not in preparing state")
+		return
+	}
+
+	// Build queue entry data from lobby members.
+	playerIDs := make([]string, 0, len(lobby.State.Members))
+	playerRatings := make(map[string]int)
+	playerChars := make(map[string]string)
+	playerItems := make(map[string][]string)
+	playerNames := make(map[string]string)
+
+	for _, m := range lobby.State.Members {
+		playerIDs = append(playerIDs, m.PlayerID)
+		playerRatings[m.PlayerID] = m.Rating
+		playerChars[m.PlayerID] = m.CharacterID
+		playerItems[m.PlayerID] = m.Items
+		playerNames[m.PlayerID] = m.DisplayName
+	}
+
+	entry, err := h.matchmaker.EnqueueLobby(ctx, lobby.ID, playerIDs, playerRatings, playerChars, playerItems, playerNames)
+	if err != nil {
+		h.sendError(client, "QUEUE_FAILED", err.Error())
+		return
+	}
+
+	lobby.State.Status = "in_queue"
+	lobby.State.QueueEntryID = entry.EntryID
+
+	// Broadcast updated state and QueueStarted.
+	lobby.broadcastLobbyUpdated()
+
+	payload, _ := json.Marshal(map[string]interface{}{
+		"estimatedWait": h.matchmaker.GetConfig().MaxWaitTime,
+	})
+	for _, c := range lobby.Clients {
+		select {
+		case c.Send <- ws.Message{Event: "QueueStarted", Data: payload}:
+		default:
+		}
+	}
+}
+
+func (h *WSHandler) handleCancelQueue(ctx context.Context, client *ws.Client) {
+	lobby, err := h.hub.FindLobby(client.LobbyID)
+	if err != nil {
+		return
+	}
+
+	if lobby.State.Status != "in_queue" {
+		h.sendError(client, "NOT_IN_QUEUE", "Lobby is not in queue")
+		return
+	}
+
+	_, cancelErr := h.matchmaker.CancelQueue(ctx, client.PlayerID)
+	if cancelErr != nil {
+		observability.Log.Warn().Err(cancelErr).Msg("failed to cancel queue")
+	}
+
+	lobby.State.Status = "preparing"
+	lobby.State.QueueEntryID = ""
+	lobby.broadcastLobbyUpdated()
+
+	payload, _ := json.Marshal(map[string]string{"reason": "cancelled"})
+	for _, c := range lobby.Clients {
+		select {
+		case c.Send <- ws.Message{Event: "QueueCancelled", Data: payload}:
+		default:
+		}
+	}
+}
+
 func (h *WSHandler) UnregisterFromLobby(client *ws.Client) {
 	if client.LobbyID != "" {
+		if h.matchmaker.IsPlayerInQueue(context.Background(), client.PlayerID) {
+			h.matchmaker.CancelQueue(context.Background(), client.PlayerID)
+		}
+
 		lobby, err := h.hub.FindLobby(client.LobbyID)
 		if err == nil {
 			lobby.Leave(client)

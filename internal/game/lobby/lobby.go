@@ -224,8 +224,13 @@ func (l *LobbyRoom) processLeave(ctx context.Context, client *ws.Client) {
 	// If lobby was in queue, reset it and notify remaining clients.
 	if l.State.Status == "in_queue" {
 		l.State.Status = "preparing"
+		l.State.QueueEntryID = ""
+		payload, _ := json.Marshal(map[string]string{"reason": "teammate disconnected"})
 		for _, c := range l.Clients {
-			l.sendEvent(c, "QueueCancelled", map[string]string{"reason": "member_left"})
+			select {
+			case c.Send <- ws.Message{Event: "QueueCancelled", Data: payload}:
+			default:
+			}
 		}
 	}
 
