@@ -1,116 +1,124 @@
 {{define "content"}}
-<h1>Cấu hình Matchmaking</h1>
+<h1>Matchmaking Config</h1>
 {{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
 {{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
 
 <div id="app">
 
-<!-- Matchmaking Settings -->
+<!-- Queue Settings -->
 <div class="card">
-<h2 style="font-size:18px;margin-bottom:16px;color:#1a1a2e;">Cài đặt hàng đợi</h2>
+<h2 style="font-size:18px;margin-bottom:16px;color:#1a1a2e;">Queue Settings</h2>
 <form id="form-matchmaking">
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
     <div class="form-group">
-        <label>Chu kỳ quét (giây)</label>
+        <label>tickInterval (seconds)</label>
         <input type="number" name="tickInterval" min="1" max="30" step="1">
-        <div class="desc">Matchmaker quét hàng đợi mỗi bao nhiêu giây</div>
+        <div class="desc">Chu kỳ quét hàng đợi — giảm xuống thì ghép trận nhanh hơn nhưng tốn tài nguyên hơn</div>
     </div>
     <div class="form-group">
-        <label>Thời gian chờ tối đa (giây)</label>
+        <label>maxWaitTime (seconds)</label>
         <input type="number" name="maxWaitTime" min="10" max="300" step="1">
-        <div class="desc">Hết thời gian này sẽ điền bot vào trận</div>
+        <div class="desc">Thời gian chờ tối đa trước khi điền bot vào trận — tăng lên thì người chơi chờ lâu hơn nhưng ít gặp bot hơn</div>
     </div>
     <div class="form-group">
-        <label>Khoảng rating cơ bản</label>
+        <label>baseRatingRange</label>
         <input type="number" name="baseRatingRange" min="10" max="1000" step="10">
-        <div class="desc">Phạm vi ghép trận ban đầu (±rating)</div>
+        <div class="desc">Phạm vi rating ban đầu khi ghép (±) — giảm thì trận đấu cân hơn nhưng chờ lâu hơn</div>
     </div>
     <div class="form-group">
-        <label>Khoảng rating tối đa</label>
+        <label>maxRatingRange</label>
         <input type="number" name="maxRatingRange" min="50" max="2000" step="50">
-        <div class="desc">Phạm vi tối đa sau khi mở rộng</div>
+        <div class="desc">Phạm vi rating tối đa sau khi mở rộng — giới hạn chênh lệch trình độ tối đa giữa 2 đội</div>
     </div>
     <div class="form-group">
-        <label>Chu kỳ mở rộng (giây)</label>
+        <label>expandInterval (seconds)</label>
         <input type="number" name="expandInterval" min="1" max="60" step="1">
-        <div class="desc">Mở rộng phạm vi rating mỗi N giây</div>
+        <div class="desc">Mỗi bao nhiêu giây thì mở rộng phạm vi rating — giảm thì tìm trận nhanh hơn nhưng trận kém cân hơn</div>
     </div>
     <div class="form-group">
-        <label>Bước mở rộng</label>
+        <label>expandStep</label>
         <input type="number" name="expandStep" min="10" max="500" step="10">
-        <div class="desc">Mỗi lần mở rộng tăng thêm bao nhiêu rating</div>
+        <div class="desc">Mỗi lần mở rộng tăng thêm bao nhiêu rating — tăng thì ghép nhanh hơn, giảm thì ghép chính xác hơn</div>
     </div>
     <div class="form-group">
-        <label>Hệ số rating khi có bot</label>
+        <label>botRatingModifier</label>
         <input type="number" name="botRatingModifier" min="0" max="1" step="0.05">
-        <div class="desc">Hệ số nhân thay đổi rating khi trận có bot (0.5 = 50%)</div>
+        <div class="desc">Hệ số nhân rating khi trận có bot (0.5 = chỉ được/mất 50% rating) — đặt 0 thì trận bot không ảnh hưởng xếp hạng</div>
     </div>
     <div class="form-group">
-        <label>Chiến lược rating nhóm</label>
+        <label>partyRatingStrategy</label>
         <select name="partyRatingStrategy">
-            <option value="max">Cao nhất (lấy người cao nhất)</option>
-            <option value="average">Trung bình</option>
-            <option value="weighted">Có trọng số</option>
+            <option value="max">max</option>
+            <option value="average">average</option>
+            <option value="weighted">weighted</option>
         </select>
-        <div class="desc">Cách tính rating hàng đợi cho nhóm 2 người</div>
+        <div class="desc">Cách tính rating cho party 2 người: max = lấy người cao nhất (chống boosting), average = trung bình, weighted = có trọng số</div>
     </div>
     <div class="form-group">
-        <label>Tỷ lệ trọng số</label>
+        <label>weightedRatio</label>
         <input type="number" name="weightedRatio" min="0" max="1" step="0.05">
-        <div class="desc">Trọng số cho người rating cao nhất (chỉ dùng khi chọn "Có trọng số")</div>
+        <div class="desc">Trọng số cho người rating cao nhất khi dùng strategy "weighted" (0.7 = 70% max + 30% min)</div>
     </div>
 </div>
-<button type="submit" class="btn btn-primary">Lưu cài đặt hàng đợi</button>
+<button type="submit" class="btn btn-primary">Save Queue Settings</button>
 </form>
 </div>
 
 <!-- Elo Settings -->
 <div class="card">
-<h2 style="font-size:18px;margin-bottom:16px;color:#1a1a2e;">Cài đặt Elo Rating</h2>
+<h2 style="font-size:18px;margin-bottom:16px;color:#1a1a2e;">Elo Rating Settings</h2>
 <form id="form-elo">
 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
     <div class="form-group">
-        <label>Hệ số K</label>
+        <label>kFactor</label>
         <input type="number" name="kFactor" min="1" max="100" step="1">
-        <div class="desc">Độ biến động rating (càng cao thay đổi càng lớn)</div>
+        <div class="desc">Độ biến động rating mỗi trận — tăng thì thắng/thua thay đổi rating nhiều hơn, leo rank nhanh hơn nhưng cũng rớt nhanh hơn</div>
     </div>
     <div class="form-group">
-        <label>Rating sàn</label>
+        <label>ratingFloor</label>
         <input type="number" name="ratingFloor" min="0" max="500" step="10">
-        <div class="desc">Rating tối thiểu (không thể giảm xuống dưới)</div>
+        <div class="desc">Rating tối thiểu — người chơi không thể rớt xuống dưới mức này dù thua liên tục</div>
     </div>
     <div class="form-group">
-        <label>Rating mặc định</label>
+        <label>defaultRating</label>
         <input type="number" name="defaultRating" min="500" max="2000" step="50">
-        <div class="desc">Rating khởi đầu cho người chơi mới</div>
+        <div class="desc">Rating khởi đầu cho người chơi mới — ảnh hưởng vị trí xếp hạng ban đầu</div>
     </div>
 </div>
-<button type="submit" class="btn btn-primary">Lưu cài đặt Elo</button>
+<button type="submit" class="btn btn-primary">Save Elo Settings</button>
 </form>
 </div>
 
 <!-- Bot Difficulty -->
 <div class="card">
-<h2 style="font-size:18px;margin-bottom:16px;color:#1a1a2e;">Độ khó Bot (theo hạng)</h2>
+<h2 style="font-size:18px;margin-bottom:16px;color:#1a1a2e;">Bot Difficulty (per Rank Tier)</h2>
+<p style="font-size:13px;color:#666;margin-bottom:16px;">Cấu hình độ khó bot khi điền vào trận ranked. Rank càng cao bot càng bắn chính xác, di chuyển thông minh và dùng item hợp lý hơn.</p>
 <form id="form-bot">
 <div style="overflow-x:auto;">
 <table>
 <thead>
 <tr>
-    <th>Hạng</th>
-    <th>Sai số góc bắn (°)</th>
-    <th>Sai số lực bắn</th>
-    <th>Nhiễu quyết định</th>
-    <th>Tỷ lệ dùng item</th>
-    <th>Độ thông minh di chuyển</th>
+    <th>Tier</th>
+    <th>accuracyError</th>
+    <th>powerError</th>
+    <th>decisionNoise</th>
+    <th>useItemChance</th>
+    <th>movementSmart</th>
 </tr>
 </thead>
 <tbody id="bot-tbody">
 </tbody>
 </table>
 </div>
-<div style="margin-top:16px;">
-<button type="submit" class="btn btn-primary">Lưu độ khó Bot</button>
+<p style="font-size:12px;color:#888;margin-top:8px;">
+    <strong>accuracyError</strong>: sai số góc bắn (°) — càng thấp bot bắn càng chính xác &nbsp;|&nbsp;
+    <strong>powerError</strong>: sai số lực bắn — càng thấp đạn rơi đúng tầm hơn &nbsp;|&nbsp;
+    <strong>decisionNoise</strong>: nhiễu khi ra quyết định — càng thấp bot chọn hành động hợp lý hơn<br>
+    <strong>useItemChance</strong>: xác suất dùng item đúng lúc (0-1) &nbsp;|&nbsp;
+    <strong>movementSmart</strong>: xác suất di chuyển thông minh (0-1) — né đạn, giữ khoảng cách
+</p>
+<div style="margin-top:12px;">
+<button type="submit" class="btn btn-primary">Save Bot Difficulty</button>
 </div>
 </form>
 </div>
@@ -119,7 +127,7 @@
 
 <script>
 const TIERS = ['bronze','silver','gold','platinum','diamond','master'];
-const TIER_LABELS = {bronze:'Đồng',silver:'Bạc',gold:'Vàng',platinum:'Bạch kim',diamond:'Kim cương',master:'Cao thủ'};
+const TIER_LABELS = {bronze:'Bronze',silver:'Silver',gold:'Gold',platinum:'Platinum',diamond:'Diamond',master:'Master'};
 const TIER_COLORS = {bronze:'#cd7f32',silver:'#c0c0c0',gold:'#ffd700',platinum:'#40e0d0',diamond:'#b9f2ff',master:'#ff6b6b'};
 
 function showFlash(msg, isError) {
@@ -132,7 +140,7 @@ function showFlash(msg, isError) {
     if (!isError) setTimeout(() => div.remove(), 3000);
 }
 
-// ── Load & Save Matchmaking Config ──
+// ── Matchmaking Config ──
 async function loadMatchmaking() {
     try {
         const res = await fetch('/api/config/matchmaking');
@@ -147,19 +155,18 @@ async function loadMatchmaking() {
 
 document.getElementById('form-matchmaking').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const form = e.target;
     const data = {};
-    new FormData(form).forEach((v, k) => {
+    new FormData(e.target).forEach((v, k) => {
         data[k] = isNaN(Number(v)) ? v : Number(v);
     });
     try {
         const res = await fetch('/api/config/matchmaking', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
-        if (res.ok) showFlash('Đã lưu cài đặt hàng đợi!');
-        else showFlash('Lưu thất bại', true);
-    } catch(e) { showFlash('Lỗi: ' + e.message, true); }
+        if (res.ok) showFlash('Queue settings saved!');
+        else showFlash('Failed to save', true);
+    } catch(e) { showFlash('Error: ' + e.message, true); }
 });
 
-// ── Load & Save Elo Config ──
+// ── Elo Config ──
 async function loadElo() {
     try {
         const res = await fetch('/api/config/elo');
@@ -174,17 +181,16 @@ async function loadElo() {
 
 document.getElementById('form-elo').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const form = e.target;
     const data = {};
-    new FormData(form).forEach((v, k) => { data[k] = Number(v); });
+    new FormData(e.target).forEach((v, k) => { data[k] = Number(v); });
     try {
         const res = await fetch('/api/config/elo', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
-        if (res.ok) showFlash('Đã lưu cài đặt Elo!');
-        else showFlash('Lưu thất bại', true);
-    } catch(e) { showFlash('Lỗi: ' + e.message, true); }
+        if (res.ok) showFlash('Elo settings saved!');
+        else showFlash('Failed to save', true);
+    } catch(e) { showFlash('Error: ' + e.message, true); }
 });
 
-// ── Load & Save Bot Difficulty ──
+// ── Bot Difficulty ──
 async function loadBot() {
     try {
         const res = await fetch('/api/config/bot-difficulty');
@@ -208,8 +214,7 @@ async function loadBot() {
 
 document.getElementById('form-bot').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const form = e.target;
-    const fd = new FormData(form);
+    const fd = new FormData(e.target);
     const tiers = {};
     TIERS.forEach(tier => {
         tiers[tier] = {
@@ -222,9 +227,9 @@ document.getElementById('form-bot').addEventListener('submit', async (e) => {
     });
     try {
         const res = await fetch('/api/config/bot-difficulty', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({tiers})});
-        if (res.ok) showFlash('Đã lưu độ khó Bot!');
-        else showFlash('Lưu thất bại', true);
-    } catch(e) { showFlash('Lỗi: ' + e.message, true); }
+        if (res.ok) showFlash('Bot difficulty saved!');
+        else showFlash('Failed to save', true);
+    } catch(e) { showFlash('Error: ' + e.message, true); }
 });
 
 // ── Init ──
