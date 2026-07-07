@@ -360,26 +360,29 @@ func (m *Match) processMove(ctx context.Context, client *ws.Client, action MoveA
 		return
 	}
 
-	// Calculate move cost
-	distance := math.Abs(action.TargetX - player.Position.X)
-	energyCost := int(math.Round(distance * 0.5)) // 1 energy per 2 pixels
-
-	if energyCost > player.MoveEnergy {
-		// Limit movement distance to maximum possible by energy
-		maxDist := float64(player.MoveEnergy * 2)
+	// Clamp target by max energy range
+	maxDist := float64(player.MoveEnergy * 2) // 1 energy per 2 pixels
+	if math.Abs(action.TargetX-player.Position.X) > maxDist {
 		if action.TargetX > player.Position.X {
 			action.TargetX = player.Position.X + maxDist
 		} else {
 			action.TargetX = player.Position.X - maxDist
 		}
+	}
+
+	// Walk with terrain physics — player follows surface, blocked by steep walls
+	finalX, finalY := m.Terrain.WalkTo(player.Position.X, player.Position.Y, action.TargetX)
+
+	// Calculate energy cost based on actual horizontal distance moved
+	actualDist := math.Abs(finalX - player.Position.X)
+	energyCost := int(math.Round(actualDist * 0.5))
+	if energyCost > player.MoveEnergy {
 		energyCost = player.MoveEnergy
 	}
 
 	player.MoveEnergy -= energyCost
-	player.Position.X = action.TargetX
-
-	// Landing check Y position on terrain
-	player.Position.Y = m.Terrain.GetLandingY(player.Position.X, player.Position.Y)
+	player.Position.X = finalX
+	player.Position.Y = finalY
 
 	// Ice terrain: slide 50px in the movement direction
 	iceTerrainType := m.Terrain.GetTerrainTypeAt(player.Position.X, player.Position.Y)
@@ -388,8 +391,9 @@ func (m *Match) processMove(ctx context.Context, client *ws.Client, action MoveA
 		if action.TargetX < player.Position.X {
 			slideDir = -50.0
 		}
-		player.Position.X += slideDir
-		player.Position.Y = m.Terrain.GetLandingY(player.Position.X, player.Position.Y)
+		slideX, slideY := m.Terrain.WalkTo(player.Position.X, player.Position.Y, player.Position.X+slideDir)
+		player.Position.X = slideX
+		player.Position.Y = slideY
 	}
 
 	// Broadcast PlayerMoved

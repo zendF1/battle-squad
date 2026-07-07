@@ -165,3 +165,50 @@ func (t *Terrain) GetLandingY(x, startY float64) float64 {
 
 	return float64(t.Height)
 }
+
+// WalkTo simulates pixel-by-pixel horizontal movement with terrain physics.
+// The player follows the terrain surface but is blocked by steep upward slopes
+// (walls, crater edges). Going downward is always allowed.
+func (t *Terrain) WalkTo(startX, startY, targetX float64) (float64, float64) {
+	const maxClimbPerStep = 3 // max pixels the player can climb up per 1px horizontal step (~72°)
+
+	curX := int(math.Round(startX))
+	curY := int(math.Round(startY))
+	endX := int(math.Round(targetX))
+
+	if curX == endX {
+		return startX, startY
+	}
+
+	dir := 1
+	if endX < curX {
+		dir = -1
+	}
+
+	for curX != endX {
+		nextX := curX + dir
+		if nextX < 0 || nextX >= t.Width {
+			break
+		}
+
+		// Find terrain surface at nextX (first solid pixel from top)
+		nextY := t.Height
+		for y := 0; y < t.Height; y++ {
+			if t.Mask[y*t.Width+nextX] {
+				nextY = y
+				break
+			}
+		}
+
+		// Going UP: curY > nextY (lower Y = higher position). Block if too steep.
+		if curY-nextY > maxClimbPerStep {
+			break
+		}
+
+		curX = nextX
+		curY = nextY
+	}
+
+	return float64(curX), float64(curY)
+}
+
