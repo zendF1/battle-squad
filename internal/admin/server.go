@@ -95,7 +95,8 @@ func (s *Server) Routes() http.Handler {
 	r.Post("/devtools/reset-data", s.handleResetData)
 	r.Post("/devtools/seed-config", s.handleSeedConfig)
 
-	// Matchmaking config API
+	// Matchmaking config page + API
+	r.Get("/matchmaking", s.handleMatchmakingPage)
 	r.Get("/api/config/matchmaking", s.handleMatchmakingConfigGet("matchmaking"))
 	r.Post("/api/config/matchmaking", s.handleMatchmakingConfigSave("matchmaking"))
 	r.Get("/api/config/elo", s.handleMatchmakingConfigGet("elo"))

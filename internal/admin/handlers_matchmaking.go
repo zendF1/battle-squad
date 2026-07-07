@@ -8,6 +8,16 @@ import (
 	"battle-squad/internal/shared/observability"
 )
 
+func (s *Server) handleMatchmakingPage(w http.ResponseWriter, r *http.Request) {
+	flash := r.URL.Query().Get("flash")
+	errMsg := r.URL.Query().Get("error")
+	s.render(w, "matchmaking", map[string]interface{}{
+		"ActivePage": "matchmaking",
+		"Flash":      flash,
+		"Error":      errMsg,
+	})
+}
+
 func (s *Server) handleMatchmakingConfigGet(settingKey string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		value, err := s.repo.GetJSONSetting(r.Context(), settingKey)

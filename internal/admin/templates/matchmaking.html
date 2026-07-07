@@ -1,0 +1,235 @@
+{{define "content"}}
+<h1>Matchmaking Config</h1>
+{{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+
+<div id="app">
+
+<!-- Matchmaking Settings -->
+<div class="card">
+<h2 style="font-size:18px;margin-bottom:16px;color:#1a1a2e;">Queue Settings</h2>
+<form id="form-matchmaking">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div class="form-group">
+        <label>Tick Interval (seconds)</label>
+        <input type="number" name="tickInterval" min="1" max="30" step="1">
+        <div class="desc">How often the matchmaker scans the queue</div>
+    </div>
+    <div class="form-group">
+        <label>Max Wait Time (seconds)</label>
+        <input type="number" name="maxWaitTime" min="10" max="300" step="1">
+        <div class="desc">Fill bots after this timeout</div>
+    </div>
+    <div class="form-group">
+        <label>Base Rating Range</label>
+        <input type="number" name="baseRatingRange" min="10" max="1000" step="10">
+        <div class="desc">Initial matching range (±rating)</div>
+    </div>
+    <div class="form-group">
+        <label>Max Rating Range</label>
+        <input type="number" name="maxRatingRange" min="50" max="2000" step="50">
+        <div class="desc">Maximum expanded range</div>
+    </div>
+    <div class="form-group">
+        <label>Expand Interval (seconds)</label>
+        <input type="number" name="expandInterval" min="1" max="60" step="1">
+        <div class="desc">Expand range every N seconds</div>
+    </div>
+    <div class="form-group">
+        <label>Expand Step</label>
+        <input type="number" name="expandStep" min="10" max="500" step="10">
+        <div class="desc">Rating range increase per expansion</div>
+    </div>
+    <div class="form-group">
+        <label>Bot Rating Modifier</label>
+        <input type="number" name="botRatingModifier" min="0" max="1" step="0.05">
+        <div class="desc">Rating change multiplier when match has bots (0.5 = 50%)</div>
+    </div>
+    <div class="form-group">
+        <label>Party Rating Strategy</label>
+        <select name="partyRatingStrategy">
+            <option value="max">Max (highest player)</option>
+            <option value="average">Average</option>
+            <option value="weighted">Weighted</option>
+        </select>
+        <div class="desc">How to calculate queue rating for parties</div>
+    </div>
+    <div class="form-group">
+        <label>Weighted Ratio</label>
+        <input type="number" name="weightedRatio" min="0" max="1" step="0.05">
+        <div class="desc">Weight for highest rating (only used with weighted strategy)</div>
+    </div>
+</div>
+<button type="submit" class="btn btn-primary">Save Queue Settings</button>
+</form>
+</div>
+
+<!-- Elo Settings -->
+<div class="card">
+<h2 style="font-size:18px;margin-bottom:16px;color:#1a1a2e;">Elo Rating Settings</h2>
+<form id="form-elo">
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+    <div class="form-group">
+        <label>K-Factor</label>
+        <input type="number" name="kFactor" min="1" max="100" step="1">
+        <div class="desc">Rating volatility (higher = bigger swings)</div>
+    </div>
+    <div class="form-group">
+        <label>Rating Floor</label>
+        <input type="number" name="ratingFloor" min="0" max="500" step="10">
+        <div class="desc">Minimum rating (cannot go below)</div>
+    </div>
+    <div class="form-group">
+        <label>Default Rating</label>
+        <input type="number" name="defaultRating" min="500" max="2000" step="50">
+        <div class="desc">Starting rating for new players</div>
+    </div>
+</div>
+<button type="submit" class="btn btn-primary">Save Elo Settings</button>
+</form>
+</div>
+
+<!-- Bot Difficulty -->
+<div class="card">
+<h2 style="font-size:18px;margin-bottom:16px;color:#1a1a2e;">Bot Difficulty (per Rank Tier)</h2>
+<form id="form-bot">
+<div style="overflow-x:auto;">
+<table>
+<thead>
+<tr>
+    <th>Tier</th>
+    <th>Accuracy Error (°)</th>
+    <th>Power Error</th>
+    <th>Decision Noise</th>
+    <th>Use Item Chance</th>
+    <th>Movement Smart</th>
+</tr>
+</thead>
+<tbody id="bot-tbody">
+</tbody>
+</table>
+</div>
+<div style="margin-top:16px;">
+<button type="submit" class="btn btn-primary">Save Bot Difficulty</button>
+</div>
+</form>
+</div>
+
+</div>
+
+<script>
+const TIERS = ['bronze','silver','gold','platinum','diamond','master'];
+const TIER_LABELS = {bronze:'Bronze',silver:'Silver',gold:'Gold',platinum:'Platinum',diamond:'Diamond',master:'Master'};
+const TIER_COLORS = {bronze:'#cd7f32',silver:'#c0c0c0',gold:'#ffd700',platinum:'#40e0d0',diamond:'#b9f2ff',master:'#ff6b6b'};
+
+function showFlash(msg, isError) {
+    const existing = document.querySelectorAll('.flash');
+    existing.forEach(el => el.remove());
+    const div = document.createElement('div');
+    div.className = 'flash ' + (isError ? 'flash-error' : 'flash-success');
+    div.textContent = msg;
+    document.querySelector('#app').prepend(div);
+    if (!isError) setTimeout(() => div.remove(), 3000);
+}
+
+// ── Load & Save Matchmaking Config ──
+async function loadMatchmaking() {
+    try {
+        const res = await fetch('/api/config/matchmaking');
+        const data = await res.json();
+        const form = document.getElementById('form-matchmaking');
+        for (const [key, val] of Object.entries(data)) {
+            const input = form.querySelector(`[name="${key}"]`);
+            if (input) input.value = val;
+        }
+    } catch(e) { console.error('load matchmaking:', e); }
+}
+
+document.getElementById('form-matchmaking').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const data = {};
+    new FormData(form).forEach((v, k) => {
+        data[k] = isNaN(Number(v)) ? v : Number(v);
+    });
+    try {
+        const res = await fetch('/api/config/matchmaking', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
+        if (res.ok) showFlash('Queue settings saved!');
+        else showFlash('Failed to save queue settings', true);
+    } catch(e) { showFlash('Error: ' + e.message, true); }
+});
+
+// ── Load & Save Elo Config ──
+async function loadElo() {
+    try {
+        const res = await fetch('/api/config/elo');
+        const data = await res.json();
+        const form = document.getElementById('form-elo');
+        for (const [key, val] of Object.entries(data)) {
+            const input = form.querySelector(`[name="${key}"]`);
+            if (input) input.value = val;
+        }
+    } catch(e) { console.error('load elo:', e); }
+}
+
+document.getElementById('form-elo').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const data = {};
+    new FormData(form).forEach((v, k) => { data[k] = Number(v); });
+    try {
+        const res = await fetch('/api/config/elo', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
+        if (res.ok) showFlash('Elo settings saved!');
+        else showFlash('Failed to save elo settings', true);
+    } catch(e) { showFlash('Error: ' + e.message, true); }
+});
+
+// ── Load & Save Bot Difficulty ──
+async function loadBot() {
+    try {
+        const res = await fetch('/api/config/bot-difficulty');
+        const data = await res.json();
+        const tbody = document.getElementById('bot-tbody');
+        tbody.innerHTML = '';
+        TIERS.forEach(tier => {
+            const cfg = data.tiers[tier] || {};
+            const color = TIER_COLORS[tier];
+            tbody.innerHTML += `<tr>
+                <td><span class="badge" style="background:${color};color:#000;font-weight:700;">${TIER_LABELS[tier]}</span></td>
+                <td><input type="number" name="${tier}_accuracyError" value="${cfg.accuracyError||0}" step="0.5" min="0" max="30" style="width:80px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;"></td>
+                <td><input type="number" name="${tier}_powerError" value="${cfg.powerError||0}" step="0.5" min="0" max="30" style="width:80px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;"></td>
+                <td><input type="number" name="${tier}_decisionNoise" value="${cfg.decisionNoise||0}" step="1" min="0" max="50" style="width:80px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;"></td>
+                <td><input type="number" name="${tier}_useItemChance" value="${cfg.useItemChance||0}" step="0.05" min="0" max="1" style="width:80px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;"></td>
+                <td><input type="number" name="${tier}_movementSmart" value="${cfg.movementSmart||0}" step="0.05" min="0" max="1" style="width:80px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;"></td>
+            </tr>`;
+        });
+    } catch(e) { console.error('load bot:', e); }
+}
+
+document.getElementById('form-bot').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const fd = new FormData(form);
+    const tiers = {};
+    TIERS.forEach(tier => {
+        tiers[tier] = {
+            accuracyError: Number(fd.get(`${tier}_accuracyError`)),
+            powerError:    Number(fd.get(`${tier}_powerError`)),
+            decisionNoise: Number(fd.get(`${tier}_decisionNoise`)),
+            useItemChance: Number(fd.get(`${tier}_useItemChance`)),
+            movementSmart: Number(fd.get(`${tier}_movementSmart`)),
+        };
+    });
+    try {
+        const res = await fetch('/api/config/bot-difficulty', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({tiers})});
+        if (res.ok) showFlash('Bot difficulty saved!');
+        else showFlash('Failed to save bot difficulty', true);
+    } catch(e) { showFlash('Error: ' + e.message, true); }
+});
+
+// ── Init ──
+loadMatchmaking();
+loadElo();
+loadBot();
+</script>
+{{end}}
