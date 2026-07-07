@@ -2,6 +2,7 @@ package match
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 
@@ -12,25 +13,29 @@ import (
 )
 
 type PlayerStats struct {
-	PlayerID  string
-	TeamID    int
-	Damage    int
-	Kills     int
-	Accuracy  float64
-	IsWinner  bool
-	IsDraw    bool
+	PlayerID    string
+	CharacterID string
+	TeamID      int
+	Damage      int
+	Kills       int
+	Accuracy    float64
+	IsWinner    bool
+	IsDraw      bool
 }
 
 type RewardResult struct {
-	PlayerID      string
-	ExpGained     int
-	CoinGained    int
-	RatingChange  int
-	NewRating     int
-	NewTier       string
-	NewDivision   int
-	LevelUp       bool
-	NewLevel      int
+	PlayerID         string
+	ExpGained        int
+	CoinGained       int
+	RatingChange     int
+	NewRating        int
+	NewTier          string
+	NewDivision      int
+	LevelUp          bool
+	NewLevel         int
+	CharLevelUp      bool   `json:"charLevelUp"`
+	CharNewLevel     int    `json:"charNewLevel"`
+	CharLevelsGained int    `json:"charLevelsGained"`
 }
 
 func ProcessMatchRewards(
@@ -187,16 +192,89 @@ func ProcessMatchRewards(
 			return nil, fmt.Errorf("failed to write match history: %w", err)
 		}
 
+		// Update character EXP and level
+		charLevelUp := false
+		charNewLevel := 0
+		charLevelsGained := 0
+
+		if p.CharacterID != "" {
+			var charLevelsVal string
+			if err := tx.QueryRow(ctx, `SELECT value FROM game_settings WHERE key = 'character_levels'`).Scan(&charLevelsVal); err == nil {
+				type levelEntry struct {
+					Level       int `json:"level"`
+					ExpRequired int `json:"expRequired"`
+				}
+				type levelsConfig struct {
+					Levels []levelEntry `json:"levels"`
+				}
+				var levelsCfg levelsConfig
+				if json.Unmarshal([]byte(charLevelsVal), &levelsCfg) == nil && len(levelsCfg.Levels) > 0 {
+					pointsPerLevel := 10
+					var progressionVal string
+					if err := tx.QueryRow(ctx, `SELECT value FROM game_settings WHERE key = 'character_progression'`).Scan(&progressionVal); err == nil {
+						type progConfig struct {
+							PointsPerLevel int `json:"pointsPerLevel"`
+						}
+						var progCfg progConfig
+						if json.Unmarshal([]byte(progressionVal), &progCfg) == nil && progCfg.PointsPerLevel > 0 {
+							pointsPerLevel = progCfg.PointsPerLevel
+						}
+					}
+
+					// Get or create character row
+					var currentExp, currentLevel int
+					err := tx.QueryRow(ctx,
+						`SELECT exp, level FROM player_characters WHERE player_id = $1 AND character_id = $2 FOR UPDATE`,
+						p.PlayerID, p.CharacterID).Scan(&currentExp, &currentLevel)
+					if err != nil {
+						// Insert default row if not exists
+						tx.Exec(ctx,
+							`INSERT INTO player_characters (player_id, character_id, level, exp, stat_points) VALUES ($1, $2, 1, 0, 0) ON CONFLICT DO NOTHING`,
+							p.PlayerID, p.CharacterID)
+						currentExp = 0
+						currentLevel = 1
+					}
+
+					newExp := currentExp + expGained
+					newLevel := 1
+					for _, entry := range levelsCfg.Levels {
+						if newExp >= entry.ExpRequired {
+							newLevel = entry.Level
+						}
+					}
+
+					levelsGained := 0
+					if newLevel > currentLevel {
+						levelsGained = newLevel - currentLevel
+					}
+					pointsToAdd := levelsGained * pointsPerLevel
+
+					tx.Exec(ctx,
+						`UPDATE player_characters SET exp = $3, level = $4, stat_points = stat_points + $5 WHERE player_id = $1 AND character_id = $2`,
+						p.PlayerID, p.CharacterID, newExp, newLevel, pointsToAdd)
+
+					if levelsGained > 0 {
+						charLevelUp = true
+						charNewLevel = newLevel
+						charLevelsGained = levelsGained
+					}
+				}
+			}
+		}
+
 		results[p.PlayerID] = RewardResult{
-			PlayerID:     p.PlayerID,
-			ExpGained:    expGained,
-			CoinGained:   coinGained,
-			RatingChange: ratingChange,
-			NewRating:    newRating,
-			NewTier:      newTier,
-			NewDivision:  newDivision,
-			LevelUp:      levelUp,
-			NewLevel:     newLevel,
+			PlayerID:         p.PlayerID,
+			ExpGained:        expGained,
+			CoinGained:       coinGained,
+			RatingChange:     ratingChange,
+			NewRating:        newRating,
+			NewTier:          newTier,
+			NewDivision:      newDivision,
+			LevelUp:          levelUp,
+			NewLevel:         newLevel,
+			CharLevelUp:      charLevelUp,
+			CharNewLevel:     charNewLevel,
+			CharLevelsGained: charLevelsGained,
 		}
 	}
 

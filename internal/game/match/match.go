@@ -916,13 +916,14 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 		for _, p := range m.State.Players {
 			isWinner := p.TeamID == winningTeam
 			stats[p.PlayerID] = &PlayerStats{
-				PlayerID: p.PlayerID,
-				TeamID:   p.TeamID,
-				Damage:   p.DamageDealt,
-				Kills:    p.KillCount,
-				Accuracy: calculateAccuracy(p.ShotsFired, p.ShotsHit),
-				IsWinner: isWinner,
-				IsDraw:   winningTeam == 0,
+				PlayerID:    p.PlayerID,
+				CharacterID: p.CharacterID,
+				TeamID:      p.TeamID,
+				Damage:      p.DamageDealt,
+				Kills:       p.KillCount,
+				Accuracy:    calculateAccuracy(p.ShotsFired, p.ShotsHit),
+				IsWinner:    isWinner,
+				IsDraw:      winningTeam == 0,
 			}
 		}
 
