@@ -23,6 +23,7 @@ type Client struct {
 	PlayerID      string
 	AccountID     string
 	RoomID        string
+	LobbyID       string
 	WSHandHandler HandlerInterface
 }
 
