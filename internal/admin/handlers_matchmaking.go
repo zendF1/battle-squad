@@ -18,6 +18,12 @@ func (s *Server) handleMatchmakingPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleCharacterProgressionPage(w http.ResponseWriter, r *http.Request) {
+	s.render(w, "character_progression", map[string]interface{}{
+		"ActivePage": "character-progression",
+	})
+}
+
 func (s *Server) handleMatchmakingConfigGet(settingKey string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		value, err := s.repo.GetJSONSetting(r.Context(), settingKey)

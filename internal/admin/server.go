@@ -104,6 +104,13 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/api/config/bot-difficulty", s.handleMatchmakingConfigGet("bot_difficulty"))
 	r.Post("/api/config/bot-difficulty", s.handleMatchmakingConfigSave("bot_difficulty"))
 
+	// Character progression config
+	r.Get("/character-progression", s.handleCharacterProgressionPage)
+	r.Get("/api/config/character-progression", s.handleMatchmakingConfigGet("character_progression"))
+	r.Post("/api/config/character-progression", s.handleMatchmakingConfigSave("character_progression"))
+	r.Get("/api/config/character-levels", s.handleMatchmakingConfigGet("character_levels"))
+	r.Post("/api/config/character-levels", s.handleMatchmakingConfigSave("character_levels"))
+
 	return r
 }
 

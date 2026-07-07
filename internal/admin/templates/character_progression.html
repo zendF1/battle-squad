@@ -1,0 +1,209 @@
+{{define "content"}}
+<h1>Character Progression</h1>
+
+<div id="app">
+
+<!-- Progression Settings -->
+<div class="card">
+<h2 style="font-size:18px;margin-bottom:16px;color:#1a1a2e;">Progression Settings</h2>
+<form id="form-progression">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div class="form-group">
+        <label>pointsPerLevel</label>
+        <input type="number" name="pointsPerLevel" min="1" max="100" step="1">
+        <div class="desc">Số điểm stat nhận được mỗi khi lên level</div>
+    </div>
+    <div class="form-group">
+        <label>resetCostCurrency</label>
+        <select name="resetCostCurrency">
+            <option value="coin">coin</option>
+            <option value="gem">gem</option>
+        </select>
+        <div class="desc">Loại tiền tệ dùng để reset điểm stat</div>
+    </div>
+    <div class="form-group">
+        <label>resetCostAmount</label>
+        <input type="number" name="resetCostAmount" min="0" max="999999" step="1">
+        <div class="desc">Giá reset điểm stat — đặt 0 thì reset miễn phí</div>
+    </div>
+</div>
+
+<h3 style="font-size:15px;margin:16px 0 12px;color:#1a1a2e;">statMultipliers</h3>
+<p style="font-size:12px;color:#888;margin-bottom:12px;">Mỗi điểm cộng vào chỉ số sẽ tăng thêm bao nhiêu giá trị thực tế. Ví dụ hp = 50 nghĩa là cộng 1 điểm HP thì HP tăng thêm 50.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+    <div class="form-group">
+        <label>hp</label>
+        <input type="number" name="stat_hp" min="0" step="1">
+    </div>
+    <div class="form-group">
+        <label>damage</label>
+        <input type="number" name="stat_damage" min="0" step="1">
+    </div>
+    <div class="form-group">
+        <label>mobility</label>
+        <input type="number" name="stat_mobility" min="0" step="1">
+    </div>
+    <div class="form-group">
+        <label>defense</label>
+        <input type="number" name="stat_defense" min="0" step="1">
+    </div>
+    <div class="form-group">
+        <label>skill_power</label>
+        <input type="number" name="stat_skill_power" min="0" step="1">
+    </div>
+    <div class="form-group">
+        <label>terrain_damage</label>
+        <input type="number" name="stat_terrain_damage" min="0" step="1">
+    </div>
+</div>
+
+<button type="submit" class="btn btn-primary">Save Progression Settings</button>
+</form>
+</div>
+
+<!-- Level Table -->
+<div class="card">
+<h2 style="font-size:18px;margin-bottom:8px;color:#1a1a2e;">Level Table</h2>
+<p style="font-size:13px;color:#666;margin-bottom:16px;">Bảng ngưỡng EXP để lên level. expRequired là EXP tích lũy (cộng dồn). Admin add đến level nào thì max level là đó.</p>
+<div style="overflow-x:auto;">
+<table>
+<thead>
+<tr>
+    <th>Level</th>
+    <th>expRequired</th>
+    <th>Actions</th>
+</tr>
+</thead>
+<tbody id="levels-tbody">
+</tbody>
+</table>
+</div>
+<div style="margin-top:12px;display:flex;gap:8px;">
+    <button type="button" class="btn btn-success" onclick="addLevel()">Add Level</button>
+    <button type="button" class="btn btn-primary" onclick="saveLevels()">Save Level Table</button>
+</div>
+</div>
+
+</div>
+
+<script>
+function showFlash(msg, isError) {
+    const existing = document.querySelectorAll('.flash');
+    existing.forEach(el => el.remove());
+    const div = document.createElement('div');
+    div.className = 'flash ' + (isError ? 'flash-error' : 'flash-success');
+    div.textContent = msg;
+    document.querySelector('#app').prepend(div);
+    if (!isError) setTimeout(() => div.remove(), 3000);
+}
+
+// ── Progression Settings ──
+async function loadProgression() {
+    try {
+        const res = await fetch('/api/config/character-progression');
+        if (!res.ok) return;
+        const data = await res.json();
+        const form = document.getElementById('form-progression');
+        const plainFields = ['pointsPerLevel', 'resetCostCurrency', 'resetCostAmount'];
+        for (const key of plainFields) {
+            const el = form.querySelector(`[name="${key}"]`);
+            if (el && data[key] !== undefined) el.value = data[key];
+        }
+        if (data.statMultipliers) {
+            const mults = data.statMultipliers;
+            const statKeys = ['hp', 'damage', 'mobility', 'defense', 'skill_power', 'terrain_damage'];
+            for (const k of statKeys) {
+                const el = form.querySelector(`[name="stat_${k}"]`);
+                if (el && mults[k] !== undefined) el.value = mults[k];
+            }
+        }
+    } catch(e) { console.error('load progression:', e); }
+}
+
+document.getElementById('form-progression').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const statKeys = ['hp', 'damage', 'mobility', 'defense', 'skill_power', 'terrain_damage'];
+    const statMultipliers = {};
+    for (const k of statKeys) {
+        statMultipliers[k] = Number(fd.get(`stat_${k}`));
+    }
+    const data = {
+        pointsPerLevel:      Number(fd.get('pointsPerLevel')),
+        resetCostCurrency:   fd.get('resetCostCurrency'),
+        resetCostAmount:     Number(fd.get('resetCostAmount')),
+        statMultipliers,
+    };
+    try {
+        const res = await fetch('/api/config/character-progression', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data),
+        });
+        if (res.ok) showFlash('Progression settings saved!');
+        else showFlash('Failed to save', true);
+    } catch(e) { showFlash('Error: ' + e.message, true); }
+});
+
+// ── Level Table ──
+let levelsData = [];
+
+function renderLevels() {
+    const tbody = document.getElementById('levels-tbody');
+    tbody.innerHTML = '';
+    levelsData.forEach((row, idx) => {
+        tbody.innerHTML += `<tr>
+            <td><strong>${row.level}</strong></td>
+            <td><input type="number" min="0" step="1" value="${row.expRequired}" style="width:120px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;" onchange="levelsData[${idx}].expRequired = Number(this.value)"></td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteLevel(${idx})">Delete</button></td>
+        </tr>`;
+    });
+}
+
+function addLevel() {
+    const nextLevel = levelsData.length > 0 ? levelsData[levelsData.length - 1].level + 1 : 1;
+    levelsData.push({level: nextLevel, expRequired: 0});
+    renderLevels();
+}
+
+function deleteLevel(idx) {
+    levelsData.splice(idx, 1);
+    // Re-number levels sequentially
+    levelsData.forEach((row, i) => { row.level = i + 1; });
+    renderLevels();
+}
+
+async function loadLevels() {
+    try {
+        const res = await fetch('/api/config/character-levels');
+        if (!res.ok) return;
+        const data = await res.json();
+        levelsData = Array.isArray(data) ? data : (data.levels || []);
+        renderLevels();
+    } catch(e) { console.error('load levels:', e); }
+}
+
+async function saveLevels() {
+    // Validate expRequired is strictly ascending
+    for (let i = 1; i < levelsData.length; i++) {
+        if (levelsData[i].expRequired <= levelsData[i - 1].expRequired) {
+            showFlash(`Level ${levelsData[i].level}: expRequired must be greater than level ${levelsData[i-1].level} (${levelsData[i-1].expRequired})`, true);
+            return;
+        }
+    }
+    try {
+        const res = await fetch('/api/config/character-levels', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(levelsData),
+        });
+        if (res.ok) showFlash('Level table saved!');
+        else showFlash('Failed to save', true);
+    } catch(e) { showFlash('Error: ' + e.message, true); }
+}
+
+// ── Init ──
+loadProgression();
+loadLevels();
+</script>
+{{end}}
