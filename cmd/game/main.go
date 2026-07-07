@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"os"
 	"os/signal"
@@ -9,6 +10,8 @@ import (
 	"time"
 
 	"battle-squad/internal/game/gamedata"
+	"battle-squad/internal/game/lobby"
+	"battle-squad/internal/game/matchmaker"
 	"battle-squad/internal/game/room"
 	"battle-squad/internal/game/ws"
 	sharedAuth "battle-squad/internal/shared/auth"
@@ -18,6 +21,27 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
+
+// CompositeWSHandler delegates WebSocket messages to the lobby handler first,
+// then falls through to the room handler if the event is not lobby-related.
+type CompositeWSHandler struct {
+	lobbyHandler *lobby.WSHandler
+	roomHandler  *room.WSHandler
+}
+
+func (c *CompositeWSHandler) HandleMessage(ctx context.Context, client *ws.Client, msg ws.Message) {
+	// Try lobby handler first
+	if c.lobbyHandler.HandleLobbyMessage(ctx, client, msg) {
+		return
+	}
+	// Fall through to room handler
+	c.roomHandler.HandleMessage(ctx, client, msg)
+}
+
+func (c *CompositeWSHandler) Unregister(client *ws.Client) {
+	c.lobbyHandler.UnregisterFromLobby(client)
+	c.roomHandler.Unregister(client)
+}
 
 func main() {
 	// 1. Load config
@@ -63,10 +87,49 @@ func main() {
 		nodeID = "node-game-1"
 	}
 
+	// Room hub
 	roomHub := room.NewHub(redisClient, db, nodeID)
 	roomWSHandler := room.NewWSHandler(roomHub)
 
-	wsServer := ws.NewServer(jwtAccess, db, redisClient, roomWSHandler, cfg)
+	// Lobby hub
+	lobbyHub := lobby.NewLobbyHub(db, redisClient, nodeID)
+
+	// Collect available map IDs
+	mapIDs := make([]string, 0)
+	for mapID := range gamedata.Data.Maps {
+		mapIDs = append(mapIDs, mapID)
+	}
+
+	// Matchmaker
+	mm := matchmaker.NewMatchmaker(db, redisClient, nodeID, roomHub, mapIDs)
+	go mm.Run()
+
+	// Lobby WS handler
+	lobbyWSHandler := lobby.NewWSHandler(lobbyHub, mm)
+
+	// Wire lobby notifier so room hub can notify lobby clients on MatchFound
+	roomHub.SetLobbyNotifier(func(lobbyID string, event string, data interface{}) {
+		l, err := lobbyHub.FindLobby(lobbyID)
+		if err != nil {
+			return
+		}
+		payload, _ := json.Marshal(data)
+		for _, c := range l.Clients {
+			select {
+			case c.Send <- ws.Message{Event: event, Data: payload}:
+			default:
+			}
+		}
+		l.SetStatus("in_match")
+	})
+
+	// Composite handler
+	compositeHandler := &CompositeWSHandler{
+		lobbyHandler: lobbyWSHandler,
+		roomHandler:  roomWSHandler,
+	}
+
+	wsServer := ws.NewServer(jwtAccess, db, redisClient, compositeHandler, cfg)
 
 	// 7. Route Upgrade Handler
 	mux := http.NewServeMux()
@@ -100,6 +163,8 @@ func main() {
 	<-quit
 
 	log.Info().Msg("shutting down Game Server gracefully...")
+
+	mm.Stop()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer shutdownCancel()
