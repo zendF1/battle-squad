@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 
 	"battle-squad/internal/api/economy"
@@ -36,6 +37,10 @@ type Match struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	el           *EventLogger
+	MatchDone    chan struct{}
+	doneOnce     sync.Once
+	TeamRatings  map[int]int // teamID → avg rating for Elo
+	EloParams    EloParams   // Elo configuration
 }
 
 type RoomHubInterface interface {
@@ -107,7 +112,16 @@ func NewMatch(
 		ctx:          ctx,
 		cancel:       cancel,
 		el:           NewEventLogger(matchID, db),
+		MatchDone:    make(chan struct{}),
+		TeamRatings:  map[int]int{},
+		EloParams:    EloParams{},
 	}
+}
+
+func (m *Match) signalDone() {
+	m.doneOnce.Do(func() {
+		close(m.MatchDone)
+	})
 }
 
 func (m *Match) Run() {
@@ -920,7 +934,7 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 			}
 		}
 
-		rewards, err := ProcessMatchRewards(ctx, m.db, m.economyRepo, m.State.MatchID, m.State.Mode, m.State.MapID, stats, playerItems)
+		rewards, err := ProcessMatchRewards(ctx, m.db, m.economyRepo, m.State.MatchID, m.State.Mode, m.State.MapID, stats, playerItems, m.TeamRatings, m.EloParams)
 		if err != nil {
 			observability.Log.Error().Err(err).Msg("failed to process match rewards")
 		}
@@ -944,6 +958,7 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 			client.RoomID = ""
 		}
 
+		m.signalDone()
 		m.cancel()
 	}
 }
@@ -1037,6 +1052,7 @@ func (m *Match) endAsNoContest() {
 		Event: "MatchEnded",
 		Data:  payload,
 	})
+	m.signalDone()
 	m.cancel()
 }
 

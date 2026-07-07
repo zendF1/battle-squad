@@ -42,6 +42,8 @@ func ProcessMatchRewards(
 	mapID string,
 	stats map[string]*PlayerStats,
 	playerItems map[string][]string,
+	teamRatings map[int]int,
+	eloParams EloParams,
 ) (map[string]RewardResult, error) {
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
@@ -127,6 +129,27 @@ func ProcessMatchRewards(
 			} else if p.IsDraw {
 				ratingChange = 0
 			}
+
+			newRating, newTier, newDivision, err = updatePlayerRank(ctx, tx, p.PlayerID, ratingChange, p.IsWinner, p.IsDraw)
+			if err != nil {
+				return nil, fmt.Errorf("failed to update rank rating: %w", err)
+			}
+		} else if mode == "ranked_2v2" {
+			actualScore := 0.0
+			if p.IsWinner {
+				actualScore = 1.0
+			} else if p.IsDraw {
+				actualScore = 0.5
+			}
+
+			teamRating := teamRatings[p.TeamID]
+			opponentTeamID := 1
+			if p.TeamID == 1 {
+				opponentTeamID = 2
+			}
+			opponentRating := teamRatings[opponentTeamID]
+
+			ratingChange = CalculateEloChange(teamRating, opponentRating, actualScore, eloParams)
 
 			newRating, newTier, newDivision, err = updatePlayerRank(ctx, tx, p.PlayerID, ratingChange, p.IsWinner, p.IsDraw)
 			if err != nil {
