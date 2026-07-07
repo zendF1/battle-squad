@@ -731,6 +731,31 @@ func (r *Repository) UnbanPlayer(ctx context.Context, accountID string) error {
 }
 
 // ---------------------------------------------------------------------------
+// Matchmaking JSON Settings
+// ---------------------------------------------------------------------------
+
+// GetJSONSetting returns the raw JSON value of a single game_settings row by key.
+func (r *Repository) GetJSONSetting(ctx context.Context, key string) (string, error) {
+	var value string
+	err := r.db.Pool.QueryRow(ctx, `SELECT value FROM game_settings WHERE key = $1`, key).Scan(&value)
+	if err != nil {
+		return "", fmt.Errorf("get setting %s: %w", key, err)
+	}
+	return value, nil
+}
+
+// UpsertJSONSetting updates the value of a game_settings row by key.
+func (r *Repository) UpsertJSONSetting(ctx context.Context, key, value string) error {
+	_, err := r.db.Pool.Exec(ctx,
+		`UPDATE game_settings SET value = $1, updated_at = CURRENT_TIMESTAMP WHERE key = $2`,
+		value, key)
+	if err != nil {
+		return fmt.Errorf("update setting %s: %w", key, err)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
 // Dev Tools
 // ---------------------------------------------------------------------------
 
