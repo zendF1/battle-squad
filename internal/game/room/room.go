@@ -36,6 +36,42 @@ type Room struct {
 	matchDone chan struct{}
 }
 
+func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense int) (int, int) {
+	var bonusHP, bonusDefense int
+	err := r.db.Pool.QueryRow(context.Background(),
+		`SELECT COALESCE(bonus_hp, 0), COALESCE(bonus_defense, 0) FROM player_characters WHERE player_id = $1 AND character_id = $2`,
+		playerID, characterID).Scan(&bonusHP, &bonusDefense)
+	if err != nil {
+		return baseHP, baseDefense
+	}
+
+	var cfgVal string
+	err = r.db.Pool.QueryRow(context.Background(),
+		`SELECT value FROM game_settings WHERE key = 'character_progression'`).Scan(&cfgVal)
+	if err != nil {
+		return baseHP, baseDefense
+	}
+
+	type progConfig struct {
+		StatMultipliers map[string]int `json:"statMultipliers"`
+	}
+	var cfg progConfig
+	if json.Unmarshal([]byte(cfgVal), &cfg) != nil || cfg.StatMultipliers == nil {
+		return baseHP, baseDefense
+	}
+
+	hpMul := cfg.StatMultipliers["hp"]
+	defMul := cfg.StatMultipliers["defense"]
+	if hpMul == 0 {
+		hpMul = 50
+	}
+	if defMul == 0 {
+		defMul = 5
+	}
+
+	return baseHP + bonusHP*hpMul, baseDefense + bonusDefense*defMul
+}
+
 func NewRoom(roomID string, initialState RoomState, hub *Hub, db *database.PostgresDB) *Room {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Room{
@@ -473,6 +509,7 @@ func (r *Room) processStartMatch(client *ws.Client) {
 			hp = charData.HP
 			defense = charData.Defense
 		}
+		hp, defense = r.getActualStats(p.PlayerID, p.CharacterID, hp, defense)
 
 		matchPlayers = append(matchPlayers, &match.BattlePlayerState{
 			PlayerID:      p.PlayerID,
@@ -638,6 +675,9 @@ func (r *Room) startRankedMatch(matchID string, botTierConfig matchmaker.BotTier
 		}
 
 		isBot := len(p.PlayerID) >= 4 && p.PlayerID[:4] == "bot_"
+		if !isBot {
+			hp, defense = r.getActualStats(p.PlayerID, p.CharacterID, hp, defense)
+		}
 
 		matchPlayers = append(matchPlayers, &match.BattlePlayerState{
 			PlayerID:      p.PlayerID,
