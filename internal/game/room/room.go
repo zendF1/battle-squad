@@ -32,6 +32,7 @@ type Room struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	match     *match.Match
+	matchDone chan struct{}
 }
 
 func NewRoom(roomID string, initialState RoomState, hub *Hub, db *database.PostgresDB) *Room {
@@ -60,9 +61,30 @@ func (r *Room) Run() {
 	defer ticker.Stop()
 
 	for {
+		// matchDone is nil when no match is active, which makes the select case a no-op
+		var matchDoneCh <-chan struct{}
+		if r.matchDone != nil {
+			matchDoneCh = r.matchDone
+		}
+
 		select {
 		case ev := <-r.Events:
 			r.handleEvent(ev)
+		case <-matchDoneCh:
+			// Match ended — notify players to return to their lobbies
+			if r.State.LobbyMapping != nil {
+				for playerID, lobbyID := range r.State.LobbyMapping {
+					if client, ok := r.Clients[playerID]; ok {
+						payload, _ := json.Marshal(map[string]string{"lobbyId": lobbyID})
+						select {
+						case client.Send <- ws.Message{Event: "ReturnToLobby", Data: payload}:
+						default:
+						}
+					}
+				}
+			}
+			observability.Log.Info().Str("roomId", r.ID).Msg("match ended, destroying room")
+			return
 		case <-ticker.C:
 			// Destroy idle rooms if empty after 30 minutes
 			if len(r.Clients) == 0 {
@@ -220,6 +242,13 @@ func (r *Room) processLeave(client *ws.Client) {
 
 	delete(r.Clients, client.PlayerID)
 	client.RoomID = ""
+
+	// Tutorial room: destroy as soon as the user leaves (only bots remain)
+	if r.State.IsTutorial {
+		observability.Log.Info().Str("roomId", r.ID).Msg("tutorial room user left, destroying room")
+		r.cancel()
+		return
+	}
 
 	// Remove player from state
 	foundIdx := -1
@@ -475,6 +504,9 @@ func (r *Room) processStartMatch(client *ws.Client) {
 		r.hub,
 	)
 
+	// Track match completion
+	r.matchDone = r.match.MatchDone
+
 	// Run match loop
 	go r.match.Run()
 
@@ -483,6 +515,7 @@ func (r *Room) processStartMatch(client *ws.Client) {
 }
 
 func (r *Room) processStartTutorial(client *ws.Client) {
+	r.State.IsTutorial = true
 	matchID := generateID()
 
 	// Add idle bot to room state
@@ -550,6 +583,9 @@ func (r *Room) processStartTutorial(client *ws.Client) {
 		economy.NewRepository(),
 		r.hub,
 	)
+
+	// Track match completion
+	r.matchDone = r.match.MatchDone
 
 	go r.match.Run()
 	r.hub.SyncRoomState(context.Background(), &r.State)

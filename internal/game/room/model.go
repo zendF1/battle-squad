@@ -17,9 +17,12 @@ type RoomState struct {
 	MapID        string       `json:"mapId"`
 	MaxPlayers   int          `json:"maxPlayers"`
 	Players      []RoomPlayer `json:"players"`
-	IsLocked     bool         `json:"isLocked"`
-	PasswordHash string       `json:"-"`
-	Status       string       `json:"status"` // waiting, in_match
+	IsLocked     bool              `json:"isLocked"`
+	PasswordHash string            `json:"-"`
+	Status       string            `json:"status"` // waiting, in_match
+	IsTutorial   bool              `json:"isTutorial"`
+	LobbyMapping map[string]string `json:"-"`  // playerID → lobbyID for return-to-lobby
+	HasBot       bool              `json:"hasBot"`
 }
 
 type CreateRoomPayload struct {
