@@ -42,6 +42,15 @@ erDiagram
     player_characters {
         VARCHAR player_id PK "FK to player_profiles"
         VARCHAR character_id PK
+        INT level "default 1"
+        INT exp "cumulative"
+        INT stat_points "unspent points"
+        INT bonus_hp
+        INT bonus_damage
+        INT bonus_mobility
+        INT bonus_defense
+        INT bonus_skill_power
+        INT bonus_terrain_damage
         TIMESTAMP unlocked_at
     }
 

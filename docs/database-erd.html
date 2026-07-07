@@ -162,7 +162,7 @@ const schema = [
   // Row 1: Inventory + Ranking + Missions
   { id:'inventory', label:'Inventory & Economy', cls:'domain-inventory', gridCol:0, gridRow:1, gridW:1, tables:[
     { name:'player_characters', cols:[
-      {n:'player_id',t:'VARCHAR',pk:1,fk:1},{n:'character_id',t:'VARCHAR',pk:1},{n:'unlocked_at',t:'TIMESTAMP'}
+      {n:'player_id',t:'VARCHAR',pk:1,fk:1},{n:'character_id',t:'VARCHAR',pk:1},{n:'level',t:'INT'},{n:'exp',t:'INT'},{n:'stat_points',t:'INT'},{n:'bonus_hp',t:'INT'},{n:'bonus_damage',t:'INT'},{n:'bonus_mobility',t:'INT'},{n:'bonus_defense',t:'INT'},{n:'bonus_skill_power',t:'INT'},{n:'bonus_terrain_damage',t:'INT'},{n:'unlocked_at',t:'TIMESTAMP'}
     ]},
     { name:'inventory_items', cols:[
       {n:'player_id',t:'VARCHAR',pk:1,fk:1},{n:'item_id',t:'VARCHAR',pk:1},{n:'quantity',t:'INT'},{n:'source',t:'VARCHAR'},{n:'expires_at',t:'TIMESTAMP'}
