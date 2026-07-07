@@ -32,6 +32,7 @@ func main() {
 		filepath.Join("migrations", "002_add_account_role.up.sql"),
 		filepath.Join("migrations", "003_add_match_event_logs.up.sql"),
 		filepath.Join("migrations", "004_admin_config_tables.up.sql"),
+		filepath.Join("migrations", "005_add_loadouts_and_matchmaking.up.sql"),
 	}
 
 	for _, migrationPath := range migrations {
