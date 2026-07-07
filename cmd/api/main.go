@@ -12,6 +12,7 @@ import (
 	"battle-squad/internal/api/player"
 	"battle-squad/internal/api/economy"
 	"battle-squad/internal/api/inventory"
+	"battle-squad/internal/api/character"
 	"battle-squad/internal/api/shop"
 	"battle-squad/internal/api/iap"
 	"battle-squad/internal/api/giftcode"
@@ -72,6 +73,10 @@ func main() {
 	inventoryRepo := inventory.NewRepository(db)
 	inventoryService := inventory.NewService(inventoryRepo)
 	inventoryHandler := inventory.NewHandler(inventoryService)
+
+	characterRepo := character.NewRepository(db)
+	characterService := character.NewService(characterRepo, economyRepo, db)
+	characterHandler := character.NewHandler(characterService)
 
 	idempotencyManager := idempotency.NewManager(redisClient)
 
@@ -169,6 +174,10 @@ func main() {
 		r.Get("/account/deletion/status", playerHandler.GetAccountDeletionStatus)
 
 		r.Get("/player/inventory", inventoryHandler.GetInventory)
+
+		r.Get("/player/characters", characterHandler.GetCharacters)
+		r.Post("/player/character/allocate-stats", characterHandler.AllocateStats)
+		r.Post("/player/character/reset-stats", characterHandler.ResetStats)
 
 		r.Get("/shop/offers", shopHandler.GetOffers)
 		r.Post("/shop/purchase", shopHandler.Purchase)
