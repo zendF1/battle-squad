@@ -1,0 +1,30 @@
+{{define "content"}}
+<div class="top-bar">
+    <h1>{{if .IsNew}}New{{else}}Edit{{end}} Brick Type</h1>
+    <a href="/brick-types" class="btn btn-primary">Back to List</a>
+</div>
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+<div class="card">
+<form method="POST" action="/brick-types/save">
+    {{if not .IsNew}}<input type="hidden" name="original_id" value="{{.BrickType.BrickTypeID}}">{{end}}
+    <div class="form-group">
+        <label>Brick Type ID</label>
+        <input type="text" name="brick_type_id" value="{{.BrickType.BrickTypeID}}" required>
+        <div class="desc">Unique identifier (e.g. dirt, rock, ice)</div>
+    </div>
+    <div class="form-group">
+        <label>Name</label>
+        <input type="text" name="name" value="{{.BrickType.Name}}" required>
+        <div class="desc">Display name</div>
+    </div>
+    <div class="form-group">
+        <label>
+            <input type="checkbox" name="destructible" value="true" {{if .BrickType.Destructible}}checked{{end}}>
+            Destructible
+        </label>
+        <div class="desc">Whether explosions can destroy this brick</div>
+    </div>
+    <button type="submit" class="btn btn-primary">Save</button>
+</form>
+</div>
+{{end}}
