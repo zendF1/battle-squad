@@ -362,6 +362,22 @@ func (r *Repository) UpsertSkill(ctx context.Context, s *ConfigSkill) error {
 	return nil
 }
 
+// GetSkillByCharacterID returns the skill for a given character.
+func (r *Repository) GetSkillByCharacterID(ctx context.Context, characterID string) (*ConfigSkill, error) {
+	var s ConfigSkill
+	err := r.db.Pool.QueryRow(ctx,
+		`SELECT skill_id, character_id, name, cooldown_turn, effect_type,
+		        projectile_count, status_effect_id, damage_multiplier, description
+		 FROM config_skills WHERE character_id = $1`, characterID).
+		Scan(&s.SkillID, &s.CharacterID, &s.Name, &s.CooldownTurn,
+			&s.EffectType, &s.ProjectileCount, &s.StatusEffectID, &s.DamageMultiplier,
+			&s.Description)
+	if err != nil {
+		return nil, fmt.Errorf("get skill for character %s: %w", characterID, err)
+	}
+	return &s, nil
+}
+
 // DeleteSkill deletes a skill by ID.
 func (r *Repository) DeleteSkill(ctx context.Context, id string) error {
 	_, err := r.db.Pool.Exec(ctx, `DELETE FROM config_skills WHERE skill_id = $1`, id)

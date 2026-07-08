@@ -53,6 +53,8 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/characters/edit", s.handleConfigEdit("characters"))
 	r.Post("/characters/save", s.handleConfigSave("characters"))
 	r.Post("/characters/delete", s.handleConfigDelete("characters"))
+	r.Get("/characters/detail", s.handleCharacterDetail())
+	r.Post("/characters/detail/save", s.handleCharacterDetailSave())
 
 	r.Get("/weapons", s.handleConfigList("weapons"))
 	r.Get("/weapons/edit", s.handleConfigEdit("weapons"))

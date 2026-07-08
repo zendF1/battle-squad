@@ -338,10 +338,7 @@ func (m *Match) startTurn(ctx context.Context) {
 	player := m.State.Players[m.State.CurrentPlayerID]
 	player.MoveEnergy = 100 // Reset move energy to full
 
-	// Decrement skill cooldown at the start of each turn
-	if player.SkillCooldown > 0 {
-		player.SkillCooldown--
-	}
+	// Skill energy is incremented at end of turn, not start
 
 	// Reset shot modifiers
 	UpdatePlayerStatusEffects(player)
@@ -437,6 +434,15 @@ func (m *Match) startTurn(ctx context.Context) {
 }
 
 func (m *Match) endTurn(ctx context.Context) {
+	// Add skill energy to current player (+20 per turn, max 100)
+	currentPlayer := m.State.Players[m.State.CurrentPlayerID]
+	if currentPlayer != nil && currentPlayer.IsAlive {
+		currentPlayer.SkillEnergy += 20
+		if currentPlayer.SkillEnergy > 100 {
+			currentPlayer.SkillEnergy = 100
+		}
+	}
+
 	// Find next player in order
 	currentIdx := -1
 	for idx, id := range m.State.TurnOrder {
@@ -578,8 +584,8 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 			return
 		}
 
-		// Reject if on cooldown
-		if player.SkillCooldown > 0 {
+		// Reject if not enough skill energy
+		if player.SkillEnergy < 100 {
 			return
 		}
 
@@ -597,7 +603,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 				Value:          0,
 				SourcePlayerID: player.PlayerID,
 			})
-			player.SkillCooldown = skillConfig.CooldownTurn
+			player.SkillEnergy = 0
 
 			payload, _ := json.Marshal(map[string]interface{}{
 				"playerId": player.PlayerID,
@@ -781,8 +787,8 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 			results = append(results, r)
 		}
 
-		// Set cooldown after use
-		player.SkillCooldown = skillConfig.CooldownTurn
+		// Reset skill energy after use
+		player.SkillEnergy = 0
 
 		// Broadcast each projectile result
 		for _, r := range results {

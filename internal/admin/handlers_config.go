@@ -374,6 +374,108 @@ func (s *Server) handleConfigDelete(configType string) http.HandlerFunc {
 	}
 }
 
+// handleCharacterDetail shows a combined character + skill edit form.
+func (s *Server) handleCharacterDetail() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		id := r.URL.Query().Get("id")
+		isNew := id == ""
+
+		var char ConfigCharacter
+		var skill ConfigSkill
+
+		if !isNew {
+			found, err := s.repo.GetCharacter(ctx, id)
+			if err != nil {
+				http.Redirect(w, r, "/characters?error=Character+not+found", http.StatusSeeOther)
+				return
+			}
+			char = *found
+
+			// Load associated skill
+			sk, err := s.repo.GetSkillByCharacterID(ctx, id)
+			if err == nil {
+				skill = *sk
+			}
+		}
+
+		flash := r.URL.Query().Get("flash")
+		errMsg := r.URL.Query().Get("error")
+
+		s.render(w, "character_detail", map[string]interface{}{
+			"ActivePage": "characters",
+			"Character":  char,
+			"Skill":      skill,
+			"IsNew":      isNew,
+			"Flash":      flash,
+			"Error":      errMsg,
+		})
+	}
+}
+
+// handleCharacterDetailSave saves both character and skill config together.
+func (s *Server) handleCharacterDetailSave() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			http.Redirect(w, r, "/characters?error=Invalid+form+data", http.StatusSeeOther)
+			return
+		}
+		ctx := r.Context()
+
+		charID := strings.TrimSpace(r.FormValue("character_id"))
+		if charID == "" {
+			http.Redirect(w, r, "/characters/detail?error=Character+ID+is+required", http.StatusSeeOther)
+			return
+		}
+
+		skillID := strings.TrimSpace(r.FormValue("skill_id"))
+
+		// Save character (link skill_id)
+		c := &ConfigCharacter{
+			CharacterID:   charID,
+			Name:          r.FormValue("name"),
+			Role:          r.FormValue("role"),
+			HP:            formInt(r, "hp"),
+			Damage:        formInt(r, "damage"),
+			Mobility:      formInt(r, "mobility"),
+			Defense:       formInt(r, "defense"),
+			SkillPower:    formInt(r, "skill_power"),
+			TerrainDamage: formInt(r, "terrain_damage"),
+			Difficulty:    formInt(r, "difficulty"),
+			WeaponID:      r.FormValue("weapon_id"),
+			SkillID:       skillID,
+			Description:   r.FormValue("char_description"),
+		}
+		if err := s.repo.UpsertCharacter(ctx, c); err != nil {
+			observability.Log.Error().Err(err).Msg("failed to upsert character")
+			http.Redirect(w, r, "/characters?error=Failed+to+save+character", http.StatusSeeOther)
+			return
+		}
+
+		// Save skill if skill_id is provided
+		if skillID != "" {
+			sk := &ConfigSkill{
+				SkillID:          skillID,
+				CharacterID:      charID,
+				Name:             r.FormValue("skill_name"),
+				CooldownTurn:     0, // no longer used (skill energy system)
+				EffectType:       r.FormValue("effect_type"),
+				ProjectileCount:  formInt(r, "projectile_count"),
+				StatusEffectID:   r.FormValue("status_effect_id"),
+				DamageMultiplier: formFloat(r, "damage_multiplier"),
+				Description:      r.FormValue("skill_description"),
+			}
+			if err := s.repo.UpsertSkill(ctx, sk); err != nil {
+				observability.Log.Error().Err(err).Msg("failed to upsert skill")
+				http.Redirect(w, r, "/characters/detail?id="+charID+"&error=Failed+to+save+skill", http.StatusSeeOther)
+				return
+			}
+		}
+
+		http.Redirect(w, r, "/characters/detail?id="+charID+"&flash=Saved+successfully", http.StatusSeeOther)
+	}
+}
+
 // jsonString converts json.RawMessage to a string for template display.
 func jsonString(raw json.RawMessage) string {
 	if raw == nil {
