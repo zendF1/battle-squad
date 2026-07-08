@@ -142,10 +142,45 @@ func (m *Match) Run() {
 	observability.MatchStartedTotal.Inc()
 	defer observability.ActiveMatches.Dec()
 
+	observability.Log.Info().
+		Str("matchId", m.State.MatchID).
+		Str("roomId", m.State.RoomID).
+		Str("mode", m.State.Mode).
+		Int("clientCount", len(m.Clients)).
+		Int("playerCount", len(m.State.Players)).
+		Str("status", m.State.Status).
+		Msg("[RANKED-DEBUG] Match.Run() started")
+
+	for pid := range m.Clients {
+		observability.Log.Info().
+			Str("matchId", m.State.MatchID).
+			Str("clientPlayerId", pid).
+			Msg("[RANKED-DEBUG] Match.Run() client")
+	}
+
+	for pid, p := range m.State.Players {
+		observability.Log.Info().
+			Str("matchId", m.State.MatchID).
+			Str("playerId", pid).
+			Bool("isBot", p.IsBot).
+			Bool("isAlive", p.IsAlive).
+			Int("teamId", p.TeamID).
+			Msg("[RANKED-DEBUG] Match.Run() player state")
+	}
+
 	m.el.Start(m.ctx)
 	m.lastActivity = time.Now()
+
+	observability.Log.Info().
+		Str("matchId", m.State.MatchID).
+		Int("clientCount", len(m.Clients)).
+		Msg("[RANKED-DEBUG] about to broadcastMatchStarted")
 	m.broadcastMatchStarted()
 
+	observability.Log.Info().
+		Str("matchId", m.State.MatchID).
+		Str("currentPlayerId", m.State.CurrentPlayerID).
+		Msg("[RANKED-DEBUG] about to startTurn (first turn)")
 	// Initialize the first turn
 	m.startTurn(context.Background())
 
@@ -235,6 +270,61 @@ func (m *Match) handleEvent(ev matchEvent) {
 	case "EndTurn":
 		m.el.Log("EndTurn", actorID, nil)
 		m.processEndTurn(ev.ctx, client)
+	case "__delayed_end_turn":
+		if m.State.Status == "in_progress" {
+			m.endTurn(ev.ctx)
+		}
+	case "__teleport_complete":
+		if m.State.Status != "in_progress" {
+			return
+		}
+		var data map[string]interface{}
+		if err := json.Unmarshal(msg.Data, &data); err != nil {
+			return
+		}
+		playerID, _ := data["playerID"].(string)
+		p, ok := m.State.Players[playerID]
+		if !ok || !p.IsAlive {
+			return
+		}
+
+		// Teleport to target position if valid
+		if targetX, hasX := data["targetX"].(float64); hasX {
+			if targetY, hasY := data["targetY"].(float64); hasY {
+				p.Position.X = targetX
+				p.Position.Y = targetY
+
+				posPayload, _ := json.Marshal(map[string]interface{}{
+					"playerId":   p.PlayerID,
+					"position":   p.Position,
+					"moveEnergy": p.MoveEnergy,
+				})
+				m.broadcast(ws.Message{Event: "PlayerMoved", Data: posPayload})
+			}
+		}
+
+		// Consume item
+		itemIdx := -1
+		if idx, ok := data["itemIdx"].(float64); ok {
+			itemIdx = int(idx)
+		}
+		if itemIdx >= 0 && itemIdx < len(p.Items) {
+			p.Items = append(p.Items[:itemIdx], p.Items[itemIdx+1:]...)
+		}
+
+		// Broadcast ItemUsed with updated player state
+		itemPayload, _ := json.Marshal(map[string]interface{}{
+			"playerId": playerID,
+			"itemId":   "teleport",
+			"players":  m.State.Players,
+			"wind":     m.State.Wind,
+		})
+		m.broadcast(ws.Message{Event: "ItemUsed", Data: itemPayload})
+
+		m.checkWinCondition(ev.ctx)
+		if m.State.Status == "in_progress" {
+			m.endTurn(ev.ctx)
+		}
 	case "Reconnect":
 		m.processReconnect(ev.ctx, client)
 	case "Leave":
@@ -285,6 +375,14 @@ func (m *Match) startTurn(ctx context.Context) {
 	m.updateWind()
 
 	// Broadcast TurnStarted
+	observability.Log.Info().
+		Str("matchId", m.State.MatchID).
+		Int("turnIndex", m.State.TurnIndex).
+		Str("currentPlayerId", m.State.CurrentPlayerID).
+		Bool("isBot", player.IsBot).
+		Int("clientCount", len(m.Clients)).
+		Msg("[RANKED-DEBUG] startTurn: broadcasting TurnStarted")
+
 	payload, _ := json.Marshal(map[string]interface{}{
 		"turnIndex":       m.State.TurnIndex,
 		"currentPlayerId": m.State.CurrentPlayerID,
@@ -298,8 +396,14 @@ func (m *Match) startTurn(ctx context.Context) {
 
 	// If it is a bot's turn, trigger bot decision block after a short delay
 	if player.IsBot {
+		observability.Log.Info().
+			Str("matchId", m.State.MatchID).
+			Str("botId", player.PlayerID).
+			Msg("[RANKED-DEBUG] startTurn: scheduling bot action")
 		go func() {
-			time.Sleep(1500 * time.Millisecond) // wait for player to realize it's bot turn
+			// Random delay 2-6s so bots feel natural, not instant
+			botDelay := 2000 + rand.Intn(4000)
+			time.Sleep(time.Duration(botDelay) * time.Millisecond)
 
 			// Idle bots (tutorial) just end their turn
 			if strings.HasPrefix(player.PlayerID, "bot_") && player.DisplayName == "Target Bot" {
@@ -361,6 +465,24 @@ func (m *Match) endTurn(ctx context.Context) {
 	}
 
 	m.startTurn(ctx)
+}
+
+// scheduleEndTurn delays the turn transition to let clients animate projectile
+// flight, explosion, and damage display before the next turn starts.
+// delay = flight time + 0.5s explosion + 0.2s damage popup + 0.5s buffer
+func (m *Match) scheduleEndTurn(ctx context.Context, flightTime float64) {
+	delay := flightTime + 1.2 // explosion + damage popup + buffer
+	if delay < 1.5 {
+		delay = 1.5
+	}
+	go func() {
+		time.Sleep(time.Duration(delay * float64(time.Second)))
+		m.Events <- matchEvent{
+			client: nil,
+			msg:    ws.Message{Event: "__delayed_end_turn"},
+			ctx:    ctx,
+		}
+	}()
 }
 
 func (m *Match) processMove(ctx context.Context, client *ws.Client, action MoveAction) {
@@ -527,6 +649,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 		for _, shot := range shots {
 			r := SimulateProjectile(
 				player.PlayerID,
+				player.TeamID,
 				player.Position,
 				shot.angle,
 				action.Power,
@@ -550,9 +673,20 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 					if !p.IsAlive {
 						continue
 					}
+					// No friendly fire — skip teammates
+					if p.TeamID == player.TeamID {
+						continue
+					}
+
+					// Direct hit: use player's own position as explosion center (distance=0, full damage)
+					explosionCenter := *r.ExplosionPoint
+					if p.PlayerID == r.HitPlayerID {
+						explosionCenter = p.Position
+					}
+
 					damage := CalculateExplosionDamage(
 						p.Position,
-						*r.ExplosionPoint,
+						explosionCenter,
 						float64(weaponConfig.Damage)*damageFactor,
 						r.ExplosionRadius,
 						p.Defense,
@@ -566,13 +700,10 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 							isKilled = true
 						}
 
-						// Track stats for shooter (only damage to other players)
-						if p.PlayerID != player.PlayerID {
-							player.DamageDealt += damage
-							player.ShotsHit++
-							if isKilled {
-								player.KillCount++
-							}
+						player.DamageDealt += damage
+						player.ShotsHit++
+						if isKilled {
+							player.KillCount++
 						}
 
 						damagedPlayers = append(damagedPlayers, map[string]interface{}{
@@ -603,6 +734,25 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 						continue
 					}
 					landY := m.Terrain.GetLandingY(p.Position.X, p.Position.Y)
+					if landY >= float64(m.Terrain.Height) {
+						// Fell off the map — instant death
+						remainingHP := p.HP
+						p.HP = 0
+						p.IsAlive = false
+						p.Position.Y = landY
+
+						player.KillCount++
+
+						damagedPlayers = append(damagedPlayers, map[string]interface{}{
+							"playerId": p.PlayerID,
+							"damage":   remainingHP,
+							"hp":       0,
+							"isAlive":  false,
+							"isKilled": true,
+							"type":     "fall",
+						})
+						continue
+					}
 					if landY > p.Position.Y {
 						fallDistance := landY - p.Position.Y
 						p.Position.Y = landY
@@ -646,13 +796,98 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 			m.el.Log("PlayerDamaged", "", damagedPlayers)
 		}
 
+		// Prevent turn timer from triggering endTurn while animation plays
+		m.State.TurnTimeLeft = 999
 		m.checkWinCondition(ctx)
 		if m.State.Status == "in_progress" {
-			m.endTurn(ctx)
+			flightTime := 0.0
+			for _, r := range results {
+				if len(r.Path) > 0 {
+					t := r.Path[len(r.Path)-1].Time
+					if t > flightTime {
+						flightTime = t
+					}
+				}
+			}
+			m.scheduleEndTurn(ctx, flightTime)
 		}
 		return
 	}
 	// ── End skill mode ───────────────────────────────────────────────────────
+
+	// ── Item mode: teleport ─────────────────────────────────────────────────
+	if action.ActionMode == "item" && action.ItemID != nil && *action.ItemID == "teleport" {
+		// Verify player has the item
+		itemIdx := -1
+		for i, it := range player.Items {
+			if it == "teleport" {
+				itemIdx = i
+				break
+			}
+		}
+		if itemIdx == -1 {
+			return
+		}
+
+		// Simulate projectile to find landing point
+		result := SimulateProjectile(
+			player.PlayerID,
+			player.TeamID,
+			player.Position,
+			action.Angle,
+			action.Power,
+			weaponConfig,
+			m.State.Wind,
+			m.Terrain,
+			m.State.Players,
+			false, // no drill mode
+		)
+		result.TerrainDestroyed = false
+		result.ExplosionRadius = 0
+
+		player.ShotsFired++
+
+		// Broadcast projectile path (so client can animate the flight)
+		payloadResult, _ := json.Marshal(result)
+		m.broadcast(ws.Message{Event: "ProjectileResult", Data: payloadResult})
+
+		// Calculate flight time for delay
+		flightTime := 0.0
+		if len(result.Path) > 0 {
+			flightTime = result.Path[len(result.Path)-1].Time
+		}
+
+		// Prevent turn timer during animation
+		m.State.TurnTimeLeft = 999
+
+		// Schedule teleport + item consume + end turn AFTER projectile animation
+		teleportData := map[string]interface{}{
+			"playerID": player.PlayerID,
+			"itemIdx":  itemIdx,
+		}
+		if result.ExplosionPoint != nil && result.ExplosionPoint.Y < float64(m.Terrain.Height) {
+			landY := m.Terrain.GetLandingY(result.ExplosionPoint.X, result.ExplosionPoint.Y)
+			if landY < float64(m.Terrain.Height) {
+				teleportData["targetX"] = result.ExplosionPoint.X
+				teleportData["targetY"] = landY
+			}
+		}
+		go func() {
+			delay := flightTime + 0.3 // small buffer after animation
+			if delay < 0.5 {
+				delay = 0.5
+			}
+			time.Sleep(time.Duration(delay * float64(time.Second)))
+			teleportPayload, _ := json.Marshal(teleportData)
+			m.Events <- matchEvent{
+				client: nil,
+				msg:    ws.Message{Event: "__teleport_complete", Data: teleportPayload},
+				ctx:    context.Background(),
+			}
+		}()
+		return
+	}
+	// ── End item mode ───────────────────────────────────────────────────────
 
 	// Determine projectile origin, angle, and power — may be overridden by air_strike
 	shootOrigin := player.Position
@@ -672,6 +907,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 	// 1. Simulate Projectile Trajectory
 	result := SimulateProjectile(
 		player.PlayerID,
+		player.TeamID,
 		shootOrigin,
 		shootAngle,
 		shootPower,
@@ -703,15 +939,24 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 		m.Terrain.DestroyCircle(result.ExplosionPoint.X, result.ExplosionPoint.Y, result.ExplosionRadius)
 		result.TerrainDestroyed = true
 
-		// Check player splash damage
+		// Check player splash damage (no friendly fire — skip teammates)
 		for _, p := range m.State.Players {
 			if !p.IsAlive {
 				continue
 			}
+			if p.TeamID == player.TeamID {
+				continue
+			}
+
+			// Direct hit: use player's own position as explosion center (distance=0, full damage)
+			explosionCenter := *result.ExplosionPoint
+			if p.PlayerID == result.HitPlayerID {
+				explosionCenter = p.Position
+			}
 
 			damage := CalculateExplosionDamage(
 				p.Position,
-				*result.ExplosionPoint,
+				explosionCenter,
 				float64(weaponConfig.Damage)*damageFactor,
 				result.ExplosionRadius,
 				p.Defense,
@@ -726,13 +971,10 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 					isKilled = true
 				}
 
-				// Track stats for shooter (only damage to other players)
-				if p.PlayerID != player.PlayerID {
-					player.DamageDealt += damage
-					player.ShotsHit++
-					if isKilled {
-						player.KillCount++
-					}
+				player.DamageDealt += damage
+				player.ShotsHit++
+				if isKilled {
+					player.KillCount++
 				}
 
 				damagedPlayers = append(damagedPlayers, map[string]interface{}{
@@ -752,8 +994,26 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 			}
 
 			landY := m.Terrain.GetLandingY(p.Position.X, p.Position.Y)
+			if landY >= float64(m.Terrain.Height) {
+				// Fell off the map — instant death
+				remainingHP := p.HP
+				p.HP = 0
+				p.IsAlive = false
+				p.Position.Y = landY
+
+				player.KillCount++
+
+				damagedPlayers = append(damagedPlayers, map[string]interface{}{
+					"playerId": p.PlayerID,
+					"damage":   remainingHP,
+					"hp":       0,
+					"isAlive":  false,
+					"isKilled": true,
+					"type":     "fall",
+				})
+				continue
+			}
 			if landY > p.Position.Y {
-				// Player fell down
 				fallDistance := landY - p.Position.Y
 				p.Position.Y = landY
 
@@ -823,10 +1083,16 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 		}
 	}
 
-	// 3. Complete shooting event, check win conditions, end turn
+	// 3. Complete shooting event, check win conditions, schedule delayed end turn
+	// Prevent turn timer from triggering endTurn while animation plays
+	m.State.TurnTimeLeft = 999
 	m.checkWinCondition(ctx)
 	if m.State.Status == "in_progress" {
-		m.endTurn(ctx)
+		flightTime := 0.0
+		if len(result.Path) > 0 {
+			flightTime = result.Path[len(result.Path)-1].Time
+		}
+		m.scheduleEndTurn(ctx, flightTime)
 	}
 }
 
@@ -1065,19 +1331,45 @@ func calculateAccuracy(fired, hit int) float64 {
 }
 
 func (m *Match) broadcast(msg ws.Message) {
-	for _, client := range m.Clients {
+	observability.Log.Debug().
+		Str("matchId", m.State.MatchID).
+		Str("event", msg.Event).
+		Int("clientCount", len(m.Clients)).
+		Msg("[RANKED-DEBUG] broadcast")
+	for pid, client := range m.Clients {
 		select {
 		case client.Send <- msg:
 		default:
+			observability.Log.Warn().
+				Str("matchId", m.State.MatchID).
+				Str("event", msg.Event).
+				Str("playerId", pid).
+				Msg("[RANKED-DEBUG] broadcast: Send channel FULL, DROPPED")
 		}
 	}
 }
 
 func (m *Match) broadcastMatchStarted() {
+	observability.Log.Info().
+		Str("matchId", m.State.MatchID).
+		Int("clientCount", len(m.Clients)).
+		Msg("[RANKED-DEBUG] broadcastMatchStarted: broadcasting to clients")
+
+	for pid := range m.Clients {
+		observability.Log.Info().
+			Str("matchId", m.State.MatchID).
+			Str("targetPlayerId", pid).
+			Msg("[RANKED-DEBUG] broadcastMatchStarted: will send to")
+	}
+
 	payload, _ := json.Marshal(m.State)
 	m.broadcast(ws.Message{
 		Event: "MatchStarted",
 		Data:  payload,
 	})
 	m.el.Log("MatchStarted", "", m.State)
+
+	observability.Log.Info().
+		Str("matchId", m.State.MatchID).
+		Msg("[RANKED-DEBUG] broadcastMatchStarted: done")
 }
