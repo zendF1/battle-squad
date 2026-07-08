@@ -78,6 +78,7 @@
 <tr>
     <td>{{.MapID}}</td><td>{{.Name}}</td><td>{{.Width}}</td><td>{{.Height}}</td><td>{{.Description}}</td>
     <td>
+        <a href="/maps/editor?id={{.MapID}}" class="btn btn-success btn-sm">Editor</a>
         <a href="/maps/edit?id={{.MapID}}" class="btn btn-primary btn-sm">Edit</a>
         <form method="POST" action="/maps/delete" style="display:inline" onsubmit="return confirm('Delete this map?')">
             <input type="hidden" name="id" value="{{.MapID}}">

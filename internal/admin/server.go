@@ -82,6 +82,13 @@ func (s *Server) Routes() http.Handler {
 	r.Post("/brick-types/save", s.handleBrickTypeSave)
 	r.Post("/brick-types/delete", s.handleBrickTypeDelete)
 
+	// Map Editor
+	r.Get("/maps/editor", s.handleMapEditor)
+	r.Get("/api/maps/tiles", s.handleMapTilesGet)
+	r.Put("/api/maps/tiles", s.handleMapTilesSave)
+	r.Get("/api/maps/export", s.handleMapExport)
+	r.Get("/api/brick-types", s.handleBrickTypesAPI)
+
 	// Physics settings
 	r.Get("/physics", s.handlePhysics)
 	r.Post("/physics/save", s.handlePhysicsSave)
