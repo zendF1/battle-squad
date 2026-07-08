@@ -74,7 +74,18 @@ func NewMatch(
 		turnOrder = append(turnOrder, p.PlayerID)
 	}
 
-	terrain := NewTerrain(1600, 900, mapID)
+	// Build terrain from map config, with legacy fallback
+	mapCfgForTerrain := gamedata.MapConfig{
+		MapID:  mapID,
+		Width:  1600,
+		Height: 900,
+	}
+	if gamedata.Data != nil {
+		if mc, ok := gamedata.Data.Maps[mapID]; ok {
+			mapCfgForTerrain = mc
+		}
+	}
+	terrain := NewTerrain(mapCfgForTerrain)
 
 	// Land players safely on terrain initially
 	for _, p := range mPlayers {
@@ -1256,8 +1267,8 @@ func (m *Match) updateWind() {
 	windMin := 0
 	windMax := 4
 	if mapCfg, ok := gamedata.Data.Maps[m.State.MapID]; ok && len(mapCfg.DefaultWindPowerRange) == 2 {
-		windMin = mapCfg.DefaultWindPowerRange[0]
-		windMax = mapCfg.DefaultWindPowerRange[1]
+		windMin = int(mapCfg.DefaultWindPowerRange[0])
+		windMax = int(mapCfg.DefaultWindPowerRange[1])
 	}
 	windRange := windMax - windMin + 1
 	if windRange < 1 {
