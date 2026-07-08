@@ -553,6 +553,115 @@ func (r *Repository) DeleteMap(ctx context.Context, id string) error {
 }
 
 // ---------------------------------------------------------------------------
+// Brick Types CRUD
+// ---------------------------------------------------------------------------
+
+// ConfigBrickType represents a row in config_brick_types.
+type ConfigBrickType struct {
+	BrickTypeID  string
+	Name         string
+	Destructible bool
+}
+
+// GetBrickTypes returns all brick types ordered by brick_type_id.
+func (r *Repository) GetBrickTypes(ctx context.Context) ([]ConfigBrickType, error) {
+	rows, err := r.db.Pool.Query(ctx,
+		`SELECT brick_type_id, name, destructible FROM config_brick_types ORDER BY brick_type_id`)
+	if err != nil {
+		return nil, fmt.Errorf("query brick types: %w", err)
+	}
+	defer rows.Close()
+
+	var types []ConfigBrickType
+	for rows.Next() {
+		var bt ConfigBrickType
+		if err := rows.Scan(&bt.BrickTypeID, &bt.Name, &bt.Destructible); err != nil {
+			return nil, fmt.Errorf("scan brick type: %w", err)
+		}
+		types = append(types, bt)
+	}
+	return types, rows.Err()
+}
+
+// GetBrickType returns a single brick type by ID.
+func (r *Repository) GetBrickType(ctx context.Context, id string) (*ConfigBrickType, error) {
+	var bt ConfigBrickType
+	err := r.db.Pool.QueryRow(ctx,
+		`SELECT brick_type_id, name, destructible FROM config_brick_types WHERE brick_type_id = $1`, id).
+		Scan(&bt.BrickTypeID, &bt.Name, &bt.Destructible)
+	if err != nil {
+		return nil, fmt.Errorf("get brick type %s: %w", id, err)
+	}
+	return &bt, nil
+}
+
+// UpsertBrickType inserts or updates a brick type.
+func (r *Repository) UpsertBrickType(ctx context.Context, bt *ConfigBrickType) error {
+	_, err := r.db.Pool.Exec(ctx,
+		`INSERT INTO config_brick_types (brick_type_id, name, destructible, updated_at)
+		 VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+		 ON CONFLICT (brick_type_id) DO UPDATE SET
+		   name=EXCLUDED.name, destructible=EXCLUDED.destructible, updated_at=CURRENT_TIMESTAMP`,
+		bt.BrickTypeID, bt.Name, bt.Destructible)
+	if err != nil {
+		return fmt.Errorf("upsert brick type %s: %w", bt.BrickTypeID, err)
+	}
+	return nil
+}
+
+// DeleteBrickType deletes a brick type by ID.
+func (r *Repository) DeleteBrickType(ctx context.Context, id string) error {
+	_, err := r.db.Pool.Exec(ctx, `DELETE FROM config_brick_types WHERE brick_type_id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("delete brick type %s: %w", id, err)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Map Tiles (Editor data)
+// ---------------------------------------------------------------------------
+
+// MapTilesData holds the tile grid and spawn points for the editor API.
+type MapTilesData struct {
+	MapID                 string          `json:"mapId"`
+	Name                  string          `json:"name"`
+	GridWidth             int             `json:"gridWidth"`
+	GridHeight            int             `json:"gridHeight"`
+	CellSize              int             `json:"cellSize"`
+	DefaultWindPowerRange json.RawMessage `json:"defaultWindPowerRange"`
+	Tiles                 json.RawMessage `json:"tiles"`
+	SpawnPoints           json.RawMessage `json:"spawnPoints"`
+}
+
+// GetMapTiles returns tiles data for the map editor.
+func (r *Repository) GetMapTiles(ctx context.Context, id string) (*MapTilesData, error) {
+	var d MapTilesData
+	err := r.db.Pool.QueryRow(ctx,
+		`SELECT map_id, name, grid_width, grid_height, cell_size,
+		        default_wind_power_range, tiles, spawn_points
+		 FROM config_maps WHERE map_id = $1`, id).
+		Scan(&d.MapID, &d.Name, &d.GridWidth, &d.GridHeight, &d.CellSize,
+			&d.DefaultWindPowerRange, &d.Tiles, &d.SpawnPoints)
+	if err != nil {
+		return nil, fmt.Errorf("get map tiles %s: %w", id, err)
+	}
+	return &d, nil
+}
+
+// SaveMapTiles saves tiles and spawn points for a map.
+func (r *Repository) SaveMapTiles(ctx context.Context, id string, tiles, spawnPoints json.RawMessage) error {
+	_, err := r.db.Pool.Exec(ctx,
+		`UPDATE config_maps SET tiles = $1, spawn_points = $2, updated_at = CURRENT_TIMESTAMP
+		 WHERE map_id = $3`,
+		tiles, spawnPoints, id)
+	if err != nil {
+		return fmt.Errorf("save map tiles %s: %w", id, err)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
 // Shop Offers
 // ---------------------------------------------------------------------------
 
