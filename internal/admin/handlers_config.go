@@ -189,10 +189,10 @@ func (s *Server) handleConfigEdit(configType string) http.HandlerFunc {
 			fields = []FieldDef{
 				{Name: "map_id", Label: "Map ID", Type: "text", Description: "Unique identifier (e.g. map_valley)", Value: m.MapID},
 				{Name: "name", Label: "Name", Type: "text", Description: "Display name", Value: m.Name},
-				{Name: "width", Label: "Width", Type: "number", Step: "1", Description: "Map width in pixels", Value: m.Width},
-				{Name: "height", Label: "Height", Type: "number", Step: "1", Description: "Map height in pixels", Value: m.Height},
-				{Name: "default_wind_power_range", Label: "Wind Power Range (JSON)", Type: "textarea", Description: "JSON array [min, max] for wind power range", Value: jsonString(m.DefaultWindPowerRange)},
-				{Name: "terrain_layers", Label: "Terrain Layers (JSON)", Type: "textarea", Description: "JSON array of terrain layer definitions", Value: jsonString(m.TerrainLayers)},
+				{Name: "grid_width", Label: "Grid Width", Type: "number", Step: "1", Description: "Number of horizontal cells", Value: m.GridWidth},
+				{Name: "grid_height", Label: "Grid Height", Type: "number", Step: "1", Description: "Number of vertical cells", Value: m.GridHeight},
+				{Name: "cell_size", Label: "Cell Size", Type: "number", Step: "1", Description: "Pixel size of each cell", Value: m.CellSize},
+				{Name: "default_wind_power_range", Label: "Wind Power Range (JSON)", Type: "textarea", Description: "JSON array [min, max] for wind power range (float)", Value: jsonString(m.DefaultWindPowerRange)},
 				{Name: "spawn_points", Label: "Spawn Points (JSON)", Type: "textarea", Description: "JSON array of spawn point coordinates", Value: jsonString(m.SpawnPoints)},
 				{Name: "description", Label: "Description", Type: "textarea", Description: "Map description", Value: m.Description},
 			}
@@ -311,14 +311,30 @@ func (s *Server) handleConfigSave(configType string) http.HandlerFunc {
 			}
 
 		case "maps":
+			gridWidth := formInt(r, "grid_width")
+			if gridWidth == 0 {
+				gridWidth = 100
+			}
+			gridHeight := formInt(r, "grid_height")
+			if gridHeight == 0 {
+				gridHeight = 56
+			}
+			cellSize := formInt(r, "cell_size")
+			if cellSize == 0 {
+				cellSize = 16
+			}
 			m := &ConfigMap{
 				MapID:                 strings.TrimSpace(r.FormValue("map_id")),
 				Name:                  r.FormValue("name"),
-				Width:                 formInt(r, "width"),
-				Height:                formInt(r, "height"),
+				Width:                 gridWidth * cellSize,
+				Height:                gridHeight * cellSize,
+				GridWidth:             gridWidth,
+				GridHeight:            gridHeight,
+				CellSize:              cellSize,
 				DefaultWindPowerRange: json.RawMessage(r.FormValue("default_wind_power_range")),
-				TerrainLayers:         json.RawMessage(r.FormValue("terrain_layers")),
+				TerrainLayers:         json.RawMessage("[]"),
 				SpawnPoints:           json.RawMessage(r.FormValue("spawn_points")),
+				Tiles:                 json.RawMessage("[]"),
 				Description:           r.FormValue("description"),
 			}
 			if m.MapID == "" {

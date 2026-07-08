@@ -477,17 +477,21 @@ type ConfigMap struct {
 	Name                  string
 	Width                 int
 	Height                int
+	GridWidth             int
+	GridHeight            int
+	CellSize              int
 	DefaultWindPowerRange json.RawMessage
 	TerrainLayers         json.RawMessage
 	SpawnPoints           json.RawMessage
+	Tiles                 json.RawMessage
 	Description           string
 }
 
 // GetMaps returns all maps ordered by map_id.
 func (r *Repository) GetMaps(ctx context.Context) ([]ConfigMap, error) {
 	rows, err := r.db.Pool.Query(ctx,
-		`SELECT map_id, name, width, height, default_wind_power_range,
-		        terrain_layers, spawn_points, description
+		`SELECT map_id, name, width, height, grid_width, grid_height, cell_size,
+		        default_wind_power_range, terrain_layers, spawn_points, tiles, description
 		 FROM config_maps ORDER BY map_id`)
 	if err != nil {
 		return nil, fmt.Errorf("query maps: %w", err)
@@ -498,8 +502,9 @@ func (r *Repository) GetMaps(ctx context.Context) ([]ConfigMap, error) {
 	for rows.Next() {
 		var m ConfigMap
 		if err := rows.Scan(&m.MapID, &m.Name, &m.Width, &m.Height,
+			&m.GridWidth, &m.GridHeight, &m.CellSize,
 			&m.DefaultWindPowerRange, &m.TerrainLayers, &m.SpawnPoints,
-			&m.Description); err != nil {
+			&m.Tiles, &m.Description); err != nil {
 			return nil, fmt.Errorf("scan map: %w", err)
 		}
 		maps = append(maps, m)
@@ -511,12 +516,13 @@ func (r *Repository) GetMaps(ctx context.Context) ([]ConfigMap, error) {
 func (r *Repository) GetMap(ctx context.Context, id string) (*ConfigMap, error) {
 	var m ConfigMap
 	err := r.db.Pool.QueryRow(ctx,
-		`SELECT map_id, name, width, height, default_wind_power_range,
-		        terrain_layers, spawn_points, description
+		`SELECT map_id, name, width, height, grid_width, grid_height, cell_size,
+		        default_wind_power_range, terrain_layers, spawn_points, tiles, description
 		 FROM config_maps WHERE map_id = $1`, id).
 		Scan(&m.MapID, &m.Name, &m.Width, &m.Height,
+			&m.GridWidth, &m.GridHeight, &m.CellSize,
 			&m.DefaultWindPowerRange, &m.TerrainLayers, &m.SpawnPoints,
-			&m.Description)
+			&m.Tiles, &m.Description)
 	if err != nil {
 		return nil, fmt.Errorf("get map %s: %w", id, err)
 	}
@@ -527,16 +533,19 @@ func (r *Repository) GetMap(ctx context.Context, id string) (*ConfigMap, error) 
 func (r *Repository) UpsertMap(ctx context.Context, m *ConfigMap) error {
 	_, err := r.db.Pool.Exec(ctx,
 		`INSERT INTO config_maps
-		 (map_id, name, width, height, default_wind_power_range,
-		  terrain_layers, spawn_points, description, updated_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8, CURRENT_TIMESTAMP)
+		 (map_id, name, width, height, grid_width, grid_height, cell_size,
+		  default_wind_power_range, terrain_layers, spawn_points, tiles, description, updated_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, CURRENT_TIMESTAMP)
 		 ON CONFLICT (map_id) DO UPDATE SET
 		   name=EXCLUDED.name, width=EXCLUDED.width, height=EXCLUDED.height,
+		   grid_width=EXCLUDED.grid_width, grid_height=EXCLUDED.grid_height,
+		   cell_size=EXCLUDED.cell_size,
 		   default_wind_power_range=EXCLUDED.default_wind_power_range,
 		   terrain_layers=EXCLUDED.terrain_layers, spawn_points=EXCLUDED.spawn_points,
+		   tiles=EXCLUDED.tiles,
 		   description=EXCLUDED.description, updated_at=CURRENT_TIMESTAMP`,
-		m.MapID, m.Name, m.Width, m.Height,
-		m.DefaultWindPowerRange, m.TerrainLayers, m.SpawnPoints, m.Description)
+		m.MapID, m.Name, m.Width, m.Height, m.GridWidth, m.GridHeight, m.CellSize,
+		m.DefaultWindPowerRange, m.TerrainLayers, m.SpawnPoints, m.Tiles, m.Description)
 	if err != nil {
 		return fmt.Errorf("upsert map %s: %w", m.MapID, err)
 	}
