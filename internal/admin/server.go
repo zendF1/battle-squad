@@ -3,6 +3,7 @@ package admin
 import (
 	"embed"
 	"html/template"
+	"io/fs"
 	"net/http"
 
 	"battle-squad/internal/shared/database"
@@ -12,6 +13,9 @@ import (
 
 //go:embed templates/*.html
 var templateFS embed.FS
+
+//go:embed static/*
+var staticFS embed.FS
 
 // Server holds all dependencies for the admin dashboard.
 type Server struct {
@@ -45,6 +49,10 @@ var tmplFuncMap = template.FuncMap{
 // Routes returns the chi router with all admin dashboard routes.
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
+
+	// Serve static JS/CSS files
+	staticContent, _ := fs.Sub(staticFS, "static")
+	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticContent))))
 
 	r.Get("/", s.handleDashboard)
 
