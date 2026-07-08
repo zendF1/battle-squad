@@ -21,10 +21,10 @@ type Hub struct {
 	redis         *database.RedisClient
 	db            *database.PostgresDB
 	nodeID        string
-	lobbyNotifier func(lobbyID string, event string, data interface{})
+	lobbyNotifier func(lobbyID string, event string, data interface{}, battleRoom *Room)
 }
 
-func (h *Hub) SetLobbyNotifier(fn func(lobbyID string, event string, data interface{})) {
+func (h *Hub) SetLobbyNotifier(fn func(lobbyID string, event string, data interface{}, battleRoom *Room)) {
 	h.lobbyNotifier = fn
 }
 
@@ -236,19 +236,66 @@ func (h *Hub) CreateBattleFromMatch(ctx context.Context, result matchmaker.Match
 
 	observability.ActiveRooms.Inc()
 
-	// Spawn room goroutine
-	go room.Run()
+	// [RANKED-DEBUG] Log all players
+	for i, p := range players {
+		observability.Log.Info().
+			Str("roomId", roomID).
+			Int("idx", i).
+			Str("playerId", p.PlayerID).
+			Str("displayName", p.DisplayName).
+			Int("teamId", p.TeamID).
+			Str("characterId", p.CharacterID).
+			Bool("isReady", p.IsReady).
+			Msg("[RANKED-DEBUG] player in room")
+	}
 
-	// Notify lobby players about match found
+	// [RANKED-DEBUG] Log lobby mapping
+	for pid, lid := range lobbyMapping {
+		observability.Log.Info().
+			Str("roomId", roomID).
+			Str("playerId", pid).
+			Str("lobbyId", lid).
+			Msg("[RANKED-DEBUG] lobby mapping")
+	}
+
+	observability.Log.Info().
+		Str("roomId", roomID).
+		Int("clientCount", len(room.Clients)).
+		Msg("[RANKED-DEBUG] room.Clients BEFORE lobbyNotifier")
+
+	// Register lobby clients in battle room BEFORE starting the match,
+	// so they receive the MatchStarted broadcast.
+	// NOTE: We pass the room directly to avoid deadlock — lobbyNotifier
+	// used to call FindRoom() which needs RLock, but we already hold Lock.
 	if h.lobbyNotifier != nil {
+		observability.Log.Info().Str("roomId", roomID).Msg("[RANKED-DEBUG] calling lobbyNotifier")
 		matchFoundData := map[string]string{"roomId": roomID, "matchId": matchID}
 		notifiedLobbies := make(map[string]bool)
 		for _, lid := range lobbyMapping {
 			if !notifiedLobbies[lid] {
-				h.lobbyNotifier(lid, "MatchFound", matchFoundData)
+				observability.Log.Info().
+					Str("roomId", roomID).
+					Str("lobbyId", lid).
+					Msg("[RANKED-DEBUG] notifying lobby")
+				h.lobbyNotifier(lid, "MatchFound", matchFoundData, room)
 				notifiedLobbies[lid] = true
 			}
 		}
+	} else {
+		observability.Log.Warn().Str("roomId", roomID).Msg("[RANKED-DEBUG] lobbyNotifier is NIL!")
+	}
+
+	observability.Log.Info().
+		Str("roomId", roomID).
+		Int("clientCount", len(room.Clients)).
+		Msg("[RANKED-DEBUG] room.Clients AFTER lobbyNotifier")
+
+	// [RANKED-DEBUG] Log registered client IDs
+	for pid := range room.Clients {
+		observability.Log.Info().
+			Str("roomId", roomID).
+			Str("clientPlayerId", pid).
+			Msg("[RANKED-DEBUG] registered client")
 	}
 
 	// Determine bot tier from average rating
@@ -256,8 +303,23 @@ func (h *Hub) CreateBattleFromMatch(ctx context.Context, result matchmaker.Match
 	tierName := ratingToTier(avgRating)
 	botTierCfg := botDiffConfig.Tiers[tierName]
 
-	// Start ranked match
+	observability.Log.Info().
+		Str("roomId", roomID).
+		Str("matchId", matchID).
+		Str("botTier", tierName).
+		Int("avgRating", avgRating).
+		Msg("[RANKED-DEBUG] about to call startRankedMatch")
+
+	// Start ranked match (spawns match goroutine which broadcasts MatchStarted)
 	room.startRankedMatch(matchID, botTierCfg, eloConfig, result)
+
+	observability.Log.Info().
+		Str("roomId", roomID).
+		Msg("[RANKED-DEBUG] startRankedMatch returned, spawning room.Run()")
+
+	// Spawn room goroutine AFTER match setup so it processes events
+	// from an already-running match.
+	go room.Run()
 
 	// Sync to Redis
 	h.saveToRedis(ctx, &roomState)
@@ -267,7 +329,7 @@ func (h *Hub) CreateBattleFromMatch(ctx context.Context, result matchmaker.Match
 		Str("matchId", matchID).
 		Str("botTier", tierName).
 		Bool("hasBot", result.HasBot).
-		Msg("created battle room from matchmaker")
+		Msg("[RANKED-DEBUG] CreateBattleFromMatch completed")
 
 	return nil
 }

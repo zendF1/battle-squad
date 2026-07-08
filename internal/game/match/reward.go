@@ -24,15 +24,15 @@ type PlayerStats struct {
 }
 
 type RewardResult struct {
-	PlayerID         string
-	ExpGained        int
-	CoinGained       int
-	RatingChange     int
-	NewRating        int
-	NewTier          string
-	NewDivision      int
-	LevelUp          bool
-	NewLevel         int
+	PlayerID         string `json:"playerId"`
+	ExpGained        int    `json:"expGained"`
+	CoinGained       int    `json:"coinGained"`
+	RatingChange     int    `json:"ratingChange"`
+	NewRating        int    `json:"newRating"`
+	NewTier          string `json:"newTier"`
+	NewDivision      int    `json:"newDivision"`
+	LevelUp          bool   `json:"levelUp"`
+	NewLevel         int    `json:"newLevel"`
 	CharLevelUp      bool   `json:"charLevelUp"`
 	CharNewLevel     int    `json:"charNewLevel"`
 	CharLevelsGained int    `json:"charLevelsGained"`
