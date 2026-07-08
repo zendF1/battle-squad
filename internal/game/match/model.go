@@ -38,7 +38,7 @@ type BattlePlayerState struct {
 
 type WindState struct {
 	Direction int `json:"direction"` // -1: left, 0: no wind, 1: right
-	Power     int `json:"power"`     // 0 to 4
+	Power     float64 `json:"power"` // 0.0 to 4.0
 }
 
 type MatchState struct {

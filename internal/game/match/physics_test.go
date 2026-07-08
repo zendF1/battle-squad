@@ -26,7 +26,7 @@ func TestSimulateProjectile(t *testing.T) {
 
 	wind := WindState{
 		Direction: 1, // wind blows right
-		Power:     2,
+		Power:     2.0,
 	}
 
 	terrain := NewTerrain(gamedata.MapConfig{

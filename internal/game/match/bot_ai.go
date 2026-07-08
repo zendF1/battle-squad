@@ -198,7 +198,7 @@ func (b *SmartBotBrain) buildShootAction(botState *BattlePlayerState, matchState
 	// Wind compensation: smarter bots (higher MovementSmart) correct for wind.
 	// windCompensation is proportional to the tier's intelligence proxy.
 	windCompensationSkill := b.tierConfig.MovementSmart / 2.0
-	windOffset := float64(matchState.Wind.Direction) * float64(matchState.Wind.Power) * windCompensationSkill * 2.0
+	windOffset := float64(matchState.Wind.Direction) * matchState.Wind.Power * windCompensationSkill * 2.0
 	angleDeg -= windOffset // compensate by aiming slightly against the wind
 
 	// Accuracy noise: uniform in [-AccuracyError, +AccuracyError].

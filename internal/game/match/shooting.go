@@ -27,6 +27,7 @@ func getPhysics() (timeStep, gravity, windScale, hitRadius, recordStep, maxFligh
 
 func SimulateProjectile(
 	ownerID string,
+	ownerTeamID int,
 	origin Vector2,
 	angleDeg float64,
 	power float64,
@@ -52,7 +53,7 @@ func SimulateProjectile(
 		mass = 1.0
 	}
 
-	windForceX := float64(wind.Direction) * float64(wind.Power) * windScale * weapon.WindInfluence
+	windForceX := float64(wind.Direction) * wind.Power * windScale * weapon.WindInfluence
 
 	result := &ProjectileResult{
 		ProjectileID:     generateProjectileID(),
@@ -90,7 +91,7 @@ func SimulateProjectile(
 
 		// --- Sub-step collision along movement segment ---
 		hit, hitPos, hitPlayer := checkSegmentCollisions(
-			prevPos, position, ownerID, t, terrain, players, drillMode, &terrainPassCount, hitRadius,
+			prevPos, position, ownerID, ownerTeamID, t, terrain, players, drillMode, &terrainPassCount, hitRadius,
 		)
 
 		if hit {
@@ -134,6 +135,7 @@ func SimulateProjectile(
 func checkSegmentCollisions(
 	prev, curr Vector2,
 	ownerID string,
+	ownerTeamID int,
 	t float64,
 	terrain *Terrain,
 	players map[string]*BattlePlayerState,
@@ -155,13 +157,13 @@ func checkSegmentCollisions(
 		px := prev.X + dx*frac
 		py := prev.Y + dy*frac
 
-		// Check player collisions
+		// Check player collisions (skip teammates — no friendly fire)
 		for _, p := range players {
 			if !p.IsAlive {
 				continue
 			}
-			if p.PlayerID == ownerID && t < 0.3 {
-				continue // skip self for first 0.3s
+			if p.TeamID == ownerTeamID {
+				continue // skip all teammates (including self)
 			}
 			ddx := px - p.Position.X
 			ddy := py - (p.Position.Y - 20) // center of player body (sprite is 48px tall, anchor bottom)

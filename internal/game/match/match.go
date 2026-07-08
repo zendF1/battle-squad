@@ -1264,21 +1264,17 @@ func (m *Match) updateWind() {
 	}
 
 	// Determine wind power range from map config
-	windMin := 0
-	windMax := 4
+	var windMin, windMax float64
+	windMin = 0
+	windMax = 4
 	if mapCfg, ok := gamedata.Data.Maps[m.State.MapID]; ok && len(mapCfg.DefaultWindPowerRange) == 2 {
-		windMin = int(mapCfg.DefaultWindPowerRange[0])
-		windMax = int(mapCfg.DefaultWindPowerRange[1])
-	}
-	windRange := windMax - windMin + 1
-	if windRange < 1 {
-		windRange = 1
+		windMin = mapCfg.DefaultWindPowerRange[0]
+		windMax = mapCfg.DefaultWindPowerRange[1]
 	}
 
-	// Random wind power and direction
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	m.State.Wind.Power = windMin + r.Intn(windRange)
-	if m.State.Wind.Power == 0 {
+	m.State.Wind.Power = windMin + r.Float64()*(windMax-windMin)
+	if m.State.Wind.Power < 0.01 {
 		m.State.Wind.Direction = 0
 	} else {
 		if r.Float64() < 0.5 {
