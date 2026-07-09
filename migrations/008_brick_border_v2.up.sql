@@ -1,7 +1,6 @@
 -- migrations/008_brick_border_v2.up.sql
 
--- Recreate brick types with SERIAL PK, border, image_id, color
-DROP TABLE IF EXISTS config_brick_types;
+-- Create brick types table with SERIAL PK if it does not exist
 CREATE TABLE IF NOT EXISTS config_brick_types (
     brick_type_id SERIAL PRIMARY KEY,
     name          TEXT NOT NULL,
@@ -13,5 +12,7 @@ CREATE TABLE IF NOT EXISTS config_brick_types (
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Reset tiles to empty since format changes from string to int
-UPDATE config_maps SET tiles = '[]'::jsonb;
+-- Add columns that may be missing if table was created by an older migration
+ALTER TABLE config_brick_types ADD COLUMN IF NOT EXISTS image_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE config_brick_types ADD COLUMN IF NOT EXISTS border JSONB NOT NULL DEFAULT '{"bottom":[{"x":0,"y":0},{"x":16,"y":0}],"right":[{"x":16,"y":0},{"x":16,"y":16}],"top":[{"x":16,"y":16},{"x":0,"y":16}],"left":[{"x":0,"y":16},{"x":0,"y":0}]}';
+ALTER TABLE config_brick_types ADD COLUMN IF NOT EXISTS color TEXT NOT NULL DEFAULT '#8B4513';
