@@ -4,12 +4,8 @@
 
     // Assign a deterministic color to each brick type
     var BRICK_COLORS = {};
-    var COLOR_PALETTE = [
-        '#8B4513','#808080','#87CEEB','#FF4500','#DEB887',
-        '#228B22','#FFD700','#9370DB','#FF6347','#2E8B57'
-    ];
-    BRICK_TYPES.forEach(function(bt, i) {
-        BRICK_COLORS[bt.BrickTypeID] = COLOR_PALETTE[i % COLOR_PALETTE.length];
+    BRICK_TYPES.forEach(function(bt) {
+        BRICK_COLORS[bt.BrickTypeID] = bt.Color || '#888';
     });
 
     function MapEditor(canvasId, wrapId) {
@@ -115,7 +111,7 @@
                 } else {
                     self.tiles = [];
                     for (var row = 0; row < self.gridHeight; row++) {
-                        self.tiles.push(new Array(self.gridWidth).fill(null));
+                        self.tiles.push(new Array(self.gridWidth).fill(0));
                     }
                 }
 
@@ -215,7 +211,7 @@
     MapEditor.prototype.paintCell = function(col, row) {
         if (!this.inBounds(col, row)) return;
         var old = this.tiles[row][col];
-        var val = this.tool === 'erase' ? null : this.selectedBrick;
+        var val = this.tool === 'erase' ? 0 : this.selectedBrick;
         if (old === val) return;
         if (!this.currentStroke) this.currentStroke = {};
         var key = row + ',' + col;
@@ -368,7 +364,7 @@
             for (var r = minRow; r <= maxRow; r++) {
                 var row = [];
                 for (var c = minCol; c <= maxCol; c++) {
-                    row.push(this.inBounds(c, r) ? this.tiles[r][c] : null);
+                    row.push(this.inBounds(c, r) ? this.tiles[r][c] : 0);
                 }
                 this.selectionTiles.push(row);
             }
@@ -460,7 +456,7 @@
         for (var row = 0; row < this.gridHeight; row++) {
             for (var col = 0; col < this.gridWidth; col++) {
                 var tile = this.tiles[row] ? this.tiles[row][col] : null;
-                if (tile) {
+                if (tile > 0) {
                     ctx.fillStyle = BRICK_COLORS[tile] || '#888';
                     ctx.fillRect(col * cs, row * cs, cs, cs);
                 }
