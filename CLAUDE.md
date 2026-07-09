@@ -40,57 +40,26 @@ All config is via environment variables with sensible defaults for local dev (se
 
 ## Architecture
 
-**Four server binaries + a migration tool:**
-- `cmd/api/` — REST API server (chi router). Handles auth, player profiles, economy, shop, IAP, gift codes, missions, ranking, moderation, app config.
-- `cmd/game/` — WebSocket game server (gorilla/websocket). Handles real-time rooms, lobbies, matchmaking, and matches.
-- `cmd/admin/` — Admin dashboard server (chi router, HTML templates). Game config CRUD, player management, matchmaking tuning.
-- `cmd/worker/` — Background worker for async tasks.
-- `cmd/migrate/` — Applies SQL migrations from `migrations/`.
+**Server binaries:** `cmd/api/` (REST :8080), `cmd/game/` (WebSocket :8081), `cmd/admin/` (HTML dashboard :9000), `cmd/worker/`, `cmd/migrate/`. API and Game are separate processes — crash isolation, independent scaling.
 
-**Why separate processes:** A bug or crash in the API server doesn't kill active matches, and vice versa. They can be deployed and scaled independently.
+**`internal/shared/`** — config, database (pgx/v5 + Redis), auth (JWT), middleware, model (error codes), observability (zerolog).
 
-### Key packages under `internal/`
+**`internal/api/`** — Domain modules following handler → service → repository pattern: auth, player, economy, inventory, shop, iap, giftcode, mission, rank, moderation, appconfig.
 
-**`internal/shared/`** — Code shared by both servers:
-- `config/` — Env-based config loading
-- `database/` — Postgres (pgx/v5 pool) and Redis client wrappers
-- `auth/` — JWT manager (sign/verify)
-- `middleware/` — Chi middleware: auth, rate limiting, correlation ID, version check
-- `model/` — Structured error codes and error response helpers
-- `observability/` — Zerolog logger, health check endpoints (/healthz, /readyz, /livez)
-- `circuitbreaker/`, `featureflag/`, `idempotency/` — Resilience patterns
+**`internal/game/`** — ws (WebSocket server), room (hub + room goroutines), lobby (ranked matchmaking lobbies), matchmaker (Redis leader election, rating-based matching, bot fallback), match (turn-based engine with physics, Elo, bot AI), gamedata (YAML/DB config loader).
 
-**`internal/api/`** — API server domain modules, each following handler → service → repository pattern:
-- `auth/` — Guest/provider login, JWT refresh, logout, link provider
-- `player/` — Profile CRUD, account deletion
-- `economy/` — Coin/Gem ledger (Credit/Debit within DB transactions)
-- `inventory/`, `shop/`, `iap/`, `giftcode/` — Commerce
-- `mission/`, `rank/`, `moderation/`, `appconfig/` — Game systems
-
-**`internal/game/`** — Game server modules:
-- `ws/` — WebSocket server, client read/write pumps, message envelope. Client has `RoomID` and `LobbyID` fields.
-- `room/` — Room hub (registry with Redis sync) and room goroutines. Each room is a goroutine. Hub also implements `matchmaker.RoomCreator` to create battle rooms from matchmaking results.
-- `lobby/` — Lobby room system for ranked matchmaking. Players create lobbies (max 2 per team), choose loadouts, then queue for matches. Lobby goroutines follow the same actor pattern as rooms.
-- `matchmaker/` — Ranked matchmaking engine. Runs as a goroutine with Redis leader election (multi-node safe). Scans Redis sorted set queue every few seconds, matches entries by expanding rating range, fills bots after timeout. Config (tick interval, rating range, Elo params, bot difficulty) loaded from `game_settings` DB table.
-- `match/` — Match engine. Each match runs as a goroutine with its own event loop, panic recovery, and watchdog timer (2 min idle → no-contest). Includes Elo rating calculation (`elo.go`) and smart bot AI (`bot_ai.go`) with rank-based difficulty.
-- `gamedata/` — Loads static YAML configs from `configs/` at startup (characters, weapons, skills, items, maps)
-
-**`internal/admin/`** — Admin dashboard: HTML template-based CRUD for game configs (characters, weapons, skills, items, maps, shop offers), player management (ban/unban), matchmaking config API endpoints, dev tools.
+**`internal/admin/`** — HTML template CRUD for game configs, player management, matchmaking tuning, map editor, brick type editor.
 
 ### Match lifecycle
 
-**Regular PvP:** Room → all players ready → host starts → Match goroutine spawns → turn-based loop (20s per turn) → shoot/move/use items → projectile physics simulation → damage calculation → terrain destruction → win condition check → rewards → cleanup.
+**Regular PvP:** Room → ready → Match goroutine → turn-based loop (20s/turn) → shoot/move/items → physics → damage → terrain destruction → win check → rewards.
 
-**Ranked 2v2:** CreateLobby → choose loadout (persisted to `player_loadouts`) → StartQueue → matchmaker finds opponent → creates battle room → match runs → Elo rating update → ReturnToLobby.
-
-Key match events (WS): `Move`, `Shoot`, `UseItem`, `EndTurn`, `Reconnect`, `Leave` (client→server); `MatchStarted`, `TurnStarted`, `ProjectileResult`, `PlayerDamaged`, `MatchEnded`, `MatchStateSync` (server→client).
-
-Key lobby/matchmaking events (WS): `CreateLobby`, `JoinLobby`, `LeaveLobby`, `UpdateLoadout`, `StartQueue`, `CancelQueue` (client→server); `LobbyUpdated`, `QueueStarted`, `QueueCancelled`, `MatchFound`, `ReturnToLobby` (server→client).
+**Ranked 2v2:** CreateLobby → loadout → StartQueue → matchmaker matches → battle room → match → Elo update → ReturnToLobby.
 
 ### Data layer
 
-- **PostgreSQL** — All persistent data (accounts, players, inventory, transactions, match history, bans, etc.). Schema in `migrations/001_init_schema.up.sql`.
-- **Redis** — Sessions, room registry (`rooms:active` hash), leaderboards (sorted sets), feature flags, idempotency keys, matchmaking queue (`matchmaking:queue:2v2` sorted set + entry hashes), matchmaker leader lock.
+- **PostgreSQL** — All persistent data. Schema in `migrations/001_init_schema.up.sql`.
+- **Redis** — Sessions, room registry, leaderboards, feature flags, matchmaking queue, leader lock.
 
 ## Conventions
 
@@ -102,3 +71,49 @@ Key lobby/matchmaking events (WS): `CreateLobby`, `JoinLobby`, `LeaveLobby`, `Up
 - Game server WebSocket uses a `CompositeWSHandler` that routes lobby events first, then falls through to room events.
 - Matchmaking config (tick intervals, rating ranges, Elo K-factor, bot difficulty per tier) is stored in `game_settings` table and hot-reloaded every 30 seconds by the matchmaker.
 - Room deletion triggers: match ends (via `MatchDone` channel), all players leave, or tutorial room user leaves.
+
+## Map System (Grid v2)
+
+Maps use a tile-based grid system. Each map has `gridWidth x gridHeight` cells of `cellSize` pixels.
+
+**Key structures:**
+- `config_maps` table: map_id (PK), name, grid_width, grid_height, cell_size, tiles (JSONB 2D array of brick_type_id integers), spawn_points (JSONB array of {x,y}), min_rank_tier, default_wind_power_range
+- `config_brick_types` table: brick_type_id (SERIAL PK), name, image_id, destructible, border (JSONB polygon with top/right/bottom/left edges), color
+- `gamedata.MapConfig` — loaded from DB via `LoadGameDataFromDB()`, includes `MinRankTier`
+- `match/terrain.go` — `NewTerrain()` converts tiles + brick borders into pixel-level collision mask. Falls back to `generateLegacyTerrain()` if tiles are empty.
+
+**Admin dashboard map editing:**
+- Single editor page at `/maps/editor?id=xxx` (no separate edit form)
+- Editor handles both metadata (name, grid size, wind, min_rank_tier, description) and canvas (tiles, spawn points)
+- Canvas renders brick polygon shapes from border data, not just colored squares
+- Save: `PUT /api/maps/save` accepts all fields in one JSON request
+- Brick types managed at `/brick-types` with polygon border editor at `/brick-types/editor`
+
+**Rank-based map selection:**
+- Each map has `min_rank_tier` (bronze/silver/gold/platinum/diamond/master)
+- Matchmaker filters maps: `randomMapForRating(maxRating)` selects from maps where `tierIndex(map.minRankTier) <= tierIndex(playerTier)`
+- Uses highest-ranked player in the match to determine eligible maps
+- Tier thresholds: bronze <1000, silver 1000-1199, gold 1200-1499, platinum 1500-1799, diamond 1800-2199, master 2200+
+
+**Current status:**
+- Server terrain engine supports both grid v2 (tiles) and legacy (sine curves) — auto-detects based on tiles data
+- All 3 default maps have `tiles: []` (empty) → still using legacy terrain generation
+- Maps need actual tile data created via admin editor to use grid v2
+- `MatchStarted` WS event sends `MatchState` with `mapId` only — client must know how to render the map
+
+## Migrations
+
+- Migrator at `cmd/migrate/main.go` runs ALL migrations every time (no state tracking)
+- All migrations MUST be idempotent: use `IF NOT EXISTS`, `ON CONFLICT DO NOTHING`, `ADD COLUMN IF NOT EXISTS`
+- Never use `DROP TABLE` in up migrations — it destroys data on re-run
+- Current migrations: 001-009. Next: 010
+
+## Rank System
+
+- 6 tiers: bronze (<1000), silver (1000), gold (1200), platinum (1500), diamond (1800), master (2200)
+- `ratingToTier()` exists in both `room/hub.go` and `matchmaker/matchmaker.go` (duplicated to avoid circular deps)
+- Elo rating with configurable K-factor, bot modifier (0.5x), floor at 0
+- Season-based ranking with reward claims
+
+## git
+- Git commit messages: Record only the changes; do not sign (no Co-Authored-By).
