@@ -1,133 +1,159 @@
-# Map Editor Design
+# Map Editor Design (v2)
 
 ## Overview
 
-Tilemap-based map editor integrated into the Admin Dashboard (port 9000). Allows admin/game designers to visually create and edit maps using a grid-based brick system (similar to Unity Tilemap). Maps are saved to DB and exported as YAML for use by game server and client.
+Tilemap-based map editor integrated into the Admin Dashboard (port 9000). Maps use a grid of brick IDs. Each brick type defines a polygon border (not just a square) for organic terrain shapes. Maps and brick types are stored in DB — game server and client load them by ID.
 
 ## Data Model
 
 ### Brick Type Registry
 
-New table `config_brick_types`:
+Table `config_brick_types`:
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `brick_type_id` | TEXT PK | e.g. "grass", "stone", "ice" |
-| `name` | TEXT | Display name |
+| `brick_type_id` | SERIAL PK | Auto-increment integer: 1, 2, 3, ... |
+| `name` | TEXT | Display name, e.g. "Grass Top", "Dirt", "Rock" |
+| `image_id` | TEXT | Reference to sprite/image asset (can be empty initially) |
 | `destructible` | BOOLEAN | Whether explosions can destroy this brick |
+| `border` | JSONB | Polygon border definition (see below) |
+| `color` | TEXT | Hex color for editor preview, e.g. "#8B4513" |
 
-Server stores only gameplay-relevant data. Client maps `brick_type_id` to sprite/image.
+**Border format** — 4 edges defined by polyline points. Origin (0,0) = bottom-left of 16x16 cell:
 
-### Map Config (replaces current `config_maps` structure)
+```json
+{
+  "top":    [{"x":16,"y":16}, {"x":12,"y":14}, {"x":8,"y":16}, {"x":4,"y":13}, {"x":0,"y":16}],
+  "right":  [{"x":16,"y":0}, {"x":16,"y":16}],
+  "bottom": [{"x":0,"y":0}, {"x":16,"y":0}],
+  "left":   [{"x":0,"y":16}, {"x":0,"y":0}]
+}
+```
+
+A full square brick has straight-line borders on all 4 edges (default).
+
+The closed polygon is formed by joining: bottom → right → top → left. This polygon defines both the visual shape and the collision mask (via scanline fill).
+
+### Map Config
+
+Table `config_maps`:
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `map_id` | TEXT PK | Unique identifier |
 | `name` | TEXT | Display name |
-| `grid_width` | INT | Number of horizontal cells (e.g. 100 = 1600px / 16px) |
-| `grid_height` | INT | Number of vertical cells (e.g. 56 = 896px / 16px) |
-| `cell_size` | INT | Fixed at 16px |
-| `default_wind_power_range` | JSONB | `[0.0, 4.0]` — float values |
-| `tiles` | JSONB | 2D array `[row][col]` = brick_type_id or null |
-| `spawn_points` | JSONB | `[{x: 200.5, y: 400.0}, ...]` — pixel coords, float |
-
-Removed fields: `terrain_layers`, `width`, `height` (computed from `grid_width * cell_size`, `grid_height * cell_size`).
+| `grid_width` | INT | Number of horizontal cells |
+| `grid_height` | INT | Number of vertical cells |
+| `cell_size` | INT | 16 (fixed) |
+| `default_wind_power_range` | JSONB | `[0.0, 4.0]` — float |
+| `tiles` | JSONB | 2D array `[row][col]` = brick_type_id (int) or 0 (air) |
+| `spawn_points` | JSONB | `[{x, y}, ...]` — pixel coords, float |
 
 ### Tiles Format
 
 ```json
 [
-  [null, null, "grass", "grass", null],
-  [null, "stone", "stone", "grass", null],
-  ...
+  [0, 0, 0, 0, 0],
+  [0, 3, 3, 3, 0],
+  [0, 1, 1, 1, 0],
+  [2, 2, 2, 2, 2]
 ]
 ```
 
-Row 0 = top of map. Each cell is either a `brick_type_id` string or `null` (air).
+`0` = air. Integer > 0 = `brick_type_id`. Lightweight — all visual/physics data resolved by looking up brick type.
 
-### Export YAML Format
+### Room Creation
 
-```yaml
-- mapId: grassland_valley
-  name: Grassland Valley
-  gridWidth: 100
-  gridHeight: 56
-  cellSize: 16
-  defaultWindPowerRange: [0.0, 4.0]
-  tiles:
-    - [null, null, "grass", "grass"]
-    - [null, "stone", "stone", "grass"]
-  spawnPoints:
-    - x: 200.5
-      y: 400.0
-    - x: 1400.0
-      y: 400.0
-```
+When creating a room, only `mapID` is needed. Server loads map tiles from DB (via `gamedata.Data.Maps[mapID]`), looks up brick borders from `gamedata.BrickTypes`, and generates collision mask.
 
-## Admin Dashboard — Editor UI
+## Admin Dashboard
 
-### Page
+### Brick Types Page (`/admin/brick-types`)
 
-New route: `/admin/maps/:id/editor`
+List page showing all brick types in DB with columns: ID, Name, Image ID, Destructible, Color, Preview (small polygon thumbnail).
 
-### Layout
+**"+ Add Brick" button** → opens the Brick Editor page.
 
-- **Left panel (toolbar):** Brick type selector, tool selector (Paint/Erase/Fill/Select/Spawn Point)
-- **Center (canvas):** HTML5 Canvas grid, color-coded rectangles per brick type (no sprites)
-- **Right panel (properties):** Map name, grid size, wind range, spawn points list
-- **Top bar:** Save, Export YAML, Undo/Redo buttons
+### Brick Editor Page (`/admin/brick-types/editor`)
 
-### Tools
+A 16x16 pixel canvas editor for designing brick polygon borders.
 
-| Tool | Behavior |
-|------|----------|
-| Paint | Click/drag to place selected brick type on cells |
-| Erase | Click/drag to clear cells (set null) |
-| Fill | Click on contiguous region of same type → flood fill with selected brick |
-| Select/Move | Drag to select rectangular region → drag to move selection |
-| Spawn Point | Click anywhere to add spawn point (pixel coords, no snap to grid) |
+**Layout:**
+- **Center:** 16x16 grid canvas (zoomed large, ~400x400px display). Each pixel cell is clickable.
+- **Left panel:** Tool selector, brick properties (name, image_id, destructible, color)
+- **Bottom:** Preview of the polygon shape at actual size
 
-### Canvas Interaction
+**Editor workflow:**
+1. Admin clicks on grid cells to place polygon vertices
+2. Points are added to the current edge (top/right/bottom/left — selectable)
+3. Polygon preview updates live
+4. Set name, color, destructible flag
+5. Image ID is a text field (image is loaded by client, not uploaded to server)
+6. Save → stores to DB
 
-- Zoom in/out: scroll wheel
-- Pan: middle-click drag or Space + drag
-- Grid lines: toggle show/hide
-- Hover: display cell coords (col, row) and pixel coords (x, y)
+**Tools:**
+- **Add Point:** Click on grid to add vertex to selected edge
+- **Move Point:** Drag existing vertex
+- **Delete Point:** Click to remove vertex
+- **Edge selector:** Choose which edge to edit (top/right/bottom/left)
 
-### Undo/Redo
+**Default border:** New brick starts with a full square (straight lines on all 4 edges).
 
-History stack of tiles snapshots. Each action (paint stroke, erase, fill, move) creates one entry. Ctrl+Z / Ctrl+Y or toolbar buttons.
+### Map Editor Page (`/admin/maps/editor?id=...`)
 
-### Tech Stack
+Same as current implementation. Changes:
+- Brick palette shows brick types from DB (with color + name)
+- Tiles are stored as integer IDs instead of strings
+- Color-coded rectangles in editor (using brick's `color` field)
 
-Vanilla JS + HTML5 Canvas. No JS framework — consistent with existing admin dashboard (server-rendered HTML templates). Editor is a Go template with separate JS file.
+### DevTools Reset Data
+
+`/devtools/reset-data` does NOT delete `config_brick_types` or `config_maps`. These contain hand-crafted content. Currently already safe — `ResetAllData` only deletes player-related tables.
 
 ## API Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/admin/maps/:id/editor` | Render editor page |
-| GET | `/admin/api/maps/:id/tiles` | Return tiles + spawn points + map config (JSON) |
-| PUT | `/admin/api/maps/:id/tiles` | Save tiles + spawn points |
-| GET | `/admin/api/maps/:id/export` | Export map as YAML file download |
-| GET | `/admin/api/brick-types` | List all brick types |
-| POST | `/admin/api/brick-types` | Create/update brick type |
-| DELETE | `/admin/api/brick-types/:id` | Delete brick type |
-
-### Brick Types Management
-
-New CRUD page at `/admin/brick-types` — same style as existing config pages. Fields: brick_type_id, name, destructible.
-
-### Export Flow
-
-1. Admin designs map in editor → Save (persists to DB)
-2. Click "Export YAML" → server reads from DB, generates YAML, returns file download
-3. Dev commits YAML to `configs/maps.yaml`
-4. Game server loads YAML at startup (or directly from DB)
+| **Brick Types** | | |
+| GET | `/admin/brick-types` | List page |
+| GET | `/admin/brick-types/editor` | Brick polygon editor page |
+| POST | `/admin/brick-types/save` | Save brick type (form or JSON) |
+| POST | `/admin/brick-types/delete` | Delete brick type |
+| GET | `/admin/api/brick-types` | List all brick types (JSON) |
+| **Map Editor** | | |
+| GET | `/admin/maps/editor` | Map editor page |
+| GET | `/admin/api/maps/tiles` | Get map tiles + config (JSON) |
+| PUT | `/admin/api/maps/tiles` | Save map tiles |
+| GET | `/admin/api/maps/export` | Export map as YAML |
 
 ## Game Server Impact
 
-### MapConfig Struct Changes
+### BrickTypeConfig Struct
+
+```go
+type BrickTypeConfig struct {
+    BrickTypeID  int
+    Name         string
+    ImageID      string
+    Destructible bool
+    Border       BrickBorder
+    Color        string
+}
+
+type BorderPoint struct {
+    X float64 `json:"x"`
+    Y float64 `json:"y"`
+}
+
+type BrickBorder struct {
+    Top    []BorderPoint `json:"top"`
+    Right  []BorderPoint `json:"right"`
+    Bottom []BorderPoint `json:"bottom"`
+    Left   []BorderPoint `json:"left"`
+}
+```
+
+### MapConfig Struct
 
 ```go
 type MapConfig struct {
@@ -136,63 +162,56 @@ type MapConfig struct {
     GridWidth             int
     GridHeight            int
     CellSize              int
-    DefaultWindPowerRange []float64  // float instead of int
-    Tiles                 [][]string // [row][col] = brick_type_id or ""
+    DefaultWindPowerRange []float64
+    Tiles                 [][]int      // 0 = air, >0 = brick_type_id
     SpawnPoints           []SpawnPoint
 }
 ```
 
-Removed: `TerrainLayers`, `Width`, `Height`.
-
 ### terrain.go — NewTerrain()
 
-Signature changes to `NewTerrain(mapCfg MapConfig) *Terrain`.
+For each cell with a brick_type_id > 0:
+1. Look up `BrickTypes[id]` to get `BrickBorder`
+2. Build closed polygon from border points: bottom → right → top → left
+3. **Scanline fill** the polygon into the 16x16 pixel area of the cell
+4. Set `Mask[px] = true` and `DestructibleMask[px] = destructible` for filled pixels
 
-- Iterate `mapCfg.Tiles` (2D array)
-- Cell with brick_type_id → set `Mask` = true for corresponding 16x16 pixel block
-- Cell null → false (air)
-- New `DestructibleMask []bool` — only cells with destructible brick types can be destroyed
+For air cells (0): skip.
+
+Fallback: if `Tiles` is empty, use legacy hardcoded terrain.
 
 ### terrain.go — DestroyCircle()
 
-Before setting `Mask[idx] = false`, check `DestructibleMask[idx]`. Non-destructible cells are skipped.
+No change from current — still pixel-based. Check `DestructibleMask` before destroying.
 
-### Backward Compatibility
+### Client Rendering
 
-During transition: if `Tiles` is empty → fallback to current hardcoded math functions. Remove fallback after all maps are migrated to tilemap.
+1. Load all brick types (border + image_id) once at game start
+2. For each cell: draw image sprite clipped to polygon shape
+3. Border lines drawn only on edges exposed to air (check 4 neighbors)
+4. After destruction: render image with mask clipping (destroyed pixels become transparent)
+5. Post-destruction border: simple crater edge or marching squares on mask
 
 ## Database Migration
 
-### New table
+### Alter `config_brick_types`
 
 ```sql
+-- Change PK from TEXT to SERIAL
+-- If migrating from existing TEXT PK, need to recreate table
+DROP TABLE IF EXISTS config_brick_types;
 CREATE TABLE config_brick_types (
-    brick_type_id TEXT PRIMARY KEY,
+    brick_type_id SERIAL PRIMARY KEY,
     name          TEXT NOT NULL,
-    destructible  BOOLEAN NOT NULL DEFAULT true
+    image_id      TEXT NOT NULL DEFAULT '',
+    destructible  BOOLEAN NOT NULL DEFAULT true,
+    border        JSONB NOT NULL DEFAULT '{"top":[{"x":0,"y":16},{"x":16,"y":16}],"right":[{"x":16,"y":16},{"x":16,"y":0}],"bottom":[{"x":16,"y":0},{"x":0,"y":0}],"left":[{"x":0,"y":0},{"x":0,"y":16}]}',
+    color         TEXT NOT NULL DEFAULT '#8B4513',
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
-### Alter config_maps
+### Update `config_maps.tiles`
 
-```sql
-ALTER TABLE config_maps
-    ADD COLUMN grid_width  INT NOT NULL DEFAULT 100,
-    ADD COLUMN grid_height INT NOT NULL DEFAULT 56,
-    ADD COLUMN cell_size   INT NOT NULL DEFAULT 16,
-    ADD COLUMN tiles       JSONB NOT NULL DEFAULT '[]';
-
-ALTER TABLE config_maps
-    DROP COLUMN IF EXISTS terrain_layers;
-```
-
-### Seed default brick types
-
-```sql
-INSERT INTO config_brick_types (brick_type_id, name, destructible) VALUES
-    ('dirt', 'Dirt', true),
-    ('rock', 'Rock', false),
-    ('ice', 'Ice', true),
-    ('lava', 'Lava', false),
-    ('fragile', 'Fragile', true);
-```
+Change tiles from `[][]string` to `[][]int`. Existing data with string IDs needs migration or reset.
