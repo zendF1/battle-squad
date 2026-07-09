@@ -3,6 +3,7 @@ package admin
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"battle-squad/internal/shared/observability"
@@ -28,13 +29,14 @@ func (s *Server) handleBrickTypesList(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleBrickTypeEdit(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleBrickTypeEditor(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	id := r.URL.Query().Get("id")
-	isNew := id == ""
+	idStr := r.URL.Query().Get("id")
+	isNew := idStr == ""
 
 	var bt ConfigBrickType
 	if !isNew {
+		id, _ := strconv.Atoi(idStr)
 		found, err := s.repo.GetBrickType(ctx, id)
 		if err != nil {
 			http.Redirect(w, r, "/brick-types?error=Brick+type+not+found", http.StatusSeeOther)
@@ -43,37 +45,71 @@ func (s *Server) handleBrickTypeEdit(w http.ResponseWriter, r *http.Request) {
 		bt = *found
 	}
 
-	s.render(w, "brick_type_edit", map[string]interface{}{
+	borderJSON := string(bt.Border)
+	if borderJSON == "" || borderJSON == "null" {
+		borderJSON = `{"top":[{"x":0,"y":16},{"x":16,"y":16}],"right":[{"x":16,"y":16},{"x":16,"y":0}],"bottom":[{"x":16,"y":0},{"x":0,"y":0}],"left":[{"x":0,"y":0},{"x":0,"y":16}]}`
+	}
+
+	s.render(w, "brick_editor", map[string]interface{}{
 		"ActivePage": "brick-types",
 		"BrickType":  bt,
+		"BorderJSON": borderJSON,
 		"IsNew":      isNew,
 		"Error":      r.URL.Query().Get("error"),
 	})
 }
 
 func (s *Server) handleBrickTypeSave(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, "/brick-types?error=Invalid+form+data", http.StatusSeeOther)
-		return
-	}
-	ctx := r.Context()
+	contentType := r.Header.Get("Content-Type")
 
-	bt := &ConfigBrickType{
-		BrickTypeID:  strings.TrimSpace(r.FormValue("brick_type_id")),
-		Name:         r.FormValue("name"),
-		Destructible: r.FormValue("destructible") == "true",
-	}
-	if bt.BrickTypeID == "" {
-		http.Redirect(w, r, "/brick-types/edit?error=Brick+Type+ID+is+required", http.StatusSeeOther)
-		return
-	}
-	if err := s.repo.UpsertBrickType(ctx, bt); err != nil {
-		observability.Log.Error().Err(err).Msg("failed to upsert brick type")
-		http.Redirect(w, r, "/brick-types?error=Failed+to+save+brick+type", http.StatusSeeOther)
+	if strings.Contains(contentType, "application/json") {
+		var body struct {
+			BrickTypeID  int             `json:"brickTypeId"`
+			Name         string          `json:"name"`
+			ImageID      string          `json:"imageId"`
+			Destructible bool            `json:"destructible"`
+			Border       json.RawMessage `json:"border"`
+			Color        string          `json:"color"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+			return
+		}
+
+		bt := &ConfigBrickType{
+			BrickTypeID:  body.BrickTypeID,
+			Name:         body.Name,
+			ImageID:      body.ImageID,
+			Destructible: body.Destructible,
+			Border:       body.Border,
+			Color:        body.Color,
+		}
+
+		ctx := r.Context()
+		if bt.BrickTypeID == 0 {
+			id, err := s.repo.InsertBrickType(ctx, bt)
+			if err != nil {
+				observability.Log.Error().Err(err).Msg("failed to insert brick type")
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"save failed"}`, http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "id": id})
+		} else {
+			if err := s.repo.UpdateBrickType(ctx, bt); err != nil {
+				observability.Log.Error().Err(err).Msg("failed to update brick type")
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"save failed"}`, http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "id": bt.BrickTypeID})
+		}
 		return
 	}
 
-	http.Redirect(w, r, "/brick-types?flash=Saved+successfully", http.StatusSeeOther)
+	http.Redirect(w, r, "/brick-types", http.StatusSeeOther)
 }
 
 func (s *Server) handleBrickTypeDelete(w http.ResponseWriter, r *http.Request) {
@@ -82,8 +118,8 @@ func (s *Server) handleBrickTypeDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	id := r.FormValue("id")
-	if id == "" {
+	id, _ := strconv.Atoi(r.FormValue("id"))
+	if id == 0 {
 		http.Redirect(w, r, "/brick-types?error=Missing+ID", http.StatusSeeOther)
 		return
 	}

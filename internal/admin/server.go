@@ -86,7 +86,7 @@ func (s *Server) Routes() http.Handler {
 
 	// Brick Types
 	r.Get("/brick-types", s.handleBrickTypesList)
-	r.Get("/brick-types/edit", s.handleBrickTypeEdit)
+	r.Get("/brick-types/editor", s.handleBrickTypeEditor)
 	r.Post("/brick-types/save", s.handleBrickTypeSave)
 	r.Post("/brick-types/delete", s.handleBrickTypeDelete)
 
