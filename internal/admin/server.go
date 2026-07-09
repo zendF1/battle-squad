@@ -38,6 +38,7 @@ func NewServer(db *database.PostgresDB, redis *database.RedisClient, configDir s
 var tmplFuncMap = template.FuncMap{
 	"add": func(a, b int) int { return a + b },
 	"sub": func(a, b int) int { return a - b },
+	"safeJS": func(s string) template.JS { return template.JS(s) },
 	"deref": func(p *int) int {
 		if p == nil {
 			return 0

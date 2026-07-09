@@ -72,7 +72,7 @@
 
 <script>
 const BRICK_ID = {{.BrickType.BrickTypeID}};
-const BORDER_DATA = {{.BorderJSON}};
+const BORDER_DATA = {{.BorderJSON | safeJS}};
 </script>
 <script src="/static/brick_editor.js"></script>
 {{end}}
