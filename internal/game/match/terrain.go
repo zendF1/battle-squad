@@ -52,20 +52,34 @@ func NewTerrain(mapCfg gamedata.MapConfig) *Terrain {
 		for row := 0; row < len(mapCfg.Tiles); row++ {
 			for col := 0; col < len(mapCfg.Tiles[row]); col++ {
 				brickID := mapCfg.Tiles[row][col]
-				if brickID == "" {
+				if brickID == 0 {
 					continue
 				}
 				destructible := true
+				var border gamedata.BrickBorder
+				hasBorder := false
 				if gamedata.BrickTypes != nil {
 					if bt, ok := gamedata.BrickTypes[brickID]; ok {
 						destructible = bt.Destructible
+						border = bt.Border
+						hasBorder = len(border.Top) > 0
 					}
 				}
-				for py := row * cs; py < (row+1)*cs && py < height; py++ {
-					for px := col * cs; px < (col+1)*cs && px < width; px++ {
-						idx := py*width + px
-						t.Mask[idx] = true
-						t.DestructibleMask[idx] = destructible
+
+				offsetX := col * cs
+				offsetY := row * cs
+
+				if hasBorder {
+					poly := polygonFromBorder(border, cs)
+					scanlineFillPolygon(t.Mask, t.DestructibleMask, width, poly, offsetX, offsetY, cs, destructible)
+				} else {
+					// Fallback: fill full square
+					for py := offsetY; py < offsetY+cs && py < height; py++ {
+						for px := offsetX; px < offsetX+cs && px < width; px++ {
+							idx := py*width + px
+							t.Mask[idx] = true
+							t.DestructibleMask[idx] = destructible
+						}
 					}
 				}
 			}
