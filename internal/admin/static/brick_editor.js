@@ -69,12 +69,40 @@
         var g = this.screenToGrid(e);
         var idx = this.findNearestPoint(g.x, g.y);
         if (idx >= 0) {
+            // Near existing point — start dragging
             this.dragIndex = idx;
+            this.didDrag = false;
+        } else {
+            // Click on empty space — add new point
+            this.dragIndex = -1;
+            g.x = Math.max(0, Math.min(CELL, g.x));
+            g.y = Math.max(0, Math.min(CELL, g.y));
+            this.addPoint(g);
         }
+    };
+
+    BrickEditor.prototype.addPoint = function(g) {
+        var points = this.border[this.activeEdge];
+        // Insert between the two nearest consecutive points
+        var bestInsert = points.length;
+        var bestDist = Infinity;
+        for (var i = 0; i < points.length - 1; i++) {
+            var mx = (points[i].x + points[i+1].x) / 2;
+            var my = (points[i].y + points[i+1].y) / 2;
+            var d = (g.x - mx) * (g.x - mx) + (g.y - my) * (g.y - my);
+            if (d < bestDist) {
+                bestDist = d;
+                bestInsert = i + 1;
+            }
+        }
+        points.splice(bestInsert, 0, g);
+        this.renderPointList();
+        this.render();
     };
 
     BrickEditor.prototype.onMouseMove = function(e) {
         if (this.dragIndex >= 0) {
+            this.didDrag = true;
             var g = this.screenToGrid(e);
             g.x = Math.max(0, Math.min(CELL, g.x));
             g.y = Math.max(0, Math.min(CELL, g.y));
@@ -89,30 +117,15 @@
     };
 
     BrickEditor.prototype.onDblClick = function(e) {
+        // Double-click on existing point → delete it
         var g = this.screenToGrid(e);
-        g.x = Math.max(0, Math.min(CELL, g.x));
-        g.y = Math.max(0, Math.min(CELL, g.y));
-
         var idx = this.findNearestPoint(g.x, g.y);
         var points = this.border[this.activeEdge];
         if (idx >= 0 && points.length > 2) {
             points.splice(idx, 1);
-        } else if (idx < 0) {
-            var bestInsert = points.length - 1;
-            var bestDist = Infinity;
-            for (var i = 0; i < points.length - 1; i++) {
-                var mx = (points[i].x + points[i+1].x) / 2;
-                var my = (points[i].y + points[i+1].y) / 2;
-                var d = (g.x - mx) * (g.x - mx) + (g.y - my) * (g.y - my);
-                if (d < bestDist) {
-                    bestDist = d;
-                    bestInsert = i + 1;
-                }
-            }
-            points.splice(bestInsert, 0, g);
+            this.renderPointList();
+            this.render();
         }
-        this.renderPointList();
-        this.render();
     };
 
     BrickEditor.prototype.setEdge = function(edge, btn) {
