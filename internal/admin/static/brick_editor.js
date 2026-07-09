@@ -4,10 +4,10 @@
     var CELL = 16;
     var SCALE = 25;
     var DEFAULT_BORDER = {
-        top:    [{x:0,y:16},{x:16,y:16}],
-        right:  [{x:16,y:16},{x:16,y:0}],
-        bottom: [{x:16,y:0},{x:0,y:0}],
-        left:   [{x:0,y:0},{x:0,y:16}]
+        bottom: [{x:0,y:0},{x:16,y:0}],
+        right:  [{x:16,y:0},{x:16,y:16}],
+        top:    [{x:16,y:16},{x:0,y:16}],
+        left:   [{x:0,y:16},{x:0,y:0}]
     };
 
     function BrickEditor() {

@@ -55,7 +55,7 @@ func (s *Server) handleBrickTypeEditor(w http.ResponseWriter, r *http.Request) {
 
 	borderJSON := string(bt.Border)
 	if borderJSON == "" || borderJSON == "null" {
-		borderJSON = `{"top":[{"x":0,"y":16},{"x":16,"y":16}],"right":[{"x":16,"y":16},{"x":16,"y":0}],"bottom":[{"x":16,"y":0},{"x":0,"y":0}],"left":[{"x":0,"y":0},{"x":0,"y":16}]}`
+		borderJSON = `{"bottom":[{"x":0,"y":0},{"x":16,"y":0}],"right":[{"x":16,"y":0},{"x":16,"y":16}],"top":[{"x":16,"y":16},{"x":0,"y":16}],"left":[{"x":0,"y":16},{"x":0,"y":0}]}`
 	}
 
 	s.render(w, "brick_editor", map[string]interface{}{
