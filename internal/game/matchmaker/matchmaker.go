@@ -12,6 +12,35 @@ import (
 	"battle-squad/internal/shared/observability"
 )
 
+var tierOrder = map[string]int{
+	"bronze": 0, "silver": 1, "gold": 2,
+	"platinum": 3, "diamond": 4, "master": 5,
+}
+
+func tierIndex(tier string) int {
+	if idx, ok := tierOrder[tier]; ok {
+		return idx
+	}
+	return 0
+}
+
+func ratingToTier(rating int) string {
+	switch {
+	case rating < 1000:
+		return "bronze"
+	case rating < 1200:
+		return "silver"
+	case rating < 1500:
+		return "gold"
+	case rating < 1800:
+		return "platinum"
+	case rating < 2200:
+		return "diamond"
+	default:
+		return "master"
+	}
+}
+
 const leaderKey = "matchmaking:leader"
 
 // MatchResult carries the two queue entries that have been matched, the chosen
@@ -42,6 +71,7 @@ type Matchmaker struct {
 	botConfig   BotDifficultyConfig
 	roomCreator RoomCreator
 	mapIDs      []string
+	mapTiers    map[string]string
 	ctx         context.Context
 	cancel      context.CancelFunc
 	mu          sync.RWMutex
@@ -55,6 +85,7 @@ func NewMatchmaker(
 	nodeID string,
 	roomCreator RoomCreator,
 	mapIDs []string,
+	mapTiers map[string]string,
 ) *Matchmaker {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -72,6 +103,7 @@ func NewMatchmaker(
 		botConfig:   botConfig,
 		roomCreator: roomCreator,
 		mapIDs:      mapIDs,
+		mapTiers:    mapTiers,
 		ctx:         ctx,
 		cancel:      cancel,
 	}
@@ -286,10 +318,15 @@ func (m *Matchmaker) matchEntries(ctx context.Context, e1, e2 QueueEntry) {
 	botConfig := m.botConfig
 	m.mu.RUnlock()
 
+	maxRating := e1.Rating
+	if e2.Rating > maxRating {
+		maxRating = e2.Rating
+	}
+
 	result := MatchResult{
 		Entry1: e1,
 		Entry2: e2,
-		MapID:  m.randomMap(),
+		MapID:  m.randomMapForRating(maxRating),
 		HasBot: false,
 	}
 
@@ -332,7 +369,7 @@ func (m *Matchmaker) matchWithBot(ctx context.Context, entry QueueEntry) {
 	result := MatchResult{
 		Entry1: entry,
 		Entry2: botEntry,
-		MapID:  m.randomMap(),
+		MapID:  m.randomMapForRating(entry.Rating),
 		HasBot: true,
 	}
 
@@ -447,18 +484,36 @@ func calculatePartyRating(ratings map[string]int, cfg MatchmakingConfig) int {
 	}
 }
 
-// randomMap picks a random map ID from the configured list.
-// Falls back to "default_map" when the list is empty.
-func (m *Matchmaker) randomMap() string {
+// randomMapForRating picks a random map whose MinRankTier is at or below the
+// tier derived from maxRating.  Falls back to "default_map" when no maps exist.
+func (m *Matchmaker) randomMapForRating(maxRating int) string {
 	m.mu.RLock()
 	ids := m.mapIDs
+	tiers := m.mapTiers
 	m.mu.RUnlock()
 
-	if len(ids) == 0 {
-		return "default_map"
+	playerTier := ratingToTier(maxRating)
+	playerIdx := tierIndex(playerTier)
+
+	var eligible []string
+	for _, id := range ids {
+		mapTier, ok := tiers[id]
+		if !ok {
+			mapTier = "bronze"
+		}
+		if tierIndex(mapTier) <= playerIdx {
+			eligible = append(eligible, id)
+		}
 	}
-	//nolint:gosec // non-cryptographic randomness is fine for map selection
-	return ids[mrand.IntN(len(ids))]
+
+	if len(eligible) == 0 {
+		if len(ids) == 0 {
+			return "default_map"
+		}
+		eligible = ids
+	}
+
+	return eligible[mrand.IntN(len(eligible))]
 }
 
 // generateMatchmakerID produces a 32-character lowercase hex string using

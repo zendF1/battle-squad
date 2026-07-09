@@ -94,14 +94,20 @@ func main() {
 	// Lobby hub
 	lobbyHub := lobby.NewLobbyHub(db, redisClient, nodeID)
 
-	// Collect available map IDs
+	// Collect available map IDs and their tier restrictions
 	mapIDs := make([]string, 0)
-	for mapID := range gamedata.Data.Maps {
+	mapTiers := make(map[string]string)
+	for mapID, mapCfg := range gamedata.Data.Maps {
 		mapIDs = append(mapIDs, mapID)
+		tier := mapCfg.MinRankTier
+		if tier == "" {
+			tier = "bronze"
+		}
+		mapTiers[mapID] = tier
 	}
 
 	// Matchmaker
-	mm := matchmaker.NewMatchmaker(db, redisClient, nodeID, roomHub, mapIDs)
+	mm := matchmaker.NewMatchmaker(db, redisClient, nodeID, roomHub, mapIDs, mapTiers)
 	go mm.Run()
 
 	// Lobby WS handler
