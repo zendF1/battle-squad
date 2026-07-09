@@ -78,7 +78,7 @@ type MapConfig struct {
 	GridHeight            int          `yaml:"gridHeight"`
 	CellSize              int          `yaml:"cellSize"`
 	DefaultWindPowerRange []float64    `yaml:"defaultWindPowerRange"`
-	Tiles                 [][]string   `yaml:"tiles"`
+	Tiles                 [][]int      `yaml:"tiles"` // 0 = air, >0 = brick_type_id
 	SpawnPoints           []SpawnPoint `yaml:"spawnPoints"`
 
 	// Legacy fields (for backward compatibility during transition)
@@ -95,13 +95,29 @@ type GameData struct {
 	Maps       map[string]MapConfig
 }
 
+type BorderPoint struct {
+	X float64 `json:"x" yaml:"x"`
+	Y float64 `json:"y" yaml:"y"`
+}
+
+type BrickBorder struct {
+	Top    []BorderPoint `json:"top" yaml:"top"`
+	Right  []BorderPoint `json:"right" yaml:"right"`
+	Bottom []BorderPoint `json:"bottom" yaml:"bottom"`
+	Left   []BorderPoint `json:"left" yaml:"left"`
+}
+
 type BrickTypeConfig struct {
-	BrickTypeID  string `yaml:"brickTypeId"`
-	Destructible bool   `yaml:"destructible"`
+	BrickTypeID  int         `yaml:"brickTypeId"`
+	Name         string      `yaml:"name"`
+	ImageID      string      `yaml:"imageId"`
+	Destructible bool        `yaml:"destructible"`
+	Border       BrickBorder `yaml:"border"`
+	Color        string      `yaml:"color"`
 }
 
 // BrickTypes is loaded from config_brick_types table.
-var BrickTypes map[string]BrickTypeConfig
+var BrickTypes map[int]BrickTypeConfig
 
 // PhysicsConfig holds physics constants loaded from game_settings table
 type PhysicsConfig struct {
@@ -335,16 +351,20 @@ func LoadGameDataFromDB(db *database.PostgresDB) error {
 	}
 
 	// 6. Load brick types
-	BrickTypes = make(map[string]BrickTypeConfig)
-	rows, err = db.Pool.Query(ctx, `SELECT brick_type_id, destructible FROM config_brick_types`)
+	BrickTypes = make(map[int]BrickTypeConfig)
+	rows, err = db.Pool.Query(ctx, `SELECT brick_type_id, name, image_id, destructible, border, color FROM config_brick_types`)
 	if err != nil {
 		return fmt.Errorf("failed to query config_brick_types: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var bt BrickTypeConfig
-		if err := rows.Scan(&bt.BrickTypeID, &bt.Destructible); err != nil {
+		var borderJSON []byte
+		if err := rows.Scan(&bt.BrickTypeID, &bt.Name, &bt.ImageID, &bt.Destructible, &borderJSON, &bt.Color); err != nil {
 			return fmt.Errorf("failed to scan config_brick_types row: %w", err)
+		}
+		if borderJSON != nil {
+			json.Unmarshal(borderJSON, &bt.Border)
 		}
 		BrickTypes[bt.BrickTypeID] = bt
 	}
