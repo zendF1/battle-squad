@@ -130,27 +130,30 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 	}
 	observability.Log.Info().Int("count", len(data.Items)).Msg("seeded config_items")
 
-	// Seed brick types
-	brickQuery := `INSERT INTO config_brick_types (brick_type_id, name, destructible)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (brick_type_id) DO NOTHING`
-	defaultBricks := []struct {
-		ID           string
-		Name         string
-		Destructible bool
-	}{
-		{"dirt", "Dirt", true},
-		{"rock", "Rock", false},
-		{"ice", "Ice", true},
-		{"lava", "Lava", false},
-		{"fragile", "Fragile", true},
-	}
-	for _, b := range defaultBricks {
-		if _, err := db.Pool.Exec(ctx, brickQuery, b.ID, b.Name, b.Destructible); err != nil {
-			return fmt.Errorf("insert brick type %s: %w", b.ID, err)
+	// Seed brick types (v2 — SERIAL PK, auto-increment)
+	var brickCount int
+	db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM config_brick_types`).Scan(&brickCount)
+	if brickCount == 0 {
+		brickQuery := `INSERT INTO config_brick_types (name, image_id, destructible, color)
+			VALUES ($1, $2, $3, $4)`
+		defaultBricks := []struct {
+			Name         string
+			Destructible bool
+			Color        string
+		}{
+			{"Dirt", true, "#8B4513"},
+			{"Rock", false, "#808080"},
+			{"Ice", true, "#87CEEB"},
+			{"Lava", false, "#FF4500"},
+			{"Fragile", true, "#DEB887"},
 		}
+		for _, b := range defaultBricks {
+			if _, err := db.Pool.Exec(ctx, brickQuery, b.Name, "", b.Destructible, b.Color); err != nil {
+				return fmt.Errorf("insert brick type %s: %w", b.Name, err)
+			}
+		}
+		observability.Log.Info().Int("count", len(defaultBricks)).Msg("seeded config_brick_types")
 	}
-	observability.Log.Info().Int("count", len(defaultBricks)).Msg("seeded config_brick_types")
 
 	// Seed maps (JSONB fields need marshaling)
 	mapQuery := `INSERT INTO config_maps
