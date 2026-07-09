@@ -146,16 +146,20 @@ func (s *Server) handleBrickTypeDelete(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleMapEditor(w http.ResponseWriter, r *http.Request) {
 	mapID := r.URL.Query().Get("id")
-	if mapID == "" {
-		http.Redirect(w, r, "/maps?error=Missing+map+ID", http.StatusSeeOther)
-		return
-	}
-
 	ctx := r.Context()
-	m, err := s.repo.GetMap(ctx, mapID)
-	if err != nil {
-		http.Redirect(w, r, "/maps?error=Map+not+found", http.StatusSeeOther)
-		return
+
+	var mapName string
+	var isNew bool
+	if mapID == "" {
+		isNew = true
+		mapName = "New Map"
+	} else {
+		m, err := s.repo.GetMap(ctx, mapID)
+		if err != nil {
+			http.Redirect(w, r, "/maps?error=Map+not+found", http.StatusSeeOther)
+			return
+		}
+		mapName = m.Name
 	}
 
 	brickTypes, err := s.repo.GetBrickTypes(ctx)
@@ -167,8 +171,9 @@ func (s *Server) handleMapEditor(w http.ResponseWriter, r *http.Request) {
 
 	s.render(w, "map_editor", map[string]interface{}{
 		"ActivePage":     "maps",
-		"MapID":          m.MapID,
-		"MapName":        m.Name,
+		"MapID":          mapID,
+		"MapName":        mapName,
+		"IsNew":          isNew,
 		"BrickTypesJSON": string(brickTypesJSON),
 	})
 }
@@ -190,39 +195,87 @@ func (s *Server) handleMapTilesGet(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(data)
 }
 
-func (s *Server) handleMapTilesSave(w http.ResponseWriter, r *http.Request) {
-	mapID := r.URL.Query().Get("id")
-	if mapID == "" {
-		http.Error(w, `{"error":"missing map id"}`, http.StatusBadRequest)
-		return
-	}
-
+func (s *Server) handleMapSave(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Tiles       json.RawMessage `json:"tiles"`
-		SpawnPoints json.RawMessage `json:"spawnPoints"`
+		MapID                 string          `json:"mapId"`
+		Name                  string          `json:"name"`
+		GridWidth             int             `json:"gridWidth"`
+		GridHeight            int             `json:"gridHeight"`
+		CellSize              int             `json:"cellSize"`
+		DefaultWindPowerRange json.RawMessage `json:"defaultWindPowerRange"`
+		MinRankTier           string          `json:"minRankTier"`
+		Description           string          `json:"description"`
+		Tiles                 json.RawMessage `json:"tiles"`
+		SpawnPoints           json.RawMessage `json:"spawnPoints"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
 		return
 	}
 
-	m, err := s.repo.GetMap(r.Context(), mapID)
-	if err != nil {
-		observability.Log.Error().Err(err).Str("mapId", mapID).Msg("failed to load map for save")
-		http.Error(w, `{"error":"map not found"}`, http.StatusNotFound)
+	mapID := r.URL.Query().Get("id")
+	if mapID == "" {
+		mapID = strings.TrimSpace(body.MapID)
+	}
+	if mapID == "" {
+		http.Error(w, `{"error":"map ID is required"}`, http.StatusBadRequest)
 		return
 	}
-	m.Tiles = body.Tiles
-	m.SpawnPoints = body.SpawnPoints
 
-	if err := s.repo.SaveMapFull(r.Context(), m); err != nil {
-		observability.Log.Error().Err(err).Str("mapId", mapID).Msg("failed to save map tiles")
+	gridWidth := body.GridWidth
+	if gridWidth == 0 {
+		gridWidth = 100
+	}
+	gridHeight := body.GridHeight
+	if gridHeight == 0 {
+		gridHeight = 56
+	}
+	cellSize := body.CellSize
+	if cellSize == 0 {
+		cellSize = 16
+	}
+	minRankTier := body.MinRankTier
+	if minRankTier == "" {
+		minRankTier = "bronze"
+	}
+
+	windRange := body.DefaultWindPowerRange
+	if len(windRange) == 0 {
+		windRange = json.RawMessage(`[0,4]`)
+	}
+	tiles := body.Tiles
+	if len(tiles) == 0 {
+		tiles = json.RawMessage(`[]`)
+	}
+	spawnPoints := body.SpawnPoints
+	if len(spawnPoints) == 0 {
+		spawnPoints = json.RawMessage(`[]`)
+	}
+
+	m := &ConfigMap{
+		MapID:                 mapID,
+		Name:                  body.Name,
+		Width:                 gridWidth * cellSize,
+		Height:                gridHeight * cellSize,
+		GridWidth:             gridWidth,
+		GridHeight:            gridHeight,
+		CellSize:              cellSize,
+		DefaultWindPowerRange: windRange,
+		TerrainLayers:         json.RawMessage(`[]`),
+		SpawnPoints:           spawnPoints,
+		Tiles:                 tiles,
+		Description:           body.Description,
+		MinRankTier:           minRankTier,
+	}
+
+	if err := s.repo.UpsertMap(r.Context(), m); err != nil {
+		observability.Log.Error().Err(err).Str("mapId", mapID).Msg("failed to save map")
 		http.Error(w, `{"error":"save failed"}`, http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"ok":true}`))
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "mapId": mapID})
 }
 
 // MapExportYAML is the YAML output structure for a single map.

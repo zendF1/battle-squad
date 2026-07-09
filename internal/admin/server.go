@@ -81,8 +81,6 @@ func (s *Server) Routes() http.Handler {
 	r.Post("/items/delete", s.handleConfigDelete("items"))
 
 	r.Get("/maps", s.handleConfigList("maps"))
-	r.Get("/maps/edit", s.handleConfigEdit("maps"))
-	r.Post("/maps/save", s.handleConfigSave("maps"))
 	r.Post("/maps/delete", s.handleConfigDelete("maps"))
 
 	// Brick Types
@@ -94,7 +92,7 @@ func (s *Server) Routes() http.Handler {
 	// Map Editor
 	r.Get("/maps/editor", s.handleMapEditor)
 	r.Get("/api/maps/tiles", s.handleMapTilesGet)
-	r.Put("/api/maps/tiles", s.handleMapTilesSave)
+	r.Put("/api/maps/save", s.handleMapSave)
 	r.Get("/api/maps/export", s.handleMapExport)
 	r.Get("/api/brick-types", s.handleBrickTypesAPI)
 

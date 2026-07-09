@@ -174,28 +174,6 @@ func (s *Server) handleConfigEdit(configType string) http.HandlerFunc {
 				{Name: "description", Label: "Description", Type: "textarea", Description: "Item description", Value: it.Description},
 			}
 
-		case "maps":
-			title = "Map"
-			var m ConfigMap
-			if !isNew {
-				found, err := s.repo.GetMap(ctx, id)
-				if err != nil {
-					http.Redirect(w, r, "/maps?error=Map+not+found", http.StatusSeeOther)
-					return
-				}
-				m = *found
-				originalID = m.MapID
-			}
-			fields = []FieldDef{
-				{Name: "map_id", Label: "Map ID", Type: "text", Description: "Unique identifier (e.g. map_valley)", Value: m.MapID},
-				{Name: "name", Label: "Name", Type: "text", Description: "Display name", Value: m.Name},
-				{Name: "grid_width", Label: "Grid Width", Type: "number", Step: "1", Description: "Number of horizontal cells", Value: m.GridWidth},
-				{Name: "grid_height", Label: "Grid Height", Type: "number", Step: "1", Description: "Number of vertical cells", Value: m.GridHeight},
-				{Name: "cell_size", Label: "Cell Size", Type: "number", Step: "1", Description: "Pixel size of each cell", Value: m.CellSize},
-				{Name: "default_wind_power_range", Label: "Wind Power Range (JSON)", Type: "textarea", Description: "JSON array [min, max] for wind power range (float)", Value: jsonString(m.DefaultWindPowerRange)},
-				{Name: "spawn_points", Label: "Spawn Points (JSON)", Type: "textarea", Description: "JSON array of spawn point coordinates", Value: jsonString(m.SpawnPoints)},
-				{Name: "description", Label: "Description", Type: "textarea", Description: "Map description", Value: m.Description},
-			}
 		}
 
 		s.render(w, "config_edit", map[string]interface{}{
@@ -310,42 +288,6 @@ func (s *Server) handleConfigSave(configType string) http.HandlerFunc {
 				return
 			}
 
-		case "maps":
-			gridWidth := formInt(r, "grid_width")
-			if gridWidth == 0 {
-				gridWidth = 100
-			}
-			gridHeight := formInt(r, "grid_height")
-			if gridHeight == 0 {
-				gridHeight = 56
-			}
-			cellSize := formInt(r, "cell_size")
-			if cellSize == 0 {
-				cellSize = 16
-			}
-			m := &ConfigMap{
-				MapID:                 strings.TrimSpace(r.FormValue("map_id")),
-				Name:                  r.FormValue("name"),
-				Width:                 gridWidth * cellSize,
-				Height:                gridHeight * cellSize,
-				GridWidth:             gridWidth,
-				GridHeight:            gridHeight,
-				CellSize:              cellSize,
-				DefaultWindPowerRange: json.RawMessage(r.FormValue("default_wind_power_range")),
-				TerrainLayers:         json.RawMessage("[]"),
-				SpawnPoints:           json.RawMessage(r.FormValue("spawn_points")),
-				Tiles:                 json.RawMessage("[]"),
-				Description:           r.FormValue("description"),
-			}
-			if m.MapID == "" {
-				http.Redirect(w, r, "/maps/edit?error=Map+ID+is+required", http.StatusSeeOther)
-				return
-			}
-			if err := s.repo.UpsertMap(ctx, m); err != nil {
-				observability.Log.Error().Err(err).Msg("failed to upsert map")
-				http.Redirect(w, r, "/maps?error=Failed+to+save+map", http.StatusSeeOther)
-				return
-			}
 		}
 
 		http.Redirect(w, r, "/"+configType+"?flash=Saved+successfully", http.StatusSeeOther)
