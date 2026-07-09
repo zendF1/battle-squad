@@ -7,13 +7,13 @@
 {{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
 <div class="card">
 <table>
-<thead><tr><th>ID</th><th>Name</th><th>Color</th><th>Image ID</th><th>Destructible</th><th>Actions</th></tr></thead>
+<thead><tr><th>ID</th><th>Preview</th><th>Name</th><th>Image ID</th><th>Destructible</th><th>Actions</th></tr></thead>
 <tbody>
 {{range .Items}}
 <tr>
     <td>{{.BrickTypeID}}</td>
+    <td><canvas class="brick-preview-cell" data-id="{{.BrickTypeID}}" data-color="{{.Color}}" width="32" height="32" style="border:1px solid #eee;border-radius:3px;vertical-align:middle"></canvas></td>
     <td>{{.Name}}</td>
-    <td><span style="display:inline-block;width:20px;height:20px;background:{{.Color}};border:1px solid #ccc;border-radius:3px;vertical-align:middle"></span> {{.Color}}</td>
     <td>{{.ImageID}}</td>
     <td>{{if .Destructible}}<span class="badge badge-success">Yes</span>{{else}}<span class="badge badge-danger">No</span>{{end}}</td>
     <td>
@@ -28,4 +28,46 @@
 </tbody>
 </table>
 </div>
+
+<script>
+(function() {
+    var BORDER_MAP = {{.BorderMapJSON | safeJS}};
+    var CELL = 16;
+
+    document.querySelectorAll('.brick-preview-cell').forEach(function(canvas) {
+        var id = parseInt(canvas.getAttribute('data-id'));
+        var color = canvas.getAttribute('data-color') || '#888';
+        var border = BORDER_MAP[id];
+        if (!border) return;
+
+        var ctx = canvas.getContext('2d');
+        var w = canvas.width;
+        var h = canvas.height;
+        var scale = w / CELL;
+        var edges = ['bottom', 'right', 'top', 'left'];
+
+        // Fill polygon
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        var first = true;
+        for (var e = 0; e < edges.length; e++) {
+            var pts = border[edges[e]];
+            if (!pts) continue;
+            for (var p = 0; p < pts.length; p++) {
+                var px = pts[p].x * scale;
+                var py = (CELL - pts[p].y) * scale;
+                if (first) { ctx.moveTo(px, py); first = false; }
+                else ctx.lineTo(px, py);
+            }
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        // Stroke outline
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+    });
+})();
+</script>
 {{end}}

@@ -21,10 +21,18 @@ func (s *Server) handleBrickTypesList(w http.ResponseWriter, r *http.Request) {
 		observability.Log.Error().Err(err).Msg("failed to list brick types")
 	}
 
+	// Build border map for JS preview rendering
+	borderMap := make(map[int]json.RawMessage)
+	for _, item := range items {
+		borderMap[item.BrickTypeID] = item.Border
+	}
+	borderMapJSON, _ := json.Marshal(borderMap)
+
 	s.render(w, "brick_types", map[string]interface{}{
-		"ActivePage": "brick-types",
-		"Items":      items,
-		"Flash":      r.URL.Query().Get("flash"),
+		"ActivePage":    "brick-types",
+		"Items":         items,
+		"BorderMapJSON": string(borderMapJSON),
+		"Flash":         r.URL.Query().Get("flash"),
 		"Error":      r.URL.Query().Get("error"),
 	})
 }
