@@ -14,6 +14,7 @@
       hardness: 60
       yRange: [750, 900]
   tiles: []
+  minRankTier: bronze
   spawnPoints:
     - x: 200
       y: 400
@@ -40,6 +41,7 @@
       hardness: 70
       yRange: [650, 900]
   tiles: []
+  minRankTier: silver
   spawnPoints:
     - x: 300
       y: 350
@@ -66,6 +68,7 @@
       hardness: 30
       yRange: [500, 700]
   tiles: []
+  minRankTier: gold
   spawnPoints:
     - x: 250
       y: 300

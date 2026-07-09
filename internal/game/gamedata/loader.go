@@ -80,6 +80,7 @@ type MapConfig struct {
 	DefaultWindPowerRange []float64    `yaml:"defaultWindPowerRange"`
 	Tiles                 [][]int      `yaml:"tiles"` // 0 = air, >0 = brick_type_id
 	SpawnPoints           []SpawnPoint `yaml:"spawnPoints"`
+	MinRankTier           string       `yaml:"minRankTier"`
 
 	// Legacy fields (for backward compatibility during transition)
 	Width         int            `yaml:"width,omitempty"`
@@ -311,7 +312,7 @@ func LoadGameDataFromDB(db *database.PostgresDB) error {
 	// 5. Load maps (with JSONB fields)
 	rows, err = db.Pool.Query(ctx, `SELECT map_id, name, grid_width, grid_height, cell_size,
 		default_wind_power_range, tiles, spawn_points,
-		width, height, terrain_layers
+		width, height, terrain_layers, min_rank_tier
 		FROM config_maps`)
 	if err != nil {
 		return fmt.Errorf("failed to query config_maps: %w", err)
@@ -323,7 +324,7 @@ func LoadGameDataFromDB(db *database.PostgresDB) error {
 		var legacyWidth, legacyHeight int
 		if err := rows.Scan(&m.MapID, &m.Name, &m.GridWidth, &m.GridHeight, &m.CellSize,
 			&windRangeJSON, &tilesJSON, &spawnJSON,
-			&legacyWidth, &legacyHeight, &terrainJSON); err != nil {
+			&legacyWidth, &legacyHeight, &terrainJSON, &m.MinRankTier); err != nil {
 			return fmt.Errorf("failed to scan config_maps row: %w", err)
 		}
 		m.Width = legacyWidth
