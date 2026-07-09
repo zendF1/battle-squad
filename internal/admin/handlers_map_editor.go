@@ -206,7 +206,16 @@ func (s *Server) handleMapTilesSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.repo.SaveMapTiles(r.Context(), mapID, body.Tiles, body.SpawnPoints); err != nil {
+	m, err := s.repo.GetMap(r.Context(), mapID)
+	if err != nil {
+		observability.Log.Error().Err(err).Str("mapId", mapID).Msg("failed to load map for save")
+		http.Error(w, `{"error":"map not found"}`, http.StatusNotFound)
+		return
+	}
+	m.Tiles = body.Tiles
+	m.SpawnPoints = body.SpawnPoints
+
+	if err := s.repo.SaveMapFull(r.Context(), m); err != nil {
 		observability.Log.Error().Err(err).Str("mapId", mapID).Msg("failed to save map tiles")
 		http.Error(w, `{"error":"save failed"}`, http.StatusInternalServerError)
 		return
