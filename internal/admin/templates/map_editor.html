@@ -4,20 +4,34 @@
 .editor-toolbar { width: 180px; flex-shrink: 0; }
 .editor-canvas-wrap { flex: 1; overflow: hidden; position: relative; background: #1a1a2e; border-radius: 8px; }
 .editor-canvas-wrap canvas { display: block; cursor: crosshair; }
-.editor-properties { width: 220px; flex-shrink: 0; }
+.editor-properties { width: 260px; flex-shrink: 0; overflow-y: auto; }
 .tool-btn { display: block; width: 100%; padding: 8px 12px; margin-bottom: 4px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; text-align: left; font-size: 13px; }
 .tool-btn.active { background: #4a6cf7; color: #fff; border-color: #4a6cf7; }
-.brick-btn { display: inline-block; width: 36px; height: 36px; margin: 2px; border: 2px solid #ccc; border-radius: 4px; cursor: pointer; text-align: center; line-height: 32px; font-size: 10px; }
+.brick-btn { display: inline-block; width: 36px; height: 36px; margin: 2px; border: 2px solid #ccc; border-radius: 4px; cursor: pointer; position: relative; overflow: hidden; }
 .brick-btn.active { border-color: #4a6cf7; box-shadow: 0 0 0 2px #4a6cf7; }
-.editor-top-bar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
-.editor-top-bar h1 { font-size: 18px; margin: 0; flex: 1; }
+.brick-btn canvas { display: block; width: 100%; height: 100%; }
+.editor-top-bar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+.editor-top-bar h1 { font-size: 18px; margin: 0; }
 .coords-display { position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,0.7); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-family: monospace; }
 .spawn-list { max-height: 200px; overflow-y: auto; }
 .spawn-item { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 12px; border-bottom: 1px solid #eee; }
+.props-section { margin-bottom: 16px; }
+.props-section h3 { font-size: 14px; margin: 0 0 8px; }
+.form-group { margin-bottom: 8px; }
+.form-group label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+.form-group input, .form-group select, .form-group textarea { width: 100%; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; box-sizing: border-box; }
+.form-group textarea { resize: vertical; min-height: 50px; }
 </style>
 
 <div class="editor-top-bar">
-    <h1>Map Editor: {{.MapName}}</h1>
+    {{if .IsNew}}
+    <div class="form-group" style="margin:0">
+        <input type="text" id="propMapId" placeholder="map_id (e.g. desert_ruins)" style="width:200px">
+    </div>
+    {{else}}
+    <h1>{{.MapName}}</h1>
+    {{end}}
+    <div style="flex:1"></div>
     <button class="btn btn-primary" onclick="editor.save()">Save</button>
     <button class="btn btn-success" onclick="editor.exportYAML()">Export YAML</button>
     <button class="btn btn-warning" onclick="editor.undo()">Undo</button>
@@ -43,27 +57,59 @@
     </div>
 
     <div class="editor-properties card">
-        <h3 style="font-size:14px;margin-bottom:8px">Properties</h3>
-        <div class="form-group">
-            <label>Grid Width</label>
-            <input type="number" id="propGridWidth" readonly>
+        <div class="props-section">
+            <h3>Map Settings</h3>
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="propName" value="">
+            </div>
+            <div class="form-group">
+                <label>Grid Width</label>
+                <input type="number" id="propGridWidth" value="100" min="1">
+            </div>
+            <div class="form-group">
+                <label>Grid Height</label>
+                <input type="number" id="propGridHeight" value="56" min="1">
+            </div>
+            <div class="form-group">
+                <label>Cell Size</label>
+                <input type="number" id="propCellSize" value="16" min="1">
+            </div>
+            <div class="form-group">
+                <label>Wind Power Min</label>
+                <input type="number" id="propWindMin" value="0" step="0.1" min="0">
+            </div>
+            <div class="form-group">
+                <label>Wind Power Max</label>
+                <input type="number" id="propWindMax" value="4" step="0.1" min="0">
+            </div>
+            <div class="form-group">
+                <label>Min Rank Tier</label>
+                <select id="propMinRankTier">
+                    <option value="bronze">Bronze</option>
+                    <option value="silver">Silver</option>
+                    <option value="gold">Gold</option>
+                    <option value="platinum">Platinum</option>
+                    <option value="diamond">Diamond</option>
+                    <option value="master">Master</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="propDescription"></textarea>
+            </div>
         </div>
-        <div class="form-group">
-            <label>Grid Height</label>
-            <input type="number" id="propGridHeight" readonly>
+        <div class="props-section">
+            <h3>Spawn Points</h3>
+            <div class="spawn-list" id="spawnList"></div>
         </div>
-        <div class="form-group">
-            <label>Cell Size</label>
-            <input type="number" id="propCellSize" readonly>
-        </div>
-        <h3 style="font-size:14px;margin:12px 0 8px">Spawn Points</h3>
-        <div class="spawn-list" id="spawnList"></div>
     </div>
 </div>
 
 <script>
-const MAP_ID = "{{.MapID}}";
-const BRICK_TYPES = JSON.parse('{{.BrickTypesJSON}}');
+var MAP_ID = '{{.MapID}}';
+var IS_NEW = {{.IsNew}};
+var BRICK_TYPES = JSON.parse('{{safeJS .BrickTypesJSON}}');
 </script>
 <script src="/static/map_editor.js"></script>
 {{end}}

@@ -1,26 +1,88 @@
-// Map Editor - Canvas-based tilemap editor
+// Map Editor - Canvas-based tilemap editor with polygon brick rendering
 (function() {
     'use strict';
 
-    // Assign a deterministic color to each brick type
+    // Build brick lookup maps
     var BRICK_COLORS = {};
+    var BRICK_BORDERS = {};
     BRICK_TYPES.forEach(function(bt) {
         BRICK_COLORS[bt.BrickTypeID] = bt.Color || '#888';
+        if (bt.Border) {
+            var border = typeof bt.Border === 'string' ? JSON.parse(bt.Border) : bt.Border;
+            if (border && border.top && border.top.length > 0) {
+                BRICK_BORDERS[bt.BrickTypeID] = border;
+            }
+        }
     });
+
+    function buildPolygonPoints(border, cellSize, offsetX, offsetY) {
+        var scale = cellSize / 16;
+        var points = [];
+        var edges = ['bottom', 'right', 'top', 'left'];
+        for (var i = 0; i < edges.length; i++) {
+            var edge = border[edges[i]];
+            if (!edge) continue;
+            for (var j = 0; j < edge.length; j++) {
+                if (j === edge.length - 1 && i < edges.length - 1) continue;
+                points.push({
+                    x: offsetX + edge[j].x * scale,
+                    y: offsetY + (16 - edge[j].y) * scale
+                });
+            }
+        }
+        return points;
+    }
+
+    function drawBrickPolygon(ctx, border, cellSize, offsetX, offsetY, color) {
+        var points = buildPolygonPoints(border, cellSize, offsetX, offsetY);
+        if (points.length < 3) return;
+
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (var i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.strokeStyle = darkenColor(color, 0.3);
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+    }
+
+    function darkenColor(hex, amount) {
+        hex = hex.replace('#', '');
+        if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+        var r = Math.max(0, parseInt(hex.substr(0, 2), 16) * (1 - amount));
+        var g = Math.max(0, parseInt(hex.substr(2, 2), 16) * (1 - amount));
+        var b = Math.max(0, parseInt(hex.substr(4, 2), 16) * (1 - amount));
+        return 'rgb(' + Math.round(r) + ',' + Math.round(g) + ',' + Math.round(b) + ')';
+    }
+
+    function drawPalettePreview(canvas, border, color) {
+        var ctx = canvas.getContext('2d');
+        var size = canvas.width;
+        canvas.height = size;
+        ctx.clearRect(0, 0, size, size);
+        if (border) {
+            drawBrickPolygon(ctx, border, size, 0, 0, color);
+        } else {
+            ctx.fillStyle = color;
+            ctx.fillRect(0, 0, size, size);
+        }
+    }
 
     function MapEditor(canvasId, wrapId) {
         this.canvas = document.getElementById(canvasId);
         this.ctx = this.canvas.getContext('2d');
         this.wrap = document.getElementById(wrapId);
 
-        // Map data
-        this.gridWidth = 0;
-        this.gridHeight = 0;
+        this.gridWidth = 100;
+        this.gridHeight = 56;
         this.cellSize = 16;
         this.tiles = [];
         this.spawnPoints = [];
 
-        // Editor state
         this.tool = 'paint';
         this.selectedBrick = BRICK_TYPES.length > 0 ? BRICK_TYPES[0].BrickTypeID : null;
         this.showGrid = true;
@@ -33,7 +95,6 @@
         this.lastPanY = 0;
         this.spaceHeld = false;
 
-        // Selection state
         this.selection = null;
         this.selectionTiles = null;
         this.isSelecting = false;
@@ -41,7 +102,6 @@
         this.dragOffsetCol = 0;
         this.dragOffsetRow = 0;
 
-        // Undo/Redo
         this.undoStack = [];
         this.redoStack = [];
         this.currentStroke = null;
@@ -53,7 +113,12 @@
         var self = this;
         this.buildPalette();
         this.resizeCanvas();
-        this.load();
+
+        if (IS_NEW) {
+            this.initNewMap();
+        } else {
+            this.load();
+        }
 
         window.addEventListener('resize', function() { self.resizeCanvas(); self.render(); });
 
@@ -73,6 +138,21 @@
         });
     };
 
+    MapEditor.prototype.initNewMap = function() {
+        this.gridWidth = 100;
+        this.gridHeight = 56;
+        this.cellSize = 16;
+        this.tiles = [];
+        for (var row = 0; row < this.gridHeight; row++) {
+            this.tiles.push(new Array(this.gridWidth).fill(0));
+        }
+        this.spawnPoints = [];
+        this.updateFormFromState();
+        this.fitView();
+        this.renderSpawnList();
+        this.render();
+    };
+
     MapEditor.prototype.buildPalette = function() {
         var palette = document.getElementById('brickPalette');
         var self = this;
@@ -80,9 +160,17 @@
             var id = bt.BrickTypeID;
             var btn = document.createElement('div');
             btn.className = 'brick-btn' + (id === self.selectedBrick ? ' active' : '');
-            btn.style.background = BRICK_COLORS[id];
             btn.title = bt.Name + (bt.Destructible ? ' (D)' : '');
             btn.setAttribute('data-id', id);
+
+            var cvs = document.createElement('canvas');
+            cvs.width = 32;
+            cvs.height = 32;
+            var border = BRICK_BORDERS[id] || null;
+            var color = BRICK_COLORS[id];
+            drawPalettePreview(cvs, border, color);
+            btn.appendChild(cvs);
+
             btn.onclick = function() {
                 document.querySelectorAll('.brick-btn').forEach(function(b) { b.classList.remove('active'); });
                 btn.classList.add('active');
@@ -115,34 +203,130 @@
                     }
                 }
 
-                self.spawnPoints = data.spawnPoints || [];
+                // Normalize spawn points: handle both {x,y} and {X,Y}
+                self.spawnPoints = [];
+                var rawSpawns = data.spawnPoints || [];
+                for (var i = 0; i < rawSpawns.length; i++) {
+                    var sp = rawSpawns[i];
+                    self.spawnPoints.push({
+                        x: sp.x !== undefined ? sp.x : sp.X,
+                        y: sp.y !== undefined ? sp.y : sp.Y
+                    });
+                }
 
-                var scaleX = self.canvas.width / (self.gridWidth * self.cellSize);
-                var scaleY = self.canvas.height / (self.gridHeight * self.cellSize);
-                self.zoom = Math.min(scaleX, scaleY) * 0.9;
-                self.panX = (self.canvas.width - self.gridWidth * self.cellSize * self.zoom) / 2;
-                self.panY = (self.canvas.height - self.gridHeight * self.cellSize * self.zoom) / 2;
+                // Populate form fields
+                document.getElementById('propName').value = data.name || '';
+                document.getElementById('propGridWidth').value = data.gridWidth;
+                document.getElementById('propGridHeight').value = data.gridHeight;
+                document.getElementById('propCellSize').value = data.cellSize;
+                document.getElementById('propMinRankTier').value = data.minRankTier || 'bronze';
+                document.getElementById('propDescription').value = data.description || '';
 
-                self.updateProperties();
+                var windRange = [0, 4];
+                try {
+                    if (typeof data.defaultWindPowerRange === 'string') {
+                        windRange = JSON.parse(data.defaultWindPowerRange);
+                    } else if (Array.isArray(data.defaultWindPowerRange)) {
+                        windRange = data.defaultWindPowerRange;
+                    }
+                } catch(e) {}
+                if (Array.isArray(windRange) && windRange.length >= 2) {
+                    document.getElementById('propWindMin').value = windRange[0];
+                    document.getElementById('propWindMax').value = windRange[1];
+                }
+
+                self.fitView();
                 self.renderSpawnList();
                 self.render();
             });
     };
 
+    MapEditor.prototype.fitView = function() {
+        var scaleX = this.canvas.width / (this.gridWidth * this.cellSize);
+        var scaleY = this.canvas.height / (this.gridHeight * this.cellSize);
+        this.zoom = Math.min(scaleX, scaleY) * 0.9;
+        this.panX = (this.canvas.width - this.gridWidth * this.cellSize * this.zoom) / 2;
+        this.panY = (this.canvas.height - this.gridHeight * this.cellSize * this.zoom) / 2;
+    };
+
+    MapEditor.prototype.updateFormFromState = function() {
+        document.getElementById('propName').value = '';
+        document.getElementById('propGridWidth').value = this.gridWidth;
+        document.getElementById('propGridHeight').value = this.gridHeight;
+        document.getElementById('propCellSize').value = this.cellSize;
+        document.getElementById('propWindMin').value = 0;
+        document.getElementById('propWindMax').value = 4;
+        document.getElementById('propMinRankTier').value = 'bronze';
+        document.getElementById('propDescription').value = '';
+    };
+
     MapEditor.prototype.save = function() {
-        fetch('/api/maps/tiles?id=' + MAP_ID, {
+        var mapId = IS_NEW ? (document.getElementById('propMapId') ? document.getElementById('propMapId').value.trim() : '') : MAP_ID;
+        if (!mapId) {
+            alert('Map ID is required');
+            return;
+        }
+
+        var gridWidth = parseInt(document.getElementById('propGridWidth').value) || 100;
+        var gridHeight = parseInt(document.getElementById('propGridHeight').value) || 56;
+        var cellSize = parseInt(document.getElementById('propCellSize').value) || 16;
+
+        if (gridWidth !== this.gridWidth || gridHeight !== this.gridHeight) {
+            var newTiles = [];
+            for (var r = 0; r < gridHeight; r++) {
+                var row = [];
+                for (var c = 0; c < gridWidth; c++) {
+                    row.push((r < this.tiles.length && c < (this.tiles[r] || []).length) ? this.tiles[r][c] : 0);
+                }
+                newTiles.push(row);
+            }
+            this.tiles = newTiles;
+            this.gridWidth = gridWidth;
+            this.gridHeight = gridHeight;
+        }
+        this.cellSize = cellSize;
+
+        var windMin = parseFloat(document.getElementById('propWindMin').value) || 0;
+        var windMax = parseFloat(document.getElementById('propWindMax').value) || 4;
+
+        var body = {
+            mapId: mapId,
+            name: document.getElementById('propName').value,
+            gridWidth: gridWidth,
+            gridHeight: gridHeight,
+            cellSize: cellSize,
+            defaultWindPowerRange: [windMin, windMax],
+            minRankTier: document.getElementById('propMinRankTier').value,
+            description: document.getElementById('propDescription').value,
+            tiles: this.tiles,
+            spawnPoints: this.spawnPoints
+        };
+
+        var url = '/api/maps/save';
+        if (!IS_NEW) {
+            url += '?id=' + MAP_ID;
+        }
+
+        fetch(url, {
             method: 'PUT',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({tiles: this.tiles, spawnPoints: this.spawnPoints})
+            body: JSON.stringify(body)
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            if (data.ok) alert('Saved!');
-            else alert('Save failed: ' + (data.error || 'unknown'));
+            if (data.ok) {
+                alert('Saved!');
+                if (IS_NEW && data.mapId) {
+                    window.location.href = '/maps/editor?id=' + data.mapId;
+                }
+            } else {
+                alert('Save failed: ' + (data.error || 'unknown'));
+            }
         });
     };
 
     MapEditor.prototype.exportYAML = function() {
+        if (IS_NEW) { alert('Save the map first before exporting.'); return; }
         window.open('/api/maps/export?id=' + MAP_ID, '_blank');
     };
 
@@ -415,12 +599,6 @@
         this.render();
     };
 
-    MapEditor.prototype.updateProperties = function() {
-        document.getElementById('propGridWidth').value = this.gridWidth;
-        document.getElementById('propGridHeight').value = this.gridHeight;
-        document.getElementById('propCellSize').value = this.cellSize;
-    };
-
     MapEditor.prototype.renderSpawnList = function() {
         var list = document.getElementById('spawnList');
         var self = this;
@@ -453,16 +631,27 @@
         ctx.fillStyle = '#2a2a4e';
         ctx.fillRect(0, 0, this.gridWidth * cs, this.gridHeight * cs);
 
+        // Tiles with polygon rendering
         for (var row = 0; row < this.gridHeight; row++) {
             for (var col = 0; col < this.gridWidth; col++) {
                 var tile = this.tiles[row] ? this.tiles[row][col] : null;
                 if (tile > 0) {
-                    ctx.fillStyle = BRICK_COLORS[tile] || '#888';
-                    ctx.fillRect(col * cs, row * cs, cs, cs);
+                    var border = BRICK_BORDERS[tile];
+                    var color = BRICK_COLORS[tile] || '#888';
+                    var ox = col * cs;
+                    var oy = row * cs;
+
+                    if (border) {
+                        drawBrickPolygon(ctx, border, cs, ox, oy, color);
+                    } else {
+                        ctx.fillStyle = color;
+                        ctx.fillRect(ox, oy, cs, cs);
+                    }
                 }
             }
         }
 
+        // Grid lines
         if (this.showGrid && this.zoom > 0.3) {
             ctx.strokeStyle = 'rgba(255,255,255,0.1)';
             ctx.lineWidth = 0.5 / this.zoom;
@@ -480,6 +669,7 @@
             }
         }
 
+        // Selection
         if (this.selection) {
             var s = this.selection;
             var minCol = Math.min(s.startCol, s.endCol);
@@ -496,10 +686,18 @@
                 ctx.globalAlpha = 0.6;
                 for (var r = 0; r < this.selectionTiles.length; r++) {
                     for (var c = 0; c < this.selectionTiles[r].length; c++) {
-                        var tile = this.selectionTiles[r][c];
-                        if (tile) {
-                            ctx.fillStyle = BRICK_COLORS[tile] || '#888';
-                            ctx.fillRect((minCol + c) * cs, (minRow + r) * cs, cs, cs);
+                        var t = this.selectionTiles[r][c];
+                        if (t) {
+                            var b2 = BRICK_BORDERS[t];
+                            var c2 = BRICK_COLORS[t] || '#888';
+                            var ox2 = (minCol + c) * cs;
+                            var oy2 = (minRow + r) * cs;
+                            if (b2) {
+                                drawBrickPolygon(ctx, b2, cs, ox2, oy2, c2);
+                            } else {
+                                ctx.fillStyle = c2;
+                                ctx.fillRect(ox2, oy2, cs, cs);
+                            }
                         }
                     }
                 }
@@ -507,6 +705,7 @@
             }
         }
 
+        // Spawn points
         ctx.fillStyle = '#FFD700';
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 1 / this.zoom;
@@ -522,6 +721,7 @@
             ctx.fillStyle = '#FFD700';
         }
 
+        // Map border
         ctx.strokeStyle = '#fff';
         ctx.lineWidth = 1 / this.zoom;
         ctx.strokeRect(0, 0, this.gridWidth * cs, this.gridHeight * cs);

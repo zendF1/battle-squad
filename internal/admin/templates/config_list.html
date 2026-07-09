@@ -1,7 +1,7 @@
 {{define "content"}}
 <div class="top-bar">
     <h1>{{.Title}}</h1>
-    <a href="{{if eq .ConfigType "characters"}}/characters/detail{{else}}/{{.ConfigType}}/edit{{end}}" class="btn btn-primary">+ Add New</a>
+    <a href="{{if eq .ConfigType "characters"}}/characters/detail{{else if eq .ConfigType "maps"}}/maps/editor{{else}}/{{.ConfigType}}/edit{{end}}" class="btn btn-primary">+ Add New</a>
 </div>
 {{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
 {{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
@@ -72,14 +72,13 @@
 {{end}}
 </tbody>
 {{else if eq .ConfigType "maps"}}
-<thead><tr><th>ID</th><th>Name</th><th>Grid</th><th>Cell Size</th><th>Description</th><th>Actions</th></tr></thead>
+<thead><tr><th>ID</th><th>Name</th><th>Grid</th><th>Cell Size</th><th>Min Rank</th><th>Description</th><th>Actions</th></tr></thead>
 <tbody>
 {{range .Items}}
 <tr>
-    <td>{{.MapID}}</td><td>{{.Name}}</td><td>{{.GridWidth}}x{{.GridHeight}}</td><td>{{.CellSize}}px</td><td>{{.Description}}</td>
+    <td>{{.MapID}}</td><td>{{.Name}}</td><td>{{.GridWidth}}x{{.GridHeight}}</td><td>{{.CellSize}}px</td><td style="text-transform:capitalize">{{.MinRankTier}}</td><td>{{.Description}}</td>
     <td>
-        <a href="/maps/editor?id={{.MapID}}" class="btn btn-success btn-sm">Editor</a>
-        <a href="/maps/edit?id={{.MapID}}" class="btn btn-primary btn-sm">Edit</a>
+        <a href="/maps/editor?id={{.MapID}}" class="btn btn-primary btn-sm">Edit</a>
         <form method="POST" action="/maps/delete" style="display:inline" onsubmit="return confirm('Delete this map?')">
             <input type="hidden" name="id" value="{{.MapID}}">
             <button type="submit" class="btn btn-danger btn-sm">Delete</button>
