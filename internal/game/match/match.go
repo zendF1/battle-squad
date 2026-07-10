@@ -43,6 +43,11 @@ type Match struct {
 	EloParams    EloParams   // Elo configuration
 }
 
+// Stop cancels the match context, causing the Run loop to exit.
+func (m *Match) Stop() {
+	m.cancel()
+}
+
 type RoomHubInterface interface {
 	UnregisterRoom(ctx context.Context, roomID string)
 }

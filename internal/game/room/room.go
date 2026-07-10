@@ -316,6 +316,9 @@ func (r *Room) processLeave(client *ws.Client) {
 	// Tutorial room: destroy as soon as the user leaves (only bots remain)
 	if r.State.IsTutorial {
 		observability.Log.Info().Str("roomId", r.ID).Msg("tutorial room user left, destroying room")
+		if r.match != nil {
+			r.match.Stop()
+		}
 		r.cancel()
 		return
 	}
