@@ -97,6 +97,11 @@ func ProcessMatchRewards(
 	results := make(map[string]RewardResult)
 
 	for _, p := range stats {
+		// Skip bot players — they have no player_profiles record
+		if len(p.PlayerID) >= 4 && p.PlayerID[:4] == "bot_" {
+			continue
+		}
+
 		// 1. Calculate experience
 		// baseExp = 50, winBonusExp = 30
 		// damageBonusExp = totalDamage * 0.05
