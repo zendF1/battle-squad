@@ -130,6 +130,18 @@ func runPlayer(ctx context.Context, id int, deadline time.Time, s *stats) {
 		return
 	}
 	atomic.AddInt64(&s.connectOK, 1)
+
+	// Close connection when deadline expires to unblock ReadMessage
+	go func() {
+		t := time.NewTimer(time.Until(deadline.Add(2 * time.Second)))
+		defer t.Stop()
+		select {
+		case <-t.C:
+			conn.Close()
+		case <-ctx.Done():
+			conn.Close()
+		}
+	}()
 	defer conn.Close()
 
 	// Handle server pings to keep connection alive
