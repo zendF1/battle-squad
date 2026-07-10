@@ -326,8 +326,11 @@ func updatePlayerRank(ctx context.Context, tx pgx.Tx, playerID string, ratingCha
 	var seasonID string
 	err := tx.QueryRow(ctx, "SELECT season_id FROM rank_seasons WHERE status = 'active' LIMIT 1").Scan(&seasonID)
 	if err != nil {
-		// Fallback to default season for local test if none configured
+		// No active season — ensure a default one exists for local dev/testing
 		seasonID = "season_1"
+		_, _ = tx.Exec(ctx, `INSERT INTO rank_seasons (season_id, name, starts_at, ends_at, status)
+			VALUES ($1, 'Default Season', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '90 days', 'active')
+			ON CONFLICT (season_id) DO NOTHING`, seasonID)
 	}
 
 	// Find or initialize player rank config
