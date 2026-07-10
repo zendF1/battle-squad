@@ -56,7 +56,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	db, err := database.NewPostgresDB(ctx, cfg.PostgresDSN)
+	db, err := database.NewPostgresDB(ctx, cfg.PostgresDSN, cfg.DBMaxConns, cfg.DBMinConns)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect to Postgres")
 	}
@@ -71,7 +71,7 @@ func main() {
 	}
 	log.Info().Msg("game configurations loaded successfully")
 
-	redisClient, err := database.NewRedisClient(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
+	redisClient, err := database.NewRedisClient(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB, cfg.RedisPoolSize, cfg.RedisMinIdle)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect to Redis")
 	}

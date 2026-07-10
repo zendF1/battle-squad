@@ -12,15 +12,15 @@ type PostgresDB struct {
 	Pool *pgxpool.Pool
 }
 
-func NewPostgresDB(ctx context.Context, dsn string) (*PostgresDB, error) {
+func NewPostgresDB(ctx context.Context, dsn string, maxConns, minConns int) (*PostgresDB, error) {
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse postgres dsn: %w", err)
 	}
 
 	// Tinh chinh connection pool
-	config.MaxConns = 25
-	config.MinConns = 5
+	config.MaxConns = int32(maxConns)
+	config.MinConns = int32(minConns)
 	config.MaxConnIdleTime = 30 * time.Minute
 	config.MaxConnLifetime = 1 * time.Hour
 

@@ -21,7 +21,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	db, err := database.NewPostgresDB(ctx, cfg.PostgresDSN)
+	db, err := database.NewPostgresDB(ctx, cfg.PostgresDSN, cfg.DBMaxConns, cfg.DBMinConns)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect to Postgres")
 	}

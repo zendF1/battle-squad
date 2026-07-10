@@ -20,6 +20,10 @@ type Config struct {
 	RedisAddr      string
 	RedisPassword  string
 	RedisDB        int
+	DBMaxConns    int
+	DBMinConns    int
+	RedisPoolSize int
+	RedisMinIdle  int
 	JWTSecret      string
 	AppVersion     string
 	ProtocolVersion int
@@ -38,7 +42,12 @@ func LoadConfig() *Config {
 	if err != nil {
 		redisDB = 0
 	}
-	
+
+	dbMaxConns := getEnvInt("DB_MAX_CONNS", 50)
+	dbMinConns := getEnvInt("DB_MIN_CONNS", 10)
+	redisPoolSize := getEnvInt("REDIS_POOL_SIZE", 100)
+	redisMinIdle := getEnvInt("REDIS_MIN_IDLE", 20)
+
 	jwtSecret := getEnv("JWT_SECRET", "super-secret-battle-squad-key-2026")
 	appVersion := getEnv("APP_VERSION", "1.0.0")
 	
@@ -56,6 +65,10 @@ func LoadConfig() *Config {
 		RedisAddr:       redisAddr,
 		RedisPassword:   redisPassword,
 		RedisDB:         redisDB,
+		DBMaxConns:      dbMaxConns,
+		DBMinConns:      dbMinConns,
+		RedisPoolSize:   redisPoolSize,
+		RedisMinIdle:    redisMinIdle,
 		JWTSecret:       jwtSecret,
 		AppVersion:      appVersion,
 		ProtocolVersion: protocolVersion,
@@ -65,6 +78,15 @@ func LoadConfig() *Config {
 func getEnv(key, fallback string) string {
 	if value, exists := os.LookupEnv(key); exists {
 		return value
+	}
+	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	if value, exists := os.LookupEnv(key); exists {
+		if i, err := strconv.Atoi(value); err == nil {
+			return i
+		}
 	}
 	return fallback
 }
