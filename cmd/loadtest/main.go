@@ -36,8 +36,8 @@ type stats struct {
 }
 
 func main() {
-	flag.StringVar(&serverURL, "server", "ws://localhost:8081/ws", "WebSocket server URL")
-	flag.StringVar(&apiURL, "api", "http://localhost:8080", "API server URL")
+	flag.StringVar(&serverURL, "server", "ws://localhost:9091/ws", "WebSocket server URL")
+	flag.StringVar(&apiURL, "api", "http://localhost:9090", "API server URL")
 	flag.IntVar(&numPlayers, "players", 100, "Number of concurrent players")
 	flag.DurationVar(&duration, "duration", 60*time.Second, "Test duration")
 	flag.Parse()
@@ -85,7 +85,7 @@ func guestLogin(apiBase string, playerID int) (string, error) {
 	defer resp.Body.Close()
 
 	var result struct {
-		Token string `json:"token"`
+		Token string `json:"accessToken"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", err
