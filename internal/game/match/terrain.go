@@ -17,9 +17,33 @@ type TerrainZone struct {
 type Terrain struct {
 	Width            int
 	Height           int
-	Mask             []bool // true = solid, false = empty/destroyed
-	DestructibleMask []bool // true = can be destroyed by explosions
+	Mask             []uint64
+	DestructibleMask []uint64
 	Zones            []TerrainZone
+}
+
+func maskSize(width, height int) int {
+	return (width*height + 63) / 64
+}
+
+func bitIndex(x, y, width int) (int, uint64) {
+	idx := y*width + x
+	return idx / 64, uint64(1) << (idx % 64)
+}
+
+func getBit(mask []uint64, x, y, width int) bool {
+	word, bit := bitIndex(x, y, width)
+	return mask[word]&bit != 0
+}
+
+func setBit(mask []uint64, x, y, width int) {
+	word, bit := bitIndex(x, y, width)
+	mask[word] |= bit
+}
+
+func clearBit(mask []uint64, x, y, width int) {
+	word, bit := bitIndex(x, y, width)
+	mask[word] &^= bit
 }
 
 func NewTerrain(mapCfg gamedata.MapConfig) *Terrain {
@@ -43,8 +67,8 @@ func NewTerrain(mapCfg gamedata.MapConfig) *Terrain {
 	t := &Terrain{
 		Width:            width,
 		Height:           height,
-		Mask:             make([]bool, width*height),
-		DestructibleMask: make([]bool, width*height),
+		Mask:             make([]uint64, maskSize(width, height)),
+		DestructibleMask: make([]uint64, maskSize(width, height)),
 	}
 
 	if hasTiles {
@@ -76,9 +100,10 @@ func NewTerrain(mapCfg gamedata.MapConfig) *Terrain {
 					// Fallback: fill full square
 					for py := offsetY; py < offsetY+cs && py < height; py++ {
 						for px := offsetX; px < offsetX+cs && px < width; px++ {
-							idx := py*width + px
-							t.Mask[idx] = true
-							t.DestructibleMask[idx] = destructible
+							setBit(t.Mask, px, py, width)
+							if destructible {
+								setBit(t.DestructibleMask, px, py, width)
+							}
 						}
 					}
 				}
@@ -131,10 +156,9 @@ func (t *Terrain) generateLegacyTerrain(mapID string) {
 		}
 
 		for y := 0; y < t.Height; y++ {
-			idx := y*t.Width + x
 			if float64(y) >= terrainHeight {
-				t.Mask[idx] = true
-				t.DestructibleMask[idx] = true
+				setBit(t.Mask, x, y, t.Width)
+				setBit(t.DestructibleMask, x, y, t.Width)
 			}
 		}
 	}
@@ -165,7 +189,7 @@ func (t *Terrain) IsSolid(x, y float64) bool {
 		return true // solid floor at bottom boundary
 	}
 
-	return t.Mask[iy*t.Width+ix]
+	return getBit(t.Mask, ix, iy, t.Width)
 }
 
 func (t *Terrain) DestroyCircle(cx, cy float64, radius float64) bool {
@@ -186,9 +210,8 @@ func (t *Terrain) DestroyCircle(cx, cy float64, radius float64) bool {
 			dx := float64(x - icx)
 			dy := float64(y - icy)
 			if dx*dx+dy*dy <= radius*radius {
-				idx := y*t.Width + x
-				if t.Mask[idx] && t.DestructibleMask[idx] {
-					t.Mask[idx] = false
+				if getBit(t.Mask, x, y, t.Width) && getBit(t.DestructibleMask, x, y, t.Width) {
+					clearBit(t.Mask, x, y, t.Width)
 					destroyedAny = true
 				}
 			}
@@ -210,7 +233,7 @@ func (t *Terrain) GetLandingY(x, startY float64) float64 {
 	}
 
 	for y := iyStart; y < t.Height; y++ {
-		if t.Mask[y*t.Width+ix] {
+		if getBit(t.Mask, ix, y, t.Width) {
 			return float64(y)
 		}
 	}
@@ -246,7 +269,7 @@ func (t *Terrain) WalkTo(startX, startY, targetX float64) (float64, float64) {
 		// Find terrain surface at nextX (first solid pixel from top)
 		nextY := t.Height
 		for y := 0; y < t.Height; y++ {
-			if t.Mask[y*t.Width+nextX] {
+			if getBit(t.Mask, nextX, y, t.Width) {
 				nextY = y
 				break
 			}

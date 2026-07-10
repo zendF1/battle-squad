@@ -24,8 +24,8 @@ func polygonFromBorder(border gamedata.BrickBorder, cellSize int) []gamedata.Bor
 
 // scanlineFillPolygon fills a polygon into a boolean mask at the given cell offset.
 func scanlineFillPolygon(
-	mask []bool,
-	destructibleMask []bool,
+	mask []uint64,
+	destructibleMask []uint64,
 	width int,
 	poly []gamedata.BorderPoint,
 	offsetX, offsetY int,
@@ -70,10 +70,9 @@ func scanlineFillPolygon(
 				px := offsetX + x
 				py := offsetY + y
 				if px >= 0 && px < width && py >= 0 {
-					idx := py*width + px
-					if idx < len(mask) {
-						mask[idx] = true
-						destructibleMask[idx] = destructible
+					setBit(mask, px, py, width)
+					if destructible {
+						setBit(destructibleMask, px, py, width)
 					}
 				}
 			}
