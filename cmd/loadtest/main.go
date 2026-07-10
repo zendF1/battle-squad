@@ -167,10 +167,11 @@ func runPlayer(ctx context.Context, id int, deadline time.Time, s *stats) {
 
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
-			atomic.AddInt64(&s.errors, 1)
-			if !time.Now().After(deadline) {
-				fmt.Printf("[player %d] read error: %v\n", id, err)
+			if time.Now().After(deadline) {
+				return // expected: test duration ended
 			}
+			atomic.AddInt64(&s.errors, 1)
+			fmt.Printf("[player %d] read error: %v\n", id, err)
 			return
 		}
 		conn.SetReadDeadline(time.Now().Add(30 * time.Second))
@@ -183,6 +184,12 @@ func runPlayer(ctx context.Context, id int, deadline time.Time, s *stats) {
 		json.Unmarshal(raw, &msg)
 
 		switch msg.Event {
+		case "MatchEnded":
+			// Match finished — start a new QuickPlay if time remains
+			if time.Now().Before(deadline) {
+				time.Sleep(500 * time.Millisecond)
+				sendMsg(conn, "QuickPlay", nil, s)
+			}
 		case "TurnStarted":
 			start := time.Now()
 			if rand.Float64() < 0.7 {
