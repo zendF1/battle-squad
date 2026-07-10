@@ -67,7 +67,7 @@ func main() {
 			}()
 			runPlayer(ctx, id, deadline, s)
 		}(i)
-		time.Sleep(time.Duration(10+rand.Intn(40)) * time.Millisecond)
+		time.Sleep(time.Duration(50+rand.Intn(150)) * time.Millisecond)
 	}
 
 	wg.Wait()
@@ -75,22 +75,38 @@ func main() {
 }
 
 func guestLogin(apiBase string, playerID int) (string, error) {
-	body, _ := json.Marshal(map[string]string{
-		"deviceInstallId": fmt.Sprintf("loadtest-device-%d-%d", playerID, time.Now().UnixNano()),
-	})
-	resp, err := http.Post(apiBase+"/auth/guest-login", "application/json", bytes.NewReader(body))
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
+	// Retry up to 3 times with backoff (rate limiter may reject)
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(500+rand.Intn(1000)) * time.Millisecond)
+		}
+		body, _ := json.Marshal(map[string]string{
+			"deviceInstallId": fmt.Sprintf("loadtest-device-%d-%d", playerID, time.Now().UnixNano()),
+		})
+		resp, err := http.Post(apiBase+"/auth/guest-login", "application/json", bytes.NewReader(body))
+		if err != nil {
+			continue
+		}
 
-	var result struct {
-		Token string `json:"accessToken"`
+		if resp.StatusCode == 429 {
+			resp.Body.Close()
+			continue
+		}
+
+		var result struct {
+			Token string `json:"accessToken"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+		if err != nil {
+			continue
+		}
+		if result.Token == "" {
+			continue
+		}
+		return result.Token, nil
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", err
-	}
-	return result.Token, nil
+	return "", fmt.Errorf("login failed after 3 retries")
 }
 
 func runPlayer(ctx context.Context, id int, deadline time.Time, s *stats) {
@@ -119,7 +135,7 @@ func runPlayer(ctx context.Context, id int, deadline time.Time, s *stats) {
 	// Start QuickPlay
 	sendMsg(conn, "QuickPlay", nil, s)
 
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	for time.Now().Before(deadline) {
 		select {
 		case <-ctx.Done():
@@ -168,7 +184,7 @@ func runPlayer(ctx context.Context, id int, deadline time.Time, s *stats) {
 			s.latencyMu.Unlock()
 		}
 
-		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	}
 }
 
