@@ -3,10 +3,18 @@ package match
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"sync/atomic"
+	"time"
 
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
+)
+
+const (
+	eventBatchSize     = 50
+	eventFlushInterval = 500 * time.Millisecond
 )
 
 type eventLogEntry struct {
@@ -30,24 +38,40 @@ func NewEventLogger(matchID string, db *database.PostgresDB) *EventLogger {
 	}
 }
 
-// Start launches a goroutine that reads from the channel and inserts events into the DB.
-// It runs until the channel is drained after ctx is cancelled.
 func (el *EventLogger) Start(ctx context.Context) {
 	go func() {
+		buffer := make([]eventLogEntry, 0, eventBatchSize)
+		ticker := time.NewTicker(eventFlushInterval)
+		defer ticker.Stop()
+
+		flush := func() {
+			if len(buffer) == 0 {
+				return
+			}
+			el.insertBatch(buffer)
+			buffer = buffer[:0]
+		}
+
 		for {
 			select {
 			case entry, ok := <-el.events:
 				if !ok {
+					flush()
 					return
 				}
-				el.insert(entry)
+				buffer = append(buffer, entry)
+				if len(buffer) >= eventBatchSize {
+					flush()
+				}
+			case <-ticker.C:
+				flush()
 			case <-ctx.Done():
-				// Drain remaining events before exiting
 				for {
 					select {
 					case entry := <-el.events:
-						el.insert(entry)
+						buffer = append(buffer, entry)
 					default:
+						flush()
 						return
 					}
 				}
@@ -56,7 +80,6 @@ func (el *EventLogger) Start(ctx context.Context) {
 	}()
 }
 
-// Log marshals data and sends an event to the async channel.
 func (el *EventLogger) Log(eventType, playerID string, data interface{}) {
 	var raw json.RawMessage
 	if data != nil {
@@ -81,23 +104,32 @@ func (el *EventLogger) Log(eventType, playerID string, data interface{}) {
 	}
 }
 
-func (el *EventLogger) insert(entry eventLogEntry) {
-	seq := atomic.AddInt64(&el.seq, 1)
+func (el *EventLogger) insertBatch(entries []eventLogEntry) {
+	if len(entries) == 0 {
+		return
+	}
+
 	ctx := context.Background()
 
-	_, err := el.db.Pool.Exec(ctx,
-		`INSERT INTO match_event_logs (match_id, seq, event_type, player_id, data, created_at)
-		 VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-		el.matchID,
-		seq,
-		entry.eventType,
-		entry.playerID,
-		entry.data,
-	)
+	var b strings.Builder
+	b.WriteString("INSERT INTO match_event_logs (match_id, seq, event_type, player_id, data, created_at) VALUES ")
+
+	args := make([]interface{}, 0, len(entries)*5)
+	for i, entry := range entries {
+		seq := atomic.AddInt64(&el.seq, 1)
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		base := i * 5
+		fmt.Fprintf(&b, "($%d, $%d, $%d, $%d, $%d, CURRENT_TIMESTAMP)", base+1, base+2, base+3, base+4, base+5)
+		args = append(args, el.matchID, seq, entry.eventType, entry.playerID, entry.data)
+	}
+
+	_, err := el.db.Pool.Exec(ctx, b.String(), args...)
 	if err != nil {
 		observability.Log.Error().Err(err).
 			Str("matchId", el.matchID).
-			Str("eventType", entry.eventType).
-			Msg("eventlog: failed to insert event")
+			Int("batchSize", len(entries)).
+			Msg("eventlog: failed to insert batch")
 	}
 }
