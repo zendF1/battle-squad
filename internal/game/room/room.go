@@ -198,7 +198,7 @@ func (r *Room) handleEvent(ev roomEvent) {
 	}
 
 	if r.State.Status == "in_match" {
-		if msg.Event == "Leave" {
+		if msg.Event == "Leave" || msg.Event == "__internal_leave" {
 			r.processLeave(client)
 			return
 		}
