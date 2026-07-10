@@ -97,14 +97,20 @@ func runPlayer(ctx context.Context, id int, deadline time.Time, s *stats) {
 	token, err := guestLogin(apiURL, id)
 	if err != nil {
 		atomic.AddInt64(&s.connectErr, 1)
+		fmt.Printf("[player %d] login failed: %v\n", id, err)
 		return
 	}
 
 	header := http.Header{}
 	header.Set("Authorization", "Bearer "+token)
-	conn, _, err := websocket.DefaultDialer.Dial(serverURL, header)
+	conn, resp, err := websocket.DefaultDialer.Dial(serverURL, header)
 	if err != nil {
 		atomic.AddInt64(&s.connectErr, 1)
+		status := 0
+		if resp != nil {
+			status = resp.StatusCode
+		}
+		fmt.Printf("[player %d] ws dial failed (status %d): %v\n", id, status, err)
 		return
 	}
 	atomic.AddInt64(&s.connectOK, 1)
@@ -124,6 +130,7 @@ func runPlayer(ctx context.Context, id int, deadline time.Time, s *stats) {
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
 			atomic.AddInt64(&s.errors, 1)
+			fmt.Printf("[player %d] read error: %v\n", id, err)
 			return
 		}
 		atomic.AddInt64(&s.msgRecv, 1)
