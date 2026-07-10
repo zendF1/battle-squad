@@ -132,6 +132,16 @@ func runPlayer(ctx context.Context, id int, deadline time.Time, s *stats) {
 	atomic.AddInt64(&s.connectOK, 1)
 	defer conn.Close()
 
+	// Handle server pings to keep connection alive
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+	conn.SetPingHandler(func(msg string) error {
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return conn.WriteControl(websocket.PongMessage, []byte(msg), time.Now().Add(5*time.Second))
+	})
+
 	// Start QuickPlay
 	sendMsg(conn, "QuickPlay", nil, s)
 
@@ -146,9 +156,12 @@ func runPlayer(ctx context.Context, id int, deadline time.Time, s *stats) {
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
 			atomic.AddInt64(&s.errors, 1)
-			fmt.Printf("[player %d] read error: %v\n", id, err)
+			if !time.Now().After(deadline) {
+				fmt.Printf("[player %d] read error: %v\n", id, err)
+			}
 			return
 		}
+		conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		atomic.AddInt64(&s.msgRecv, 1)
 
 		var msg struct {
