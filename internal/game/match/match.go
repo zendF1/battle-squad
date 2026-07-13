@@ -230,6 +230,22 @@ func (m *Match) Run() {
 			}
 
 		case <-watchdog.C:
+			// Check if all human players disconnected (only bots remain)
+			allDisconnected := true
+			for _, p := range m.State.Players {
+				if p.IsAlive && !p.IsBot {
+					if _, connected := m.Clients[p.PlayerID]; connected {
+						allDisconnected = false
+						break
+					}
+				}
+			}
+			if allDisconnected {
+				observability.Log.Info().Str("matchId", m.State.MatchID).Msg("all human players disconnected, ending match")
+				m.endAsNoContest()
+				return
+			}
+
 			// Pattern 10: Watchdog Timer to prevent stuck zombie matches
 			if time.Since(m.lastActivity) > 2*time.Minute {
 				observability.Log.Warn().Str("matchId", m.State.MatchID).Msg("match stuck with no activity for 2 mins, terminating")
