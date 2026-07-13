@@ -25,6 +25,9 @@ type Client struct {
 	RoomID        string
 	LobbyID       string
 	WSHandHandler HandlerInterface
+	server        *Server
+	ip            string
+	DroppedMsgs   int // consecutive dropped messages tracked by match broadcast
 }
 
 type HandlerInterface interface {
@@ -35,6 +38,9 @@ type HandlerInterface interface {
 func (c *Client) ReadPump() {
 	defer func() {
 		observability.ActiveConnections.Dec()
+		if c.server != nil {
+			c.server.DecrementIPConn(c.ip)
+		}
 		c.WSHandHandler.Unregister(c)
 		c.Conn.Close()
 	}()

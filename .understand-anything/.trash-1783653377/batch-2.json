@@ -1,0 +1,636 @@
+{
+  "nodes": [
+    {
+      "id": "file:cmd/admin/main.go",
+      "type": "file",
+      "name": "main.go",
+      "filePath": "cmd/admin/main.go",
+      "summary": "Điểm khởi động của Admin dashboard trên cổng :9000. Seed cấu hình khi khởi động và tạo admin.Server.",
+      "tags": ["entry-point", "admin", "dashboard", "seed"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/handlers_config.go",
+      "type": "file",
+      "name": "handlers_config.go",
+      "filePath": "internal/admin/handlers_config.go",
+      "summary": "CRUD handlers cho cấu hình nhân vật/vũ khí/kỹ năng/vật phẩm/bản đồ trong admin dashboard.",
+      "tags": ["handler", "admin", "config", "crud"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/admin/handlers_dashboard.go",
+      "type": "file",
+      "name": "handlers_dashboard.go",
+      "filePath": "internal/admin/handlers_dashboard.go",
+      "summary": "Handler dashboard admin: hiển thị thống kê số phòng hoạt động và tổng số người chơi.",
+      "tags": ["handler", "admin", "dashboard", "stats"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/handlers_devtools.go",
+      "type": "file",
+      "name": "handlers_devtools.go",
+      "filePath": "internal/admin/handlers_devtools.go",
+      "summary": "Dev tools handlers: handleDevTools, handleClearRooms, handleResetData, handleSeedConfig để hỗ trợ phát triển.",
+      "tags": ["handler", "admin", "devtools", "seed"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/handlers_map_editor.go",
+      "type": "file",
+      "name": "handlers_map_editor.go",
+      "filePath": "internal/admin/handlers_map_editor.go",
+      "summary": "Handlers cho map editor và brick type editor: CRUD brick types, editor bản đồ, lưu tiles và export.",
+      "tags": ["handler", "admin", "map-editor", "brick-types", "tiles"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/admin/handlers_matchmaking.go",
+      "type": "file",
+      "name": "handlers_matchmaking.go",
+      "filePath": "internal/admin/handlers_matchmaking.go",
+      "summary": "Handlers cấu hình matchmaking: trang cấu hình và JSON API GET/POST cho cài đặt matchmaking/elo/bot_difficulty.",
+      "tags": ["handler", "admin", "matchmaking", "config"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/handlers_physics.go",
+      "type": "file",
+      "name": "handlers_physics.go",
+      "filePath": "internal/admin/handlers_physics.go",
+      "summary": "Handlers cài đặt vật lý: trang cấu hình và lưu các setting với tiền tố setting_.",
+      "tags": ["handler", "admin", "physics", "settings"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/handlers_players.go",
+      "type": "file",
+      "name": "handlers_players.go",
+      "filePath": "internal/admin/handlers_players.go",
+      "summary": "Handlers quản lý người chơi: danh sách với tìm kiếm/phân trang, ban và unban tài khoản.",
+      "tags": ["handler", "admin", "players", "ban", "pagination"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/admin/handlers_shop.go",
+      "type": "file",
+      "name": "handlers_shop.go",
+      "filePath": "internal/admin/handlers_shop.go",
+      "summary": "Handlers CRUD cửa hàng trong admin: list, edit, save và delete shop offers.",
+      "tags": ["handler", "admin", "shop", "crud"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/admin/seed.go",
+      "type": "file",
+      "name": "seed.go",
+      "filePath": "internal/admin/seed.go",
+      "summary": "SeedAll: seed cài đặt mặc định vật lý/trận đấu và load YAML config vào các bảng config. Tất cả idempotent qua ON CONFLICT DO NOTHING.",
+      "tags": ["seed", "admin", "config", "yaml", "idempotent"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/admin/server.go",
+      "type": "file",
+      "name": "server.go",
+      "filePath": "internal/admin/server.go",
+      "summary": "Admin Server với embedded templates/static, NewServer, Routes (tất cả admin routes) và phương thức render dùng html/template.",
+      "tags": ["server", "admin", "routes", "template", "embed"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/appconfig/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/appconfig/handler.go",
+      "summary": "HTTP handler cho app config: GetVersionPolicy và GetRemoteConfig endpoints.",
+      "tags": ["handler", "api", "appconfig"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/auth/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/auth/handler.go",
+      "summary": "HTTP handlers cho xác thực: GuestLogin, ProviderLogin, LinkProvider, RefreshToken, Logout.",
+      "tags": ["handler", "api", "auth"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/character/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/character/handler.go",
+      "summary": "HTTP handlers cho nhân vật: GetPlayerCharacters, AllocateStats, ResetStats.",
+      "tags": ["handler", "api", "character"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/dev/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/dev/handler.go",
+      "summary": "HTTP handlers cho dev tools: các endpoint hỗ trợ phát triển và testing.",
+      "tags": ["handler", "api", "dev", "tools"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/giftcode/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/giftcode/handler.go",
+      "summary": "HTTP handler đổi mã quà tặng: nhận request RedeemRequest và trả kết quả.",
+      "tags": ["handler", "api", "giftcode"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/iap/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/iap/handler.go",
+      "summary": "HTTP handlers IAP: GetActiveProducts và VerifyReceipt endpoints.",
+      "tags": ["handler", "api", "iap", "payment"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/matchhistory/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/matchhistory/handler.go",
+      "summary": "HTTP handler lịch sử trận đấu: GetPlayerHistory với phân trang.",
+      "tags": ["handler", "api", "match-history"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/mission/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/mission/handler.go",
+      "summary": "HTTP handlers nhiệm vụ: GetMissions và ClaimReward endpoints.",
+      "tags": ["handler", "api", "mission"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/moderation/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/moderation/handler.go",
+      "summary": "HTTP handlers kiểm duyệt: CreateReport và BanPlayer endpoints.",
+      "tags": ["handler", "api", "moderation", "ban"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/player/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/player/handler.go",
+      "summary": "HTTP handlers người chơi: GetProfile, UpdateDisplayName, RequestAccountDeletion và các endpoint liên quan.",
+      "tags": ["handler", "api", "player", "profile"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/rank/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/rank/handler.go",
+      "summary": "HTTP handlers xếp hạng: GetCurrentSeason, GetPlayerRank, GetLeaderboard, ClaimSeasonReward.",
+      "tags": ["handler", "api", "rank", "season"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/rooms/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/rooms/handler.go",
+      "summary": "HTTP handler danh sách phòng: trả về danh sách phòng đang hoạt động từ Redis.",
+      "tags": ["handler", "api", "rooms", "redis"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/shop/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/shop/handler.go",
+      "summary": "HTTP handlers cửa hàng: GetActiveOffers, Purchase và GetPlayerPurchases endpoints.",
+      "tags": ["handler", "api", "shop"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/game/lobby/hub.go",
+      "type": "file",
+      "name": "hub.go",
+      "filePath": "internal/game/lobby/hub.go",
+      "summary": "LobbyHub: registry in-memory của các lobby rooms. Tạo, tìm và hủy đăng ký lobby, load loadout và rating người chơi.",
+      "tags": ["lobby", "hub", "registry", "in-memory"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/game/match/eventlog.go",
+      "type": "file",
+      "name": "eventlog.go",
+      "filePath": "internal/game/match/eventlog.go",
+      "summary": "EventLogger: ghi log sự kiện trận đấu bất đồng bộ vào bảng match_event_logs qua buffered channel.",
+      "tags": ["match", "event-log", "async", "postgres"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/game/match/item_effect.go",
+      "type": "file",
+      "name": "item_effect.go",
+      "filePath": "internal/game/match/item_effect.go",
+      "summary": "ApplyImmediateItem: xử lý các hiệu ứng vật phẩm tức thì như medkit, teleport, wind_stopper và các vật phẩm thay đổi đạn.",
+      "tags": ["match", "item", "effect", "game-logic"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/shared/middleware/correlation.go",
+      "type": "file",
+      "name": "correlation.go",
+      "filePath": "internal/shared/middleware/correlation.go",
+      "summary": "CorrelationID middleware: đọc/tạo X-Correlation-ID header và inject vào context để theo dõi request.",
+      "tags": ["middleware", "correlation", "tracing", "context"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/model/errors.go",
+      "type": "file",
+      "name": "errors.go",
+      "filePath": "internal/shared/model/errors.go",
+      "summary": "AppError, ErrorResponse và WriteError. Registry các mã lỗi chuẩn của ứng dụng.",
+      "tags": ["model", "errors", "error-codes", "http"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/observability/health.go",
+      "type": "file",
+      "name": "health.go",
+      "filePath": "internal/shared/observability/health.go",
+      "summary": "HealthHandler với Healthz (liveness), Readyz (kiểm tra DB+Redis) và Livez (JSON health chi tiết).",
+      "tags": ["observability", "health", "liveness", "readiness"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/shared/observability/logger.go",
+      "type": "file",
+      "name": "logger.go",
+      "filePath": "internal/shared/observability/logger.go",
+      "summary": "Thiết lập Zerolog: InitLogger, FromContext làm giàu logger với correlationID/playerID/matchID.",
+      "tags": ["observability", "logging", "zerolog", "context"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/observability/metrics.go",
+      "type": "file",
+      "name": "metrics.go",
+      "filePath": "internal/shared/observability/metrics.go",
+      "summary": "Prometheus metrics: HTTP requests, WebSocket connections, match events, active connections/matches/rooms, request duration và MetricsMiddleware.",
+      "tags": ["observability", "metrics", "prometheus", "middleware"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:internal/admin/seed.go:SeedAll",
+      "type": "function",
+      "name": "SeedAll",
+      "filePath": "internal/admin/seed.go",
+      "summary": "Gọi SeedSettings và SeedConfigFromYAML để khởi tạo dữ liệu mặc định khi server admin khởi động.",
+      "tags": ["seed", "admin", "init"]
+    },
+    {
+      "id": "function:internal/admin/seed.go:SeedConfigFromYAML",
+      "type": "function",
+      "name": "SeedConfigFromYAML",
+      "filePath": "internal/admin/seed.go",
+      "summary": "Load cấu hình game từ YAML qua gamedata.LoadGameData và insert vào các bảng config của database.",
+      "tags": ["seed", "yaml", "gamedata", "config"]
+    },
+    {
+      "id": "function:internal/admin/handlers_map_editor.go:handleMapSave",
+      "type": "function",
+      "name": "handleMapSave",
+      "filePath": "internal/admin/handlers_map_editor.go",
+      "summary": "Lưu toàn bộ dữ liệu bản đồ (metadata + tiles + spawn points) qua PUT /api/maps/save.",
+      "tags": ["map-editor", "save", "tiles", "admin"]
+    },
+    {
+      "id": "function:internal/admin/handlers_map_editor.go:handleBrickTypeSave",
+      "type": "function",
+      "name": "handleBrickTypeSave",
+      "filePath": "internal/admin/handlers_map_editor.go",
+      "summary": "Lưu hoặc cập nhật brick type bao gồm tên, image_id, destructible và polygon border.",
+      "tags": ["brick-type", "save", "polygon", "admin"]
+    },
+    {
+      "id": "function:internal/admin/server.go:Routes",
+      "type": "function",
+      "name": "Routes",
+      "filePath": "internal/admin/server.go",
+      "summary": "Đăng ký tất cả routes của admin dashboard bao gồm map editor, brick types, matchmaking config và player management.",
+      "tags": ["server", "routes", "admin"]
+    },
+    {
+      "id": "function:internal/shared/model/errors.go:WriteError",
+      "type": "function",
+      "name": "WriteError",
+      "filePath": "internal/shared/model/errors.go",
+      "summary": "Ghi HTTP error response chuẩn với error code và message từ AppError.",
+      "tags": ["errors", "http", "response"]
+    },
+    {
+      "id": "function:internal/shared/observability/logger.go:InitLogger",
+      "type": "function",
+      "name": "InitLogger",
+      "filePath": "internal/shared/observability/logger.go",
+      "summary": "Khởi tạo zerolog logger toàn cục với level và format phù hợp với môi trường.",
+      "tags": ["logging", "init", "zerolog"]
+    },
+    {
+      "id": "function:internal/shared/observability/logger.go:FromContext",
+      "type": "function",
+      "name": "FromContext",
+      "filePath": "internal/shared/observability/logger.go",
+      "summary": "Lấy logger từ context và làm giàu với correlationID, playerID, matchID để theo dõi request.",
+      "tags": ["logging", "context", "correlation"]
+    },
+    {
+      "id": "function:internal/game/lobby/hub.go:CreateLobby",
+      "type": "function",
+      "name": "CreateLobby",
+      "filePath": "internal/game/lobby/hub.go",
+      "summary": "Tạo lobby room mới và đăng ký vào LobbyHub registry.",
+      "tags": ["lobby", "create", "registry"]
+    },
+    {
+      "id": "function:internal/game/match/eventlog.go:NewEventLogger",
+      "type": "function",
+      "name": "NewEventLogger",
+      "filePath": "internal/game/match/eventlog.go",
+      "summary": "Khởi tạo async event logger cho trận đấu với buffered channel và goroutine ghi DB.",
+      "tags": ["event-log", "async", "match"]
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:cmd/admin/main.go",
+      "target": "file:internal/admin/server.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/admin/main.go",
+      "target": "file:internal/admin/seed.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "target": "file:internal/admin/handlers_config.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "target": "file:internal/admin/handlers_dashboard.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "target": "file:internal/admin/handlers_devtools.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "target": "file:internal/admin/handlers_map_editor.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "target": "file:internal/admin/handlers_matchmaking.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "target": "file:internal/admin/handlers_physics.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "target": "file:internal/admin/handlers_players.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "target": "file:internal/admin/handlers_shop.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "target": "file:internal/admin/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "contains": "function:internal/admin/server.go:Routes",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/admin/seed.go",
+      "contains": "function:internal/admin/seed.go:SeedAll",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/admin/seed.go",
+      "contains": "function:internal/admin/seed.go:SeedConfigFromYAML",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/admin/seed.go",
+      "target": "file:internal/game/gamedata/loader.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/handlers_map_editor.go",
+      "contains": "function:internal/admin/handlers_map_editor.go:handleMapSave",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/admin/handlers_map_editor.go",
+      "contains": "function:internal/admin/handlers_map_editor.go:handleBrickTypeSave",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/admin/handlers_map_editor.go",
+      "target": "file:internal/admin/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/handlers_config.go",
+      "target": "file:internal/admin/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/handlers_players.go",
+      "target": "file:internal/admin/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/handlers_shop.go",
+      "target": "file:internal/admin/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/shared/model/errors.go",
+      "contains": "function:internal/shared/model/errors.go:WriteError",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/shared/observability/logger.go",
+      "contains": "function:internal/shared/observability/logger.go:InitLogger",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/shared/observability/logger.go",
+      "contains": "function:internal/shared/observability/logger.go:FromContext",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/game/lobby/hub.go",
+      "contains": "function:internal/game/lobby/hub.go:CreateLobby",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/game/match/eventlog.go",
+      "contains": "function:internal/game/match/eventlog.go:NewEventLogger",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/auth/handler.go",
+      "target": "file:internal/api/auth/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/auth/handler.go",
+      "target": "file:internal/shared/model/errors.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/character/handler.go",
+      "target": "file:internal/api/character/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/player/handler.go",
+      "target": "file:internal/api/player/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/rank/handler.go",
+      "target": "file:internal/api/rank/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/shop/handler.go",
+      "target": "file:internal/api/shop/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/mission/handler.go",
+      "target": "file:internal/api/mission/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/giftcode/handler.go",
+      "target": "file:internal/api/giftcode/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/iap/handler.go",
+      "target": "file:internal/api/iap/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/matchhistory/handler.go",
+      "target": "file:internal/api/matchhistory/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/moderation/handler.go",
+      "target": "file:internal/api/moderation/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "function:internal/admin/seed.go:SeedAll",
+      "target": "function:internal/admin/seed.go:SeedConfigFromYAML",
+      "type": "calls",
+      "weight": 0.8
+    }
+  ],
+  "batchFiles": [
+    {"path": "cmd/admin/main.go", "language": "go", "sizeLines": 87, "fileCategory": "entry-point"},
+    {"path": "internal/admin/handlers_config.go", "language": "go", "sizeLines": 472, "fileCategory": "handler"},
+    {"path": "internal/admin/handlers_dashboard.go", "language": "go", "sizeLines": 20, "fileCategory": "handler"},
+    {"path": "internal/admin/handlers_devtools.go", "language": "go", "sizeLines": 52, "fileCategory": "handler"},
+    {"path": "internal/admin/handlers_map_editor.go", "language": "go", "sizeLines": 339, "fileCategory": "handler"},
+    {"path": "internal/admin/handlers_matchmaking.go", "language": "go", "sizeLines": 65, "fileCategory": "handler"},
+    {"path": "internal/admin/handlers_physics.go", "language": "go", "sizeLines": 53, "fileCategory": "handler"},
+    {"path": "internal/admin/handlers_players.go", "language": "go", "sizeLines": 88, "fileCategory": "handler"},
+    {"path": "internal/admin/handlers_shop.go", "language": "go", "sizeLines": 110, "fileCategory": "handler"},
+    {"path": "internal/admin/seed.go", "language": "go", "sizeLines": 207, "fileCategory": "admin"},
+    {"path": "internal/admin/server.go", "language": "go", "sizeLines": 151, "fileCategory": "server"},
+    {"path": "internal/api/appconfig/handler.go", "language": "go", "sizeLines": 40, "fileCategory": "handler"},
+    {"path": "internal/api/auth/handler.go", "language": "go", "sizeLines": 80, "fileCategory": "handler"},
+    {"path": "internal/api/character/handler.go", "language": "go", "sizeLines": 60, "fileCategory": "handler"},
+    {"path": "internal/api/dev/handler.go", "language": "go", "sizeLines": 40, "fileCategory": "handler"},
+    {"path": "internal/api/giftcode/handler.go", "language": "go", "sizeLines": 30, "fileCategory": "handler"},
+    {"path": "internal/api/iap/handler.go", "language": "go", "sizeLines": 40, "fileCategory": "handler"},
+    {"path": "internal/api/matchhistory/handler.go", "language": "go", "sizeLines": 30, "fileCategory": "handler"},
+    {"path": "internal/api/mission/handler.go", "language": "go", "sizeLines": 40, "fileCategory": "handler"},
+    {"path": "internal/api/moderation/handler.go", "language": "go", "sizeLines": 50, "fileCategory": "handler"},
+    {"path": "internal/api/player/handler.go", "language": "go", "sizeLines": 70, "fileCategory": "handler"},
+    {"path": "internal/api/rank/handler.go", "language": "go", "sizeLines": 60, "fileCategory": "handler"},
+    {"path": "internal/api/rooms/handler.go", "language": "go", "sizeLines": 35, "fileCategory": "handler"},
+    {"path": "internal/api/shop/handler.go", "language": "go", "sizeLines": 50, "fileCategory": "handler"},
+    {"path": "internal/game/lobby/hub.go", "language": "go", "sizeLines": 168, "fileCategory": "game-logic"},
+    {"path": "internal/game/match/eventlog.go", "language": "go", "sizeLines": 103, "fileCategory": "game-logic"},
+    {"path": "internal/game/match/item_effect.go", "language": "go", "sizeLines": 96, "fileCategory": "game-logic"},
+    {"path": "internal/shared/middleware/correlation.go", "language": "go", "sizeLines": 32, "fileCategory": "middleware"},
+    {"path": "internal/shared/model/errors.go", "language": "go", "sizeLines": 61, "fileCategory": "model"},
+    {"path": "internal/shared/observability/health.go", "language": "go", "sizeLines": 81, "fileCategory": "shared"},
+    {"path": "internal/shared/observability/logger.go", "language": "go", "sizeLines": 55, "fileCategory": "shared"},
+    {"path": "internal/shared/observability/metrics.go", "language": "go", "sizeLines": 93, "fileCategory": "shared"}
+  ]
+}

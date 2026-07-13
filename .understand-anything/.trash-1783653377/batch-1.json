@@ -1,0 +1,836 @@
+{
+  "nodes": [
+    {
+      "id": "file:cmd/api/main.go",
+      "type": "file",
+      "name": "main.go",
+      "filePath": "cmd/api/main.go",
+      "summary": "Điểm khởi động của REST API server trên cổng :8080. Khởi tạo DB, Redis, JWT, tất cả các module domain, router chi, middleware (CORS, rate limiter, version check), routes và graceful shutdown.",
+      "tags": ["entry-point", "api-server", "http", "chi-router", "middleware"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/api/appconfig/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/appconfig/model.go",
+      "summary": "Định nghĩa struct ClientVersionPolicy và RemoteConfig cho API cấu hình ứng dụng.",
+      "tags": ["model", "appconfig", "version-policy"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/auth/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/auth/model.go",
+      "summary": "Định nghĩa các struct Account, AuthIdentity, Session và các request/response struct cho module xác thực.",
+      "tags": ["model", "auth", "session", "account"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/auth/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/auth/service.go",
+      "summary": "Service xác thực: GuestLogin, ProviderLogin, LinkProvider, RefreshToken, Logout và các hàm helper generateLoginTokens, verifyToken.",
+      "tags": ["service", "auth", "jwt", "login", "token"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/character/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/character/model.go",
+      "summary": "Định nghĩa struct PlayerCharacter, các payload phân bổ stats, ProgressionConfig và hàm helper tính level từ EXP.",
+      "tags": ["model", "character", "progression", "level"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/character/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/character/service.go",
+      "summary": "Service quản lý nhân vật: GetPlayerCharacters, AllocateStats, ResetStats. Sử dụng economy repo để trừ tiền khi reset stats.",
+      "tags": ["service", "character", "stats", "economy"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/economy/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/economy/model.go",
+      "summary": "Định nghĩa struct EconomyTransaction cho các giao dịch coin và gem.",
+      "tags": ["model", "economy", "transaction", "currency"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/economy/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/economy/repository.go",
+      "summary": "Repository kinh tế: CreditTx và DebitTx thực hiện trực tiếp trên pgx.Tx để đảm bảo tính nguyên tử của các giao dịch tiền tệ.",
+      "tags": ["repository", "economy", "transaction", "postgres"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/economy/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/economy/service.go",
+      "summary": "Service kinh tế: Credit và Debit bọc các thao tác repo trong DB transactions.",
+      "tags": ["service", "economy", "credit", "debit"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/giftcode/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/giftcode/model.go",
+      "summary": "Định nghĩa struct GiftCode, GiftCodeRedemption và RedeemRequest cho hệ thống mã quà tặng.",
+      "tags": ["model", "giftcode", "redemption"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/giftcode/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/giftcode/service.go",
+      "summary": "Service mã quà tặng: RedeemCode xác thực mã, kiểm tra hạn/giới hạn/trùng lặp, cấp coins/gems/items trong transaction.",
+      "tags": ["service", "giftcode", "redemption", "economy"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/iap/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/iap/model.go",
+      "summary": "Định nghĩa struct IAPProduct, PaymentTransaction và VerifyReceiptRequest cho thanh toán trong ứng dụng.",
+      "tags": ["model", "iap", "payment", "receipt"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/iap/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/iap/service.go",
+      "summary": "Service IAP: GetActiveProducts, VerifyReceipt với xác thực store giả lập và idempotency qua transaction ID.",
+      "tags": ["service", "iap", "payment", "idempotency"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/inventory/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/inventory/handler.go",
+      "summary": "HTTP handler cho inventory: GetInventory trả về danh sách vật phẩm của người chơi.",
+      "tags": ["handler", "inventory", "http"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/inventory/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/inventory/model.go",
+      "summary": "Định nghĩa struct InventoryItem và InventoryReservation cho hệ thống kho vật phẩm.",
+      "tags": ["model", "inventory", "reservation"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/inventory/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/inventory/repository.go",
+      "summary": "Repository kho vật phẩm: GetAvailableInventory, AddItemsTx, ReserveItemsTx, ConsumeReservationTx, ReleaseReservationTx.",
+      "tags": ["repository", "inventory", "transaction", "postgres"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/inventory/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/inventory/service.go",
+      "summary": "Service kho vật phẩm đơn giản: ủy quyền tất cả thao tác cho repository.",
+      "tags": ["service", "inventory"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/matchhistory/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/matchhistory/model.go",
+      "summary": "Định nghĩa struct MatchHistoryEntry cho lịch sử trận đấu của người chơi.",
+      "tags": ["model", "match-history"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/matchhistory/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/matchhistory/service.go",
+      "summary": "Service lịch sử trận đấu: GetPlayerHistory ủy quyền cho repository.",
+      "tags": ["service", "match-history"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/mission/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/mission/model.go",
+      "summary": "Định nghĩa struct Mission, MissionProgress và ClaimRewardRequest cho hệ thống nhiệm vụ.",
+      "tags": ["model", "mission", "progress", "reward"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/mission/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/mission/service.go",
+      "summary": "Service nhiệm vụ: GetMissions, ClaimReward với transaction, kiểm tra tiến độ và cấp coin/gem.",
+      "tags": ["service", "mission", "reward", "economy"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/moderation/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/moderation/model.go",
+      "summary": "Định nghĩa struct PlayerReport, AccountBan và các request struct cho hệ thống kiểm duyệt.",
+      "tags": ["model", "moderation", "ban", "report"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/player/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/player/model.go",
+      "summary": "Định nghĩa struct PlayerProfile, UpdateProfileRequest và AccountDeletionStatusResponse.",
+      "tags": ["model", "player", "profile", "deletion"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/player/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/player/service.go",
+      "summary": "Service người chơi: GetProfile, UpdateDisplayName, RequestAccountDeletion, CancelAccountDeletion, GetAccountDeletionStatus.",
+      "tags": ["service", "player", "profile", "account-deletion"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/rank/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/rank/model.go",
+      "summary": "Định nghĩa struct Season, PlayerRank, LeaderboardResponse và ClaimSeasonRewardRequest cho hệ thống xếp hạng.",
+      "tags": ["model", "rank", "season", "leaderboard"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/rank/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/rank/service.go",
+      "summary": "Service xếp hạng: GetCurrentSeason, GetPlayerRank, GetLeaderboard, ClaimSeasonReward với phần thưởng theo tier.",
+      "tags": ["service", "rank", "elo", "season", "reward"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/rooms/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/rooms/model.go",
+      "summary": "Định nghĩa struct RoomSummary cho API danh sách phòng.",
+      "tags": ["model", "rooms"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/shop/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/shop/model.go",
+      "summary": "Định nghĩa struct ShopOffer, ShopPurchase và PurchaseRequest cho hệ thống cửa hàng.",
+      "tags": ["model", "shop", "purchase", "offer"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/shop/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/shop/service.go",
+      "summary": "Service cửa hàng: GetActiveOffers, Purchase (với idempotency, kiểm tra ngày/giới hạn, trừ tiền + trao vật phẩm), GetPlayerPurchases.",
+      "tags": ["service", "shop", "purchase", "idempotency", "economy"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/game/match/reward.go",
+      "type": "file",
+      "name": "reward.go",
+      "filePath": "internal/game/match/reward.go",
+      "summary": "Xử lý phần thưởng sau trận đấu: tiêu thụ reservation kho vật phẩm, tính EXP/coin, cập nhật rank Elo, ghi lịch sử trận đấu và level nhân vật.",
+      "tags": ["match", "reward", "elo", "exp", "level"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/shared/auth/jwt.go",
+      "type": "file",
+      "name": "jwt.go",
+      "filePath": "internal/shared/auth/jwt.go",
+      "summary": "Quản lý JWT: Claims struct, JWTManager với Generate và Verify sử dụng HMAC-SHA256.",
+      "tags": ["auth", "jwt", "token", "hmac"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/idempotency/idempotency.go",
+      "type": "file",
+      "name": "idempotency.go",
+      "filePath": "internal/shared/idempotency/idempotency.go",
+      "summary": "Idempotency dựa trên Redis qua SETNX: CheckAndSet và Complete để ngăn chặn xử lý trùng lặp.",
+      "tags": ["idempotency", "redis", "setnx"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/middleware/auth.go",
+      "type": "file",
+      "name": "auth.go",
+      "filePath": "internal/shared/middleware/auth.go",
+      "summary": "AuthMiddleware: xác thực Bearer JWT và inject playerID/accountID/role vào context.",
+      "tags": ["middleware", "auth", "jwt", "context"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/middleware/ratelimit.go",
+      "type": "file",
+      "name": "ratelimit.go",
+      "filePath": "internal/shared/middleware/ratelimit.go",
+      "summary": "Rate limiter theo IP sử dụng golang.org/x/time/rate với goroutine dọn dẹp định kỳ.",
+      "tags": ["middleware", "rate-limit", "ip", "cleanup"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:cmd/api/main.go:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "cmd/api/main.go",
+      "summary": "Khởi động API server: load config, init DB/Redis/JWT, đăng ký routes, bắt đầu lắng nghe và graceful shutdown.",
+      "tags": ["entry-point", "server-init", "graceful-shutdown"]
+    },
+    {
+      "id": "function:internal/api/auth/service.go:GuestLogin",
+      "type": "function",
+      "name": "GuestLogin",
+      "filePath": "internal/api/auth/service.go",
+      "summary": "Đăng nhập khách: tạo tài khoản guest nếu chưa tồn tại và sinh JWT tokens.",
+      "tags": ["auth", "guest", "login"]
+    },
+    {
+      "id": "function:internal/api/auth/service.go:ProviderLogin",
+      "type": "function",
+      "name": "ProviderLogin",
+      "filePath": "internal/api/auth/service.go",
+      "summary": "Đăng nhập qua provider (Google, Facebook): xác thực identity và sinh JWT tokens.",
+      "tags": ["auth", "provider", "oauth"]
+    },
+    {
+      "id": "function:internal/api/auth/service.go:RefreshToken",
+      "type": "function",
+      "name": "RefreshToken",
+      "filePath": "internal/api/auth/service.go",
+      "summary": "Làm mới access token từ refresh token hợp lệ.",
+      "tags": ["auth", "token", "refresh"]
+    },
+    {
+      "id": "function:internal/api/economy/repository.go:CreditTx",
+      "type": "function",
+      "name": "CreditTx",
+      "filePath": "internal/api/economy/repository.go",
+      "summary": "Cộng coins/gems cho tài khoản trong một pgx.Tx đang có.",
+      "tags": ["economy", "credit", "transaction"]
+    },
+    {
+      "id": "function:internal/api/economy/repository.go:DebitTx",
+      "type": "function",
+      "name": "DebitTx",
+      "filePath": "internal/api/economy/repository.go",
+      "summary": "Trừ coins/gems từ tài khoản trong một pgx.Tx đang có, kiểm tra số dư đủ.",
+      "tags": ["economy", "debit", "transaction"]
+    },
+    {
+      "id": "function:internal/game/match/reward.go:ProcessMatchRewards",
+      "type": "function",
+      "name": "ProcessMatchRewards",
+      "filePath": "internal/game/match/reward.go",
+      "summary": "Xử lý toàn bộ phần thưởng sau khi kết thúc trận: EXP, coins, Elo rating, lịch sử trận và level nhân vật.",
+      "tags": ["match", "reward", "elo", "exp"]
+    },
+    {
+      "id": "function:internal/game/match/reward.go:updatePlayerRank",
+      "type": "function",
+      "name": "updatePlayerRank",
+      "filePath": "internal/game/match/reward.go",
+      "summary": "Cập nhật Elo rating của người chơi dựa trên kết quả trận đấu.",
+      "tags": ["rank", "elo", "update"]
+    },
+    {
+      "id": "function:internal/shared/auth/jwt.go:Generate",
+      "type": "function",
+      "name": "Generate",
+      "filePath": "internal/shared/auth/jwt.go",
+      "summary": "Tạo JWT token mới với claims và ký bằng HMAC-SHA256.",
+      "tags": ["jwt", "generate", "token"]
+    },
+    {
+      "id": "function:internal/shared/auth/jwt.go:Verify",
+      "type": "function",
+      "name": "Verify",
+      "filePath": "internal/shared/auth/jwt.go",
+      "summary": "Xác thực và parse JWT token, trả về claims nếu hợp lệ.",
+      "tags": ["jwt", "verify", "token"]
+    },
+    {
+      "id": "function:internal/shared/idempotency/idempotency.go:CheckAndSet",
+      "type": "function",
+      "name": "CheckAndSet",
+      "filePath": "internal/shared/idempotency/idempotency.go",
+      "summary": "Kiểm tra và đặt idempotency key trong Redis, trả về true nếu key chưa tồn tại (request mới).",
+      "tags": ["idempotency", "redis", "check"]
+    },
+    {
+      "id": "function:internal/api/character/model.go:CalcLevelFromExp",
+      "type": "function",
+      "name": "CalcLevelFromExp",
+      "filePath": "internal/api/character/model.go",
+      "summary": "Tính level nhân vật từ tổng EXP dựa trên bảng cấu hình level.",
+      "tags": ["character", "level", "exp", "progression"]
+    },
+    {
+      "id": "function:internal/api/shop/service.go:Purchase",
+      "type": "function",
+      "name": "Purchase",
+      "filePath": "internal/api/shop/service.go",
+      "summary": "Xử lý mua vật phẩm: kiểm tra idempotency, ngày hợp lệ, giới hạn mua, trừ tiền và trao vật phẩm trong transaction.",
+      "tags": ["shop", "purchase", "idempotency", "economy"]
+    },
+    {
+      "id": "function:internal/api/giftcode/service.go:RedeemCode",
+      "type": "function",
+      "name": "RedeemCode",
+      "filePath": "internal/api/giftcode/service.go",
+      "summary": "Đổi mã quà tặng: xác thực mã, kiểm tra hạn/giới hạn/trùng, cấp phần thưởng trong transaction.",
+      "tags": ["giftcode", "redeem", "economy"]
+    },
+    {
+      "id": "function:internal/api/rank/service.go:ClaimSeasonReward",
+      "type": "function",
+      "name": "ClaimSeasonReward",
+      "filePath": "internal/api/rank/service.go",
+      "summary": "Nhận phần thưởng cuối mùa theo tier xếp hạng của người chơi.",
+      "tags": ["rank", "season", "reward", "tier"]
+    },
+    {
+      "id": "function:internal/shared/middleware/auth.go:AuthMiddleware",
+      "type": "function",
+      "name": "AuthMiddleware",
+      "filePath": "internal/shared/middleware/auth.go",
+      "summary": "Middleware xác thực: validate Bearer JWT và inject thông tin người dùng vào request context.",
+      "tags": ["middleware", "auth", "jwt"]
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/config/config.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/database/postgres.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/auth/jwt.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/middleware/auth.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/middleware/ratelimit.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/auth/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/player/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/economy/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/shop/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/rank/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/mission/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/inventory/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/giftcode/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/iap/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/character/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/rooms/model.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/matchhistory/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "contains": "function:cmd/api/main.go:main",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/auth/service.go",
+      "target": "file:internal/api/auth/model.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/auth/service.go",
+      "target": "file:internal/shared/auth/jwt.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/auth/service.go",
+      "contains": "function:internal/api/auth/service.go:GuestLogin",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/auth/service.go",
+      "contains": "function:internal/api/auth/service.go:ProviderLogin",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/auth/service.go",
+      "contains": "function:internal/api/auth/service.go:RefreshToken",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/economy/service.go",
+      "target": "file:internal/api/economy/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/economy/repository.go",
+      "contains": "function:internal/api/economy/repository.go:CreditTx",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/economy/repository.go",
+      "contains": "function:internal/api/economy/repository.go:DebitTx",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/character/service.go",
+      "target": "file:internal/api/economy/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/character/service.go",
+      "target": "file:internal/api/character/model.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/character/model.go",
+      "contains": "function:internal/api/character/model.go:CalcLevelFromExp",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "file:internal/api/economy/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "file:internal/api/inventory/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "file:internal/shared/idempotency/idempotency.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "contains": "function:internal/api/shop/service.go:Purchase",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/giftcode/service.go",
+      "target": "file:internal/api/economy/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/giftcode/service.go",
+      "target": "file:internal/api/inventory/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/giftcode/service.go",
+      "contains": "function:internal/api/giftcode/service.go:RedeemCode",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/mission/service.go",
+      "target": "file:internal/api/economy/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/rank/service.go",
+      "target": "file:internal/api/economy/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/rank/service.go",
+      "contains": "function:internal/api/rank/service.go:ClaimSeasonReward",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/game/match/reward.go",
+      "target": "file:internal/api/economy/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/match/reward.go",
+      "target": "file:internal/api/inventory/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/match/reward.go",
+      "contains": "function:internal/game/match/reward.go:ProcessMatchRewards",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/game/match/reward.go",
+      "contains": "function:internal/game/match/reward.go:updatePlayerRank",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/shared/auth/jwt.go",
+      "contains": "function:internal/shared/auth/jwt.go:Generate",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/shared/auth/jwt.go",
+      "contains": "function:internal/shared/auth/jwt.go:Verify",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/shared/idempotency/idempotency.go",
+      "contains": "function:internal/shared/idempotency/idempotency.go:CheckAndSet",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/shared/middleware/auth.go",
+      "target": "file:internal/shared/auth/jwt.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/shared/middleware/auth.go",
+      "contains": "function:internal/shared/middleware/auth.go:AuthMiddleware",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/iap/service.go",
+      "target": "file:internal/shared/idempotency/idempotency.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/inventory/service.go",
+      "target": "file:internal/api/inventory/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "function:internal/api/auth/service.go:GuestLogin",
+      "target": "function:internal/shared/auth/jwt.go:Generate",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/api/auth/service.go:ProviderLogin",
+      "target": "function:internal/shared/auth/jwt.go:Generate",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/api/auth/service.go:RefreshToken",
+      "target": "function:internal/shared/auth/jwt.go:Verify",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/shared/middleware/auth.go:AuthMiddleware",
+      "target": "function:internal/shared/auth/jwt.go:Verify",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/api/shop/service.go:Purchase",
+      "target": "function:internal/shared/idempotency/idempotency.go:CheckAndSet",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/api/shop/service.go:Purchase",
+      "target": "function:internal/api/economy/repository.go:DebitTx",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/api/giftcode/service.go:RedeemCode",
+      "target": "function:internal/api/economy/repository.go:CreditTx",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/game/match/reward.go:ProcessMatchRewards",
+      "target": "function:internal/game/match/reward.go:updatePlayerRank",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/game/match/reward.go:ProcessMatchRewards",
+      "target": "function:internal/api/economy/repository.go:CreditTx",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/api/character/service.go:ResetStats",
+      "target": "function:internal/api/economy/repository.go:DebitTx",
+      "type": "calls",
+      "weight": 0.8
+    }
+  ],
+  "batchFiles": [
+    {"path": "cmd/api/main.go", "language": "go", "sizeLines": 246, "fileCategory": "entry-point"},
+    {"path": "internal/api/appconfig/model.go", "language": "go", "sizeLines": 24, "fileCategory": "model"},
+    {"path": "internal/api/auth/model.go", "language": "go", "sizeLines": 59, "fileCategory": "model"},
+    {"path": "internal/api/auth/service.go", "language": "go", "sizeLines": 246, "fileCategory": "service"},
+    {"path": "internal/api/character/model.go", "language": "go", "sizeLines": 109, "fileCategory": "model"},
+    {"path": "internal/api/character/service.go", "language": "go", "sizeLines": 165, "fileCategory": "service"},
+    {"path": "internal/api/economy/model.go", "language": "go", "sizeLines": 14, "fileCategory": "model"},
+    {"path": "internal/api/economy/repository.go", "language": "go", "sizeLines": 123, "fileCategory": "repository"},
+    {"path": "internal/api/economy/service.go", "language": "go", "sizeLines": 55, "fileCategory": "service"},
+    {"path": "internal/api/giftcode/model.go", "language": "go", "sizeLines": 29, "fileCategory": "model"},
+    {"path": "internal/api/giftcode/service.go", "language": "go", "sizeLines": 110, "fileCategory": "service"},
+    {"path": "internal/api/iap/model.go", "language": "go", "sizeLines": 32, "fileCategory": "model"},
+    {"path": "internal/api/iap/service.go", "language": "go", "sizeLines": 128, "fileCategory": "service"},
+    {"path": "internal/api/inventory/handler.go", "language": "go", "sizeLines": 40, "fileCategory": "handler"},
+    {"path": "internal/api/inventory/model.go", "language": "go", "sizeLines": 23, "fileCategory": "model"},
+    {"path": "internal/api/inventory/repository.go", "language": "go", "sizeLines": 160, "fileCategory": "repository"},
+    {"path": "internal/api/inventory/service.go", "language": "go", "sizeLines": 15, "fileCategory": "service"},
+    {"path": "internal/api/matchhistory/model.go", "language": "go", "sizeLines": 14, "fileCategory": "model"},
+    {"path": "internal/api/matchhistory/service.go", "language": "go", "sizeLines": 15, "fileCategory": "service"},
+    {"path": "internal/api/mission/model.go", "language": "go", "sizeLines": 33, "fileCategory": "model"},
+    {"path": "internal/api/mission/service.go", "language": "go", "sizeLines": 80, "fileCategory": "service"},
+    {"path": "internal/api/moderation/model.go", "language": "go", "sizeLines": 48, "fileCategory": "model"},
+    {"path": "internal/api/player/model.go", "language": "go", "sizeLines": 24, "fileCategory": "model"},
+    {"path": "internal/api/player/service.go", "language": "go", "sizeLines": 49, "fileCategory": "service"},
+    {"path": "internal/api/rank/model.go", "language": "go", "sizeLines": 38, "fileCategory": "model"},
+    {"path": "internal/api/rank/service.go", "language": "go", "sizeLines": 210, "fileCategory": "service"},
+    {"path": "internal/api/rooms/model.go", "language": "go", "sizeLines": 12, "fileCategory": "model"},
+    {"path": "internal/api/shop/model.go", "language": "go", "sizeLines": 32, "fileCategory": "model"},
+    {"path": "internal/api/shop/service.go", "language": "go", "sizeLines": 158, "fileCategory": "service"},
+    {"path": "internal/game/match/reward.go", "language": "go", "sizeLines": 456, "fileCategory": "game-logic"},
+    {"path": "internal/shared/auth/jwt.go", "language": "go", "sizeLines": 74, "fileCategory": "shared"},
+    {"path": "internal/shared/idempotency/idempotency.go", "language": "go", "sizeLines": 41, "fileCategory": "shared"},
+    {"path": "internal/shared/middleware/auth.go", "language": "go", "sizeLines": 43, "fileCategory": "middleware"},
+    {"path": "internal/shared/middleware/ratelimit.go", "language": "go", "sizeLines": 90, "fileCategory": "middleware"}
+  ]
+}

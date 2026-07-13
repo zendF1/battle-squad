@@ -24,6 +24,11 @@ type matchEvent struct {
 	ctx    context.Context
 }
 
+const (
+	actionRateLimit = 150 * time.Millisecond // min interval between player actions
+	maxDroppedMsgs  = 10                     // kick client after N consecutive dropped broadcasts
+)
+
 type Match struct {
 	State        MatchState
 	Terrain      *Terrain
@@ -41,6 +46,7 @@ type Match struct {
 	doneOnce     sync.Once
 	TeamRatings  map[int]int // teamID → avg rating for Elo
 	EloParams    EloParams   // Elo configuration
+	lastAction   map[string]time.Time // playerID → last action timestamp (rate limit)
 }
 
 // Stop cancels the match context, causing the Run loop to exit.
@@ -131,6 +137,7 @@ func NewMatch(
 		MatchDone:    make(chan struct{}),
 		TeamRatings:  map[int]int{},
 		EloParams:    EloParams{},
+		lastAction:   make(map[string]time.Time),
 	}
 }
 
@@ -278,6 +285,19 @@ func (m *Match) handleEvent(ev matchEvent) {
 	actorID := m.State.CurrentPlayerID
 	if client != nil {
 		actorID = client.PlayerID
+	}
+
+	// Rate limit player actions (bots bypass)
+	if client != nil {
+		switch msg.Event {
+		case "Move", "Shoot", "UseItem", "EndTurn":
+			now := time.Now()
+			if last, ok := m.lastAction[actorID]; ok && now.Sub(last) < actionRateLimit {
+				log.Debug().Str("playerId", actorID).Str("event", msg.Event).Msg("action rate limited")
+				return
+			}
+			m.lastAction[actorID] = now
+		}
 	}
 
 	switch msg.Event {
@@ -1373,12 +1393,27 @@ func (m *Match) broadcast(msg ws.Message) {
 	for pid, client := range m.Clients {
 		select {
 		case client.Send <- msg:
+			client.DroppedMsgs = 0
 		default:
+			client.DroppedMsgs++
 			observability.Log.Warn().
 				Str("matchId", m.State.MatchID).
 				Str("event", msg.Event).
 				Str("playerId", pid).
-				Msg("[RANKED-DEBUG] broadcast: Send channel FULL, DROPPED")
+				Int("droppedCount", client.DroppedMsgs).
+				Msg("broadcast: Send channel FULL, DROPPED")
+			if client.DroppedMsgs >= maxDroppedMsgs {
+				observability.Log.Warn().
+					Str("matchId", m.State.MatchID).
+					Str("playerId", pid).
+					Msg("kicking slow client - too many consecutive dropped messages")
+				close(client.Send)
+				delete(m.Clients, pid)
+				if player, ok := m.State.Players[pid]; ok {
+					player.IsAlive = false
+					player.HP = 0
+				}
+			}
 		}
 	}
 }

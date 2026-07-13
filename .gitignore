@@ -29,3 +29,6 @@ bin/
 
 # Go package lock
 go.work
+
+.understand-anything/intermediate/
+.understand-anything/diff-overlay.json

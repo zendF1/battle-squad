@@ -1,0 +1,308 @@
+{
+  "nodes": [
+    {
+      "id": "file:migrations/001_init_schema.up.sql",
+      "type": "file",
+      "name": "001_init_schema.up.sql",
+      "filePath": "migrations/001_init_schema.up.sql",
+      "summary": "Tạo toàn bộ schema ban đầu của cơ sở dữ liệu gồm 24 bảng: accounts, auth_identities, player_profiles, player_characters, inventory_items, shop, IAP, economy, gift_codes, missions, player_reports, account_bans, rank_seasons, player_ranks, match_histories, match_snapshots, match_recovery_logs, client_version_policies cùng các index hiệu suất.",
+      "tags": ["migration", "schema", "sql", "init", "postgresql"],
+      "complexity": "high"
+    },
+    {
+      "id": "file:migrations/001_init_schema.down.sql",
+      "type": "file",
+      "name": "001_init_schema.down.sql",
+      "filePath": "migrations/001_init_schema.down.sql",
+      "summary": "Xóa toàn bộ 24 bảng được tạo bởi migration 001 theo thứ tự đảo ngược (CASCADE) để tránh vi phạm foreign key.",
+      "tags": ["migration", "rollback", "sql"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:migrations/002_add_account_role.up.sql",
+      "type": "file",
+      "name": "002_add_account_role.up.sql",
+      "filePath": "migrations/002_add_account_role.up.sql",
+      "summary": "Thêm cột `role` (VARCHAR 20, mặc định 'player') vào bảng `accounts` để phân biệt vai trò player và admin.",
+      "tags": ["migration", "schema", "sql", "auth", "admin"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:migrations/002_add_account_role.down.sql",
+      "type": "file",
+      "name": "002_add_account_role.down.sql",
+      "filePath": "migrations/002_add_account_role.down.sql",
+      "summary": "Xóa cột `role` khỏi bảng `accounts` — rollback cho migration 002.",
+      "tags": ["migration", "rollback", "sql"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:migrations/003_add_match_event_logs.up.sql",
+      "type": "file",
+      "name": "003_add_match_event_logs.up.sql",
+      "filePath": "migrations/003_add_match_event_logs.up.sql",
+      "summary": "Tạo bảng `match_event_logs` ghi lại từng sự kiện trong trận đấu (seq, event_type, player_id, data JSONB) kèm index theo match_id và (match_id, seq) phục vụ replay và debug.",
+      "tags": ["migration", "schema", "sql", "match", "logging"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:migrations/003_add_match_event_logs.down.sql",
+      "type": "file",
+      "name": "003_add_match_event_logs.down.sql",
+      "filePath": "migrations/003_add_match_event_logs.down.sql",
+      "summary": "Xóa bảng `match_event_logs` — rollback cho migration 003.",
+      "tags": ["migration", "rollback", "sql"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:migrations/004_admin_config_tables.up.sql",
+      "type": "file",
+      "name": "004_admin_config_tables.up.sql",
+      "filePath": "migrations/004_admin_config_tables.up.sql",
+      "summary": "Tạo các bảng cấu hình game do admin quản lý: `game_settings` (key-value), `config_characters`, `config_weapons`, `config_skills`, `config_items`, `config_maps` (với terrain_layers và spawn_points JSONB).",
+      "tags": ["migration", "schema", "sql", "admin", "gameconfig"],
+      "complexity": "medium"
+    },
+    {
+      "id": "file:migrations/004_admin_config_tables.down.sql",
+      "type": "file",
+      "name": "004_admin_config_tables.down.sql",
+      "filePath": "migrations/004_admin_config_tables.down.sql",
+      "summary": "Xóa toàn bộ bảng cấu hình game (config_maps, config_items, config_skills, config_weapons, config_characters, game_settings) — rollback cho migration 004.",
+      "tags": ["migration", "rollback", "sql"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:migrations/005_add_loadouts_and_matchmaking.up.sql",
+      "type": "file",
+      "name": "005_add_loadouts_and_matchmaking.up.sql",
+      "filePath": "migrations/005_add_loadouts_and_matchmaking.up.sql",
+      "summary": "Tạo bảng `player_loadouts` lưu character và items được chọn, đồng thời seed dữ liệu cấu hình matchmaking (queue config, Elo, bot difficulty theo 6 tier) vào `game_settings`.",
+      "tags": ["migration", "schema", "sql", "matchmaking", "loadout", "elo"],
+      "complexity": "medium"
+    },
+    {
+      "id": "file:migrations/005_add_loadouts_and_matchmaking.down.sql",
+      "type": "file",
+      "name": "005_add_loadouts_and_matchmaking.down.sql",
+      "filePath": "migrations/005_add_loadouts_and_matchmaking.down.sql",
+      "summary": "Xóa bảng `player_loadouts` và dọn dữ liệu matchmaking, elo, bot_difficulty trong `game_settings` — rollback cho migration 005.",
+      "tags": ["migration", "rollback", "sql"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:migrations/006_character_progression.up.sql",
+      "type": "file",
+      "name": "006_character_progression.up.sql",
+      "filePath": "migrations/006_character_progression.up.sql",
+      "summary": "Thêm hệ thống tiến trình nhân vật: 9 cột mới (level, exp, stat_points, bonus stats) vào `player_characters`, seed config `character_progression` và `character_levels` (level 2-10) vào `game_settings`.",
+      "tags": ["migration", "schema", "sql", "character", "progression"],
+      "complexity": "medium"
+    },
+    {
+      "id": "file:migrations/006_character_progression.down.sql",
+      "type": "file",
+      "name": "006_character_progression.down.sql",
+      "filePath": "migrations/006_character_progression.down.sql",
+      "summary": "Xóa các cột tiến trình khỏi `player_characters` và dọn config character progression trong `game_settings` — rollback cho migration 006.",
+      "tags": ["migration", "rollback", "sql"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:migrations/007_map_editor.up.sql",
+      "type": "file",
+      "name": "007_map_editor.up.sql",
+      "filePath": "migrations/007_map_editor.up.sql",
+      "summary": "Thêm các cột tilemap (`grid_width`, `grid_height`, `cell_size`, `tiles` JSONB) vào bảng `config_maps` để hỗ trợ hệ thống bản đồ lưới Grid v2.",
+      "tags": ["migration", "schema", "sql", "map", "editor", "tilemap"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:migrations/007_map_editor.down.sql",
+      "type": "file",
+      "name": "007_map_editor.down.sql",
+      "filePath": "migrations/007_map_editor.down.sql",
+      "summary": "Xóa các cột tilemap khỏi `config_maps` và bảng `config_brick_types` — rollback cho migration 007.",
+      "tags": ["migration", "rollback", "sql"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:migrations/008_brick_border_v2.up.sql",
+      "type": "file",
+      "name": "008_brick_border_v2.up.sql",
+      "filePath": "migrations/008_brick_border_v2.up.sql",
+      "summary": "Tạo bảng `config_brick_types` với SERIAL PK lưu loại gạch của map: name, image_id, destructible, border JSONB (polygon 4 cạnh top/right/bottom/left), color cho hệ thống render terrain v2.",
+      "tags": ["migration", "schema", "sql", "brick", "map", "terrain"],
+      "complexity": "medium"
+    },
+    {
+      "id": "file:migrations/008_brick_border_v2.down.sql",
+      "type": "file",
+      "name": "008_brick_border_v2.down.sql",
+      "filePath": "migrations/008_brick_border_v2.down.sql",
+      "summary": "Rollback migration 008: xóa và tái tạo `config_brick_types` với TEXT PK (schema cũ), reset tiles trong `config_maps` về mảng rỗng.",
+      "tags": ["migration", "rollback", "sql"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:migrations/009_map_rank_tier.up.sql",
+      "type": "file",
+      "name": "009_map_rank_tier.up.sql",
+      "filePath": "migrations/009_map_rank_tier.up.sql",
+      "summary": "Thêm cột `min_rank_tier` (VARCHAR 20, mặc định 'bronze') vào `config_maps` để matchmaker chỉ chọn map phù hợp rank tối thiểu của người chơi.",
+      "tags": ["migration", "schema", "sql", "map", "rank", "tier"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:migrations/009_map_rank_tier.down.sql",
+      "type": "file",
+      "name": "009_map_rank_tier.down.sql",
+      "filePath": "migrations/009_map_rank_tier.down.sql",
+      "summary": "Xóa cột `min_rank_tier` khỏi `config_maps` — rollback cho migration 009.",
+      "tags": ["migration", "rollback", "sql"],
+      "complexity": "low"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:migrations/001_init_schema.up.sql",
+      "target": "file:migrations/001_init_schema.down.sql",
+      "type": "migrates",
+      "weight": 0.7
+    },
+    {
+      "source": "file:migrations/002_add_account_role.up.sql",
+      "target": "file:migrations/001_init_schema.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/002_add_account_role.up.sql",
+      "target": "file:migrations/002_add_account_role.down.sql",
+      "type": "migrates",
+      "weight": 0.7
+    },
+    {
+      "source": "file:migrations/003_add_match_event_logs.up.sql",
+      "target": "file:migrations/001_init_schema.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/003_add_match_event_logs.up.sql",
+      "target": "file:migrations/003_add_match_event_logs.down.sql",
+      "type": "migrates",
+      "weight": 0.7
+    },
+    {
+      "source": "file:migrations/004_admin_config_tables.up.sql",
+      "target": "file:migrations/001_init_schema.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/004_admin_config_tables.up.sql",
+      "target": "file:migrations/004_admin_config_tables.down.sql",
+      "type": "migrates",
+      "weight": 0.7
+    },
+    {
+      "source": "file:migrations/005_add_loadouts_and_matchmaking.up.sql",
+      "target": "file:migrations/001_init_schema.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/005_add_loadouts_and_matchmaking.up.sql",
+      "target": "file:migrations/004_admin_config_tables.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/005_add_loadouts_and_matchmaking.up.sql",
+      "target": "file:migrations/005_add_loadouts_and_matchmaking.down.sql",
+      "type": "migrates",
+      "weight": 0.7
+    },
+    {
+      "source": "file:migrations/006_character_progression.up.sql",
+      "target": "file:migrations/001_init_schema.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/006_character_progression.up.sql",
+      "target": "file:migrations/004_admin_config_tables.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/006_character_progression.up.sql",
+      "target": "file:migrations/006_character_progression.down.sql",
+      "type": "migrates",
+      "weight": 0.7
+    },
+    {
+      "source": "file:migrations/007_map_editor.up.sql",
+      "target": "file:migrations/004_admin_config_tables.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/007_map_editor.up.sql",
+      "target": "file:migrations/007_map_editor.down.sql",
+      "type": "migrates",
+      "weight": 0.7
+    },
+    {
+      "source": "file:migrations/008_brick_border_v2.up.sql",
+      "target": "file:migrations/007_map_editor.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/008_brick_border_v2.up.sql",
+      "target": "file:migrations/008_brick_border_v2.down.sql",
+      "type": "migrates",
+      "weight": 0.7
+    },
+    {
+      "source": "file:migrations/009_map_rank_tier.up.sql",
+      "target": "file:migrations/004_admin_config_tables.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/009_map_rank_tier.up.sql",
+      "target": "file:migrations/007_map_editor.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/009_map_rank_tier.up.sql",
+      "target": "file:migrations/009_map_rank_tier.down.sql",
+      "type": "migrates",
+      "weight": 0.7
+    }
+  ],
+  "batchFiles": [
+    {"path": "migrations/001_init_schema.down.sql", "language": "sql", "sizeLines": 25, "fileCategory": "data"},
+    {"path": "migrations/001_init_schema.up.sql", "language": "sql", "sizeLines": 275, "fileCategory": "data"},
+    {"path": "migrations/002_add_account_role.down.sql", "language": "sql", "sizeLines": 1, "fileCategory": "data"},
+    {"path": "migrations/002_add_account_role.up.sql", "language": "sql", "sizeLines": 1, "fileCategory": "data"},
+    {"path": "migrations/003_add_match_event_logs.down.sql", "language": "sql", "sizeLines": 1, "fileCategory": "data"},
+    {"path": "migrations/003_add_match_event_logs.up.sql", "language": "sql", "sizeLines": 12, "fileCategory": "data"},
+    {"path": "migrations/004_admin_config_tables.down.sql", "language": "sql", "sizeLines": 6, "fileCategory": "data"},
+    {"path": "migrations/004_admin_config_tables.up.sql", "language": "sql", "sizeLines": 75, "fileCategory": "data"},
+    {"path": "migrations/005_add_loadouts_and_matchmaking.down.sql", "language": "sql", "sizeLines": 2, "fileCategory": "data"},
+    {"path": "migrations/005_add_loadouts_and_matchmaking.up.sql", "language": "sql", "sizeLines": 14, "fileCategory": "data"},
+    {"path": "migrations/006_character_progression.down.sql", "language": "sql", "sizeLines": 12, "fileCategory": "data"},
+    {"path": "migrations/006_character_progression.up.sql", "language": "sql", "sizeLines": 15, "fileCategory": "data"},
+    {"path": "migrations/007_map_editor.down.sql", "language": "sql", "sizeLines": 9, "fileCategory": "data"},
+    {"path": "migrations/007_map_editor.up.sql", "language": "sql", "sizeLines": 9, "fileCategory": "data"},
+    {"path": "migrations/008_brick_border_v2.down.sql", "language": "sql", "sizeLines": 12, "fileCategory": "data"},
+    {"path": "migrations/008_brick_border_v2.up.sql", "language": "sql", "sizeLines": 18, "fileCategory": "data"},
+    {"path": "migrations/009_map_rank_tier.down.sql", "language": "sql", "sizeLines": 3, "fileCategory": "data"},
+    {"path": "migrations/009_map_rank_tier.up.sql", "language": "sql", "sizeLines": 3, "fileCategory": "data"}
+  ]
+}

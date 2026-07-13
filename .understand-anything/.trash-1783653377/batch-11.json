@@ -1,0 +1,272 @@
+{
+  "nodes": [
+    {
+      "id": "file:internal/admin/templates/brick_editor.html",
+      "type": "file",
+      "name": "brick_editor.html",
+      "filePath": "internal/admin/templates/brick_editor.html",
+      "summary": "Template HTML cho trang editor brick type 16x16 pixel: form nhập tên/màu sắc/destructible, canvas 400x400 để vẽ polygon border theo 4 cạnh (top/right/bottom/left), preview canvas thực tế. Load brick_editor.js.",
+      "tags": ["template", "admin", "brick-editor", "canvas", "polygon", "html"],
+      "complexity": "medium"
+    },
+    {
+      "id": "file:internal/admin/templates/brick_types.html",
+      "type": "file",
+      "name": "brick_types.html",
+      "filePath": "internal/admin/templates/brick_types.html",
+      "summary": "Template HTML cho trang danh sách brick types: bảng hiển thị ID/preview canvas/tên/image/destructible với nút Edit và Delete. Render preview polygon từ border data bằng inline JavaScript.",
+      "tags": ["template", "admin", "brick-types", "list", "canvas", "polygon", "html"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:internal/admin/templates/character_detail.html",
+      "type": "file",
+      "name": "character_detail.html",
+      "filePath": "internal/admin/templates/character_detail.html",
+      "summary": "Template HTML cho trang tạo/sửa nhân vật: form 2 cột với đầy đủ chỉ số (HP/Damage/Mobility/Defense/SkillPower/TerrainDamage), role selector, difficulty, và cấu hình kỹ năng (skill). Có mô tả chi tiết tiếng Việt cho từng field.",
+      "tags": ["template", "admin", "character", "form", "stats", "skill", "html"],
+      "complexity": "medium"
+    },
+    {
+      "id": "file:internal/admin/templates/character_progression.html",
+      "type": "file",
+      "name": "character_progression.html",
+      "filePath": "internal/admin/templates/character_progression.html",
+      "summary": "Template HTML cho trang cấu hình Character Progression: form điều chỉnh pointsPerLevel/resetCost/statMultipliers, bảng level table với expRequired có thể thêm/xóa/lưu qua fetch API. Toàn bộ tương tác qua JavaScript.",
+      "tags": ["template", "admin", "character-progression", "level", "exp", "stats", "javascript", "html"],
+      "complexity": "medium"
+    },
+    {
+      "id": "file:internal/admin/templates/config_edit.html",
+      "type": "file",
+      "name": "config_edit.html",
+      "filePath": "internal/admin/templates/config_edit.html",
+      "summary": "Template HTML dùng chung cho form chỉnh sửa config: hỗ trợ dynamic fields với type textarea/number/text, render từ .Fields slice. Dùng cho weapons, skills, items và các config type tổng quát.",
+      "tags": ["template", "admin", "config", "form", "generic", "html"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:internal/admin/templates/config_list.html",
+      "type": "file",
+      "name": "config_list.html",
+      "filePath": "internal/admin/templates/config_list.html",
+      "summary": "Template HTML dùng chung cho trang danh sách config: hỗ trợ nhiều loại (characters/weapons/skills/items/maps) với cột và action khác nhau, hiển thị Min Rank cho maps và nút Edit dẫn đến editor. Dùng conditional block theo .ConfigType.",
+      "tags": ["template", "admin", "config", "list", "characters", "weapons", "maps", "html"],
+      "complexity": "medium"
+    },
+    {
+      "id": "file:internal/admin/templates/dashboard.html",
+      "type": "file",
+      "name": "dashboard.html",
+      "filePath": "internal/admin/templates/dashboard.html",
+      "summary": "Template HTML trang dashboard chính: hiển thị stats-grid với ActiveRooms và TotalPlayers dưới dạng stat card. Template tối giản.",
+      "tags": ["template", "admin", "dashboard", "stats", "html"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:internal/admin/templates/devtools.html",
+      "type": "file",
+      "name": "devtools.html",
+      "filePath": "internal/admin/templates/devtools.html",
+      "summary": "Template HTML trang Dev Tools: 3 thao tác nguy hiểm có xác nhận — Clear Active Rooms khỏi Redis, Seed Config từ YAML, và Reset All Player Data (xóa toàn bộ data người chơi). Thiết kế với cảnh báo rõ ràng.",
+      "tags": ["template", "admin", "devtools", "redis", "seed", "reset", "html"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:internal/admin/templates/layout.html",
+      "type": "file",
+      "name": "layout.html",
+      "filePath": "internal/admin/templates/layout.html",
+      "summary": "Template HTML layout chung cho toàn bộ admin dashboard: sidebar navigation với các nhóm (Game Config/Matchmaking/Commerce/Management/System), CSS inline đầy đủ, block content cho các trang con. Định nghĩa toàn bộ CSS utility classes.",
+      "tags": ["template", "admin", "layout", "sidebar", "navigation", "css", "html"],
+      "complexity": "medium"
+    },
+    {
+      "id": "file:internal/admin/templates/map_editor.html",
+      "type": "file",
+      "name": "map_editor.html",
+      "filePath": "internal/admin/templates/map_editor.html",
+      "summary": "Template HTML cho map editor canvas-based: toolbar với các tool (Paint/Erase/Fill/Select/Spawn), canvas fullscreen với coordinate display, panel properties bên phải với Map Settings đầy đủ (name/grid/wind/min_rank_tier/description) và spawn points list. Load map_editor.js.",
+      "tags": ["template", "admin", "map-editor", "canvas", "tilemap", "spawn-points", "min-rank-tier", "html"],
+      "complexity": "high"
+    },
+    {
+      "id": "file:internal/admin/templates/matchmaking.html",
+      "type": "file",
+      "name": "matchmaking.html",
+      "filePath": "internal/admin/templates/matchmaking.html",
+      "summary": "Template HTML cho trang cấu hình Matchmaking: 3 form riêng cho Queue Settings (tickInterval/ratingRange/expandInterval/strategy), Elo Settings (kFactor/ratingFloor/defaultRating), và Bot Difficulty per tier được render động qua JavaScript.",
+      "tags": ["template", "admin", "matchmaking", "elo", "bot-difficulty", "queue", "javascript", "html"],
+      "complexity": "high"
+    },
+    {
+      "id": "file:internal/admin/templates/physics.html",
+      "type": "file",
+      "name": "physics.html",
+      "filePath": "internal/admin/templates/physics.html",
+      "summary": "Template HTML cho trang Physics & Game Settings: bảng key-value editor với category/key/value/type/description, submit toàn bộ bằng POST. Tối giản, dùng server-rendered data từ .Settings slice.",
+      "tags": ["template", "admin", "physics", "game-settings", "key-value", "html"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:internal/admin/templates/players.html",
+      "type": "file",
+      "name": "players.html",
+      "filePath": "internal/admin/templates/players.html",
+      "summary": "Template HTML cho trang quản lý Players: search bar, bảng danh sách với PlayerID/DisplayName/Level/Coins/Gems/CreatedAt/Status, nút Ban/Unban có xác nhận, phân trang với Prev/Next. Thiết kế moderation-focused.",
+      "tags": ["template", "admin", "players", "ban", "unban", "pagination", "search", "html"],
+      "complexity": "medium"
+    },
+    {
+      "id": "file:internal/admin/templates/shop.html",
+      "type": "file",
+      "name": "shop.html",
+      "filePath": "internal/admin/templates/shop.html",
+      "summary": "Template HTML cho trang danh sách Shop Offers: bảng với OfferID/ItemID/Type/Currency/Price/Qty/Limit/Active, nút Edit và Delete có xác nhận. Hiển thị badge Active/Inactive.",
+      "tags": ["template", "admin", "shop", "offers", "list", "html"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:internal/admin/templates/shop_edit.html",
+      "type": "file",
+      "name": "shop_edit.html",
+      "filePath": "internal/admin/templates/shop_edit.html",
+      "summary": "Template HTML cho form tạo/sửa Shop Offer: các field offer_id/item_id/offer_type/price_currency/price_amount/quantity/limit_per_player/is_active với mô tả cho từng field. Hỗ trợ cả create và update.",
+      "tags": ["template", "admin", "shop", "offer", "form", "html"],
+      "complexity": "low"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:internal/admin/templates/brick_editor.html",
+      "target": "file:internal/admin/static/brick_editor.js",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/map_editor.html",
+      "target": "file:internal/admin/static/map_editor.js",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/brick_editor.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/brick_types.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/character_detail.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/character_progression.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/config_edit.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/config_list.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/dashboard.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/devtools.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/map_editor.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/matchmaking.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/physics.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/players.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/shop.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/shop_edit.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/brick_types.html",
+      "target": "file:internal/admin/templates/brick_editor.html",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "file:internal/admin/templates/config_list.html",
+      "target": "file:internal/admin/templates/map_editor.html",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "file:internal/admin/templates/shop.html",
+      "target": "file:internal/admin/templates/shop_edit.html",
+      "type": "related",
+      "weight": 0.5
+    }
+  ],
+  "batchFiles": [
+    {"path": "internal/admin/templates/brick_editor.html", "language": "html", "sizeLines": 78, "fileCategory": "markup"},
+    {"path": "internal/admin/templates/brick_types.html", "language": "html", "sizeLines": 73, "fileCategory": "markup"},
+    {"path": "internal/admin/templates/character_detail.html", "language": "html", "sizeLines": 145, "fileCategory": "markup"},
+    {"path": "internal/admin/templates/character_progression.html", "language": "html", "sizeLines": 209, "fileCategory": "markup"},
+    {"path": "internal/admin/templates/config_edit.html", "language": "html", "sizeLines": 25, "fileCategory": "markup"},
+    {"path": "internal/admin/templates/config_list.html", "language": "html", "sizeLines": 93, "fileCategory": "markup"},
+    {"path": "internal/admin/templates/dashboard.html", "language": "html", "sizeLines": 13, "fileCategory": "markup"},
+    {"path": "internal/admin/templates/devtools.html", "language": "html", "sizeLines": 29, "fileCategory": "markup"},
+    {"path": "internal/admin/templates/layout.html", "language": "html", "sizeLines": 85, "fileCategory": "markup"},
+    {"path": "internal/admin/templates/map_editor.html", "language": "html", "sizeLines": 115, "fileCategory": "markup"},
+    {"path": "internal/admin/templates/matchmaking.html", "language": "html", "sizeLines": 240, "fileCategory": "markup"},
+    {"path": "internal/admin/templates/physics.html", "language": "html", "sizeLines": 26, "fileCategory": "markup"},
+    {"path": "internal/admin/templates/players.html", "language": "html", "sizeLines": 54, "fileCategory": "markup"},
+    {"path": "internal/admin/templates/shop.html", "language": "html", "sizeLines": 34, "fileCategory": "markup"},
+    {"path": "internal/admin/templates/shop_edit.html", "language": "html", "sizeLines": 55, "fileCategory": "markup"}
+  ]
+}

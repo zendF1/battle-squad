@@ -1,0 +1,5209 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "battle-squad",
+    "languages": [
+      "Go",
+      "SQL",
+      "HTML",
+      "YAML",
+      "JavaScript",
+      "Dockerfile",
+      "Makefile"
+    ],
+    "frameworks": [
+      "chi",
+      "Docker",
+      "Docker Compose"
+    ],
+    "description": "Game server cho Battle Squad — game bắn súng theo lượt hỗ trợ PvP 1v1 và 2v2 thời gian thực",
+    "analyzedAt": "2026-07-10T03:06:00.636Z",
+    "gitCommitHash": "dd4b9cfa32d4f21602edda23d35b93159b8619c8"
+  },
+  "nodes": [
+    {
+      "id": "file:cmd/api/main.go",
+      "type": "file",
+      "name": "main.go",
+      "filePath": "cmd/api/main.go",
+      "summary": "Điểm khởi động của REST API server trên cổng :8080. Khởi tạo DB, Redis, JWT, tất cả các module domain, router chi, middleware (CORS, rate limiter, version check), routes và graceful shutdown.",
+      "tags": [
+        "entry-point",
+        "api-server",
+        "http",
+        "chi-router",
+        "middleware"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/api/appconfig/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/appconfig/model.go",
+      "summary": "Định nghĩa struct ClientVersionPolicy và RemoteConfig cho API cấu hình ứng dụng.",
+      "tags": [
+        "model",
+        "appconfig",
+        "version-policy"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/auth/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/auth/model.go",
+      "summary": "Định nghĩa các struct Account, AuthIdentity, Session và các request/response struct cho module xác thực.",
+      "tags": [
+        "model",
+        "auth",
+        "session",
+        "account"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/auth/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/auth/service.go",
+      "summary": "Service xác thực: GuestLogin, ProviderLogin, LinkProvider, RefreshToken, Logout và các hàm helper generateLoginTokens, verifyToken.",
+      "tags": [
+        "service",
+        "auth",
+        "jwt",
+        "login",
+        "token"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/character/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/character/model.go",
+      "summary": "Định nghĩa struct PlayerCharacter, các payload phân bổ stats, ProgressionConfig và hàm helper tính level từ EXP.",
+      "tags": [
+        "model",
+        "character",
+        "progression",
+        "level"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/character/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/character/service.go",
+      "summary": "Service quản lý nhân vật: GetPlayerCharacters, AllocateStats, ResetStats. Sử dụng economy repo để trừ tiền khi reset stats.",
+      "tags": [
+        "service",
+        "character",
+        "stats",
+        "economy"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/economy/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/economy/model.go",
+      "summary": "Định nghĩa struct EconomyTransaction cho các giao dịch coin và gem.",
+      "tags": [
+        "model",
+        "economy",
+        "transaction",
+        "currency"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/economy/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/economy/repository.go",
+      "summary": "Repository kinh tế: CreditTx và DebitTx thực hiện trực tiếp trên pgx.Tx để đảm bảo tính nguyên tử của các giao dịch tiền tệ.",
+      "tags": [
+        "repository",
+        "economy",
+        "transaction",
+        "postgres"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/economy/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/economy/service.go",
+      "summary": "Service kinh tế: Credit và Debit bọc các thao tác repo trong DB transactions.",
+      "tags": [
+        "service",
+        "economy",
+        "credit",
+        "debit"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/giftcode/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/giftcode/model.go",
+      "summary": "Định nghĩa struct GiftCode, GiftCodeRedemption và RedeemRequest cho hệ thống mã quà tặng.",
+      "tags": [
+        "model",
+        "giftcode",
+        "redemption"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/giftcode/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/giftcode/service.go",
+      "summary": "Service mã quà tặng: RedeemCode xác thực mã, kiểm tra hạn/giới hạn/trùng lặp, cấp coins/gems/items trong transaction.",
+      "tags": [
+        "service",
+        "giftcode",
+        "redemption",
+        "economy"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/iap/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/iap/model.go",
+      "summary": "Định nghĩa struct IAPProduct, PaymentTransaction và VerifyReceiptRequest cho thanh toán trong ứng dụng.",
+      "tags": [
+        "model",
+        "iap",
+        "payment",
+        "receipt"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/iap/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/iap/service.go",
+      "summary": "Service IAP: GetActiveProducts, VerifyReceipt với xác thực store giả lập và idempotency qua transaction ID.",
+      "tags": [
+        "service",
+        "iap",
+        "payment",
+        "idempotency"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/inventory/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/inventory/handler.go",
+      "summary": "HTTP handler cho inventory: GetInventory trả về danh sách vật phẩm của người chơi.",
+      "tags": [
+        "handler",
+        "inventory",
+        "http"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/inventory/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/inventory/model.go",
+      "summary": "Định nghĩa struct InventoryItem và InventoryReservation cho hệ thống kho vật phẩm.",
+      "tags": [
+        "model",
+        "inventory",
+        "reservation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/inventory/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/inventory/repository.go",
+      "summary": "Repository kho vật phẩm: GetAvailableInventory, AddItemsTx, ReserveItemsTx, ConsumeReservationTx, ReleaseReservationTx.",
+      "tags": [
+        "repository",
+        "inventory",
+        "transaction",
+        "postgres"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/inventory/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/inventory/service.go",
+      "summary": "Service kho vật phẩm đơn giản: ủy quyền tất cả thao tác cho repository.",
+      "tags": [
+        "service",
+        "inventory"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/matchhistory/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/matchhistory/model.go",
+      "summary": "Định nghĩa struct MatchHistoryEntry cho lịch sử trận đấu của người chơi.",
+      "tags": [
+        "model",
+        "match-history"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/matchhistory/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/matchhistory/service.go",
+      "summary": "Service lịch sử trận đấu: GetPlayerHistory ủy quyền cho repository.",
+      "tags": [
+        "service",
+        "match-history"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/mission/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/mission/model.go",
+      "summary": "Định nghĩa struct Mission, MissionProgress và ClaimRewardRequest cho hệ thống nhiệm vụ.",
+      "tags": [
+        "model",
+        "mission",
+        "progress",
+        "reward"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/mission/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/mission/service.go",
+      "summary": "Service nhiệm vụ: GetMissions, ClaimReward với transaction, kiểm tra tiến độ và cấp coin/gem.",
+      "tags": [
+        "service",
+        "mission",
+        "reward",
+        "economy"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/moderation/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/moderation/model.go",
+      "summary": "Định nghĩa struct PlayerReport, AccountBan và các request struct cho hệ thống kiểm duyệt.",
+      "tags": [
+        "model",
+        "moderation",
+        "ban",
+        "report"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/player/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/player/model.go",
+      "summary": "Định nghĩa struct PlayerProfile, UpdateProfileRequest và AccountDeletionStatusResponse.",
+      "tags": [
+        "model",
+        "player",
+        "profile",
+        "deletion"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/player/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/player/service.go",
+      "summary": "Service người chơi: GetProfile, UpdateDisplayName, RequestAccountDeletion, CancelAccountDeletion, GetAccountDeletionStatus.",
+      "tags": [
+        "service",
+        "player",
+        "profile",
+        "account-deletion"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/rank/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/rank/model.go",
+      "summary": "Định nghĩa struct Season, PlayerRank, LeaderboardResponse và ClaimSeasonRewardRequest cho hệ thống xếp hạng.",
+      "tags": [
+        "model",
+        "rank",
+        "season",
+        "leaderboard"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/rank/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/rank/service.go",
+      "summary": "Service xếp hạng: GetCurrentSeason, GetPlayerRank, GetLeaderboard, ClaimSeasonReward với phần thưởng theo tier.",
+      "tags": [
+        "service",
+        "rank",
+        "elo",
+        "season",
+        "reward"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/rooms/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/rooms/model.go",
+      "summary": "Định nghĩa struct RoomSummary cho API danh sách phòng.",
+      "tags": [
+        "model",
+        "rooms"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/shop/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/shop/model.go",
+      "summary": "Định nghĩa struct ShopOffer, ShopPurchase và PurchaseRequest cho hệ thống cửa hàng.",
+      "tags": [
+        "model",
+        "shop",
+        "purchase",
+        "offer"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/shop/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/shop/service.go",
+      "summary": "Service cửa hàng: GetActiveOffers, Purchase (với idempotency, kiểm tra ngày/giới hạn, trừ tiền + trao vật phẩm), GetPlayerPurchases.",
+      "tags": [
+        "service",
+        "shop",
+        "purchase",
+        "idempotency",
+        "economy"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/game/match/reward.go",
+      "type": "file",
+      "name": "reward.go",
+      "filePath": "internal/game/match/reward.go",
+      "summary": "Xử lý phần thưởng sau trận đấu: tiêu thụ reservation kho vật phẩm, tính EXP/coin, cập nhật rank Elo, ghi lịch sử trận đấu và level nhân vật.",
+      "tags": [
+        "match",
+        "reward",
+        "elo",
+        "exp",
+        "level"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/shared/auth/jwt.go",
+      "type": "file",
+      "name": "jwt.go",
+      "filePath": "internal/shared/auth/jwt.go",
+      "summary": "Quản lý JWT: Claims struct, JWTManager với Generate và Verify sử dụng HMAC-SHA256.",
+      "tags": [
+        "auth",
+        "jwt",
+        "token",
+        "hmac"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/idempotency/idempotency.go",
+      "type": "file",
+      "name": "idempotency.go",
+      "filePath": "internal/shared/idempotency/idempotency.go",
+      "summary": "Idempotency dựa trên Redis qua SETNX: CheckAndSet và Complete để ngăn chặn xử lý trùng lặp.",
+      "tags": [
+        "idempotency",
+        "redis",
+        "setnx"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/middleware/auth.go",
+      "type": "file",
+      "name": "auth.go",
+      "filePath": "internal/shared/middleware/auth.go",
+      "summary": "AuthMiddleware: xác thực Bearer JWT và inject playerID/accountID/role vào context.",
+      "tags": [
+        "middleware",
+        "auth",
+        "jwt",
+        "context"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/middleware/ratelimit.go",
+      "type": "file",
+      "name": "ratelimit.go",
+      "filePath": "internal/shared/middleware/ratelimit.go",
+      "summary": "Rate limiter theo IP sử dụng golang.org/x/time/rate với goroutine dọn dẹp định kỳ.",
+      "tags": [
+        "middleware",
+        "rate-limit",
+        "ip",
+        "cleanup"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:cmd/api/main.go:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "cmd/api/main.go",
+      "summary": "Khởi động API server: load config, init DB/Redis/JWT, đăng ký routes, bắt đầu lắng nghe và graceful shutdown.",
+      "tags": [
+        "entry-point",
+        "server-init",
+        "graceful-shutdown"
+      ]
+    },
+    {
+      "id": "function:internal/api/auth/service.go:GuestLogin",
+      "type": "function",
+      "name": "GuestLogin",
+      "filePath": "internal/api/auth/service.go",
+      "summary": "Đăng nhập khách: tạo tài khoản guest nếu chưa tồn tại và sinh JWT tokens.",
+      "tags": [
+        "auth",
+        "guest",
+        "login"
+      ]
+    },
+    {
+      "id": "function:internal/api/auth/service.go:ProviderLogin",
+      "type": "function",
+      "name": "ProviderLogin",
+      "filePath": "internal/api/auth/service.go",
+      "summary": "Đăng nhập qua provider (Google, Facebook): xác thực identity và sinh JWT tokens.",
+      "tags": [
+        "auth",
+        "provider",
+        "oauth"
+      ]
+    },
+    {
+      "id": "function:internal/api/auth/service.go:RefreshToken",
+      "type": "function",
+      "name": "RefreshToken",
+      "filePath": "internal/api/auth/service.go",
+      "summary": "Làm mới access token từ refresh token hợp lệ.",
+      "tags": [
+        "auth",
+        "token",
+        "refresh"
+      ]
+    },
+    {
+      "id": "function:internal/api/economy/repository.go:CreditTx",
+      "type": "function",
+      "name": "CreditTx",
+      "filePath": "internal/api/economy/repository.go",
+      "summary": "Cộng coins/gems cho tài khoản trong một pgx.Tx đang có.",
+      "tags": [
+        "economy",
+        "credit",
+        "transaction"
+      ]
+    },
+    {
+      "id": "function:internal/api/economy/repository.go:DebitTx",
+      "type": "function",
+      "name": "DebitTx",
+      "filePath": "internal/api/economy/repository.go",
+      "summary": "Trừ coins/gems từ tài khoản trong một pgx.Tx đang có, kiểm tra số dư đủ.",
+      "tags": [
+        "economy",
+        "debit",
+        "transaction"
+      ]
+    },
+    {
+      "id": "function:internal/game/match/reward.go:ProcessMatchRewards",
+      "type": "function",
+      "name": "ProcessMatchRewards",
+      "filePath": "internal/game/match/reward.go",
+      "summary": "Xử lý toàn bộ phần thưởng sau khi kết thúc trận: EXP, coins, Elo rating, lịch sử trận và level nhân vật.",
+      "tags": [
+        "match",
+        "reward",
+        "elo",
+        "exp"
+      ]
+    },
+    {
+      "id": "function:internal/game/match/reward.go:updatePlayerRank",
+      "type": "function",
+      "name": "updatePlayerRank",
+      "filePath": "internal/game/match/reward.go",
+      "summary": "Cập nhật Elo rating của người chơi dựa trên kết quả trận đấu.",
+      "tags": [
+        "rank",
+        "elo",
+        "update"
+      ]
+    },
+    {
+      "id": "function:internal/shared/auth/jwt.go:Generate",
+      "type": "function",
+      "name": "Generate",
+      "filePath": "internal/shared/auth/jwt.go",
+      "summary": "Tạo JWT token mới với claims và ký bằng HMAC-SHA256.",
+      "tags": [
+        "jwt",
+        "generate",
+        "token"
+      ]
+    },
+    {
+      "id": "function:internal/shared/auth/jwt.go:Verify",
+      "type": "function",
+      "name": "Verify",
+      "filePath": "internal/shared/auth/jwt.go",
+      "summary": "Xác thực và parse JWT token, trả về claims nếu hợp lệ.",
+      "tags": [
+        "jwt",
+        "verify",
+        "token"
+      ]
+    },
+    {
+      "id": "function:internal/shared/idempotency/idempotency.go:CheckAndSet",
+      "type": "function",
+      "name": "CheckAndSet",
+      "filePath": "internal/shared/idempotency/idempotency.go",
+      "summary": "Kiểm tra và đặt idempotency key trong Redis, trả về true nếu key chưa tồn tại (request mới).",
+      "tags": [
+        "idempotency",
+        "redis",
+        "check"
+      ]
+    },
+    {
+      "id": "function:internal/api/character/model.go:CalcLevelFromExp",
+      "type": "function",
+      "name": "CalcLevelFromExp",
+      "filePath": "internal/api/character/model.go",
+      "summary": "Tính level nhân vật từ tổng EXP dựa trên bảng cấu hình level.",
+      "tags": [
+        "character",
+        "level",
+        "exp",
+        "progression"
+      ]
+    },
+    {
+      "id": "function:internal/api/shop/service.go:Purchase",
+      "type": "function",
+      "name": "Purchase",
+      "filePath": "internal/api/shop/service.go",
+      "summary": "Xử lý mua vật phẩm: kiểm tra idempotency, ngày hợp lệ, giới hạn mua, trừ tiền và trao vật phẩm trong transaction.",
+      "tags": [
+        "shop",
+        "purchase",
+        "idempotency",
+        "economy"
+      ]
+    },
+    {
+      "id": "function:internal/api/giftcode/service.go:RedeemCode",
+      "type": "function",
+      "name": "RedeemCode",
+      "filePath": "internal/api/giftcode/service.go",
+      "summary": "Đổi mã quà tặng: xác thực mã, kiểm tra hạn/giới hạn/trùng, cấp phần thưởng trong transaction.",
+      "tags": [
+        "giftcode",
+        "redeem",
+        "economy"
+      ]
+    },
+    {
+      "id": "function:internal/api/rank/service.go:ClaimSeasonReward",
+      "type": "function",
+      "name": "ClaimSeasonReward",
+      "filePath": "internal/api/rank/service.go",
+      "summary": "Nhận phần thưởng cuối mùa theo tier xếp hạng của người chơi.",
+      "tags": [
+        "rank",
+        "season",
+        "reward",
+        "tier"
+      ]
+    },
+    {
+      "id": "function:internal/shared/middleware/auth.go:AuthMiddleware",
+      "type": "function",
+      "name": "AuthMiddleware",
+      "filePath": "internal/shared/middleware/auth.go",
+      "summary": "Middleware xác thực: validate Bearer JWT và inject thông tin người dùng vào request context.",
+      "tags": [
+        "middleware",
+        "auth",
+        "jwt"
+      ]
+    },
+    {
+      "id": "document:docs/superpowers/specs/2026-07-07-character-progression-design.md",
+      "type": "document",
+      "name": "2026-07-07-character-progression-design.md",
+      "filePath": "docs/superpowers/specs/2026-07-07-character-progression-design.md",
+      "summary": "Thiết kế chi tiết hệ thống tiến triển nhân vật: schema DB với các cột level/exp/stat_points/bonus_*, API endpoints cấp phát stat và reset, công thức tính chỉ số thực tế (base + bonus × multiplier). Bao gồm config game_settings cho progression.",
+      "tags": [
+        "spec",
+        "character",
+        "progression",
+        "exp",
+        "stats",
+        "database",
+        "api"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/superpowers/specs/2026-07-07-ranked-matchmaking-design.md",
+      "type": "document",
+      "name": "2026-07-07-ranked-matchmaking-design.md",
+      "filePath": "docs/superpowers/specs/2026-07-07-ranked-matchmaking-design.md",
+      "summary": "Thiết kế chi tiết hệ thống matchmaking ranked 2v2: flow người dùng từ lobby đến battle room, Redis queue với Elo rating, cấu trúc dữ liệu QueueEntry/LobbyRoom, WebSocket events, và smart bot thay thế khi hết timeout.",
+      "tags": [
+        "spec",
+        "matchmaking",
+        "ranked",
+        "2v2",
+        "lobby",
+        "elo",
+        "redis",
+        "websocket",
+        "bot"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/superpowers/specs/2026-07-08-battle-fixes-design.md",
+      "type": "document",
+      "name": "2026-07-08-battle-fixes-design.md",
+      "filePath": "docs/superpowers/specs/2026-07-08-battle-fixes-design.md",
+      "summary": "Thiết kế 4 thay đổi cho hệ thống trận đấu: cancel shot icon (chỉ client), fall death khi rơi khỏi bản đồ (server), vật phẩm dùng một lần khi bắn (server), và teleport item qua đạn (server + client animation).",
+      "tags": [
+        "spec",
+        "battle",
+        "cancel-shot",
+        "fall-death",
+        "single-use-item",
+        "teleport",
+        "flutter"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/superpowers/specs/2026-07-08-map-editor-design.md",
+      "type": "document",
+      "name": "2026-07-08-map-editor-design.md",
+      "filePath": "docs/superpowers/specs/2026-07-08-map-editor-design.md",
+      "summary": "Thiết kế map editor tilemap-based: data model cho config_brick_types với border JSONB polygon, schema config_maps với tiles 2D array, và API endpoints cho CRUD map tiles và export YAML. Định nghĩa format border 4 cạnh (top/right/bottom/left).",
+      "tags": [
+        "spec",
+        "map-editor",
+        "tilemap",
+        "brick-types",
+        "polygon-border",
+        "jsonb",
+        "api"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/superpowers/specs/2026-07-09-map-rank-restriction-and-editor-unification-design.md",
+      "type": "document",
+      "name": "2026-07-09-map-rank-restriction-and-editor-unification-design.md",
+      "filePath": "docs/superpowers/specs/2026-07-09-map-rank-restriction-and-editor-unification-design.md",
+      "summary": "Thiết kế 3 thay đổi map system: thêm cột min_rank_tier vào config_maps, hợp nhất hai trang map editing thành một canvas editor, và render brick bằng polygon border thực tế. Định nghĩa logic matchmaker lọc map theo rank tier của người chơi cao nhất.",
+      "tags": [
+        "spec",
+        "map-rank",
+        "min-rank-tier",
+        "editor-unification",
+        "polygon-rendering",
+        "matchmaker"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/admin/templates/brick_editor.html",
+      "type": "file",
+      "name": "brick_editor.html",
+      "filePath": "internal/admin/templates/brick_editor.html",
+      "summary": "Template HTML cho trang editor brick type 16x16 pixel: form nhập tên/màu sắc/destructible, canvas 400x400 để vẽ polygon border theo 4 cạnh (top/right/bottom/left), preview canvas thực tế. Load brick_editor.js.",
+      "tags": [
+        "template",
+        "admin",
+        "brick-editor",
+        "canvas",
+        "polygon",
+        "html"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/admin/templates/brick_types.html",
+      "type": "file",
+      "name": "brick_types.html",
+      "filePath": "internal/admin/templates/brick_types.html",
+      "summary": "Template HTML cho trang danh sách brick types: bảng hiển thị ID/preview canvas/tên/image/destructible với nút Edit và Delete. Render preview polygon từ border data bằng inline JavaScript.",
+      "tags": [
+        "template",
+        "admin",
+        "brick-types",
+        "list",
+        "canvas",
+        "polygon",
+        "html"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/templates/character_detail.html",
+      "type": "file",
+      "name": "character_detail.html",
+      "filePath": "internal/admin/templates/character_detail.html",
+      "summary": "Template HTML cho trang tạo/sửa nhân vật: form 2 cột với đầy đủ chỉ số (HP/Damage/Mobility/Defense/SkillPower/TerrainDamage), role selector, difficulty, và cấu hình kỹ năng (skill). Có mô tả chi tiết tiếng Việt cho từng field.",
+      "tags": [
+        "template",
+        "admin",
+        "character",
+        "form",
+        "stats",
+        "skill",
+        "html"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/admin/templates/character_progression.html",
+      "type": "file",
+      "name": "character_progression.html",
+      "filePath": "internal/admin/templates/character_progression.html",
+      "summary": "Template HTML cho trang cấu hình Character Progression: form điều chỉnh pointsPerLevel/resetCost/statMultipliers, bảng level table với expRequired có thể thêm/xóa/lưu qua fetch API. Toàn bộ tương tác qua JavaScript.",
+      "tags": [
+        "template",
+        "admin",
+        "character-progression",
+        "level",
+        "exp",
+        "stats",
+        "javascript",
+        "html"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/admin/templates/config_edit.html",
+      "type": "file",
+      "name": "config_edit.html",
+      "filePath": "internal/admin/templates/config_edit.html",
+      "summary": "Template HTML dùng chung cho form chỉnh sửa config: hỗ trợ dynamic fields với type textarea/number/text, render từ .Fields slice. Dùng cho weapons, skills, items và các config type tổng quát.",
+      "tags": [
+        "template",
+        "admin",
+        "config",
+        "form",
+        "generic",
+        "html"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/templates/config_list.html",
+      "type": "file",
+      "name": "config_list.html",
+      "filePath": "internal/admin/templates/config_list.html",
+      "summary": "Template HTML dùng chung cho trang danh sách config: hỗ trợ nhiều loại (characters/weapons/skills/items/maps) với cột và action khác nhau, hiển thị Min Rank cho maps và nút Edit dẫn đến editor. Dùng conditional block theo .ConfigType.",
+      "tags": [
+        "template",
+        "admin",
+        "config",
+        "list",
+        "characters",
+        "weapons",
+        "maps",
+        "html"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/admin/templates/dashboard.html",
+      "type": "file",
+      "name": "dashboard.html",
+      "filePath": "internal/admin/templates/dashboard.html",
+      "summary": "Template HTML trang dashboard chính: hiển thị stats-grid với ActiveRooms và TotalPlayers dưới dạng stat card. Template tối giản.",
+      "tags": [
+        "template",
+        "admin",
+        "dashboard",
+        "stats",
+        "html"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/templates/devtools.html",
+      "type": "file",
+      "name": "devtools.html",
+      "filePath": "internal/admin/templates/devtools.html",
+      "summary": "Template HTML trang Dev Tools: 3 thao tác nguy hiểm có xác nhận — Clear Active Rooms khỏi Redis, Seed Config từ YAML, và Reset All Player Data (xóa toàn bộ data người chơi). Thiết kế với cảnh báo rõ ràng.",
+      "tags": [
+        "template",
+        "admin",
+        "devtools",
+        "redis",
+        "seed",
+        "reset",
+        "html"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/templates/layout.html",
+      "type": "file",
+      "name": "layout.html",
+      "filePath": "internal/admin/templates/layout.html",
+      "summary": "Template HTML layout chung cho toàn bộ admin dashboard: sidebar navigation với các nhóm (Game Config/Matchmaking/Commerce/Management/System), CSS inline đầy đủ, block content cho các trang con. Định nghĩa toàn bộ CSS utility classes.",
+      "tags": [
+        "template",
+        "admin",
+        "layout",
+        "sidebar",
+        "navigation",
+        "css",
+        "html"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/admin/templates/map_editor.html",
+      "type": "file",
+      "name": "map_editor.html",
+      "filePath": "internal/admin/templates/map_editor.html",
+      "summary": "Template HTML cho map editor canvas-based: toolbar với các tool (Paint/Erase/Fill/Select/Spawn), canvas fullscreen với coordinate display, panel properties bên phải với Map Settings đầy đủ (name/grid/wind/min_rank_tier/description) và spawn points list. Load map_editor.js.",
+      "tags": [
+        "template",
+        "admin",
+        "map-editor",
+        "canvas",
+        "tilemap",
+        "spawn-points",
+        "min-rank-tier",
+        "html"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/admin/templates/matchmaking.html",
+      "type": "file",
+      "name": "matchmaking.html",
+      "filePath": "internal/admin/templates/matchmaking.html",
+      "summary": "Template HTML cho trang cấu hình Matchmaking: 3 form riêng cho Queue Settings (tickInterval/ratingRange/expandInterval/strategy), Elo Settings (kFactor/ratingFloor/defaultRating), và Bot Difficulty per tier được render động qua JavaScript.",
+      "tags": [
+        "template",
+        "admin",
+        "matchmaking",
+        "elo",
+        "bot-difficulty",
+        "queue",
+        "javascript",
+        "html"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/admin/templates/physics.html",
+      "type": "file",
+      "name": "physics.html",
+      "filePath": "internal/admin/templates/physics.html",
+      "summary": "Template HTML cho trang Physics & Game Settings: bảng key-value editor với category/key/value/type/description, submit toàn bộ bằng POST. Tối giản, dùng server-rendered data từ .Settings slice.",
+      "tags": [
+        "template",
+        "admin",
+        "physics",
+        "game-settings",
+        "key-value",
+        "html"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/templates/players.html",
+      "type": "file",
+      "name": "players.html",
+      "filePath": "internal/admin/templates/players.html",
+      "summary": "Template HTML cho trang quản lý Players: search bar, bảng danh sách với PlayerID/DisplayName/Level/Coins/Gems/CreatedAt/Status, nút Ban/Unban có xác nhận, phân trang với Prev/Next. Thiết kế moderation-focused.",
+      "tags": [
+        "template",
+        "admin",
+        "players",
+        "ban",
+        "unban",
+        "pagination",
+        "search",
+        "html"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/admin/templates/shop.html",
+      "type": "file",
+      "name": "shop.html",
+      "filePath": "internal/admin/templates/shop.html",
+      "summary": "Template HTML cho trang danh sách Shop Offers: bảng với OfferID/ItemID/Type/Currency/Price/Qty/Limit/Active, nút Edit và Delete có xác nhận. Hiển thị badge Active/Inactive.",
+      "tags": [
+        "template",
+        "admin",
+        "shop",
+        "offers",
+        "list",
+        "html"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/templates/shop_edit.html",
+      "type": "file",
+      "name": "shop_edit.html",
+      "filePath": "internal/admin/templates/shop_edit.html",
+      "summary": "Template HTML cho form tạo/sửa Shop Offer: các field offer_id/item_id/offer_type/price_currency/price_amount/quantity/limit_per_player/is_active với mô tả cho từng field. Hỗ trợ cả create và update.",
+      "tags": [
+        "template",
+        "admin",
+        "shop",
+        "offer",
+        "form",
+        "html"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:docs/specs/2026-07-06-admin-dashboard-design.md",
+      "type": "document",
+      "name": "2026-07-06-admin-dashboard-design.md",
+      "filePath": "docs/specs/2026-07-06-admin-dashboard-design.md",
+      "summary": "Thiết kế spec cho Admin Dashboard: server-rendered bằng Go html/template trên port 9000, không authentication ở dev phase, mô tả kiến trúc file structure handlers/templates và các trang CRUD cho game config và player management.",
+      "tags": [
+        "spec",
+        "admin",
+        "dashboard",
+        "server-rendered",
+        "go-template",
+        "crud"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/specs/2026-07-06-admin-dashboard-plan.md",
+      "type": "document",
+      "name": "2026-07-06-admin-dashboard-plan.md",
+      "filePath": "docs/specs/2026-07-06-admin-dashboard-plan.md",
+      "summary": "Kế hoạch triển khai Admin Dashboard: binary mới cmd/admin, Chi router, config tables trong Postgres thay thế YAML, game server load config từ DB với YAML fallback. Bao gồm danh sách task checkbox chi tiết.",
+      "tags": [
+        "plan",
+        "admin",
+        "dashboard",
+        "chi-router",
+        "postgres",
+        "config-tables",
+        "migration"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:documents/server_implementation_plan.md",
+      "type": "document",
+      "name": "server_implementation_plan.md",
+      "filePath": "documents/server_implementation_plan.md",
+      "summary": "Kế hoạch triển khai server Battle Squad v2: tech stack (Go/WebSocket/PostgreSQL/Redis), kiến trúc 3 process (API/Game/Migrate), các module REST API và gameplay realtime. Tài liệu lập kế hoạch tổng thể ban đầu của dự án.",
+      "tags": [
+        "plan",
+        "server",
+        "architecture",
+        "go",
+        "websocket",
+        "postgresql",
+        "redis",
+        "tech-stack"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:documents/server_implementation_walkthrough.md",
+      "type": "document",
+      "name": "server_implementation_walkthrough.md",
+      "filePath": "documents/server_implementation_walkthrough.md",
+      "summary": "Tóm tắt kết quả triển khai server Battle Squad: các phân hệ đã hoàn thành (Auth/Inventory/Shop/IAP/Missions/Ranks/Match Physics/Bot AI), kết quả unit test physics, và E2E verification script thành công.",
+      "tags": [
+        "walkthrough",
+        "server",
+        "implementation",
+        "unit-test",
+        "e2e",
+        "physics",
+        "bot-ai"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/static/brick_editor.js",
+      "type": "file",
+      "name": "brick_editor.js",
+      "filePath": "internal/admin/static/brick_editor.js",
+      "summary": "JavaScript cho brick type editor 16x16 pixel: class BrickEditor với tọa độ grid 16x16 (scale 25px/unit), drag-and-drop point editing, thêm/xóa point trên từng cạnh polygon (top/right/bottom/left), render preview canvas và save qua POST /brick-types/save.",
+      "tags": [
+        "javascript",
+        "admin",
+        "brick-editor",
+        "canvas",
+        "polygon",
+        "drag-drop",
+        "16x16"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/admin/static/map_editor.js",
+      "type": "file",
+      "name": "map_editor.js",
+      "filePath": "internal/admin/static/map_editor.js",
+      "summary": "JavaScript cho map editor canvas-based: class MapEditor hỗ trợ paint/erase/fill/select/spawn tools, zoom/pan, undo/redo stack, polygon brick rendering từ border data, load/save qua REST API, export YAML. Là file JS lớn nhất và phức tạp nhất trong admin.",
+      "tags": [
+        "javascript",
+        "admin",
+        "map-editor",
+        "canvas",
+        "tilemap",
+        "polygon",
+        "undo-redo",
+        "zoom-pan",
+        "flood-fill"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/shared/circuitbreaker/breaker.go",
+      "type": "file",
+      "name": "breaker.go",
+      "filePath": "internal/shared/circuitbreaker/breaker.go",
+      "summary": "Circuit breaker pattern cho Go: 3 trạng thái Closed/Open/HalfOpen với threshold lỗi và cooldown duration, thread-safe với sync.Mutex, Execute() bao bọc function và tự động chuyển trạng thái theo kết quả.",
+      "tags": [
+        "go",
+        "circuit-breaker",
+        "reliability",
+        "concurrency",
+        "shared",
+        "pattern"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:cmd/admin/main.go",
+      "type": "file",
+      "name": "main.go",
+      "filePath": "cmd/admin/main.go",
+      "summary": "Điểm khởi động của Admin dashboard trên cổng :9000. Seed cấu hình khi khởi động và tạo admin.Server.",
+      "tags": [
+        "entry-point",
+        "admin",
+        "dashboard",
+        "seed"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/handlers_config.go",
+      "type": "file",
+      "name": "handlers_config.go",
+      "filePath": "internal/admin/handlers_config.go",
+      "summary": "CRUD handlers cho cấu hình nhân vật/vũ khí/kỹ năng/vật phẩm/bản đồ trong admin dashboard.",
+      "tags": [
+        "handler",
+        "admin",
+        "config",
+        "crud"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/admin/handlers_dashboard.go",
+      "type": "file",
+      "name": "handlers_dashboard.go",
+      "filePath": "internal/admin/handlers_dashboard.go",
+      "summary": "Handler dashboard admin: hiển thị thống kê số phòng hoạt động và tổng số người chơi.",
+      "tags": [
+        "handler",
+        "admin",
+        "dashboard",
+        "stats"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/handlers_devtools.go",
+      "type": "file",
+      "name": "handlers_devtools.go",
+      "filePath": "internal/admin/handlers_devtools.go",
+      "summary": "Dev tools handlers: handleDevTools, handleClearRooms, handleResetData, handleSeedConfig để hỗ trợ phát triển.",
+      "tags": [
+        "handler",
+        "admin",
+        "devtools",
+        "seed"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/handlers_map_editor.go",
+      "type": "file",
+      "name": "handlers_map_editor.go",
+      "filePath": "internal/admin/handlers_map_editor.go",
+      "summary": "Handlers cho map editor và brick type editor: CRUD brick types, editor bản đồ, lưu tiles và export.",
+      "tags": [
+        "handler",
+        "admin",
+        "map-editor",
+        "brick-types",
+        "tiles"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/admin/handlers_matchmaking.go",
+      "type": "file",
+      "name": "handlers_matchmaking.go",
+      "filePath": "internal/admin/handlers_matchmaking.go",
+      "summary": "Handlers cấu hình matchmaking: trang cấu hình và JSON API GET/POST cho cài đặt matchmaking/elo/bot_difficulty.",
+      "tags": [
+        "handler",
+        "admin",
+        "matchmaking",
+        "config"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/handlers_physics.go",
+      "type": "file",
+      "name": "handlers_physics.go",
+      "filePath": "internal/admin/handlers_physics.go",
+      "summary": "Handlers cài đặt vật lý: trang cấu hình và lưu các setting với tiền tố setting_.",
+      "tags": [
+        "handler",
+        "admin",
+        "physics",
+        "settings"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/handlers_players.go",
+      "type": "file",
+      "name": "handlers_players.go",
+      "filePath": "internal/admin/handlers_players.go",
+      "summary": "Handlers quản lý người chơi: danh sách với tìm kiếm/phân trang, ban và unban tài khoản.",
+      "tags": [
+        "handler",
+        "admin",
+        "players",
+        "ban",
+        "pagination"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/admin/handlers_shop.go",
+      "type": "file",
+      "name": "handlers_shop.go",
+      "filePath": "internal/admin/handlers_shop.go",
+      "summary": "Handlers CRUD cửa hàng trong admin: list, edit, save và delete shop offers.",
+      "tags": [
+        "handler",
+        "admin",
+        "shop",
+        "crud"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/admin/seed.go",
+      "type": "file",
+      "name": "seed.go",
+      "filePath": "internal/admin/seed.go",
+      "summary": "SeedAll: seed cài đặt mặc định vật lý/trận đấu và load YAML config vào các bảng config. Tất cả idempotent qua ON CONFLICT DO NOTHING.",
+      "tags": [
+        "seed",
+        "admin",
+        "config",
+        "yaml",
+        "idempotent"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/admin/server.go",
+      "type": "file",
+      "name": "server.go",
+      "filePath": "internal/admin/server.go",
+      "summary": "Admin Server với embedded templates/static, NewServer, Routes (tất cả admin routes) và phương thức render dùng html/template.",
+      "tags": [
+        "server",
+        "admin",
+        "routes",
+        "template",
+        "embed"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/appconfig/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/appconfig/handler.go",
+      "summary": "HTTP handler cho app config: GetVersionPolicy và GetRemoteConfig endpoints.",
+      "tags": [
+        "handler",
+        "api",
+        "appconfig"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/auth/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/auth/handler.go",
+      "summary": "HTTP handlers cho xác thực: GuestLogin, ProviderLogin, LinkProvider, RefreshToken, Logout.",
+      "tags": [
+        "handler",
+        "api",
+        "auth"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/character/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/character/handler.go",
+      "summary": "HTTP handlers cho nhân vật: GetPlayerCharacters, AllocateStats, ResetStats.",
+      "tags": [
+        "handler",
+        "api",
+        "character"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/dev/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/dev/handler.go",
+      "summary": "HTTP handlers cho dev tools: các endpoint hỗ trợ phát triển và testing.",
+      "tags": [
+        "handler",
+        "api",
+        "dev",
+        "tools"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/giftcode/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/giftcode/handler.go",
+      "summary": "HTTP handler đổi mã quà tặng: nhận request RedeemRequest và trả kết quả.",
+      "tags": [
+        "handler",
+        "api",
+        "giftcode"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/iap/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/iap/handler.go",
+      "summary": "HTTP handlers IAP: GetActiveProducts và VerifyReceipt endpoints.",
+      "tags": [
+        "handler",
+        "api",
+        "iap",
+        "payment"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/matchhistory/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/matchhistory/handler.go",
+      "summary": "HTTP handler lịch sử trận đấu: GetPlayerHistory với phân trang.",
+      "tags": [
+        "handler",
+        "api",
+        "match-history"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/mission/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/mission/handler.go",
+      "summary": "HTTP handlers nhiệm vụ: GetMissions và ClaimReward endpoints.",
+      "tags": [
+        "handler",
+        "api",
+        "mission"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/moderation/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/moderation/handler.go",
+      "summary": "HTTP handlers kiểm duyệt: CreateReport và BanPlayer endpoints.",
+      "tags": [
+        "handler",
+        "api",
+        "moderation",
+        "ban"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/player/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/player/handler.go",
+      "summary": "HTTP handlers người chơi: GetProfile, UpdateDisplayName, RequestAccountDeletion và các endpoint liên quan.",
+      "tags": [
+        "handler",
+        "api",
+        "player",
+        "profile"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/rank/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/rank/handler.go",
+      "summary": "HTTP handlers xếp hạng: GetCurrentSeason, GetPlayerRank, GetLeaderboard, ClaimSeasonReward.",
+      "tags": [
+        "handler",
+        "api",
+        "rank",
+        "season"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/rooms/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/rooms/handler.go",
+      "summary": "HTTP handler danh sách phòng: trả về danh sách phòng đang hoạt động từ Redis.",
+      "tags": [
+        "handler",
+        "api",
+        "rooms",
+        "redis"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/shop/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/shop/handler.go",
+      "summary": "HTTP handlers cửa hàng: GetActiveOffers, Purchase và GetPlayerPurchases endpoints.",
+      "tags": [
+        "handler",
+        "api",
+        "shop"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/game/lobby/hub.go",
+      "type": "file",
+      "name": "hub.go",
+      "filePath": "internal/game/lobby/hub.go",
+      "summary": "LobbyHub: registry in-memory của các lobby rooms. Tạo, tìm và hủy đăng ký lobby, load loadout và rating người chơi.",
+      "tags": [
+        "lobby",
+        "hub",
+        "registry",
+        "in-memory"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/game/match/eventlog.go",
+      "type": "file",
+      "name": "eventlog.go",
+      "filePath": "internal/game/match/eventlog.go",
+      "summary": "EventLogger: ghi log sự kiện trận đấu bất đồng bộ vào bảng match_event_logs qua buffered channel.",
+      "tags": [
+        "match",
+        "event-log",
+        "async",
+        "postgres"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/game/match/item_effect.go",
+      "type": "file",
+      "name": "item_effect.go",
+      "filePath": "internal/game/match/item_effect.go",
+      "summary": "ApplyImmediateItem: xử lý các hiệu ứng vật phẩm tức thì như medkit, teleport, wind_stopper và các vật phẩm thay đổi đạn.",
+      "tags": [
+        "match",
+        "item",
+        "effect",
+        "game-logic"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/shared/middleware/correlation.go",
+      "type": "file",
+      "name": "correlation.go",
+      "filePath": "internal/shared/middleware/correlation.go",
+      "summary": "CorrelationID middleware: đọc/tạo X-Correlation-ID header và inject vào context để theo dõi request.",
+      "tags": [
+        "middleware",
+        "correlation",
+        "tracing",
+        "context"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/model/errors.go",
+      "type": "file",
+      "name": "errors.go",
+      "filePath": "internal/shared/model/errors.go",
+      "summary": "AppError, ErrorResponse và WriteError. Registry các mã lỗi chuẩn của ứng dụng.",
+      "tags": [
+        "model",
+        "errors",
+        "error-codes",
+        "http"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/observability/health.go",
+      "type": "file",
+      "name": "health.go",
+      "filePath": "internal/shared/observability/health.go",
+      "summary": "HealthHandler với Healthz (liveness), Readyz (kiểm tra DB+Redis) và Livez (JSON health chi tiết).",
+      "tags": [
+        "observability",
+        "health",
+        "liveness",
+        "readiness"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/shared/observability/logger.go",
+      "type": "file",
+      "name": "logger.go",
+      "filePath": "internal/shared/observability/logger.go",
+      "summary": "Thiết lập Zerolog: InitLogger, FromContext làm giàu logger với correlationID/playerID/matchID.",
+      "tags": [
+        "observability",
+        "logging",
+        "zerolog",
+        "context"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/observability/metrics.go",
+      "type": "file",
+      "name": "metrics.go",
+      "filePath": "internal/shared/observability/metrics.go",
+      "summary": "Prometheus metrics: HTTP requests, WebSocket connections, match events, active connections/matches/rooms, request duration và MetricsMiddleware.",
+      "tags": [
+        "observability",
+        "metrics",
+        "prometheus",
+        "middleware"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:internal/admin/seed.go:SeedAll",
+      "type": "function",
+      "name": "SeedAll",
+      "filePath": "internal/admin/seed.go",
+      "summary": "Gọi SeedSettings và SeedConfigFromYAML để khởi tạo dữ liệu mặc định khi server admin khởi động.",
+      "tags": [
+        "seed",
+        "admin",
+        "init"
+      ]
+    },
+    {
+      "id": "function:internal/admin/seed.go:SeedConfigFromYAML",
+      "type": "function",
+      "name": "SeedConfigFromYAML",
+      "filePath": "internal/admin/seed.go",
+      "summary": "Load cấu hình game từ YAML qua gamedata.LoadGameData và insert vào các bảng config của database.",
+      "tags": [
+        "seed",
+        "yaml",
+        "gamedata",
+        "config"
+      ]
+    },
+    {
+      "id": "function:internal/admin/handlers_map_editor.go:handleMapSave",
+      "type": "function",
+      "name": "handleMapSave",
+      "filePath": "internal/admin/handlers_map_editor.go",
+      "summary": "Lưu toàn bộ dữ liệu bản đồ (metadata + tiles + spawn points) qua PUT /api/maps/save.",
+      "tags": [
+        "map-editor",
+        "save",
+        "tiles",
+        "admin"
+      ]
+    },
+    {
+      "id": "function:internal/admin/handlers_map_editor.go:handleBrickTypeSave",
+      "type": "function",
+      "name": "handleBrickTypeSave",
+      "filePath": "internal/admin/handlers_map_editor.go",
+      "summary": "Lưu hoặc cập nhật brick type bao gồm tên, image_id, destructible và polygon border.",
+      "tags": [
+        "brick-type",
+        "save",
+        "polygon",
+        "admin"
+      ]
+    },
+    {
+      "id": "function:internal/admin/server.go:Routes",
+      "type": "function",
+      "name": "Routes",
+      "filePath": "internal/admin/server.go",
+      "summary": "Đăng ký tất cả routes của admin dashboard bao gồm map editor, brick types, matchmaking config và player management.",
+      "tags": [
+        "server",
+        "routes",
+        "admin"
+      ]
+    },
+    {
+      "id": "function:internal/shared/model/errors.go:WriteError",
+      "type": "function",
+      "name": "WriteError",
+      "filePath": "internal/shared/model/errors.go",
+      "summary": "Ghi HTTP error response chuẩn với error code và message từ AppError.",
+      "tags": [
+        "errors",
+        "http",
+        "response"
+      ]
+    },
+    {
+      "id": "function:internal/shared/observability/logger.go:InitLogger",
+      "type": "function",
+      "name": "InitLogger",
+      "filePath": "internal/shared/observability/logger.go",
+      "summary": "Khởi tạo zerolog logger toàn cục với level và format phù hợp với môi trường.",
+      "tags": [
+        "logging",
+        "init",
+        "zerolog"
+      ]
+    },
+    {
+      "id": "function:internal/shared/observability/logger.go:FromContext",
+      "type": "function",
+      "name": "FromContext",
+      "filePath": "internal/shared/observability/logger.go",
+      "summary": "Lấy logger từ context và làm giàu với correlationID, playerID, matchID để theo dõi request.",
+      "tags": [
+        "logging",
+        "context",
+        "correlation"
+      ]
+    },
+    {
+      "id": "function:internal/game/lobby/hub.go:CreateLobby",
+      "type": "function",
+      "name": "CreateLobby",
+      "filePath": "internal/game/lobby/hub.go",
+      "summary": "Tạo lobby room mới và đăng ký vào LobbyHub registry.",
+      "tags": [
+        "lobby",
+        "create",
+        "registry"
+      ]
+    },
+    {
+      "id": "function:internal/game/match/eventlog.go:NewEventLogger",
+      "type": "function",
+      "name": "NewEventLogger",
+      "filePath": "internal/game/match/eventlog.go",
+      "summary": "Khởi tạo async event logger cho trận đấu với buffered channel và goroutine ghi DB.",
+      "tags": [
+        "event-log",
+        "async",
+        "match"
+      ]
+    },
+    {
+      "id": "file:cmd/game/main.go",
+      "type": "file",
+      "name": "main.go",
+      "filePath": "cmd/game/main.go",
+      "summary": "Điểm khởi động của Game server trên cổng :8081. Load gamedata (DB trước, fallback YAML), tạo Hub, LobbyHub, Matchmaker và CompositeWSHandler xử lý WebSocket.",
+      "tags": [
+        "entry-point",
+        "game-server",
+        "websocket",
+        "matchmaker"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/game/gamedata/loader.go",
+      "type": "file",
+      "name": "loader.go",
+      "filePath": "internal/game/gamedata/loader.go",
+      "summary": "Loader cấu hình game: định nghĩa MapConfig (với GridWidth, GridHeight, Tiles, MinRankTier), BrickTypeConfig, PhysicsConfig và các hàm LoadGameData (YAML) và LoadGameDataFromDB (DB).",
+      "tags": [
+        "gamedata",
+        "config",
+        "yaml",
+        "db",
+        "map",
+        "brick-types"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/game/lobby/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/game/lobby/handler.go",
+      "summary": "WSHandler lobby: định tuyến các message WebSocket CreateLobby, JoinLobby, LeaveLobby, UpdateLoadout, StartQueue, CancelQueue.",
+      "tags": [
+        "lobby",
+        "websocket",
+        "handler",
+        "queue"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/game/lobby/lobby.go",
+      "type": "file",
+      "name": "lobby.go",
+      "filePath": "internal/game/lobby/lobby.go",
+      "summary": "LobbyRoom: goroutine-based room cho pre-match. Vòng lặp sự kiện Run, xử lý Join/Leave/ProcessEvent/SetStatus/broadcast.",
+      "tags": [
+        "lobby",
+        "room",
+        "goroutine",
+        "event-loop"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/game/lobby/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/game/lobby/model.go",
+      "summary": "Định nghĩa struct LobbyState, LobbyMember, UpdateLoadoutPayload, InvitePayload, JoinLobbyPayload cho hệ thống lobby.",
+      "tags": [
+        "model",
+        "lobby",
+        "state",
+        "payload"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/game/match/bot.go",
+      "type": "file",
+      "name": "bot.go",
+      "filePath": "internal/game/match/bot.go",
+      "summary": "BotBrain (độ khó đơn giản/bình thường): DecideAction dùng medkit khi HP thấp, tìm kẻ địch gần nhất và tính góc/sức mạnh với sai số theo độ khó.",
+      "tags": [
+        "bot",
+        "ai",
+        "match",
+        "game-logic"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/game/match/bot_ai.go",
+      "type": "file",
+      "name": "bot_ai.go",
+      "filePath": "internal/game/match/bot_ai.go",
+      "summary": "SmartBotBrain (bot xếp hạng): AI dựa trên trạng thái với scoring cho shoot/move/useItem, noise từ BotTierConfig. Hàm findClosestEnemy, scoreShoot, scoreMove, scoreUseItem.",
+      "tags": [
+        "bot",
+        "smart-ai",
+        "match",
+        "ranked",
+        "scoring"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/game/match/damage.go",
+      "type": "file",
+      "name": "damage.go",
+      "filePath": "internal/game/match/damage.go",
+      "summary": "Tính sát thương: CalculateExplosionDamage (giảm tuyến tính + giảm defense) và CalculateFallDamage (ngưỡng 150px, 0.25 HP/px).",
+      "tags": [
+        "match",
+        "damage",
+        "physics",
+        "explosion",
+        "fall"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/game/match/damage_test.go",
+      "type": "file",
+      "name": "damage_test.go",
+      "filePath": "internal/game/match/damage_test.go",
+      "summary": "Tests cho tính toán sát thương: explosion damage có/không defense, ngoài tầm và fall damage.",
+      "tags": [
+        "test",
+        "damage",
+        "match"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/game/match/elo.go",
+      "type": "file",
+      "name": "elo.go",
+      "filePath": "internal/game/match/elo.go",
+      "summary": "EloParams struct, CalculateEloChange (công thức Elo chuẩn với bot modifier) và TeamAvgRating.",
+      "tags": [
+        "elo",
+        "rating",
+        "match",
+        "rank"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/game/match/elo_test.go",
+      "type": "file",
+      "name": "elo_test.go",
+      "filePath": "internal/game/match/elo_test.go",
+      "summary": "Tests cho Elo: hai đội ngang nhau, underdog, bot modifier, hòa và team average rating.",
+      "tags": [
+        "test",
+        "elo",
+        "rating"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/game/match/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/game/match/model.go",
+      "summary": "Core game state: Vector2, StatusEffect, BattlePlayerState, WindState, MatchState, ShootAction, MoveAction, UseItemAction, ProjectileResult, MatchHistoryRecord.",
+      "tags": [
+        "model",
+        "match",
+        "game-state",
+        "physics"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/game/match/physics_test.go",
+      "type": "file",
+      "name": "physics_test.go",
+      "filePath": "internal/game/match/physics_test.go",
+      "summary": "Tests SimulateProjectile với rocket cơ bản và wind.",
+      "tags": [
+        "test",
+        "physics",
+        "projectile",
+        "simulation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/game/match/polygon.go",
+      "type": "file",
+      "name": "polygon.go",
+      "filePath": "internal/game/match/polygon.go",
+      "summary": "polygonFromBorder (chuyển BrickBorder thành pixel polygon) và scanlineFillPolygon (raster hóa polygon thành boolean mask).",
+      "tags": [
+        "polygon",
+        "terrain",
+        "rasterization",
+        "brick"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/game/match/shooting.go",
+      "type": "file",
+      "name": "shooting.go",
+      "filePath": "internal/game/match/shooting.go",
+      "summary": "SimulateProjectile: vòng lặp vật lý đầy đủ (trọng lực, gió, sub-step va chạm) và checkSegmentCollisions (4px sub-steps, hit radius, terrain IsSolid, drill mode).",
+      "tags": [
+        "shooting",
+        "projectile",
+        "physics",
+        "collision",
+        "terrain"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/game/match/status_effect.go",
+      "type": "file",
+      "name": "status_effect.go",
+      "filePath": "internal/game/match/status_effect.go",
+      "summary": "ApplyStatusEffect, UpdatePlayerStatusEffects, TickPlayerStatusEffects, HasEffect cho hệ thống hiệu ứng trạng thái người chơi.",
+      "tags": [
+        "status-effect",
+        "match",
+        "game-logic"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/game/match/terrain.go",
+      "type": "file",
+      "name": "terrain.go",
+      "filePath": "internal/game/match/terrain.go",
+      "summary": "Terrain struct với Mask và DestructibleMask. NewTerrain tự động phát hiện tiles vs legacy sine curve. Tile path dùng polygonFromBorder + scanlineFillPolygon.",
+      "tags": [
+        "terrain",
+        "map",
+        "collision-mask",
+        "tiles",
+        "legacy"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/game/match/terrain_test.go",
+      "type": "file",
+      "name": "terrain_test.go",
+      "filePath": "internal/game/match/terrain_test.go",
+      "summary": "Tests terrain: IsSolid cho tile terrain, destroy circle (tôn trọng destructible), legacy fallback và polygon border fill.",
+      "tags": [
+        "test",
+        "terrain",
+        "tiles",
+        "destructible"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/game/matchmaker/map_selection_test.go",
+      "type": "file",
+      "name": "map_selection_test.go",
+      "filePath": "internal/game/matchmaker/map_selection_test.go",
+      "summary": "Tests tierIndex và ratingToTier functions cho hệ thống lọc bản đồ theo rank.",
+      "tags": [
+        "test",
+        "matchmaker",
+        "tier",
+        "map-selection"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/game/matchmaker/matchmaker.go",
+      "type": "file",
+      "name": "matchmaker.go",
+      "filePath": "internal/game/matchmaker/matchmaker.go",
+      "summary": "Matchmaker struct: queue, DB, Redis, nodeID, configs, roomCreator, mapIDs, mapTiers. Chứa ratingToTier, tierIndex, tierOrder và RoomCreator interface. Load tất cả configs từ DB khi khởi tạo.",
+      "tags": [
+        "matchmaker",
+        "queue",
+        "redis",
+        "leader-election",
+        "tier",
+        "map-selection"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/game/matchmaker/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/game/matchmaker/model.go",
+      "summary": "MatchmakingConfig, EloConfig, BotTierConfig, BotDifficultyConfig, QueueEntry và các hàm load config từ DB.",
+      "tags": [
+        "model",
+        "matchmaker",
+        "config",
+        "elo",
+        "bot"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/game/matchmaker/queue.go",
+      "type": "file",
+      "name": "queue.go",
+      "filePath": "internal/game/matchmaker/queue.go",
+      "summary": "Queue dựa trên Redis sorted set: Enqueue, Dequeue, IsPlayerInQueue, GetAllEntries, CancelByPlayer với entry JSON và TTL.",
+      "tags": [
+        "matchmaker",
+        "queue",
+        "redis",
+        "sorted-set"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/game/room/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/game/room/handler.go",
+      "summary": "WSHandler phòng: định tuyến CreateRoom, QuickPlay (tutorial với idle bot), JoinRoom và fallthrough tới room event loop.",
+      "tags": [
+        "room",
+        "websocket",
+        "handler",
+        "quickplay"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/game/room/hub.go",
+      "type": "file",
+      "name": "hub.go",
+      "filePath": "internal/game/room/hub.go",
+      "summary": "Hub: map các phòng, redis, db, nodeID, lobbyNotifier callback. CreateRoom, FindRoom, UnregisterRoom, SyncRoomState, CreateBattleFromMatch.",
+      "tags": [
+        "room",
+        "hub",
+        "registry",
+        "redis",
+        "battle"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/game/room/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/game/room/model.go",
+      "summary": "Định nghĩa struct RoomPlayer, RoomState và các payload CreateRoom, JoinRoom, ChangeTeam, SelectCharacter, SelectItems.",
+      "tags": [
+        "model",
+        "room",
+        "state",
+        "payload"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/game/room/room.go",
+      "type": "file",
+      "name": "room.go",
+      "filePath": "internal/game/room/room.go",
+      "summary": "Room goroutine actor: getActualStats (đọc bonus stats + multipliers), NewRoom, vòng lặp sự kiện cho tất cả room/match events.",
+      "tags": [
+        "room",
+        "goroutine",
+        "event-loop",
+        "match",
+        "stats"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/game/ws/client.go",
+      "type": "file",
+      "name": "client.go",
+      "filePath": "internal/game/ws/client.go",
+      "summary": "Client WebSocket với ReadPump/WritePump goroutines và HandlerInterface với HandleMessage và Unregister.",
+      "tags": [
+        "websocket",
+        "client",
+        "goroutine",
+        "pump"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/game/ws/message.go",
+      "type": "file",
+      "name": "message.go",
+      "filePath": "internal/game/ws/message.go",
+      "summary": "Định nghĩa struct Message WebSocket: Event, Data (json.RawMessage), Seq, Timestamp, CorrelationID.",
+      "tags": [
+        "websocket",
+        "message",
+        "protocol"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/game/ws/server.go",
+      "type": "file",
+      "name": "server.go",
+      "filePath": "internal/game/ws/server.go",
+      "summary": "WebSocket Server: JWT auth, kiểm tra ban, upgrade connection, tạo Client với handler. HandleUpgrade, checkAccountBan.",
+      "tags": [
+        "websocket",
+        "server",
+        "auth",
+        "upgrade",
+        "ban-check"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:cmd/game/main.go:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "cmd/game/main.go",
+      "summary": "Khởi động game server: load gamedata, tạo Hub/LobbyHub/Matchmaker, thiết lập CompositeWSHandler và bắt đầu lắng nghe WebSocket.",
+      "tags": [
+        "entry-point",
+        "server-init",
+        "websocket"
+      ]
+    },
+    {
+      "id": "function:internal/game/gamedata/loader.go:LoadGameDataFromDB",
+      "type": "function",
+      "name": "LoadGameDataFromDB",
+      "filePath": "internal/game/gamedata/loader.go",
+      "summary": "Load toàn bộ cấu hình game từ database PostgreSQL bao gồm maps (với tiles và MinRankTier), brick types và physics config.",
+      "tags": [
+        "gamedata",
+        "db",
+        "config",
+        "map",
+        "brick-types"
+      ]
+    },
+    {
+      "id": "function:internal/game/gamedata/loader.go:LoadGameData",
+      "type": "function",
+      "name": "LoadGameData",
+      "filePath": "internal/game/gamedata/loader.go",
+      "summary": "Load cấu hình game từ các file YAML trong thư mục configs/ khi DB không khả dụng.",
+      "tags": [
+        "gamedata",
+        "yaml",
+        "config",
+        "fallback"
+      ]
+    },
+    {
+      "id": "function:internal/game/match/terrain.go:NewTerrain",
+      "type": "function",
+      "name": "NewTerrain",
+      "filePath": "internal/game/match/terrain.go",
+      "summary": "Tạo terrain mới: tự động chọn tile-based (grid v2) hoặc legacy sine curve dựa trên dữ liệu tiles.",
+      "tags": [
+        "terrain",
+        "tiles",
+        "legacy",
+        "auto-detect"
+      ]
+    },
+    {
+      "id": "function:internal/game/match/shooting.go:SimulateProjectile",
+      "type": "function",
+      "name": "SimulateProjectile",
+      "filePath": "internal/game/match/shooting.go",
+      "summary": "Mô phỏng vật lý đạn: vòng lặp step với trọng lực, gió, va chạm terrain/người chơi và hỗ trợ drill mode.",
+      "tags": [
+        "physics",
+        "projectile",
+        "simulation",
+        "collision"
+      ]
+    },
+    {
+      "id": "function:internal/game/match/damage.go:CalculateExplosionDamage",
+      "type": "function",
+      "name": "CalculateExplosionDamage",
+      "filePath": "internal/game/match/damage.go",
+      "summary": "Tính sát thương nổ với giảm tuyến tính theo khoảng cách và giảm sát thương theo defense.",
+      "tags": [
+        "damage",
+        "explosion",
+        "physics"
+      ]
+    },
+    {
+      "id": "function:internal/game/match/elo.go:CalculateEloChange",
+      "type": "function",
+      "name": "CalculateEloChange",
+      "filePath": "internal/game/match/elo.go",
+      "summary": "Tính thay đổi Elo rating chuẩn với K-factor và bot modifier.",
+      "tags": [
+        "elo",
+        "rating",
+        "calculation"
+      ]
+    },
+    {
+      "id": "function:internal/game/matchmaker/matchmaker.go:ratingToTier",
+      "type": "function",
+      "name": "ratingToTier",
+      "filePath": "internal/game/matchmaker/matchmaker.go",
+      "summary": "Chuyển đổi Elo rating sang tên tier (bronze/silver/gold/platinum/diamond/master).",
+      "tags": [
+        "matchmaker",
+        "tier",
+        "rating",
+        "conversion"
+      ]
+    },
+    {
+      "id": "function:internal/game/matchmaker/matchmaker.go:randomMapForRating",
+      "type": "function",
+      "name": "randomMapForRating",
+      "filePath": "internal/game/matchmaker/matchmaker.go",
+      "summary": "Chọn ngẫu nhiên bản đồ phù hợp với rating người chơi: lọc theo min_rank_tier của map.",
+      "tags": [
+        "matchmaker",
+        "map-selection",
+        "tier",
+        "random"
+      ]
+    },
+    {
+      "id": "function:internal/game/room/hub.go:CreateRoom",
+      "type": "function",
+      "name": "CreateRoom",
+      "filePath": "internal/game/room/hub.go",
+      "summary": "Tạo phòng mới: kiểm tra mode hợp lệ, hash password và đăng ký vào Hub.",
+      "tags": [
+        "room",
+        "create",
+        "hub"
+      ]
+    },
+    {
+      "id": "function:internal/game/room/hub.go:CreateBattleFromMatch",
+      "type": "function",
+      "name": "CreateBattleFromMatch",
+      "filePath": "internal/game/room/hub.go",
+      "summary": "Tạo battle room từ kết quả match của lobby, được gọi khi matchmaker tìm được đủ người chơi.",
+      "tags": [
+        "room",
+        "battle",
+        "match",
+        "lobby"
+      ]
+    },
+    {
+      "id": "function:internal/game/ws/server.go:HandleUpgrade",
+      "type": "function",
+      "name": "HandleUpgrade",
+      "filePath": "internal/game/ws/server.go",
+      "summary": "Xử lý HTTP upgrade sang WebSocket: xác thực JWT, kiểm tra ban và tạo Client mới.",
+      "tags": [
+        "websocket",
+        "upgrade",
+        "auth",
+        "ban-check"
+      ]
+    },
+    {
+      "id": "function:internal/game/match/polygon.go:scanlineFillPolygon",
+      "type": "function",
+      "name": "scanlineFillPolygon",
+      "filePath": "internal/game/match/polygon.go",
+      "summary": "Raster hóa polygon brick thành boolean mask dùng scanline fill algorithm.",
+      "tags": [
+        "polygon",
+        "rasterization",
+        "terrain",
+        "mask"
+      ]
+    },
+    {
+      "id": "file:cmd/migrate/main.go",
+      "type": "file",
+      "name": "main.go",
+      "filePath": "cmd/migrate/main.go",
+      "summary": "Chạy 9 file SQL migration tuần tự. Tất cả migrations idempotent với IF NOT EXISTS và ON CONFLICT DO NOTHING.",
+      "tags": [
+        "entry-point",
+        "migrate",
+        "sql",
+        "idempotent"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:cmd/worker/main.go",
+      "type": "file",
+      "name": "main.go",
+      "filePath": "cmd/worker/main.go",
+      "summary": "Worker server: tạo Scheduler, đăng ký 3 jobs (ban_expire, daily_reset, account_deletion), khởi động và chờ signal.",
+      "tags": [
+        "entry-point",
+        "worker",
+        "scheduler",
+        "jobs"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/admin/repository.go",
+      "summary": "Admin repository: DashboardStats, CRUD game settings, character/weapon/skill/item/map, brick type CRUD, MapTilesData, SaveMapFull, shop offer CRUD, player management, ClearRooms, ResetAllData.",
+      "tags": [
+        "repository",
+        "admin",
+        "crud",
+        "map",
+        "brick-types",
+        "postgres"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/api/appconfig/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/appconfig/service.go",
+      "summary": "GetVersionPolicy (DB lookup với mock fallback) và GetRemoteConfig (trả về config với env URLs và active items list).",
+      "tags": [
+        "service",
+        "appconfig",
+        "version",
+        "remote-config"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/auth/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/auth/repository.go",
+      "summary": "FindIdentity, FindAccountByID, CreateGuestAccount, CreateProviderAccount, LinkIdentity, UpdateLastLogin, GetPlayerProfileByAccountID.",
+      "tags": [
+        "repository",
+        "auth",
+        "account",
+        "identity",
+        "postgres"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/character/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/character/repository.go",
+      "summary": "GetPlayerCharacters, GetPlayerCharacter, AllocateStats, ResetStats, GetConfigValue, GetCharacterBonuses, AddExpAndLevelTx.",
+      "tags": [
+        "repository",
+        "character",
+        "stats",
+        "exp",
+        "postgres"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/giftcode/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/giftcode/repository.go",
+      "summary": "GetGiftCode, HasRedeemed, GetGiftCodeTx, HasRedeemedTx, RedeemTx cho hệ thống mã quà tặng.",
+      "tags": [
+        "repository",
+        "giftcode",
+        "transaction",
+        "postgres"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/iap/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/iap/repository.go",
+      "summary": "GetActiveProducts, GetProductByID, FindTransactionByID, CreateTransactionTx cho thanh toán trong ứng dụng.",
+      "tags": [
+        "repository",
+        "iap",
+        "payment",
+        "transaction",
+        "postgres"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/matchhistory/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/matchhistory/repository.go",
+      "summary": "GetPlayerHistory với phân trang query từ database.",
+      "tags": [
+        "repository",
+        "match-history",
+        "pagination",
+        "postgres"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/mission/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/mission/repository.go",
+      "summary": "GetPlayerMissions, GetMissionProgress, GetMissionProgressTx, IncrementProgressTx, MarkClaimedTx.",
+      "tags": [
+        "repository",
+        "mission",
+        "progress",
+        "transaction",
+        "postgres"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/moderation/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/moderation/repository.go",
+      "summary": "CreateReport, GetAccountIDByPlayerID, BanAccountTx, RevokeBanTx cho hệ thống kiểm duyệt.",
+      "tags": [
+        "repository",
+        "moderation",
+        "ban",
+        "report",
+        "postgres"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/moderation/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/moderation/service.go",
+      "summary": "CreateReport, BanPlayer (TX: get accountID, tạo ban, cập nhật status), RevokeBan.",
+      "tags": [
+        "service",
+        "moderation",
+        "ban",
+        "report"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/player/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/player/repository.go",
+      "summary": "GetProfile, UpdateDisplayName, RequestAccountDeletion, CancelAccountDeletion, GetAccountDeletionStatus.",
+      "tags": [
+        "repository",
+        "player",
+        "profile",
+        "account-deletion",
+        "postgres"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/rank/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/rank/repository.go",
+      "summary": "GetActiveSeason, GetPlayerRank, GetLeaderboard, HasClaimedReward, ClaimRewardTx cho hệ thống xếp hạng.",
+      "tags": [
+        "repository",
+        "rank",
+        "season",
+        "leaderboard",
+        "postgres"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/shop/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/shop/repository.go",
+      "summary": "GetActiveOffers, GetOfferByID, GetPlayerPurchaseCount, CreateShopPurchaseTx, GetPlayerPurchases.",
+      "tags": [
+        "repository",
+        "shop",
+        "purchase",
+        "transaction",
+        "postgres"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/shared/config/config.go",
+      "type": "file",
+      "name": "config.go",
+      "filePath": "internal/shared/config/config.go",
+      "summary": "Config struct và LoadConfig đọc từ env vars với giá trị mặc định cho local dev. Các biến chính: PostgresDSN, RedisAddr, JWTSecret, ports.",
+      "tags": [
+        "config",
+        "env",
+        "shared",
+        "server-config"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/database/postgres.go",
+      "type": "file",
+      "name": "postgres.go",
+      "filePath": "internal/shared/database/postgres.go",
+      "summary": "PostgresDB bọc pgxpool.Pool. NewPostgresDB với pool config (max 25, min 5, idle 30min, lifetime 1h), Close, Ping.",
+      "tags": [
+        "database",
+        "postgres",
+        "pgx",
+        "connection-pool"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/database/redis.go",
+      "type": "file",
+      "name": "redis.go",
+      "filePath": "internal/shared/database/redis.go",
+      "summary": "RedisClient bọc redis.Client. NewRedisClient với pool 50 connections, min idle 10, Close, Ping.",
+      "tags": [
+        "database",
+        "redis",
+        "connection-pool"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/featureflag/flags.go",
+      "type": "file",
+      "name": "flags.go",
+      "filePath": "internal/shared/featureflag/flags.go",
+      "summary": "Feature flag Manager dựa trên Redis: IsEnabled, Set và getDefaultValue cho các flag đã biết (shop_enabled, iap_ios/android_enabled, ranked_mode).",
+      "tags": [
+        "feature-flag",
+        "redis",
+        "shared"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/middleware/version_check.go",
+      "type": "file",
+      "name": "version_check.go",
+      "filePath": "internal/shared/middleware/version_check.go",
+      "summary": "VersionCheck middleware: kiểm tra header X-Protocol-Version và trả ErrForceUpdate nếu client cũ hơn.",
+      "tags": [
+        "middleware",
+        "version",
+        "protocol",
+        "force-update"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/worker/jobs/account_deletion.go",
+      "type": "file",
+      "name": "account_deletion.go",
+      "filePath": "internal/worker/jobs/account_deletion.go",
+      "summary": "Job chạy mỗi 1h: ẩn danh hóa player_profiles cho tài khoản đang chờ xóa, đánh dấu accounts là deleted.",
+      "tags": [
+        "worker",
+        "job",
+        "account-deletion",
+        "scheduled"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/worker/jobs/ban_expire.go",
+      "type": "file",
+      "name": "ban_expire.go",
+      "filePath": "internal/worker/jobs/ban_expire.go",
+      "summary": "Job chạy mỗi 5min: hết hạn các ban quá hạn, kích hoạt lại tài khoản không còn ban active.",
+      "tags": [
+        "worker",
+        "job",
+        "ban",
+        "scheduled"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/worker/jobs/daily_reset.go",
+      "type": "file",
+      "name": "daily_reset.go",
+      "filePath": "internal/worker/jobs/daily_reset.go",
+      "summary": "Job chạy mỗi 1h: reset tiến độ nhiệm vụ hàng ngày một lần mỗi ngày UTC (Redis dedup qua key worker:daily_reset:last_run_date).",
+      "tags": [
+        "worker",
+        "job",
+        "daily-reset",
+        "mission",
+        "redis"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/worker/scheduler.go",
+      "type": "file",
+      "name": "scheduler.go",
+      "filePath": "internal/worker/scheduler.go",
+      "summary": "Job struct và Scheduler: chạy mỗi job trong goroutine với ticker. Register, Start, Stop.",
+      "tags": [
+        "worker",
+        "scheduler",
+        "goroutine",
+        "ticker"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:cmd/migrate/main.go:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "cmd/migrate/main.go",
+      "summary": "Kết nối DB và chạy tuần tự 9 file SQL migration từ thư mục migrations/.",
+      "tags": [
+        "migrate",
+        "sql",
+        "entry-point"
+      ]
+    },
+    {
+      "id": "function:cmd/worker/main.go:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "cmd/worker/main.go",
+      "summary": "Khởi động worker: tạo scheduler, đăng ký jobs và bắt đầu chạy cho đến khi nhận SIGTERM.",
+      "tags": [
+        "worker",
+        "scheduler",
+        "entry-point"
+      ]
+    },
+    {
+      "id": "function:internal/admin/repository.go:SaveMapFull",
+      "type": "function",
+      "name": "SaveMapFull",
+      "filePath": "internal/admin/repository.go",
+      "summary": "Lưu toàn bộ dữ liệu bản đồ: metadata, tiles JSONB 2D array và spawn_points vào bảng config_maps.",
+      "tags": [
+        "repository",
+        "map",
+        "save",
+        "tiles",
+        "jsonb"
+      ]
+    },
+    {
+      "id": "function:internal/admin/repository.go:GetBrickTypes",
+      "type": "function",
+      "name": "GetBrickTypes",
+      "filePath": "internal/admin/repository.go",
+      "summary": "Lấy danh sách tất cả brick types từ bảng config_brick_types.",
+      "tags": [
+        "repository",
+        "brick-types",
+        "query"
+      ]
+    },
+    {
+      "id": "function:internal/admin/repository.go:DashboardStats",
+      "type": "function",
+      "name": "DashboardStats",
+      "filePath": "internal/admin/repository.go",
+      "summary": "Lấy thống kê dashboard: số phòng đang hoạt động và tổng số người chơi.",
+      "tags": [
+        "repository",
+        "admin",
+        "stats",
+        "dashboard"
+      ]
+    },
+    {
+      "id": "function:internal/admin/repository.go:ClearRooms",
+      "type": "function",
+      "name": "ClearRooms",
+      "filePath": "internal/admin/repository.go",
+      "summary": "Xóa tất cả phòng đang hoạt động khỏi Redis và database, dùng cho dev tools.",
+      "tags": [
+        "repository",
+        "admin",
+        "rooms",
+        "devtools"
+      ]
+    },
+    {
+      "id": "function:internal/shared/config/config.go:LoadConfig",
+      "type": "function",
+      "name": "LoadConfig",
+      "filePath": "internal/shared/config/config.go",
+      "summary": "Đọc cấu hình server từ env vars với giá trị mặc định cho phát triển local.",
+      "tags": [
+        "config",
+        "env",
+        "init"
+      ]
+    },
+    {
+      "id": "function:internal/shared/database/postgres.go:NewPostgresDB",
+      "type": "function",
+      "name": "NewPostgresDB",
+      "filePath": "internal/shared/database/postgres.go",
+      "summary": "Tạo kết nối PostgreSQL pool mới với pgxpool và cấu hình pool size, idle timeout, lifetime.",
+      "tags": [
+        "database",
+        "postgres",
+        "connection-pool",
+        "init"
+      ]
+    },
+    {
+      "id": "function:internal/shared/database/redis.go:NewRedisClient",
+      "type": "function",
+      "name": "NewRedisClient",
+      "filePath": "internal/shared/database/redis.go",
+      "summary": "Tạo Redis client mới với pool 50 connections và min idle 10.",
+      "tags": [
+        "database",
+        "redis",
+        "connection-pool",
+        "init"
+      ]
+    },
+    {
+      "id": "function:internal/worker/scheduler.go:Start",
+      "type": "function",
+      "name": "Start",
+      "filePath": "internal/worker/scheduler.go",
+      "summary": "Khởi động tất cả jobs đã đăng ký, mỗi job chạy trong goroutine riêng với ticker.",
+      "tags": [
+        "scheduler",
+        "start",
+        "goroutine"
+      ]
+    },
+    {
+      "id": "function:internal/api/character/repository.go:AddExpAndLevelTx",
+      "type": "function",
+      "name": "AddExpAndLevelTx",
+      "filePath": "internal/api/character/repository.go",
+      "summary": "Cộng EXP cho nhân vật và tự động lên level nếu đủ EXP trong một transaction.",
+      "tags": [
+        "character",
+        "exp",
+        "level",
+        "transaction"
+      ]
+    },
+    {
+      "id": "function:internal/api/moderation/service.go:BanPlayer",
+      "type": "function",
+      "name": "BanPlayer",
+      "filePath": "internal/api/moderation/service.go",
+      "summary": "Ban tài khoản người chơi: lấy accountID, tạo ban record và cập nhật trạng thái trong transaction.",
+      "tags": [
+        "moderation",
+        "ban",
+        "transaction"
+      ]
+    },
+    {
+      "id": "file:migrations/001_init_schema.up.sql",
+      "type": "file",
+      "name": "001_init_schema.up.sql",
+      "filePath": "migrations/001_init_schema.up.sql",
+      "summary": "Tạo toàn bộ schema ban đầu của cơ sở dữ liệu gồm 24 bảng: accounts, auth_identities, player_profiles, player_characters, inventory_items, shop, IAP, economy, gift_codes, missions, player_reports, account_bans, rank_seasons, player_ranks, match_histories, match_snapshots, match_recovery_logs, client_version_policies cùng các index hiệu suất.",
+      "tags": [
+        "migration",
+        "schema",
+        "sql",
+        "init",
+        "postgresql"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:migrations/001_init_schema.down.sql",
+      "type": "file",
+      "name": "001_init_schema.down.sql",
+      "filePath": "migrations/001_init_schema.down.sql",
+      "summary": "Xóa toàn bộ 24 bảng được tạo bởi migration 001 theo thứ tự đảo ngược (CASCADE) để tránh vi phạm foreign key.",
+      "tags": [
+        "migration",
+        "rollback",
+        "sql"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:migrations/002_add_account_role.up.sql",
+      "type": "file",
+      "name": "002_add_account_role.up.sql",
+      "filePath": "migrations/002_add_account_role.up.sql",
+      "summary": "Thêm cột `role` (VARCHAR 20, mặc định 'player') vào bảng `accounts` để phân biệt vai trò player và admin.",
+      "tags": [
+        "migration",
+        "schema",
+        "sql",
+        "auth",
+        "admin"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:migrations/002_add_account_role.down.sql",
+      "type": "file",
+      "name": "002_add_account_role.down.sql",
+      "filePath": "migrations/002_add_account_role.down.sql",
+      "summary": "Xóa cột `role` khỏi bảng `accounts` — rollback cho migration 002.",
+      "tags": [
+        "migration",
+        "rollback",
+        "sql"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:migrations/003_add_match_event_logs.up.sql",
+      "type": "file",
+      "name": "003_add_match_event_logs.up.sql",
+      "filePath": "migrations/003_add_match_event_logs.up.sql",
+      "summary": "Tạo bảng `match_event_logs` ghi lại từng sự kiện trong trận đấu (seq, event_type, player_id, data JSONB) kèm index theo match_id và (match_id, seq) phục vụ replay và debug.",
+      "tags": [
+        "migration",
+        "schema",
+        "sql",
+        "match",
+        "logging"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:migrations/003_add_match_event_logs.down.sql",
+      "type": "file",
+      "name": "003_add_match_event_logs.down.sql",
+      "filePath": "migrations/003_add_match_event_logs.down.sql",
+      "summary": "Xóa bảng `match_event_logs` — rollback cho migration 003.",
+      "tags": [
+        "migration",
+        "rollback",
+        "sql"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:migrations/004_admin_config_tables.up.sql",
+      "type": "file",
+      "name": "004_admin_config_tables.up.sql",
+      "filePath": "migrations/004_admin_config_tables.up.sql",
+      "summary": "Tạo các bảng cấu hình game do admin quản lý: `game_settings` (key-value), `config_characters`, `config_weapons`, `config_skills`, `config_items`, `config_maps` (với terrain_layers và spawn_points JSONB).",
+      "tags": [
+        "migration",
+        "schema",
+        "sql",
+        "admin",
+        "gameconfig"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:migrations/004_admin_config_tables.down.sql",
+      "type": "file",
+      "name": "004_admin_config_tables.down.sql",
+      "filePath": "migrations/004_admin_config_tables.down.sql",
+      "summary": "Xóa toàn bộ bảng cấu hình game (config_maps, config_items, config_skills, config_weapons, config_characters, game_settings) — rollback cho migration 004.",
+      "tags": [
+        "migration",
+        "rollback",
+        "sql"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:migrations/005_add_loadouts_and_matchmaking.up.sql",
+      "type": "file",
+      "name": "005_add_loadouts_and_matchmaking.up.sql",
+      "filePath": "migrations/005_add_loadouts_and_matchmaking.up.sql",
+      "summary": "Tạo bảng `player_loadouts` lưu character và items được chọn, đồng thời seed dữ liệu cấu hình matchmaking (queue config, Elo, bot difficulty theo 6 tier) vào `game_settings`.",
+      "tags": [
+        "migration",
+        "schema",
+        "sql",
+        "matchmaking",
+        "loadout",
+        "elo"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:migrations/005_add_loadouts_and_matchmaking.down.sql",
+      "type": "file",
+      "name": "005_add_loadouts_and_matchmaking.down.sql",
+      "filePath": "migrations/005_add_loadouts_and_matchmaking.down.sql",
+      "summary": "Xóa bảng `player_loadouts` và dọn dữ liệu matchmaking, elo, bot_difficulty trong `game_settings` — rollback cho migration 005.",
+      "tags": [
+        "migration",
+        "rollback",
+        "sql"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:migrations/006_character_progression.up.sql",
+      "type": "file",
+      "name": "006_character_progression.up.sql",
+      "filePath": "migrations/006_character_progression.up.sql",
+      "summary": "Thêm hệ thống tiến trình nhân vật: 9 cột mới (level, exp, stat_points, bonus stats) vào `player_characters`, seed config `character_progression` và `character_levels` (level 2-10) vào `game_settings`.",
+      "tags": [
+        "migration",
+        "schema",
+        "sql",
+        "character",
+        "progression"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:migrations/006_character_progression.down.sql",
+      "type": "file",
+      "name": "006_character_progression.down.sql",
+      "filePath": "migrations/006_character_progression.down.sql",
+      "summary": "Xóa các cột tiến trình khỏi `player_characters` và dọn config character progression trong `game_settings` — rollback cho migration 006.",
+      "tags": [
+        "migration",
+        "rollback",
+        "sql"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:migrations/007_map_editor.up.sql",
+      "type": "file",
+      "name": "007_map_editor.up.sql",
+      "filePath": "migrations/007_map_editor.up.sql",
+      "summary": "Thêm các cột tilemap (`grid_width`, `grid_height`, `cell_size`, `tiles` JSONB) vào bảng `config_maps` để hỗ trợ hệ thống bản đồ lưới Grid v2.",
+      "tags": [
+        "migration",
+        "schema",
+        "sql",
+        "map",
+        "editor",
+        "tilemap"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:migrations/007_map_editor.down.sql",
+      "type": "file",
+      "name": "007_map_editor.down.sql",
+      "filePath": "migrations/007_map_editor.down.sql",
+      "summary": "Xóa các cột tilemap khỏi `config_maps` và bảng `config_brick_types` — rollback cho migration 007.",
+      "tags": [
+        "migration",
+        "rollback",
+        "sql"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:migrations/008_brick_border_v2.up.sql",
+      "type": "file",
+      "name": "008_brick_border_v2.up.sql",
+      "filePath": "migrations/008_brick_border_v2.up.sql",
+      "summary": "Tạo bảng `config_brick_types` với SERIAL PK lưu loại gạch của map: name, image_id, destructible, border JSONB (polygon 4 cạnh top/right/bottom/left), color cho hệ thống render terrain v2.",
+      "tags": [
+        "migration",
+        "schema",
+        "sql",
+        "brick",
+        "map",
+        "terrain"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:migrations/008_brick_border_v2.down.sql",
+      "type": "file",
+      "name": "008_brick_border_v2.down.sql",
+      "filePath": "migrations/008_brick_border_v2.down.sql",
+      "summary": "Rollback migration 008: xóa và tái tạo `config_brick_types` với TEXT PK (schema cũ), reset tiles trong `config_maps` về mảng rỗng.",
+      "tags": [
+        "migration",
+        "rollback",
+        "sql"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:migrations/009_map_rank_tier.up.sql",
+      "type": "file",
+      "name": "009_map_rank_tier.up.sql",
+      "filePath": "migrations/009_map_rank_tier.up.sql",
+      "summary": "Thêm cột `min_rank_tier` (VARCHAR 20, mặc định 'bronze') vào `config_maps` để matchmaker chỉ chọn map phù hợp rank tối thiểu của người chơi.",
+      "tags": [
+        "migration",
+        "schema",
+        "sql",
+        "map",
+        "rank",
+        "tier"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:migrations/009_map_rank_tier.down.sql",
+      "type": "file",
+      "name": "009_map_rank_tier.down.sql",
+      "filePath": "migrations/009_map_rank_tier.down.sql",
+      "summary": "Xóa cột `min_rank_tier` khỏi `config_maps` — rollback cho migration 009.",
+      "tags": [
+        "migration",
+        "rollback",
+        "sql"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:.env.example",
+      "type": "config",
+      "name": ".env.example",
+      "filePath": ".env.example",
+      "summary": "File mẫu biến môi trường cho toàn bộ server: APP_ENV, API_PORT (8080), GAME_PORT (8081), POSTGRES_DSN, REDIS_ADDR, JWT_SECRET, NODE_ID. Dùng làm tài liệu tham khảo cấu hình local dev.",
+      "tags": [
+        "config",
+        "env",
+        "environment",
+        "secrets"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:CLAUDE.md",
+      "type": "document",
+      "name": "CLAUDE.md",
+      "filePath": "CLAUDE.md",
+      "summary": "Hướng dẫn cho Claude Code khi làm việc với codebase: build & run commands, kiến trúc tổng quan, hệ thống map Grid v2, quy tắc migration idempotent, rank system, git conventions.",
+      "tags": [
+        "docs",
+        "claude",
+        "instructions",
+        "architecture"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "service:Dockerfile.api",
+      "type": "service",
+      "name": "Dockerfile.api",
+      "filePath": "Dockerfile.api",
+      "summary": "Multi-stage Dockerfile build API server (REST :8080): stage builder dùng golang:1.25-alpine để biên dịch, stage runtime dùng alpine:3.20 với user appuser không có quyền root, health check qua /healthz.",
+      "tags": [
+        "docker",
+        "infra",
+        "api",
+        "build"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:Dockerfile.game",
+      "type": "service",
+      "name": "Dockerfile.game",
+      "filePath": "Dockerfile.game",
+      "summary": "Multi-stage Dockerfile build Game server (WebSocket :8081): tương tự Dockerfile.api nhưng copy thêm thư mục `configs/` vào image để load YAML game data lúc khởi động.",
+      "tags": [
+        "docker",
+        "infra",
+        "game",
+        "build",
+        "configs"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:Dockerfile.worker",
+      "type": "service",
+      "name": "Dockerfile.worker",
+      "filePath": "Dockerfile.worker",
+      "summary": "Multi-stage Dockerfile build Worker (background jobs): copy thêm thư mục `migrations/` vào image để worker có thể chạy database migration khi khởi động.",
+      "tags": [
+        "docker",
+        "infra",
+        "worker",
+        "build",
+        "migrations"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:Makefile",
+      "type": "config",
+      "name": "Makefile",
+      "filePath": "Makefile",
+      "summary": "Makefile định nghĩa các lệnh build (build-api, build-game, build-worker, build-migrate, build-all), run, test với coverage, lint, migrate và quản lý Docker Compose cho môi trường phát triển.",
+      "tags": [
+        "makefile",
+        "build",
+        "infra",
+        "dev"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "README.md",
+      "summary": "Tài liệu chính của project: mô tả tổng quan kiến trúc 3 process (API/Game/Worker), tech stack (Go 1.25, chi, gorilla/websocket, pgx/v5, go-redis, JWT, zerolog, Prometheus), hướng dẫn chạy local và cấu trúc thư mục.",
+      "tags": [
+        "docs",
+        "readme",
+        "overview"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:docker-compose.yml",
+      "type": "config",
+      "name": "docker-compose.yml",
+      "filePath": "docker-compose.yml",
+      "summary": "Định nghĩa Docker Compose services: postgres (15-alpine, port 5432), redis (7-alpine, port 6379), api (port 8080), game (port 8081), worker — tất cả trong network `battlesquad_network`, dùng volume cho data persistence.",
+      "tags": [
+        "docker",
+        "compose",
+        "infra",
+        "postgresql",
+        "redis"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:go.mod",
+      "type": "config",
+      "name": "go.mod",
+      "filePath": "go.mod",
+      "summary": "Go module file khai báo module `battle-squad` với Go 1.25, liệt kê các dependency chính: chi/v5, golang-jwt/v5, gorilla/websocket, pgx/v5, prometheus/client_golang, go-redis/v9, zerolog, yaml.v3.",
+      "tags": [
+        "go",
+        "module",
+        "dependencies"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:go.sum",
+      "type": "config",
+      "name": "go.sum",
+      "filePath": "go.sum",
+      "summary": "File checksum Go module đảm bảo tính toàn vẹn của tất cả dependency được khai báo trong go.mod.",
+      "tags": [
+        "go",
+        "module",
+        "checksums",
+        "security"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:configs/characters.yaml",
+      "type": "config",
+      "name": "characters.yaml",
+      "filePath": "configs/characters.yaml",
+      "summary": "Định nghĩa 4 nhân vật chơi được: Rookie (balanced, hp:100), Tanko (heavy_gunner, hp:130), Spark (controller, hp:90), Flora (support, hp:95) — mỗi nhân vật có stats đầy đủ, weaponId và skillId tương ứng.",
+      "tags": [
+        "config",
+        "yaml",
+        "characters",
+        "gamedata"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:configs/items.yaml",
+      "type": "config",
+      "name": "items.yaml",
+      "filePath": "configs/items.yaml",
+      "summary": "Định nghĩa 8 vật phẩm chiến đấu: medkit (hồi máu), teleport (dịch chuyển), power_shot (tăng sát thương), drill_bomb (xuyên địa hình), spider_net (giảm di chuyển), freeze_bomb (đóng băng), air_strike (không kích), wind_stopper (triệt gió).",
+      "tags": [
+        "config",
+        "yaml",
+        "items",
+        "gamedata"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:configs/maps.yaml",
+      "type": "config",
+      "name": "maps.yaml",
+      "filePath": "configs/maps.yaml",
+      "summary": "Định nghĩa 3 bản đồ: Grassland Valley (minRankTier: bronze), Frozen Peak (minRankTier: silver), Steel Base (minRankTier: gold) — mỗi map có gridWidth/Height/cellSize, defaultWindPowerRange, terrainLayers và spawnPoints, tiles hiện để trống (dùng legacy terrain).",
+      "tags": [
+        "config",
+        "yaml",
+        "maps",
+        "gamedata",
+        "terrain",
+        "rank"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:configs/skills.yaml",
+      "type": "config",
+      "name": "skills.yaml",
+      "filePath": "configs/skills.yaml",
+      "summary": "Định nghĩa 4 kỹ năng đặc biệt gắn với nhân vật: triple_shot (Rookie, multi_projectile), heavy_bomb (Tanko, single_large_bomb), shock_field (Spark, debuff/net), healing_bloom (Flora, heal).",
+      "tags": [
+        "config",
+        "yaml",
+        "skills",
+        "gamedata"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:configs/weapons.yaml",
+      "type": "config",
+      "name": "weapons.yaml",
+      "filePath": "configs/weapons.yaml",
+      "summary": "Định nghĩa 4 vũ khí chính cho từng nhân vật: basic_rocket (Rookie), cannon_ball (Tanko, terrainDamage:85), electric_orb (Spark, windInfluence:1.2), seed_bomb (Flora) với các thông số damage, explosionRadius, terrainDamage, projectileWeight, windInfluence.",
+      "tags": [
+        "config",
+        "yaml",
+        "weapons",
+        "gamedata"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:docs/database-erd.html",
+      "type": "file",
+      "name": "database-erd.html",
+      "filePath": "docs/database-erd.html",
+      "summary": "Trang HTML tương tác hiển thị Entity-Relationship Diagram của database Battle Squad: canvas kéo thả, zoom, hiển thị tất cả bảng theo domain (auth, inventory, shop, match, rank, config) với các cột PK/FK/UK và đường quan hệ SVG.",
+      "tags": [
+        "docs",
+        "html",
+        "erd",
+        "database",
+        "visualization"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/database-erd.md",
+      "type": "document",
+      "name": "database-erd.md",
+      "filePath": "docs/database-erd.md",
+      "summary": "Tài liệu ERD dạng Mermaid diagram mô tả đầy đủ tất cả bảng và quan hệ của database Battle Squad theo 7 nhóm domain: Auth/Player, Inventory/Economy, Shop/IAP, Missions/Giftcode, Moderation, Rank/Season, Match/Config.",
+      "tags": [
+        "docs",
+        "markdown",
+        "erd",
+        "database",
+        "mermaid"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/technical-documentation.md",
+      "type": "document",
+      "name": "technical-documentation.md",
+      "filePath": "docs/technical-documentation.md",
+      "summary": "Tài liệu kỹ thuật toàn diện của Battle Squad server: kiến trúc 4 process, tech stack, cấu hình env, cấu trúc thư mục, toàn bộ REST API endpoints, WebSocket events, match lifecycle, bot AI, matchmaking flow và Elo system.",
+      "tags": [
+        "docs",
+        "markdown",
+        "technical",
+        "api",
+        "architecture"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/superpowers/plans/2026-07-07-character-progression.md",
+      "type": "document",
+      "name": "2026-07-07-character-progression.md",
+      "filePath": "docs/superpowers/plans/2026-07-07-character-progression.md",
+      "summary": "Kế hoạch triển khai hệ thống tiến triển nhân vật: thêm EXP/level/stat points vào player_characters, module API character mới, cấu hình qua admin dashboard. Mô tả đầy đủ file structure và các bước checkbox.",
+      "tags": [
+        "plan",
+        "character",
+        "progression",
+        "exp",
+        "leveling",
+        "stats",
+        "admin"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/superpowers/plans/2026-07-07-ranked-matchmaking.md",
+      "type": "document",
+      "name": "2026-07-07-ranked-matchmaking.md",
+      "filePath": "docs/superpowers/plans/2026-07-07-ranked-matchmaking.md",
+      "summary": "Kế hoạch triển khai hệ thống matchmaking ranked 2v2 tự động: lobby room, Redis queue, Elo rating, smart bot AI, và cài đặt có thể cấu hình từ admin. Bao gồm toàn bộ file structure từ lobby đến matchmaker.",
+      "tags": [
+        "plan",
+        "matchmaking",
+        "ranked",
+        "lobby",
+        "elo",
+        "bot",
+        "redis",
+        "queue"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/superpowers/plans/2026-07-08-battle-fixes.md",
+      "type": "document",
+      "name": "2026-07-08-battle-fixes.md",
+      "filePath": "docs/superpowers/plans/2026-07-08-battle-fixes.md",
+      "summary": "Kế hoạch sửa lỗi trận đấu: thêm icon hủy bắn, fall-death khi không có mặt đất, vật phẩm dùng một lần qua shoot, và teleport item qua đạn. Bao gồm cả thay đổi server Go lẫn client Flutter.",
+      "tags": [
+        "plan",
+        "battle",
+        "bugfix",
+        "fall-death",
+        "teleport",
+        "items",
+        "flutter",
+        "server"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/superpowers/plans/2026-07-08-map-editor.md",
+      "type": "document",
+      "name": "2026-07-08-map-editor.md",
+      "filePath": "docs/superpowers/plans/2026-07-08-map-editor.md",
+      "summary": "Kế hoạch triển khai map editor tilemap-based trong admin dashboard: bảng config_brick_types, cột grid mới cho config_maps, canvas editor bằng HTML5/JS, và terrain.go đọc tile grid. Mô tả chi tiết file structure.",
+      "tags": [
+        "plan",
+        "map-editor",
+        "tilemap",
+        "brick-types",
+        "admin",
+        "canvas",
+        "terrain"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/superpowers/plans/2026-07-09-map-editor-v2.md",
+      "type": "document",
+      "name": "2026-07-09-map-editor-v2.md",
+      "filePath": "docs/superpowers/plans/2026-07-09-map-editor-v2.md",
+      "summary": "Kế hoạch nâng cấp brick types từ hình vuông đơn giản sang polygon border với image support, đổi tile format sang integer ID, thêm pixel editor 16x16 để thiết kế border. Tái cấu trúc bảng config_brick_types với SERIAL PK.",
+      "tags": [
+        "plan",
+        "map-editor-v2",
+        "polygon",
+        "brick-border",
+        "pixel-editor",
+        "terrain-mask"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/superpowers/plans/2026-07-09-map-rank-restriction-and-editor-unification.md",
+      "type": "document",
+      "name": "2026-07-09-map-rank-restriction-and-editor-unification.md",
+      "filePath": "docs/superpowers/plans/2026-07-09-map-rank-restriction-and-editor-unification.md",
+      "summary": "Kế hoạch thêm rank-based map unlocking vào matchmaking, hợp nhất trang edit và editor map thành một, và render brick bằng polygon border thực tế từ DB. Bao gồm migration thêm cột min_rank_tier.",
+      "tags": [
+        "plan",
+        "map-rank",
+        "editor-unification",
+        "matchmaker",
+        "min-rank-tier",
+        "polygon-rendering"
+      ],
+      "complexity": "complex"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/config/config.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/database/postgres.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/auth/jwt.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/middleware/auth.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/middleware/ratelimit.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/auth/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/player/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/economy/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/shop/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/rank/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/mission/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/inventory/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/giftcode/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/iap/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/character/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/rooms/model.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/matchhistory/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/auth/service.go",
+      "target": "file:internal/api/auth/model.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/auth/service.go",
+      "target": "file:internal/shared/auth/jwt.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/economy/service.go",
+      "target": "file:internal/api/economy/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/character/service.go",
+      "target": "file:internal/api/economy/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/character/service.go",
+      "target": "file:internal/api/character/model.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "file:internal/api/economy/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "file:internal/api/inventory/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "file:internal/shared/idempotency/idempotency.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/giftcode/service.go",
+      "target": "file:internal/api/economy/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/giftcode/service.go",
+      "target": "file:internal/api/inventory/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/mission/service.go",
+      "target": "file:internal/api/economy/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/rank/service.go",
+      "target": "file:internal/api/economy/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/match/reward.go",
+      "target": "file:internal/api/economy/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/match/reward.go",
+      "target": "file:internal/api/inventory/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/shared/middleware/auth.go",
+      "target": "file:internal/shared/auth/jwt.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/iap/service.go",
+      "target": "file:internal/shared/idempotency/idempotency.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/inventory/service.go",
+      "target": "file:internal/api/inventory/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "function:internal/api/auth/service.go:GuestLogin",
+      "target": "function:internal/shared/auth/jwt.go:Generate",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/api/auth/service.go:ProviderLogin",
+      "target": "function:internal/shared/auth/jwt.go:Generate",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/api/auth/service.go:RefreshToken",
+      "target": "function:internal/shared/auth/jwt.go:Verify",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/shared/middleware/auth.go:AuthMiddleware",
+      "target": "function:internal/shared/auth/jwt.go:Verify",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/api/shop/service.go:Purchase",
+      "target": "function:internal/shared/idempotency/idempotency.go:CheckAndSet",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/api/shop/service.go:Purchase",
+      "target": "function:internal/api/economy/repository.go:DebitTx",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/api/giftcode/service.go:RedeemCode",
+      "target": "function:internal/api/economy/repository.go:CreditTx",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/game/match/reward.go:ProcessMatchRewards",
+      "target": "function:internal/game/match/reward.go:updatePlayerRank",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/game/match/reward.go:ProcessMatchRewards",
+      "target": "function:internal/api/economy/repository.go:CreditTx",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "document:docs/superpowers/specs/2026-07-07-character-progression-design.md",
+      "target": "document:docs/superpowers/plans/2026-07-07-character-progression.md",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/superpowers/specs/2026-07-07-ranked-matchmaking-design.md",
+      "target": "document:docs/superpowers/plans/2026-07-07-ranked-matchmaking.md",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/superpowers/specs/2026-07-08-battle-fixes-design.md",
+      "target": "document:docs/superpowers/plans/2026-07-08-battle-fixes.md",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/superpowers/specs/2026-07-08-map-editor-design.md",
+      "target": "document:docs/superpowers/plans/2026-07-08-map-editor.md",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/superpowers/specs/2026-07-09-map-rank-restriction-and-editor-unification-design.md",
+      "target": "document:docs/superpowers/plans/2026-07-09-map-rank-restriction-and-editor-unification.md",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/superpowers/specs/2026-07-08-map-editor-design.md",
+      "target": "document:docs/superpowers/specs/2026-07-09-map-rank-restriction-and-editor-unification-design.md",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "file:internal/admin/templates/brick_editor.html",
+      "target": "file:internal/admin/static/brick_editor.js",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/map_editor.html",
+      "target": "file:internal/admin/static/map_editor.js",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/brick_editor.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/brick_types.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/character_detail.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/character_progression.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/config_edit.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/config_list.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/dashboard.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/devtools.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/map_editor.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/matchmaking.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/physics.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/players.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/shop.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/shop_edit.html",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/templates/brick_types.html",
+      "target": "file:internal/admin/templates/brick_editor.html",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "file:internal/admin/templates/config_list.html",
+      "target": "file:internal/admin/templates/map_editor.html",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "file:internal/admin/templates/shop.html",
+      "target": "file:internal/admin/templates/shop_edit.html",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "file:internal/admin/static/brick_editor.js",
+      "target": "file:internal/admin/templates/brick_editor.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/static/map_editor.js",
+      "target": "file:internal/admin/templates/map_editor.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/static/brick_editor.js",
+      "target": "file:internal/admin/static/map_editor.js",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/specs/2026-07-06-admin-dashboard-design.md",
+      "target": "document:docs/specs/2026-07-06-admin-dashboard-plan.md",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/specs/2026-07-06-admin-dashboard-plan.md",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:documents/server_implementation_walkthrough.md",
+      "target": "document:documents/server_implementation_plan.md",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "file:internal/shared/circuitbreaker/breaker.go",
+      "target": "document:documents/server_implementation_walkthrough.md",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "file:cmd/admin/main.go",
+      "target": "file:internal/admin/server.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/admin/main.go",
+      "target": "file:internal/admin/seed.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "target": "file:internal/admin/handlers_config.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "target": "file:internal/admin/handlers_dashboard.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "target": "file:internal/admin/handlers_devtools.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "target": "file:internal/admin/handlers_map_editor.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "target": "file:internal/admin/handlers_matchmaking.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "target": "file:internal/admin/handlers_physics.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "target": "file:internal/admin/handlers_players.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "target": "file:internal/admin/handlers_shop.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/server.go",
+      "target": "file:internal/admin/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/seed.go",
+      "target": "file:internal/game/gamedata/loader.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/handlers_map_editor.go",
+      "target": "file:internal/admin/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/handlers_config.go",
+      "target": "file:internal/admin/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/handlers_players.go",
+      "target": "file:internal/admin/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/handlers_shop.go",
+      "target": "file:internal/admin/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/auth/handler.go",
+      "target": "file:internal/api/auth/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/auth/handler.go",
+      "target": "file:internal/shared/model/errors.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/character/handler.go",
+      "target": "file:internal/api/character/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/player/handler.go",
+      "target": "file:internal/api/player/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/rank/handler.go",
+      "target": "file:internal/api/rank/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/shop/handler.go",
+      "target": "file:internal/api/shop/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/mission/handler.go",
+      "target": "file:internal/api/mission/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/giftcode/handler.go",
+      "target": "file:internal/api/giftcode/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/iap/handler.go",
+      "target": "file:internal/api/iap/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/matchhistory/handler.go",
+      "target": "file:internal/api/matchhistory/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/moderation/handler.go",
+      "target": "file:internal/api/moderation/service.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "function:internal/admin/seed.go:SeedAll",
+      "target": "function:internal/admin/seed.go:SeedConfigFromYAML",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "file:cmd/game/main.go",
+      "target": "file:internal/game/gamedata/loader.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/game/main.go",
+      "target": "file:internal/game/room/hub.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/game/main.go",
+      "target": "file:internal/game/lobby/hub.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/game/main.go",
+      "target": "file:internal/game/matchmaker/matchmaker.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/game/main.go",
+      "target": "file:internal/game/ws/server.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/game/main.go",
+      "target": "file:internal/game/lobby/handler.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/game/main.go",
+      "target": "file:internal/game/room/handler.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/match/terrain.go",
+      "target": "file:internal/game/match/polygon.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/match/shooting.go",
+      "target": "file:internal/game/match/terrain.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/matchmaker/matchmaker.go",
+      "target": "file:internal/game/matchmaker/model.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/matchmaker/matchmaker.go",
+      "target": "file:internal/game/matchmaker/queue.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/matchmaker/matchmaker.go",
+      "target": "file:internal/game/gamedata/loader.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/room/hub.go",
+      "target": "file:internal/game/room/room.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/room/handler.go",
+      "target": "file:internal/game/room/hub.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/lobby/handler.go",
+      "target": "file:internal/game/lobby/hub.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/lobby/handler.go",
+      "target": "file:internal/game/lobby/lobby.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/ws/server.go",
+      "target": "file:internal/game/ws/client.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/ws/client.go",
+      "target": "file:internal/game/ws/message.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/room/room.go",
+      "target": "file:internal/game/match/shooting.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/room/room.go",
+      "target": "file:internal/game/match/damage.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/room/room.go",
+      "target": "file:internal/game/match/elo.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/room/room.go",
+      "target": "file:internal/game/match/bot.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/room/room.go",
+      "target": "file:internal/game/match/bot_ai.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/room/room.go",
+      "target": "file:internal/game/match/terrain.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/room/room.go",
+      "target": "file:internal/game/match/item_effect.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/room/room.go",
+      "target": "file:internal/game/match/status_effect.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/room/room.go",
+      "target": "file:internal/game/match/eventlog.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "function:internal/game/match/terrain.go:NewTerrain",
+      "target": "function:internal/game/match/polygon.go:scanlineFillPolygon",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/game/match/shooting.go:SimulateProjectile",
+      "target": "function:internal/game/match/damage.go:CalculateExplosionDamage",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/game/matchmaker/matchmaker.go:randomMapForRating",
+      "target": "function:internal/game/matchmaker/matchmaker.go:ratingToTier",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "file:cmd/migrate/main.go",
+      "target": "file:internal/shared/config/config.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/migrate/main.go",
+      "target": "file:internal/shared/database/postgres.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/worker/main.go",
+      "target": "file:internal/worker/scheduler.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/worker/main.go",
+      "target": "file:internal/worker/jobs/ban_expire.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/worker/main.go",
+      "target": "file:internal/worker/jobs/daily_reset.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/worker/main.go",
+      "target": "file:internal/worker/jobs/account_deletion.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/moderation/service.go",
+      "target": "file:internal/api/moderation/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/auth/service.go",
+      "target": "file:internal/api/auth/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/character/service.go",
+      "target": "file:internal/api/character/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/giftcode/service.go",
+      "target": "file:internal/api/giftcode/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/iap/service.go",
+      "target": "file:internal/api/iap/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/matchhistory/service.go",
+      "target": "file:internal/api/matchhistory/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/mission/service.go",
+      "target": "file:internal/api/mission/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/player/service.go",
+      "target": "file:internal/api/player/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/rank/service.go",
+      "target": "file:internal/api/rank/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "file:internal/api/shop/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/shared/featureflag/flags.go",
+      "target": "file:internal/shared/database/redis.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/worker/jobs/daily_reset.go",
+      "target": "file:internal/shared/database/redis.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/match/reward.go",
+      "target": "file:internal/api/character/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "function:cmd/worker/main.go:main",
+      "target": "function:internal/worker/scheduler.go:Start",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/game/match/reward.go:ProcessMatchRewards",
+      "target": "function:internal/api/character/repository.go:AddExpAndLevelTx",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "file:migrations/001_init_schema.up.sql",
+      "target": "file:migrations/001_init_schema.down.sql",
+      "type": "migrates",
+      "weight": 0.7
+    },
+    {
+      "source": "file:migrations/002_add_account_role.up.sql",
+      "target": "file:migrations/001_init_schema.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/002_add_account_role.up.sql",
+      "target": "file:migrations/002_add_account_role.down.sql",
+      "type": "migrates",
+      "weight": 0.7
+    },
+    {
+      "source": "file:migrations/003_add_match_event_logs.up.sql",
+      "target": "file:migrations/001_init_schema.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/003_add_match_event_logs.up.sql",
+      "target": "file:migrations/003_add_match_event_logs.down.sql",
+      "type": "migrates",
+      "weight": 0.7
+    },
+    {
+      "source": "file:migrations/004_admin_config_tables.up.sql",
+      "target": "file:migrations/001_init_schema.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/004_admin_config_tables.up.sql",
+      "target": "file:migrations/004_admin_config_tables.down.sql",
+      "type": "migrates",
+      "weight": 0.7
+    },
+    {
+      "source": "file:migrations/005_add_loadouts_and_matchmaking.up.sql",
+      "target": "file:migrations/001_init_schema.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/005_add_loadouts_and_matchmaking.up.sql",
+      "target": "file:migrations/004_admin_config_tables.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/005_add_loadouts_and_matchmaking.up.sql",
+      "target": "file:migrations/005_add_loadouts_and_matchmaking.down.sql",
+      "type": "migrates",
+      "weight": 0.7
+    },
+    {
+      "source": "file:migrations/006_character_progression.up.sql",
+      "target": "file:migrations/001_init_schema.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/006_character_progression.up.sql",
+      "target": "file:migrations/004_admin_config_tables.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/006_character_progression.up.sql",
+      "target": "file:migrations/006_character_progression.down.sql",
+      "type": "migrates",
+      "weight": 0.7
+    },
+    {
+      "source": "file:migrations/007_map_editor.up.sql",
+      "target": "file:migrations/004_admin_config_tables.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/007_map_editor.up.sql",
+      "target": "file:migrations/007_map_editor.down.sql",
+      "type": "migrates",
+      "weight": 0.7
+    },
+    {
+      "source": "file:migrations/008_brick_border_v2.up.sql",
+      "target": "file:migrations/007_map_editor.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/008_brick_border_v2.up.sql",
+      "target": "file:migrations/008_brick_border_v2.down.sql",
+      "type": "migrates",
+      "weight": 0.7
+    },
+    {
+      "source": "file:migrations/009_map_rank_tier.up.sql",
+      "target": "file:migrations/004_admin_config_tables.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/009_map_rank_tier.up.sql",
+      "target": "file:migrations/007_map_editor.up.sql",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:migrations/009_map_rank_tier.up.sql",
+      "target": "file:migrations/009_map_rank_tier.down.sql",
+      "type": "migrates",
+      "weight": 0.7
+    },
+    {
+      "source": "config:docker-compose.yml",
+      "target": "service:Dockerfile.api",
+      "type": "deploys",
+      "weight": 0.7
+    },
+    {
+      "source": "config:docker-compose.yml",
+      "target": "service:Dockerfile.game",
+      "type": "deploys",
+      "weight": 0.7
+    },
+    {
+      "source": "config:docker-compose.yml",
+      "target": "service:Dockerfile.worker",
+      "type": "deploys",
+      "weight": 0.7
+    },
+    {
+      "source": "config:Makefile",
+      "target": "config:docker-compose.yml",
+      "type": "configures",
+      "weight": 0.6
+    },
+    {
+      "source": "config:Makefile",
+      "target": "config:go.mod",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "service:Dockerfile.api",
+      "target": "config:go.mod",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "service:Dockerfile.game",
+      "target": "config:go.mod",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "service:Dockerfile.game",
+      "target": "config:configs/maps.yaml",
+      "type": "configures",
+      "weight": 0.6
+    },
+    {
+      "source": "service:Dockerfile.worker",
+      "target": "config:go.mod",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "config:go.mod",
+      "target": "config:go.sum",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "document:CLAUDE.md",
+      "target": "config:docker-compose.yml",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "config:docker-compose.yml",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "config:Makefile",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "config:.env.example",
+      "target": "config:docker-compose.yml",
+      "type": "configures",
+      "weight": 0.6
+    },
+    {
+      "source": "config:configs/characters.yaml",
+      "target": "config:configs/weapons.yaml",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "config:configs/characters.yaml",
+      "target": "config:configs/skills.yaml",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "config:configs/skills.yaml",
+      "target": "config:configs/characters.yaml",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "config:configs/maps.yaml",
+      "target": "file:migrations/009_map_rank_tier.up.sql",
+      "type": "configures",
+      "weight": 0.6
+    },
+    {
+      "source": "config:configs/maps.yaml",
+      "target": "file:migrations/007_map_editor.up.sql",
+      "type": "configures",
+      "weight": 0.6
+    },
+    {
+      "source": "service:Dockerfile.game",
+      "target": "config:configs/characters.yaml",
+      "type": "configures",
+      "weight": 0.6
+    },
+    {
+      "source": "service:Dockerfile.game",
+      "target": "config:configs/items.yaml",
+      "type": "configures",
+      "weight": 0.6
+    },
+    {
+      "source": "service:Dockerfile.game",
+      "target": "config:configs/skills.yaml",
+      "type": "configures",
+      "weight": 0.6
+    },
+    {
+      "source": "service:Dockerfile.game",
+      "target": "config:configs/weapons.yaml",
+      "type": "configures",
+      "weight": 0.6
+    },
+    {
+      "source": "document:docs/database-erd.md",
+      "target": "file:migrations/001_init_schema.up.sql",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/database-erd.md",
+      "target": "file:migrations/002_add_account_role.up.sql",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/database-erd.md",
+      "target": "file:migrations/004_admin_config_tables.up.sql",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/database-erd.md",
+      "target": "file:migrations/005_add_loadouts_and_matchmaking.up.sql",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/database-erd.md",
+      "target": "file:migrations/006_character_progression.up.sql",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "file:docs/database-erd.html",
+      "target": "document:docs/database-erd.md",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/technical-documentation.md",
+      "target": "config:docker-compose.yml",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/technical-documentation.md",
+      "target": "config:go.mod",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/technical-documentation.md",
+      "target": "document:docs/database-erd.md",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/technical-documentation.md",
+      "target": "file:migrations/001_init_schema.up.sql",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/superpowers/plans/2026-07-07-character-progression.md",
+      "target": "document:docs/superpowers/specs/2026-07-07-character-progression-design.md",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/superpowers/plans/2026-07-07-ranked-matchmaking.md",
+      "target": "document:docs/superpowers/specs/2026-07-07-ranked-matchmaking-design.md",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/superpowers/plans/2026-07-08-map-editor.md",
+      "target": "document:docs/superpowers/plans/2026-07-09-map-editor-v2.md",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/superpowers/plans/2026-07-09-map-editor-v2.md",
+      "target": "document:docs/superpowers/plans/2026-07-09-map-rank-restriction-and-editor-unification.md",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/superpowers/plans/2026-07-09-map-rank-restriction-and-editor-unification.md",
+      "target": "document:docs/superpowers/specs/2026-07-09-map-rank-restriction-and-editor-unification-design.md",
+      "type": "related",
+      "weight": 0.5
+    }
+  ],
+  "layers": [
+    {
+      "id": "layer:entry-points",
+      "name": "Điểm Khởi Động (Entry Points)",
+      "description": "Các file main.go của từng binary server: API server, Game server, Admin dashboard, Worker và Migration runner. Đây là điểm bắt đầu thực thi của toàn bộ hệ thống, chịu trách nhiệm khởi tạo dependency và graceful shutdown.",
+      "nodeIds": [
+        "file:cmd/api/main.go",
+        "file:cmd/game/main.go",
+        "file:cmd/admin/main.go",
+        "file:cmd/migrate/main.go",
+        "file:cmd/worker/main.go"
+      ]
+    },
+    {
+      "id": "layer:infrastructure",
+      "name": "Hạ Tầng & Cấu Hình (Infrastructure & Configuration)",
+      "description": "Lớp hạ tầng bao gồm: cấu hình môi trường (env vars), kết nối database PostgreSQL và Redis, Dockerfile cho từng service, Docker Compose, Makefile và Go module files. Đây là nền tảng kỹ thuật mà toàn bộ ứng dụng chạy trên đó.",
+      "nodeIds": [
+        "file:internal/shared/config/config.go",
+        "file:internal/shared/database/postgres.go",
+        "file:internal/shared/database/redis.go",
+        "config:.env.example",
+        "config:Makefile",
+        "config:docker-compose.yml",
+        "config:go.mod",
+        "config:go.sum",
+        "service:Dockerfile.api",
+        "service:Dockerfile.game",
+        "service:Dockerfile.worker"
+      ]
+    },
+    {
+      "id": "layer:shared-middleware",
+      "name": "Middleware & Tiện Ích Dùng Chung (Shared Middleware & Utilities)",
+      "description": "Các thành phần dùng chung cho nhiều module: JWT authentication, middleware HTTP (auth, rate limit, correlation ID, version check), circuit breaker, idempotency dựa trên Redis, mô hình lỗi chuẩn và observability (logging, metrics, health check).",
+      "nodeIds": [
+        "file:internal/shared/auth/jwt.go",
+        "file:internal/shared/middleware/auth.go",
+        "file:internal/shared/middleware/ratelimit.go",
+        "file:internal/shared/middleware/correlation.go",
+        "file:internal/shared/middleware/version_check.go",
+        "file:internal/shared/idempotency/idempotency.go",
+        "file:internal/shared/circuitbreaker/breaker.go",
+        "file:internal/shared/featureflag/flags.go",
+        "file:internal/shared/model/errors.go",
+        "file:internal/shared/observability/logger.go",
+        "file:internal/shared/observability/metrics.go",
+        "file:internal/shared/observability/health.go"
+      ]
+    },
+    {
+      "id": "layer:api-handlers",
+      "name": "Lớp Xử Lý HTTP (REST API Handlers)",
+      "description": "Các HTTP handler của REST API server (cổng :8080). Mỗi handler nhận request, validate input, gọi service tương ứng và trả về response. Bao gồm auth, player, shop, inventory, IAP, giftcode, mission, rank, moderation, character, matchhistory, rooms, appconfig và dev tools.",
+      "nodeIds": [
+        "file:internal/api/auth/handler.go",
+        "file:internal/api/player/handler.go",
+        "file:internal/api/shop/handler.go",
+        "file:internal/api/inventory/handler.go",
+        "file:internal/api/iap/handler.go",
+        "file:internal/api/giftcode/handler.go",
+        "file:internal/api/mission/handler.go",
+        "file:internal/api/rank/handler.go",
+        "file:internal/api/moderation/handler.go",
+        "file:internal/api/character/handler.go",
+        "file:internal/api/matchhistory/handler.go",
+        "file:internal/api/rooms/handler.go",
+        "file:internal/api/appconfig/handler.go",
+        "file:internal/api/dev/handler.go"
+      ]
+    },
+    {
+      "id": "layer:api-services",
+      "name": "Lớp Logic Nghiệp Vụ API (API Business Logic Services)",
+      "description": "Các service chứa logic nghiệp vụ của REST API: xác thực người dùng, quản lý kinh tế (credit/debit), mua sắm, kho vật phẩm, IAP, mã quà tặng, nhiệm vụ, xếp hạng, kiểm duyệt, nhân vật, lịch sử trận và cấu hình ứng dụng.",
+      "nodeIds": [
+        "file:internal/api/auth/service.go",
+        "file:internal/api/economy/service.go",
+        "file:internal/api/shop/service.go",
+        "file:internal/api/inventory/service.go",
+        "file:internal/api/iap/service.go",
+        "file:internal/api/giftcode/service.go",
+        "file:internal/api/mission/service.go",
+        "file:internal/api/rank/service.go",
+        "file:internal/api/moderation/service.go",
+        "file:internal/api/player/service.go",
+        "file:internal/api/character/service.go",
+        "file:internal/api/matchhistory/service.go",
+        "file:internal/api/appconfig/service.go"
+      ]
+    },
+    {
+      "id": "layer:api-repositories",
+      "name": "Lớp Truy Cập Dữ Liệu API (API Data Repositories)",
+      "description": "Các repository thực hiện truy vấn PostgreSQL cho tầng API: xác thực/tài khoản, kinh tế, kho vật phẩm, cửa hàng, IAP, mã quà tặng, nhiệm vụ, xếp hạng, kiểm duyệt, người chơi, nhân vật và lịch sử trận đấu.",
+      "nodeIds": [
+        "file:internal/api/auth/repository.go",
+        "file:internal/api/economy/repository.go",
+        "file:internal/api/inventory/repository.go",
+        "file:internal/api/shop/repository.go",
+        "file:internal/api/iap/repository.go",
+        "file:internal/api/giftcode/repository.go",
+        "file:internal/api/mission/repository.go",
+        "file:internal/api/rank/repository.go",
+        "file:internal/api/moderation/repository.go",
+        "file:internal/api/player/repository.go",
+        "file:internal/api/character/repository.go",
+        "file:internal/api/matchhistory/repository.go"
+      ]
+    },
+    {
+      "id": "layer:api-models",
+      "name": "Mô Hình Dữ Liệu API (API Domain Models)",
+      "description": "Các struct định nghĩa kiểu dữ liệu, request/response payload và domain model cho từng module API: auth, player, economy, shop, inventory, IAP, giftcode, mission, rank, moderation, character, matchhistory và rooms.",
+      "nodeIds": [
+        "file:internal/api/auth/model.go",
+        "file:internal/api/player/model.go",
+        "file:internal/api/economy/model.go",
+        "file:internal/api/shop/model.go",
+        "file:internal/api/inventory/model.go",
+        "file:internal/api/iap/model.go",
+        "file:internal/api/giftcode/model.go",
+        "file:internal/api/mission/model.go",
+        "file:internal/api/rank/model.go",
+        "file:internal/api/moderation/model.go",
+        "file:internal/api/character/model.go",
+        "file:internal/api/matchhistory/model.go",
+        "file:internal/api/rooms/model.go",
+        "file:internal/api/appconfig/model.go"
+      ]
+    },
+    {
+      "id": "layer:game-websocket",
+      "name": "Lớp WebSocket Game Server (Game WebSocket Layer)",
+      "description": "Thành phần xử lý kết nối WebSocket của Game server (cổng :8081): server nâng cấp HTTP lên WebSocket, client với read/write pump goroutine, định nghĩa format message giao thức và xác thực JWT khi kết nối.",
+      "nodeIds": [
+        "file:internal/game/ws/server.go",
+        "file:internal/game/ws/client.go",
+        "file:internal/game/ws/message.go"
+      ]
+    },
+    {
+      "id": "layer:game-room",
+      "name": "Lớp Phòng Chơi (Game Room Layer)",
+      "description": "Quản lý phòng chơi thời gian thực: Hub lưu registry phòng trên Redis, Room goroutine actor xử lý vòng lặp sự kiện, handler WebSocket định tuyến CreateRoom/JoinRoom/QuickPlay và các model dữ liệu phòng.",
+      "nodeIds": [
+        "file:internal/game/room/hub.go",
+        "file:internal/game/room/room.go",
+        "file:internal/game/room/handler.go",
+        "file:internal/game/room/model.go"
+      ]
+    },
+    {
+      "id": "layer:game-lobby",
+      "name": "Lớp Phòng Chờ Ranked (Ranked Lobby Layer)",
+      "description": "Hệ thống lobby trước khi vào trận ranked 2v2: LobbyHub registry, LobbyRoom goroutine vòng lặp sự kiện, handler WebSocket cho CreateLobby/JoinLobby/StartQueue và model dữ liệu lobby.",
+      "nodeIds": [
+        "file:internal/game/lobby/hub.go",
+        "file:internal/game/lobby/lobby.go",
+        "file:internal/game/lobby/handler.go",
+        "file:internal/game/lobby/model.go"
+      ]
+    },
+    {
+      "id": "layer:game-matchmaker",
+      "name": "Lớp Ghép Trận (Matchmaking Layer)",
+      "description": "Hệ thống ghép trận ranked dựa trên Elo rating và Redis: Matchmaker với leader election, queue sorted set, lọc bản đồ theo rank tier, cấu hình matchmaking/elo/bot difficulty và model dữ liệu ghép trận.",
+      "nodeIds": [
+        "file:internal/game/matchmaker/matchmaker.go",
+        "file:internal/game/matchmaker/queue.go",
+        "file:internal/game/matchmaker/model.go",
+        "file:internal/game/matchmaker/map_selection_test.go"
+      ]
+    },
+    {
+      "id": "layer:game-match-engine",
+      "name": "Lớp Engine Trận Đấu (Match Engine Layer)",
+      "description": "Toàn bộ engine xử lý logic trận đấu theo lượt: mô phỏng vật lý đạn, tính sát thương nổ và rơi, terrain collision mask, hiệu ứng trạng thái, vật phẩm tức thì, phần thưởng sau trận và ghi log sự kiện. Bao gồm cả model game state trung tâm.",
+      "nodeIds": [
+        "file:internal/game/match/model.go",
+        "file:internal/game/match/shooting.go",
+        "file:internal/game/match/damage.go",
+        "file:internal/game/match/terrain.go",
+        "file:internal/game/match/polygon.go",
+        "file:internal/game/match/elo.go",
+        "file:internal/game/match/reward.go",
+        "file:internal/game/match/item_effect.go",
+        "file:internal/game/match/status_effect.go",
+        "file:internal/game/match/eventlog.go"
+      ]
+    },
+    {
+      "id": "layer:game-bot-ai",
+      "name": "Lớp Trí Tuệ Nhân Tạo Bot (Bot AI Layer)",
+      "description": "AI điều khiển bot trong trận đấu: BotBrain đơn giản cho tutorial (tìm kẻ địch, tính góc bắn với sai số theo độ khó) và SmartBotBrain cho ranked (AI dựa trên trạng thái với scoring system cho shoot/move/useItem).",
+      "nodeIds": [
+        "file:internal/game/match/bot.go",
+        "file:internal/game/match/bot_ai.go"
+      ]
+    },
+    {
+      "id": "layer:game-tests",
+      "name": "Kiểm Thử Game Engine (Game Engine Tests)",
+      "description": "Các file unit test cho engine game: test tính toán sát thương nổ/rơi, Elo rating, mô phỏng đạn (vật lý), terrain collision (tile và legacy) và lọc bản đồ theo rank tier.",
+      "nodeIds": [
+        "file:internal/game/match/damage_test.go",
+        "file:internal/game/match/elo_test.go",
+        "file:internal/game/match/physics_test.go",
+        "file:internal/game/match/terrain_test.go"
+      ]
+    },
+    {
+      "id": "layer:game-data",
+      "name": "Lớp Dữ Liệu Game (Game Data Configuration Layer)",
+      "description": "Load và quản lý cấu hình game data: loader đọc từ PostgreSQL (ưu tiên) hoặc YAML fallback, bao gồm maps (grid v2 với tiles và min_rank_tier), brick types, nhân vật, vũ khí, kỹ năng, vật phẩm và physics config.",
+      "nodeIds": [
+        "file:internal/game/gamedata/loader.go"
+      ]
+    },
+    {
+      "id": "layer:game-configs-yaml",
+      "name": "Cấu Hình Game YAML (Game Data YAML Files)",
+      "description": "Các file YAML định nghĩa dữ liệu tĩnh của game: 4 nhân vật (Rookie/Tanko/Spark/Flora), 4 vũ khí, 4 kỹ năng, 8 vật phẩm chiến đấu và 3 bản đồ với rank tier tối thiểu. Dùng làm nguồn dữ liệu fallback khi DB không khả dụng.",
+      "nodeIds": [
+        "config:configs/characters.yaml",
+        "config:configs/weapons.yaml",
+        "config:configs/skills.yaml",
+        "config:configs/items.yaml",
+        "config:configs/maps.yaml"
+      ]
+    },
+    {
+      "id": "layer:admin-server",
+      "name": "Lớp Server Admin (Admin Server Layer)",
+      "description": "Admin dashboard server (cổng :9000): server khởi động với embedded templates/static, đăng ký toàn bộ routes và render HTML templates. Bao gồm repository CRUD tổng hợp và seed data ban đầu từ YAML.",
+      "nodeIds": [
+        "file:internal/admin/server.go",
+        "file:internal/admin/repository.go",
+        "file:internal/admin/seed.go"
+      ]
+    },
+    {
+      "id": "layer:admin-handlers",
+      "name": "Lớp Xử Lý Admin (Admin HTTP Handlers)",
+      "description": "Các HTTP handler của admin dashboard: quản lý cấu hình game (nhân vật/vũ khí/kỹ năng/vật phẩm/bản đồ), map editor và brick type editor, matchmaking settings, physics settings, quản lý người chơi (ban/unban), shop offers, dashboard stats và dev tools.",
+      "nodeIds": [
+        "file:internal/admin/handlers_config.go",
+        "file:internal/admin/handlers_map_editor.go",
+        "file:internal/admin/handlers_matchmaking.go",
+        "file:internal/admin/handlers_physics.go",
+        "file:internal/admin/handlers_players.go",
+        "file:internal/admin/handlers_shop.go",
+        "file:internal/admin/handlers_dashboard.go",
+        "file:internal/admin/handlers_devtools.go"
+      ]
+    },
+    {
+      "id": "layer:admin-templates",
+      "name": "Giao Diện Admin Dashboard (Admin HTML Templates)",
+      "description": "Các template HTML server-rendered cho admin dashboard: layout chung với sidebar, dashboard thống kê, danh sách và form chỉnh sửa config game, map editor canvas, brick type editor, matchmaking config, physics settings, quản lý người chơi và shop offers.",
+      "nodeIds": [
+        "file:internal/admin/templates/layout.html",
+        "file:internal/admin/templates/dashboard.html",
+        "file:internal/admin/templates/config_list.html",
+        "file:internal/admin/templates/config_edit.html",
+        "file:internal/admin/templates/map_editor.html",
+        "file:internal/admin/templates/brick_editor.html",
+        "file:internal/admin/templates/brick_types.html",
+        "file:internal/admin/templates/matchmaking.html",
+        "file:internal/admin/templates/physics.html",
+        "file:internal/admin/templates/players.html",
+        "file:internal/admin/templates/shop.html",
+        "file:internal/admin/templates/shop_edit.html",
+        "file:internal/admin/templates/character_detail.html",
+        "file:internal/admin/templates/character_progression.html",
+        "file:internal/admin/templates/devtools.html"
+      ]
+    },
+    {
+      "id": "layer:admin-static",
+      "name": "Tài Nguyên Tĩnh Admin (Admin Static Assets)",
+      "description": "Các file JavaScript tĩnh cho admin dashboard: MapEditor class (canvas-based map editor với paint/erase/fill/spawn tools, zoom/pan, undo/redo, polygon brick rendering) và BrickEditor class (pixel editor 16x16 cho polygon border của brick type).",
+      "nodeIds": [
+        "file:internal/admin/static/map_editor.js",
+        "file:internal/admin/static/brick_editor.js"
+      ]
+    },
+    {
+      "id": "layer:worker",
+      "name": "Lớp Worker Nền (Background Worker Layer)",
+      "description": "Hệ thống các job chạy nền theo lịch: Scheduler quản lý ticker goroutine cho từng job, job hết hạn ban tài khoản (5 phút), job reset nhiệm vụ hàng ngày (1 giờ, Redis dedup) và job ẩn danh hóa tài khoản đang chờ xóa (1 giờ).",
+      "nodeIds": [
+        "file:internal/worker/scheduler.go",
+        "file:internal/worker/jobs/ban_expire.go",
+        "file:internal/worker/jobs/daily_reset.go",
+        "file:internal/worker/jobs/account_deletion.go"
+      ]
+    },
+    {
+      "id": "layer:migrations",
+      "name": "Lớp Migration Cơ Sở Dữ Liệu (Database Migrations)",
+      "description": "Các file SQL migration idempotent (001-009): khởi tạo toàn bộ schema 24 bảng, thêm role tài khoản, match event logs, bảng cấu hình admin (game_settings/config_*), loadout và matchmaking settings, character progression, tilemap columns, brick types v2 với polygon border, và cột min_rank_tier cho bản đồ.",
+      "nodeIds": [
+        "file:migrations/001_init_schema.up.sql",
+        "file:migrations/001_init_schema.down.sql",
+        "file:migrations/002_add_account_role.up.sql",
+        "file:migrations/002_add_account_role.down.sql",
+        "file:migrations/003_add_match_event_logs.up.sql",
+        "file:migrations/003_add_match_event_logs.down.sql",
+        "file:migrations/004_admin_config_tables.up.sql",
+        "file:migrations/004_admin_config_tables.down.sql",
+        "file:migrations/005_add_loadouts_and_matchmaking.up.sql",
+        "file:migrations/005_add_loadouts_and_matchmaking.down.sql",
+        "file:migrations/006_character_progression.up.sql",
+        "file:migrations/006_character_progression.down.sql",
+        "file:migrations/007_map_editor.up.sql",
+        "file:migrations/007_map_editor.down.sql",
+        "file:migrations/008_brick_border_v2.up.sql",
+        "file:migrations/008_brick_border_v2.down.sql",
+        "file:migrations/009_map_rank_tier.up.sql",
+        "file:migrations/009_map_rank_tier.down.sql"
+      ]
+    },
+    {
+      "id": "layer:documentation",
+      "name": "Tài Liệu Dự Án (Project Documentation)",
+      "description": "Toàn bộ tài liệu của dự án: README tổng quan, CLAUDE.md hướng dẫn AI, tài liệu kỹ thuật đầy đủ, ERD database (HTML tương tác và Markdown Mermaid), kế hoạch và spec thiết kế cho các tính năng (character progression, ranked matchmaking, battle fixes, map editor, map rank restriction).",
+      "nodeIds": [
+        "document:README.md",
+        "document:CLAUDE.md",
+        "document:docs/technical-documentation.md",
+        "file:docs/database-erd.html",
+        "document:docs/database-erd.md",
+        "document:docs/specs/2026-07-06-admin-dashboard-design.md",
+        "document:docs/specs/2026-07-06-admin-dashboard-plan.md",
+        "document:docs/superpowers/specs/2026-07-07-character-progression-design.md",
+        "document:docs/superpowers/specs/2026-07-07-ranked-matchmaking-design.md",
+        "document:docs/superpowers/specs/2026-07-08-battle-fixes-design.md",
+        "document:docs/superpowers/specs/2026-07-08-map-editor-design.md",
+        "document:docs/superpowers/specs/2026-07-09-map-rank-restriction-and-editor-unification-design.md",
+        "document:docs/superpowers/plans/2026-07-07-character-progression.md",
+        "document:docs/superpowers/plans/2026-07-07-ranked-matchmaking.md",
+        "document:docs/superpowers/plans/2026-07-08-battle-fixes.md",
+        "document:docs/superpowers/plans/2026-07-08-map-editor.md",
+        "document:docs/superpowers/plans/2026-07-09-map-editor-v2.md",
+        "document:docs/superpowers/plans/2026-07-09-map-rank-restriction-and-editor-unification.md",
+        "document:documents/server_implementation_plan.md",
+        "document:documents/server_implementation_walkthrough.md"
+      ]
+    }
+  ],
+  "tour": [
+    {
+      "order": 1,
+      "title": "Tổng Quan Dự Án",
+      "description": "Bắt đầu từ README và tài liệu kỹ thuật để hiểu Battle Squad là gì: một game server bắn súng theo lượt hỗ trợ PvP 1v1 và 2v2 ranked, viết bằng Go. Kiến trúc gồm hai server riêng biệt (API :8080 và Game :8081) dùng chung PostgreSQL và Redis. Đọc CLAUDE.md để nắm quy ước code, cách chạy dự án và toàn bộ bức tranh hệ thống.",
+      "nodeIds": [
+        "document:README.md",
+        "document:CLAUDE.md",
+        "document:docs/technical-documentation.md",
+        "document:docs/database-erd.md"
+      ]
+    },
+    {
+      "order": 2,
+      "title": "Điểm Khởi Động Các Server",
+      "description": "Xem cách từng binary server được khởi động. `cmd/api/main.go` khởi tạo DB, Redis, JWT, đăng ký toàn bộ routes chi và graceful shutdown cho REST API. `cmd/game/main.go` khởi tạo WebSocket server game. `cmd/admin/main.go` khởi tạo dashboard quản trị. `cmd/migrate/main.go` chạy migrations và `cmd/worker/main.go` khởi động background jobs. Đây là nơi tất cả dependency được wire lại với nhau.",
+      "nodeIds": [
+        "file:cmd/api/main.go",
+        "file:cmd/game/main.go",
+        "file:cmd/admin/main.go",
+        "file:cmd/migrate/main.go",
+        "file:cmd/worker/main.go"
+      ]
+    },
+    {
+      "order": 3,
+      "title": "Hạ Tầng & Middleware Dùng Chung",
+      "description": "Tìm hiểu lớp nền tảng kỹ thuật được dùng chung bởi tất cả các module. `config.go` đọc toàn bộ cấu hình từ environment variables. `postgres.go` và `redis.go` cung cấp connection pool. `jwt.go` tạo và xác thực token. Các middleware HTTP gồm: xác thực Bearer JWT, rate limiting theo IP, correlation ID cho log tracing và version check. `errors.go` định nghĩa mã lỗi chuẩn cho toàn hệ thống. `logger.go` cung cấp zerolog với correlation ID propagation.",
+      "nodeIds": [
+        "file:internal/shared/config/config.go",
+        "file:internal/shared/database/postgres.go",
+        "file:internal/shared/database/redis.go",
+        "file:internal/shared/auth/jwt.go",
+        "file:internal/shared/middleware/auth.go",
+        "file:internal/shared/middleware/ratelimit.go",
+        "file:internal/shared/middleware/correlation.go",
+        "file:internal/shared/middleware/version_check.go",
+        "file:internal/shared/model/errors.go",
+        "file:internal/shared/observability/logger.go",
+        "file:internal/shared/idempotency/idempotency.go",
+        "file:internal/shared/featureflag/flags.go"
+      ]
+    },
+    {
+      "order": 4,
+      "title": "Pattern Module API: Handler → Service → Repository",
+      "description": "Battle Squad dùng pattern nhất quán cho mọi domain API: handler nhận HTTP request và validate input, service chứa business logic, repository thực hiện SQL queries. Đọc module `auth` như ví dụ mẫu đầy đủ nhất: `model.go` định nghĩa Account/Session, `service.go` xử lý GuestLogin/ProviderLogin/RefreshToken với JWT, `repository.go` truy vấn PostgreSQL, `handler.go` expose HTTP endpoints. Module `economy` minh họa transactions nguyên tử. Module `shop` minh họa idempotency cho purchase. Module `rank` minh họa Elo rating và leaderboard.",
+      "nodeIds": [
+        "file:internal/api/auth/model.go",
+        "file:internal/api/auth/service.go",
+        "file:internal/api/auth/repository.go",
+        "file:internal/api/auth/handler.go",
+        "file:internal/api/economy/model.go",
+        "file:internal/api/economy/service.go",
+        "file:internal/api/economy/repository.go",
+        "file:internal/api/shop/model.go",
+        "file:internal/api/shop/service.go",
+        "file:internal/api/shop/handler.go",
+        "file:internal/api/rank/model.go",
+        "file:internal/api/rank/service.go",
+        "file:internal/api/rank/handler.go",
+        "file:internal/api/player/model.go",
+        "file:internal/api/player/service.go"
+      ]
+    },
+    {
+      "order": 5,
+      "title": "Game Server: WebSocket & Quản Lý Phòng Chơi",
+      "description": "Tìm hiểu cách Game server quản lý kết nối thời gian thực. `ws/server.go` nâng cấp HTTP lên WebSocket và xác thực JWT khi connect. `ws/client.go` có hai goroutine read/write pump riêng biệt. `ws/message.go` định nghĩa protocol message JSON. Tầng phòng chơi: `room/hub.go` lưu registry phòng trên Redis, `room/room.go` là goroutine actor xử lý vòng lặp sự kiện của từng phòng, `room/handler.go` định tuyến các event CreateRoom/JoinRoom/QuickPlay. Tương tự, `lobby/` quản lý phòng chờ trước khi vào trận ranked 2v2.",
+      "nodeIds": [
+        "file:internal/game/ws/server.go",
+        "file:internal/game/ws/client.go",
+        "file:internal/game/ws/message.go",
+        "file:internal/game/room/hub.go",
+        "file:internal/game/room/room.go",
+        "file:internal/game/room/handler.go",
+        "file:internal/game/room/model.go",
+        "file:internal/game/lobby/hub.go",
+        "file:internal/game/lobby/lobby.go",
+        "file:internal/game/lobby/handler.go",
+        "file:internal/game/lobby/model.go"
+      ]
+    },
+    {
+      "order": 6,
+      "title": "Engine Trận Đấu: Vật Lý, Sát Thương & Địa Hình",
+      "description": "Đây là trái tim của game. `match/model.go` định nghĩa MatchState trung tâm với toàn bộ trạng thái trận. `shooting.go` mô phỏng vật lý đạn theo parabol (góc, vận tốc, gió, bước thời gian). `damage.go` tính sát thương nổ theo bán kính và sát thương rơi theo độ cao. `terrain.go` chuyển đổi tile grid thành pixel-level collision mask (grid v2) hoặc sinh địa hình sine curves (legacy). `polygon.go` xử lý va chạm đa giác cho brick types. `item_effect.go` và `status_effect.go` xử lý vật phẩm và hiệu ứng trạng thái. `reward.go` tổng kết trận: EXP, coins, Elo update và lịch sử trận.",
+      "nodeIds": [
+        "file:internal/game/match/model.go",
+        "file:internal/game/match/shooting.go",
+        "file:internal/game/match/damage.go",
+        "file:internal/game/match/terrain.go",
+        "file:internal/game/match/polygon.go",
+        "file:internal/game/match/elo.go",
+        "file:internal/game/match/reward.go",
+        "file:internal/game/match/item_effect.go",
+        "file:internal/game/match/status_effect.go",
+        "file:internal/game/match/eventlog.go"
+      ]
+    },
+    {
+      "order": 7,
+      "title": "Trí Tuệ Nhân Tạo Bot",
+      "description": "Game có hai loại bot AI. `bot.go` định nghĩa interface BotBrain và BotBrain đơn giản cho tutorial: tìm kẻ địch gần nhất, tính góc bắn cơ bản với sai số ngẫu nhiên theo độ khó. `bot_ai.go` là SmartBotBrain cho ranked: AI dựa trên state machine với scoring system để quyết định shoot/move/useItem, difficulty được cấu hình theo rank tier từ bảng `game_settings`. Bot turns được inject vào match event channel sau một delay.",
+      "nodeIds": [
+        "file:internal/game/match/bot.go",
+        "file:internal/game/match/bot_ai.go"
+      ]
+    },
+    {
+      "order": 8,
+      "title": "Hệ Thống Ghép Trận (Matchmaker)",
+      "description": "Matchmaker điều phối việc tìm đối thủ cho ranked 2v2. `matchmaker.go` dùng Redis leader election (chỉ một node chạy tick loop), lấy queue từ Redis sorted set và ghép người chơi theo Elo rating gần nhau. Quan trọng: `randomMapForRating()` lọc bản đồ theo rank tier của người chơi cao nhất — bronze chỉ được chơi bản đồ bronze, gold trở lên mới mở thêm bản đồ khó hơn. `queue.go` quản lý enqueue/dequeue. Cấu hình matchmaking (tick interval, rating range, K-factor Elo, bot difficulty per tier) lưu trong `game_settings` và hot-reload mỗi 30 giây. `map_selection_test.go` test logic lọc bản đồ.",
+      "nodeIds": [
+        "file:internal/game/matchmaker/matchmaker.go",
+        "file:internal/game/matchmaker/queue.go",
+        "file:internal/game/matchmaker/model.go",
+        "file:internal/game/matchmaker/map_selection_test.go"
+      ]
+    },
+    {
+      "order": 9,
+      "title": "Admin Dashboard & Dữ Liệu Cấu Hình Game",
+      "description": "Admin dashboard (cổng :9000) cho phép quản lý toàn bộ game config qua giao diện web. `admin/server.go` khởi tạo server với embedded templates. `admin/repository.go` cung cấp CRUD tổng hợp cho tất cả bảng config. `admin/seed.go` nạp dữ liệu ban đầu từ YAML. Các handler chuyên biệt: `handlers_map_editor.go` cho bản đồ tile-based (PUT /api/maps/save), `handlers_matchmaking.go` cho cấu hình ghép trận, `handlers_config.go` cho nhân vật/vũ khí/vật phẩm. `gamedata/loader.go` load config từ DB (ưu tiên) hoặc fallback YAML. Các file YAML trong `configs/` là nguồn dữ liệu tĩnh. Static JS: `map_editor.js` là canvas editor với paint/fill/spawn tools, `brick_editor.js` là pixel editor polygon 16x16.",
+      "nodeIds": [
+        "file:internal/admin/server.go",
+        "file:internal/admin/repository.go",
+        "file:internal/admin/seed.go",
+        "file:internal/admin/handlers_config.go",
+        "file:internal/admin/handlers_map_editor.go",
+        "file:internal/admin/handlers_matchmaking.go",
+        "file:internal/admin/handlers_players.go",
+        "file:internal/admin/handlers_dashboard.go",
+        "file:internal/admin/templates/map_editor.html",
+        "file:internal/admin/templates/brick_editor.html",
+        "file:internal/admin/static/map_editor.js",
+        "file:internal/admin/static/brick_editor.js",
+        "file:internal/game/gamedata/loader.go",
+        "config:configs/maps.yaml",
+        "config:configs/characters.yaml",
+        "config:configs/weapons.yaml",
+        "config:configs/items.yaml"
+      ]
+    },
+    {
+      "order": 10,
+      "title": "Database Migrations & Schema",
+      "description": "Hệ thống migration chạy toàn bộ file SQL mỗi lần (không có state tracking), do đó mọi migration PHẢI idempotent dùng `IF NOT EXISTS` và `ON CONFLICT DO NOTHING`. `001_init_schema` tạo 24 bảng cơ bản. `003` thêm match event logs. `004` thêm bảng config admin (game_settings, config_maps, config_weapons...). `005` thêm loadouts và matchmaking. `006` thêm character progression. `007-008` thêm tile grid v2 cho bản đồ và brick type polygon border. `009` thêm cột `min_rank_tier` cho map. Background worker có các job: hết hạn ban, reset nhiệm vụ hàng ngày và xóa tài khoản.",
+      "nodeIds": [
+        "file:migrations/001_init_schema.up.sql",
+        "file:migrations/003_add_match_event_logs.up.sql",
+        "file:migrations/004_admin_config_tables.up.sql",
+        "file:migrations/005_add_loadouts_and_matchmaking.up.sql",
+        "file:migrations/006_character_progression.up.sql",
+        "file:migrations/007_map_editor.up.sql",
+        "file:migrations/008_brick_border_v2.up.sql",
+        "file:migrations/009_map_rank_tier.up.sql",
+        "file:internal/worker/scheduler.go",
+        "file:internal/worker/jobs/ban_expire.go",
+        "file:internal/worker/jobs/daily_reset.go",
+        "file:internal/worker/jobs/account_deletion.go"
+      ]
+    },
+    {
+      "order": 11,
+      "title": "Kiểm Thử: Unit Tests Engine Game",
+      "description": "Các unit test tập trung vào engine game — phần phức tạp nhất và dễ sai nhất. `damage_test.go` kiểm tra công thức tính sát thương nổ theo bán kính và sát thương rơi theo độ cao. `elo_test.go` kiểm tra thuật toán Elo với nhiều kịch bản win/lose và bot modifier. `physics_test.go` mô phỏng quỹ đạo đạn với các góc bắn và vận tốc khác nhau. `terrain_test.go` kiểm tra collision mask cho cả tile grid v2 và legacy sine curves. `map_selection_test.go` trong matchmaker kiểm tra logic lọc bản đồ theo rank tier. Chạy: `go test ./internal/game/match/... -v`.",
+      "nodeIds": [
+        "file:internal/game/match/damage_test.go",
+        "file:internal/game/match/elo_test.go",
+        "file:internal/game/match/physics_test.go",
+        "file:internal/game/match/terrain_test.go",
+        "file:internal/game/matchmaker/map_selection_test.go"
+      ]
+    }
+  ]
+}

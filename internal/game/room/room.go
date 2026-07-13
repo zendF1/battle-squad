@@ -307,7 +307,19 @@ func (r *Room) processJoin(client *ws.Client) {
 
 func (r *Room) processLeave(client *ws.Client) {
 	if r.match != nil {
+		// Match goroutine owns the Clients map during in_match — let it
+		// handle the delete via its own event loop to avoid a concurrent
+		// map write between the room and match goroutines.
 		r.match.ProcessEvent(context.Background(), client, ws.Message{Event: "Leave"})
+		client.RoomID = ""
+
+		// Tutorial room: destroy as soon as the user leaves (only bots remain)
+		if r.State.IsTutorial {
+			observability.Log.Info().Str("roomId", r.ID).Msg("tutorial room user left, destroying room")
+			r.match.Stop()
+			r.cancel()
+		}
+		return
 	}
 
 	delete(r.Clients, client.PlayerID)
@@ -316,9 +328,6 @@ func (r *Room) processLeave(client *ws.Client) {
 	// Tutorial room: destroy as soon as the user leaves (only bots remain)
 	if r.State.IsTutorial {
 		observability.Log.Info().Str("roomId", r.ID).Msg("tutorial room user left, destroying room")
-		if r.match != nil {
-			r.match.Stop()
-		}
 		r.cancel()
 		return
 	}

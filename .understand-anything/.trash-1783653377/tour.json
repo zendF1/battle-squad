@@ -1,0 +1,176 @@
+[
+  {
+    "order": 1,
+    "title": "Tổng Quan Dự Án",
+    "description": "Bắt đầu từ README và tài liệu kỹ thuật để hiểu Battle Squad là gì: một game server bắn súng theo lượt hỗ trợ PvP 1v1 và 2v2 ranked, viết bằng Go. Kiến trúc gồm hai server riêng biệt (API :8080 và Game :8081) dùng chung PostgreSQL và Redis. Đọc CLAUDE.md để nắm quy ước code, cách chạy dự án và toàn bộ bức tranh hệ thống.",
+    "nodeIds": [
+      "document:README.md",
+      "document:CLAUDE.md",
+      "document:docs/technical-documentation.md",
+      "document:docs/database-erd.md"
+    ]
+  },
+  {
+    "order": 2,
+    "title": "Điểm Khởi Động Các Server",
+    "description": "Xem cách từng binary server được khởi động. `cmd/api/main.go` khởi tạo DB, Redis, JWT, đăng ký toàn bộ routes chi và graceful shutdown cho REST API. `cmd/game/main.go` khởi tạo WebSocket server game. `cmd/admin/main.go` khởi tạo dashboard quản trị. `cmd/migrate/main.go` chạy migrations và `cmd/worker/main.go` khởi động background jobs. Đây là nơi tất cả dependency được wire lại với nhau.",
+    "nodeIds": [
+      "file:cmd/api/main.go",
+      "file:cmd/game/main.go",
+      "file:cmd/admin/main.go",
+      "file:cmd/migrate/main.go",
+      "file:cmd/worker/main.go"
+    ]
+  },
+  {
+    "order": 3,
+    "title": "Hạ Tầng & Middleware Dùng Chung",
+    "description": "Tìm hiểu lớp nền tảng kỹ thuật được dùng chung bởi tất cả các module. `config.go` đọc toàn bộ cấu hình từ environment variables. `postgres.go` và `redis.go` cung cấp connection pool. `jwt.go` tạo và xác thực token. Các middleware HTTP gồm: xác thực Bearer JWT, rate limiting theo IP, correlation ID cho log tracing và version check. `errors.go` định nghĩa mã lỗi chuẩn cho toàn hệ thống. `logger.go` cung cấp zerolog với correlation ID propagation.",
+    "nodeIds": [
+      "file:internal/shared/config/config.go",
+      "file:internal/shared/database/postgres.go",
+      "file:internal/shared/database/redis.go",
+      "file:internal/shared/auth/jwt.go",
+      "file:internal/shared/middleware/auth.go",
+      "file:internal/shared/middleware/ratelimit.go",
+      "file:internal/shared/middleware/correlation.go",
+      "file:internal/shared/middleware/version_check.go",
+      "file:internal/shared/model/errors.go",
+      "file:internal/shared/observability/logger.go",
+      "file:internal/shared/idempotency/idempotency.go",
+      "file:internal/shared/featureflag/flags.go"
+    ]
+  },
+  {
+    "order": 4,
+    "title": "Pattern Module API: Handler → Service → Repository",
+    "description": "Battle Squad dùng pattern nhất quán cho mọi domain API: handler nhận HTTP request và validate input, service chứa business logic, repository thực hiện SQL queries. Đọc module `auth` như ví dụ mẫu đầy đủ nhất: `model.go` định nghĩa Account/Session, `service.go` xử lý GuestLogin/ProviderLogin/RefreshToken với JWT, `repository.go` truy vấn PostgreSQL, `handler.go` expose HTTP endpoints. Module `economy` minh họa transactions nguyên tử. Module `shop` minh họa idempotency cho purchase. Module `rank` minh họa Elo rating và leaderboard.",
+    "nodeIds": [
+      "file:internal/api/auth/model.go",
+      "file:internal/api/auth/service.go",
+      "file:internal/api/auth/repository.go",
+      "file:internal/api/auth/handler.go",
+      "file:internal/api/economy/model.go",
+      "file:internal/api/economy/service.go",
+      "file:internal/api/economy/repository.go",
+      "file:internal/api/shop/model.go",
+      "file:internal/api/shop/service.go",
+      "file:internal/api/shop/handler.go",
+      "file:internal/api/rank/model.go",
+      "file:internal/api/rank/service.go",
+      "file:internal/api/rank/handler.go",
+      "file:internal/api/player/model.go",
+      "file:internal/api/player/service.go"
+    ]
+  },
+  {
+    "order": 5,
+    "title": "Game Server: WebSocket & Quản Lý Phòng Chơi",
+    "description": "Tìm hiểu cách Game server quản lý kết nối thời gian thực. `ws/server.go` nâng cấp HTTP lên WebSocket và xác thực JWT khi connect. `ws/client.go` có hai goroutine read/write pump riêng biệt. `ws/message.go` định nghĩa protocol message JSON. Tầng phòng chơi: `room/hub.go` lưu registry phòng trên Redis, `room/room.go` là goroutine actor xử lý vòng lặp sự kiện của từng phòng, `room/handler.go` định tuyến các event CreateRoom/JoinRoom/QuickPlay. Tương tự, `lobby/` quản lý phòng chờ trước khi vào trận ranked 2v2.",
+    "nodeIds": [
+      "file:internal/game/ws/server.go",
+      "file:internal/game/ws/client.go",
+      "file:internal/game/ws/message.go",
+      "file:internal/game/room/hub.go",
+      "file:internal/game/room/room.go",
+      "file:internal/game/room/handler.go",
+      "file:internal/game/room/model.go",
+      "file:internal/game/lobby/hub.go",
+      "file:internal/game/lobby/lobby.go",
+      "file:internal/game/lobby/handler.go",
+      "file:internal/game/lobby/model.go"
+    ]
+  },
+  {
+    "order": 6,
+    "title": "Engine Trận Đấu: Vật Lý, Sát Thương & Địa Hình",
+    "description": "Đây là trái tim của game. `match/model.go` định nghĩa MatchState trung tâm với toàn bộ trạng thái trận. `shooting.go` mô phỏng vật lý đạn theo parabol (góc, vận tốc, gió, bước thời gian). `damage.go` tính sát thương nổ theo bán kính và sát thương rơi theo độ cao. `terrain.go` chuyển đổi tile grid thành pixel-level collision mask (grid v2) hoặc sinh địa hình sine curves (legacy). `polygon.go` xử lý va chạm đa giác cho brick types. `item_effect.go` và `status_effect.go` xử lý vật phẩm và hiệu ứng trạng thái. `reward.go` tổng kết trận: EXP, coins, Elo update và lịch sử trận.",
+    "nodeIds": [
+      "file:internal/game/match/model.go",
+      "file:internal/game/match/shooting.go",
+      "file:internal/game/match/damage.go",
+      "file:internal/game/match/terrain.go",
+      "file:internal/game/match/polygon.go",
+      "file:internal/game/match/elo.go",
+      "file:internal/game/match/reward.go",
+      "file:internal/game/match/item_effect.go",
+      "file:internal/game/match/status_effect.go",
+      "file:internal/game/match/eventlog.go"
+    ]
+  },
+  {
+    "order": 7,
+    "title": "Trí Tuệ Nhân Tạo Bot",
+    "description": "Game có hai loại bot AI. `bot.go` định nghĩa interface BotBrain và BotBrain đơn giản cho tutorial: tìm kẻ địch gần nhất, tính góc bắn cơ bản với sai số ngẫu nhiên theo độ khó. `bot_ai.go` là SmartBotBrain cho ranked: AI dựa trên state machine với scoring system để quyết định shoot/move/useItem, difficulty được cấu hình theo rank tier từ bảng `game_settings`. Bot turns được inject vào match event channel sau một delay.",
+    "nodeIds": [
+      "file:internal/game/match/bot.go",
+      "file:internal/game/match/bot_ai.go"
+    ]
+  },
+  {
+    "order": 8,
+    "title": "Hệ Thống Ghép Trận (Matchmaker)",
+    "description": "Matchmaker điều phối việc tìm đối thủ cho ranked 2v2. `matchmaker.go` dùng Redis leader election (chỉ một node chạy tick loop), lấy queue từ Redis sorted set và ghép người chơi theo Elo rating gần nhau. Quan trọng: `randomMapForRating()` lọc bản đồ theo rank tier của người chơi cao nhất — bronze chỉ được chơi bản đồ bronze, gold trở lên mới mở thêm bản đồ khó hơn. `queue.go` quản lý enqueue/dequeue. Cấu hình matchmaking (tick interval, rating range, K-factor Elo, bot difficulty per tier) lưu trong `game_settings` và hot-reload mỗi 30 giây. `map_selection_test.go` test logic lọc bản đồ.",
+    "nodeIds": [
+      "file:internal/game/matchmaker/matchmaker.go",
+      "file:internal/game/matchmaker/queue.go",
+      "file:internal/game/matchmaker/model.go",
+      "file:internal/game/matchmaker/map_selection_test.go"
+    ]
+  },
+  {
+    "order": 9,
+    "title": "Admin Dashboard & Dữ Liệu Cấu Hình Game",
+    "description": "Admin dashboard (cổng :9000) cho phép quản lý toàn bộ game config qua giao diện web. `admin/server.go` khởi tạo server với embedded templates. `admin/repository.go` cung cấp CRUD tổng hợp cho tất cả bảng config. `admin/seed.go` nạp dữ liệu ban đầu từ YAML. Các handler chuyên biệt: `handlers_map_editor.go` cho bản đồ tile-based (PUT /api/maps/save), `handlers_matchmaking.go` cho cấu hình ghép trận, `handlers_config.go` cho nhân vật/vũ khí/vật phẩm. `gamedata/loader.go` load config từ DB (ưu tiên) hoặc fallback YAML. Các file YAML trong `configs/` là nguồn dữ liệu tĩnh. Static JS: `map_editor.js` là canvas editor với paint/fill/spawn tools, `brick_editor.js` là pixel editor polygon 16x16.",
+    "nodeIds": [
+      "file:internal/admin/server.go",
+      "file:internal/admin/repository.go",
+      "file:internal/admin/seed.go",
+      "file:internal/admin/handlers_config.go",
+      "file:internal/admin/handlers_map_editor.go",
+      "file:internal/admin/handlers_matchmaking.go",
+      "file:internal/admin/handlers_players.go",
+      "file:internal/admin/handlers_dashboard.go",
+      "file:internal/admin/templates/map_editor.html",
+      "file:internal/admin/templates/brick_editor.html",
+      "file:internal/admin/static/map_editor.js",
+      "file:internal/admin/static/brick_editor.js",
+      "file:internal/game/gamedata/loader.go",
+      "config:configs/maps.yaml",
+      "config:configs/characters.yaml",
+      "config:configs/weapons.yaml",
+      "config:configs/items.yaml"
+    ]
+  },
+  {
+    "order": 10,
+    "title": "Database Migrations & Schema",
+    "description": "Hệ thống migration chạy toàn bộ file SQL mỗi lần (không có state tracking), do đó mọi migration PHẢI idempotent dùng `IF NOT EXISTS` và `ON CONFLICT DO NOTHING`. `001_init_schema` tạo 24 bảng cơ bản. `003` thêm match event logs. `004` thêm bảng config admin (game_settings, config_maps, config_weapons...). `005` thêm loadouts và matchmaking. `006` thêm character progression. `007-008` thêm tile grid v2 cho bản đồ và brick type polygon border. `009` thêm cột `min_rank_tier` cho map. Background worker có các job: hết hạn ban, reset nhiệm vụ hàng ngày và xóa tài khoản.",
+    "nodeIds": [
+      "file:migrations/001_init_schema.up.sql",
+      "file:migrations/003_add_match_event_logs.up.sql",
+      "file:migrations/004_admin_config_tables.up.sql",
+      "file:migrations/005_add_loadouts_and_matchmaking.up.sql",
+      "file:migrations/006_character_progression.up.sql",
+      "file:migrations/007_map_editor.up.sql",
+      "file:migrations/008_brick_border_v2.up.sql",
+      "file:migrations/009_map_rank_tier.up.sql",
+      "file:internal/worker/scheduler.go",
+      "file:internal/worker/jobs/ban_expire.go",
+      "file:internal/worker/jobs/daily_reset.go",
+      "file:internal/worker/jobs/account_deletion.go"
+    ]
+  },
+  {
+    "order": 11,
+    "title": "Kiểm Thử: Unit Tests Engine Game",
+    "description": "Các unit test tập trung vào engine game — phần phức tạp nhất và dễ sai nhất. `damage_test.go` kiểm tra công thức tính sát thương nổ theo bán kính và sát thương rơi theo độ cao. `elo_test.go` kiểm tra thuật toán Elo với nhiều kịch bản win/lose và bot modifier. `physics_test.go` mô phỏng quỹ đạo đạn với các góc bắn và vận tốc khác nhau. `terrain_test.go` kiểm tra collision mask cho cả tile grid v2 và legacy sine curves. `map_selection_test.go` trong matchmaker kiểm tra logic lọc bản đồ theo rank tier. Chạy: `go test ./internal/game/match/... -v`.",
+    "nodeIds": [
+      "file:internal/game/match/damage_test.go",
+      "file:internal/game/match/elo_test.go",
+      "file:internal/game/match/physics_test.go",
+      "file:internal/game/match/terrain_test.go",
+      "file:internal/game/matchmaker/map_selection_test.go"
+    ]
+  }
+]

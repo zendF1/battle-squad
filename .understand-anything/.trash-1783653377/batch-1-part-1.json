@@ -1,0 +1,975 @@
+{
+  "nodes": [
+    {
+      "id": "file:cmd/api/main.go",
+      "type": "file",
+      "name": "main.go",
+      "filePath": "cmd/api/main.go",
+      "summary": "Điểm khởi động của API Server REST trên cổng 8080 — khởi tạo toàn bộ module (auth, player, economy, shop, iap, giftcode, mission, rank, moderation, matchhistory, rooms, appconfig), thiết lập router Chi với middleware CORS/rate-limit/auth, và graceful shutdown.",
+      "tags": ["entry-point", "api-handler", "service"],
+      "complexity": "complex",
+      "languageNotes": "Pattern DI thủ công: wiring tất cả repository, service, handler trong main() trước khi đăng ký route."
+    },
+    {
+      "id": "function:cmd/api/main.go:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "cmd/api/main.go",
+      "lineRange": [40, 246],
+      "summary": "Hàm khởi động chính: load config, kết nối Postgres/Redis, khởi tạo JWT managers, wire toàn bộ module, đăng ký route và chạy HTTP server với graceful shutdown.",
+      "tags": ["entry-point", "service", "factory"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/api/appconfig/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/appconfig/model.go",
+      "summary": "Định nghĩa các kiểu dữ liệu cho module appconfig: ClientVersionPolicy (chính sách phiên bản client) và RemoteConfig (cấu hình remote gồm URLs, feature flags, tham số client).",
+      "tags": ["type-definition", "data-model", "config"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/auth/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/auth/model.go",
+      "summary": "Định nghĩa các kiểu dữ liệu cho module auth: Account, AuthIdentity, Session, và các request/response (GuestLoginRequest, ProviderLoginRequest, LinkProviderRequest, RefreshTokenRequest, LoginResponse).",
+      "tags": ["type-definition", "data-model", "service"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/auth/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/auth/service.go",
+      "summary": "Xử lý logic nghiệp vụ xác thực: đăng nhập guest/provider, liên kết tài khoản, refresh token (kiểm tra Redis), logout, và sinh JWT access+refresh token lưu vào Redis với TTL 30 ngày.",
+      "tags": ["service", "middleware", "validation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:internal/api/auth/service.go:GuestLogin",
+      "type": "function",
+      "name": "GuestLogin",
+      "filePath": "internal/api/auth/service.go",
+      "lineRange": [30, 84],
+      "summary": "Đăng nhập guest theo deviceInstallID: tìm hoặc tạo tài khoản guest, kiểm tra ban, sinh JWT tokens.",
+      "tags": ["service", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:internal/api/auth/service.go:ProviderLogin",
+      "type": "function",
+      "name": "ProviderLogin",
+      "filePath": "internal/api/auth/service.go",
+      "lineRange": [86, 141],
+      "summary": "Đăng nhập qua provider (Google/Apple): xác thực token, tìm hoặc tạo tài khoản provider, kiểm tra ban, sinh JWT tokens.",
+      "tags": ["service", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:internal/api/auth/service.go:RefreshToken",
+      "type": "function",
+      "name": "RefreshToken",
+      "filePath": "internal/api/auth/service.go",
+      "lineRange": [156, 192],
+      "summary": "Làm mới access token: xác thực refresh token JWT, kiểm tra session còn hợp lệ trong Redis, thu hồi token cũ và cấp token mới.",
+      "tags": ["service", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:internal/api/auth/service.go:generateLoginTokens",
+      "type": "function",
+      "name": "generateLoginTokens",
+      "filePath": "internal/api/auth/service.go",
+      "lineRange": [199, 229],
+      "summary": "Sinh cặp access token (15 phút) và refresh token (30 ngày), lưu refresh token vào Redis với key session:<token>.",
+      "tags": ["service", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/character/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/character/model.go",
+      "summary": "Định nghĩa kiểu dữ liệu và logic tính toán cho hệ thống nhân vật: PlayerCharacter, ProgressionConfig, LevelEntry, cùng các hàm CalcLevelFromExp, LoadProgressionConfig, LoadLevelsConfig.",
+      "tags": ["type-definition", "data-model", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:internal/api/character/model.go:CalcLevelFromExp",
+      "type": "function",
+      "name": "CalcLevelFromExp",
+      "filePath": "internal/api/character/model.go",
+      "lineRange": [90, 109],
+      "summary": "Tính level hiện tại, exp cần cho level tiếp theo và trạng thái max level từ tổng exp và bảng level curve.",
+      "tags": ["utility", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/character/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/character/service.go",
+      "summary": "Logic nghiệp vụ nhân vật: lấy danh sách nhân vật (tính toán level từ exp), phân bổ stat points, reset stats (tính phí currency qua transaction Postgres).",
+      "tags": ["service", "validation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:internal/api/character/service.go:GetPlayerCharacters",
+      "type": "function",
+      "name": "GetPlayerCharacters",
+      "filePath": "internal/api/character/service.go",
+      "lineRange": [33, 54],
+      "summary": "Lấy danh sách nhân vật của người chơi và tính metadata level/exp từ level curve trong game_settings.",
+      "tags": ["service", "data-model"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:internal/api/character/service.go:AllocateStats",
+      "type": "function",
+      "name": "AllocateStats",
+      "filePath": "internal/api/character/service.go",
+      "lineRange": [57, 97],
+      "summary": "Validate và áp dụng phân bổ stat points cho nhân vật, kiểm tra giá trị hợp lệ và đủ điểm.",
+      "tags": ["service", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:internal/api/character/service.go:ResetStats",
+      "type": "function",
+      "name": "ResetStats",
+      "filePath": "internal/api/character/service.go",
+      "lineRange": [100, 165],
+      "summary": "Reset toàn bộ stat đã phân bổ: trừ phí currency theo progression config trong transaction Postgres rồi xóa bonus stats.",
+      "tags": ["service", "validation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/api/economy/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/economy/model.go",
+      "summary": "Định nghĩa kiểu EconomyTransaction — bản ghi giao dịch tiền tệ (coin/gem) với các trường player_id, currency, amount, balance_after, source, ref_id.",
+      "tags": ["type-definition", "data-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/economy/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/economy/repository.go",
+      "summary": "Repository economy không cần DB injection — thực hiện CreditTx và DebitTx trực tiếp trên pgx.Tx: khóa row player_profiles, cập nhật balance, ghi log vào economy_transactions.",
+      "tags": ["service", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:internal/api/economy/repository.go:CreditTx",
+      "type": "function",
+      "name": "CreditTx",
+      "filePath": "internal/api/economy/repository.go",
+      "lineRange": [27, 71],
+      "summary": "Cộng tiền tệ (coin/gem) cho người chơi trong transaction: SELECT FOR UPDATE để lock, UPDATE balance, INSERT vào economy_transactions.",
+      "tags": ["service", "data-model"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:internal/api/economy/repository.go:DebitTx",
+      "type": "function",
+      "name": "DebitTx",
+      "filePath": "internal/api/economy/repository.go",
+      "lineRange": [73, 123],
+      "summary": "Trừ tiền tệ (coin/gem) cho người chơi trong transaction: SELECT FOR UPDATE, kiểm tra balance nếu allowNegative=false, UPDATE balance, INSERT log giao dịch âm.",
+      "tags": ["service", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/economy/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/economy/service.go",
+      "summary": "Service economy cung cấp Credit và Debit standalone — tự mở transaction Postgres, gọi CreditTx/DebitTx của Repository, commit hoặc rollback.",
+      "tags": ["service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/giftcode/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/giftcode/model.go",
+      "summary": "Định nghĩa kiểu dữ liệu giftcode: GiftCode (phần thưởng coin/gem/item, giới hạn sử dụng, thời hạn), GiftCodeRedemption và RedeemRequest.",
+      "tags": ["type-definition", "data-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/giftcode/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/giftcode/service.go",
+      "summary": "Logic đổi gift code: trong một transaction duy nhất kiểm tra code hợp lệ/hết hạn/giới hạn dùng, kiểm tra đã đổi chưa, cấp phần thưởng coin/gem/item, cập nhật used_count.",
+      "tags": ["service", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:internal/api/giftcode/service.go:RedeemCode",
+      "type": "function",
+      "name": "RedeemCode",
+      "filePath": "internal/api/giftcode/service.go",
+      "lineRange": [35, 110],
+      "summary": "Đổi gift code trong một Postgres transaction: SELECT FOR UPDATE code, validate, kiểm tra đã dùng chưa, credit coin/gem, add items, cập nhật used_count.",
+      "tags": ["service", "validation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/api/iap/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/iap/model.go",
+      "summary": "Định nghĩa kiểu dữ liệu IAP: IAPProduct (sku, gem amount, giá USD), PaymentTransaction (trạng thái verified/failed/refunded), và VerifyReceiptRequest.",
+      "tags": ["type-definition", "data-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/iap/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/iap/service.go",
+      "summary": "Logic xác thực in-app purchase: mock store verification, idempotency check theo store transaction ID, credit gem cho người chơi, ghi payment transaction log trong Postgres transaction.",
+      "tags": ["service", "validation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:internal/api/iap/service.go:VerifyReceipt",
+      "type": "function",
+      "name": "VerifyReceipt",
+      "filePath": "internal/api/iap/service.go",
+      "lineRange": [32, 106],
+      "summary": "Xác thực receipt IAP: lấy product config, gọi mock store verification, kiểm tra transaction đã xử lý chưa, credit gems, ghi PaymentTransaction log.",
+      "tags": ["service", "validation"],
+      "complexity": "complex"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "function:cmd/api/main.go:main",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/appconfig/handler.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/appconfig/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/appconfig/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/auth/handler.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/auth/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/auth/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/auth/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/character/handler.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/character/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/character/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/character/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/dev/handler.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/economy/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/economy/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/economy/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/giftcode/handler.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/giftcode/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/giftcode/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/giftcode/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/iap/handler.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/iap/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/iap/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/iap/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/inventory/handler.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/inventory/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/inventory/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/inventory/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/matchhistory/handler.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/matchhistory/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/matchhistory/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/matchhistory/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/mission/handler.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/mission/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/mission/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/mission/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/moderation/handler.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/moderation/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/moderation/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/moderation/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/player/handler.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/player/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/player/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/player/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/rank/handler.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/rank/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/rank/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/rank/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/rooms/handler.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/rooms/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/shop/handler.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/shop/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/shop/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/api/shop/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/auth/jwt.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/config/config.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/database/postgres.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/database/redis.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/idempotency/idempotency.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/middleware/auth.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/middleware/correlation.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/middleware/ratelimit.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/middleware/version_check.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/observability/health.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/observability/logger.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/api/main.go",
+      "target": "file:internal/shared/observability/metrics.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/auth/service.go",
+      "target": "function:internal/api/auth/service.go:GuestLogin",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/auth/service.go",
+      "target": "function:internal/api/auth/service.go:ProviderLogin",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/auth/service.go",
+      "target": "function:internal/api/auth/service.go:RefreshToken",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/auth/service.go",
+      "target": "function:internal/api/auth/service.go:generateLoginTokens",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/auth/service.go",
+      "target": "file:internal/shared/auth/jwt.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/auth/service.go",
+      "target": "file:internal/shared/database/postgres.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/auth/service.go",
+      "target": "file:internal/shared/database/redis.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/character/model.go",
+      "target": "function:internal/api/character/model.go:CalcLevelFromExp",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/character/service.go",
+      "target": "function:internal/api/character/service.go:GetPlayerCharacters",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/character/service.go",
+      "target": "function:internal/api/character/service.go:AllocateStats",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/character/service.go",
+      "target": "function:internal/api/character/service.go:ResetStats",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/character/service.go",
+      "target": "file:internal/api/economy/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/character/service.go",
+      "target": "file:internal/api/economy/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/character/service.go",
+      "target": "file:internal/api/economy/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/character/service.go",
+      "target": "file:internal/shared/database/postgres.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/character/service.go",
+      "target": "file:internal/shared/database/redis.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/character/service.go",
+      "target": "file:internal/shared/model/errors.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/economy/service.go",
+      "target": "file:internal/shared/database/postgres.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/economy/service.go",
+      "target": "file:internal/shared/database/redis.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/economy/repository.go",
+      "target": "function:internal/api/economy/repository.go:CreditTx",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/economy/repository.go",
+      "target": "function:internal/api/economy/repository.go:DebitTx",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/giftcode/service.go",
+      "target": "function:internal/api/giftcode/service.go:RedeemCode",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/giftcode/service.go",
+      "target": "file:internal/api/economy/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/giftcode/service.go",
+      "target": "file:internal/api/economy/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/giftcode/service.go",
+      "target": "file:internal/api/economy/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/giftcode/service.go",
+      "target": "file:internal/api/inventory/handler.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/giftcode/service.go",
+      "target": "file:internal/api/inventory/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/giftcode/service.go",
+      "target": "file:internal/api/inventory/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/giftcode/service.go",
+      "target": "file:internal/api/inventory/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/giftcode/service.go",
+      "target": "file:internal/shared/database/postgres.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/giftcode/service.go",
+      "target": "file:internal/shared/database/redis.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/iap/service.go",
+      "target": "function:internal/api/iap/service.go:VerifyReceipt",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/iap/service.go",
+      "target": "file:internal/api/economy/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/iap/service.go",
+      "target": "file:internal/api/economy/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/iap/service.go",
+      "target": "file:internal/api/economy/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/iap/service.go",
+      "target": "file:internal/shared/database/postgres.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/iap/service.go",
+      "target": "file:internal/shared/database/redis.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    }
+  ]
+}

@@ -1,0 +1,6408 @@
+{
+  "schemaVersion": 1,
+  "algorithm": "louvain",
+  "totalFiles": 199,
+  "totalBatches": 12,
+  "exportsByPath": {
+    ".understand-anything/.understandignore": [],
+    "admin": [],
+    "api": [],
+    "cmd/admin/main.go": [],
+    "cmd/api/main.go": [],
+    "cmd/game/main.go": [
+      "CompositeWSHandler",
+      "HandleMessage",
+      "Unregister"
+    ],
+    "cmd/migrate/main.go": [],
+    "cmd/worker/main.go": [],
+    "documents/Battle_Squad_Technical_Spec.docx": [],
+    "documents/Gameplay_Spec_Battle_Squad.docx": [],
+    "documents/MVP Feature List.docx": [],
+    "documents/MVP_Feature_List.docx": [],
+    "game": [],
+    "internal/admin/handlers_config.go": [
+      "FieldDef"
+    ],
+    "internal/admin/handlers_dashboard.go": [],
+    "internal/admin/handlers_devtools.go": [],
+    "internal/admin/handlers_map_editor.go": [
+      "MapExportYAML"
+    ],
+    "internal/admin/handlers_matchmaking.go": [],
+    "internal/admin/handlers_physics.go": [],
+    "internal/admin/handlers_players.go": [],
+    "internal/admin/handlers_shop.go": [],
+    "internal/admin/repository.go": [
+      "Repository",
+      "NewRepository",
+      "DashboardStats",
+      "GetDashboardStats",
+      "GameSetting",
+      "GetAllSettings",
+      "UpdateSetting",
+      "ConfigCharacter",
+      "GetCharacters",
+      "GetCharacter",
+      "UpsertCharacter",
+      "DeleteCharacter",
+      "ConfigWeapon",
+      "GetWeapons",
+      "GetWeapon",
+      "UpsertWeapon",
+      "DeleteWeapon",
+      "ConfigSkill",
+      "GetSkills",
+      "GetSkill",
+      "UpsertSkill",
+      "GetSkillByCharacterID",
+      "DeleteSkill",
+      "ConfigItem",
+      "GetItems",
+      "GetItem",
+      "UpsertItem",
+      "DeleteItem",
+      "ConfigMap",
+      "GetMaps",
+      "GetMap",
+      "UpsertMap",
+      "DeleteMap",
+      "ConfigBrickType",
+      "GetBrickTypes",
+      "GetBrickType",
+      "InsertBrickType",
+      "UpdateBrickType",
+      "DeleteBrickType",
+      "MapTilesData",
+      "GetMapTiles",
+      "SaveMapFull",
+      "ShopOffer",
+      "GetShopOffers",
+      "GetShopOffer",
+      "UpsertShopOffer",
+      "DeleteShopOffer",
+      "PlayerInfo",
+      "GetPlayers",
+      "BanPlayer",
+      "UnbanPlayer",
+      "GetJSONSetting",
+      "UpsertJSONSetting",
+      "ClearRooms",
+      "ResetAllData"
+    ],
+    "internal/admin/seed.go": [
+      "SeedAll",
+      "SeedSettings",
+      "SeedConfigFromYAML"
+    ],
+    "internal/admin/server.go": [
+      "Server",
+      "NewServer",
+      "Routes"
+    ],
+    "internal/admin/static/brick_editor.js": [],
+    "internal/admin/static/map_editor.js": [],
+    "internal/api/appconfig/handler.go": [
+      "Handler",
+      "NewHandler",
+      "GetVersionPolicy",
+      "GetRemoteConfig"
+    ],
+    "internal/api/appconfig/model.go": [
+      "ClientVersionPolicy",
+      "RemoteConfig"
+    ],
+    "internal/api/appconfig/service.go": [
+      "Service",
+      "NewService",
+      "GetVersionPolicy",
+      "GetRemoteConfig"
+    ],
+    "internal/api/auth/handler.go": [
+      "Handler",
+      "NewHandler",
+      "GuestLogin",
+      "ProviderLogin",
+      "LinkProvider",
+      "RefreshToken",
+      "Logout"
+    ],
+    "internal/api/auth/model.go": [
+      "Account",
+      "AuthIdentity",
+      "Session",
+      "GuestLoginRequest",
+      "ProviderLoginRequest",
+      "LinkProviderRequest",
+      "RefreshTokenRequest",
+      "LoginResponse"
+    ],
+    "internal/api/auth/repository.go": [
+      "Repository",
+      "NewRepository",
+      "FindIdentity",
+      "FindAccountByID",
+      "CreateGuestAccount",
+      "CreateProviderAccount",
+      "LinkIdentity",
+      "UpdateLastLogin",
+      "GetPlayerProfileByAccountID"
+    ],
+    "internal/api/auth/service.go": [
+      "Service",
+      "NewService",
+      "GuestLogin",
+      "ProviderLogin",
+      "LinkProvider",
+      "RefreshToken",
+      "Logout"
+    ],
+    "internal/api/character/handler.go": [
+      "Handler",
+      "NewHandler",
+      "GetCharacters",
+      "AllocateStats",
+      "ResetStats"
+    ],
+    "internal/api/character/model.go": [
+      "PlayerCharacter",
+      "AllocateStatsPayload",
+      "ResetStatsPayload",
+      "ProgressionConfig",
+      "LevelEntry",
+      "CharacterLevelsConfig",
+      "LoadProgressionConfig",
+      "LoadLevelsConfig",
+      "CalcLevelFromExp"
+    ],
+    "internal/api/character/repository.go": [
+      "Repository",
+      "NewRepository",
+      "GetPlayerCharacters",
+      "GetPlayerCharacter",
+      "AllocateStats",
+      "ResetStats",
+      "GetConfigValue",
+      "GetCharacterBonuses",
+      "AddExpAndLevelTx"
+    ],
+    "internal/api/character/service.go": [
+      "Service",
+      "NewService",
+      "GetPlayerCharacters",
+      "AllocateStats",
+      "ResetStats"
+    ],
+    "internal/api/dev/handler.go": [
+      "Handler",
+      "NewHandler",
+      "ClearRooms",
+      "ResetData"
+    ],
+    "internal/api/economy/model.go": [
+      "EconomyTransaction"
+    ],
+    "internal/api/economy/repository.go": [
+      "Repository",
+      "NewRepository",
+      "CreditTx",
+      "DebitTx"
+    ],
+    "internal/api/economy/service.go": [
+      "Service",
+      "NewService",
+      "Credit",
+      "Debit"
+    ],
+    "internal/api/giftcode/handler.go": [
+      "Handler",
+      "NewHandler",
+      "Redeem"
+    ],
+    "internal/api/giftcode/model.go": [
+      "RewardItem",
+      "GiftCode",
+      "GiftCodeRedemption",
+      "RedeemRequest"
+    ],
+    "internal/api/giftcode/repository.go": [
+      "Repository",
+      "NewRepository",
+      "GetGiftCode",
+      "HasRedeemed",
+      "GetGiftCodeTx",
+      "HasRedeemedTx",
+      "RedeemTx"
+    ],
+    "internal/api/giftcode/service.go": [
+      "Service",
+      "NewService",
+      "RedeemCode"
+    ],
+    "internal/api/iap/handler.go": [
+      "Handler",
+      "NewHandler",
+      "GetProducts",
+      "VerifyReceipt"
+    ],
+    "internal/api/iap/model.go": [
+      "IAPProduct",
+      "PaymentTransaction",
+      "VerifyReceiptRequest"
+    ],
+    "internal/api/iap/repository.go": [
+      "Repository",
+      "NewRepository",
+      "GetActiveProducts",
+      "GetProductByID",
+      "FindTransactionByID",
+      "CreateTransactionTx"
+    ],
+    "internal/api/iap/service.go": [
+      "Service",
+      "NewService",
+      "GetActiveProducts",
+      "VerifyReceipt"
+    ],
+    "internal/api/inventory/handler.go": [
+      "Handler",
+      "NewHandler",
+      "GetInventory"
+    ],
+    "internal/api/inventory/model.go": [
+      "InventoryItem",
+      "InventoryReservation"
+    ],
+    "internal/api/inventory/repository.go": [
+      "Repository",
+      "NewRepository",
+      "GetAvailableInventory",
+      "AddItemsTx",
+      "ReserveItemsTx",
+      "ConsumeReservationTx",
+      "ReleaseReservationTx"
+    ],
+    "internal/api/inventory/service.go": [
+      "Service",
+      "NewService",
+      "GetAvailableInventory"
+    ],
+    "internal/api/matchhistory/handler.go": [
+      "Handler",
+      "NewHandler",
+      "GetHistory"
+    ],
+    "internal/api/matchhistory/model.go": [
+      "MatchHistoryEntry"
+    ],
+    "internal/api/matchhistory/repository.go": [
+      "Repository",
+      "NewRepository",
+      "GetPlayerHistory"
+    ],
+    "internal/api/matchhistory/service.go": [
+      "Service",
+      "NewService",
+      "GetPlayerHistory"
+    ],
+    "internal/api/mission/handler.go": [
+      "Handler",
+      "NewHandler",
+      "GetDailyMissions",
+      "GetAchievements",
+      "ClaimReward"
+    ],
+    "internal/api/mission/model.go": [
+      "Mission",
+      "MissionProgress",
+      "ClaimRewardRequest"
+    ],
+    "internal/api/mission/repository.go": [
+      "Repository",
+      "NewRepository",
+      "GetPlayerMissions",
+      "GetMissionProgress",
+      "GetMissionProgressTx",
+      "IncrementProgressTx",
+      "MarkClaimedTx"
+    ],
+    "internal/api/mission/service.go": [
+      "Service",
+      "NewService",
+      "GetMissions",
+      "ClaimReward"
+    ],
+    "internal/api/moderation/handler.go": [
+      "Handler",
+      "NewHandler",
+      "CreateReport",
+      "BanPlayer",
+      "RevokeBan"
+    ],
+    "internal/api/moderation/model.go": [
+      "PlayerReport",
+      "AccountBan",
+      "ReportRequest",
+      "BanRequest",
+      "RevokeBanRequest"
+    ],
+    "internal/api/moderation/repository.go": [
+      "Repository",
+      "NewRepository",
+      "CreateReport",
+      "GetAccountIDByPlayerID",
+      "GetAccountIDByPlayerIDTx",
+      "BanAccountTx",
+      "RevokeBanTx"
+    ],
+    "internal/api/moderation/service.go": [
+      "Service",
+      "NewService",
+      "CreateReport",
+      "BanPlayer",
+      "RevokeBan"
+    ],
+    "internal/api/player/handler.go": [
+      "Handler",
+      "NewHandler",
+      "GetProfile",
+      "UpdateProfile",
+      "RequestAccountDeletion",
+      "CancelAccountDeletion",
+      "GetAccountDeletionStatus"
+    ],
+    "internal/api/player/model.go": [
+      "PlayerProfile",
+      "UpdateProfileRequest",
+      "AccountDeletionStatusResponse"
+    ],
+    "internal/api/player/repository.go": [
+      "Repository",
+      "NewRepository",
+      "GetProfile",
+      "UpdateDisplayName",
+      "RequestAccountDeletion",
+      "CancelAccountDeletion",
+      "GetAccountDeletionStatus"
+    ],
+    "internal/api/player/service.go": [
+      "Service",
+      "NewService",
+      "GetProfile",
+      "UpdateDisplayName",
+      "RequestAccountDeletion",
+      "CancelAccountDeletion",
+      "GetAccountDeletionStatus"
+    ],
+    "internal/api/rank/handler.go": [
+      "Handler",
+      "NewHandler",
+      "GetRankMe",
+      "GetLeaderboard",
+      "GetCurrentSeason",
+      "ClaimReward"
+    ],
+    "internal/api/rank/model.go": [
+      "Season",
+      "PlayerRank",
+      "LeaderboardResponse",
+      "ClaimSeasonRewardRequest"
+    ],
+    "internal/api/rank/repository.go": [
+      "Repository",
+      "NewRepository",
+      "GetActiveSeason",
+      "GetPlayerRank",
+      "GetLeaderboard",
+      "HasClaimedReward",
+      "ClaimRewardTx"
+    ],
+    "internal/api/rank/service.go": [
+      "Service",
+      "NewService",
+      "GetCurrentSeason",
+      "GetPlayerRank",
+      "GetLeaderboard",
+      "ClaimSeasonReward"
+    ],
+    "internal/api/rooms/handler.go": [
+      "Handler",
+      "NewHandler",
+      "GetRooms"
+    ],
+    "internal/api/rooms/model.go": [
+      "RoomSummary"
+    ],
+    "internal/api/shop/handler.go": [
+      "Handler",
+      "NewHandler",
+      "GetOffers",
+      "Purchase",
+      "GetPurchases"
+    ],
+    "internal/api/shop/model.go": [
+      "ShopOffer",
+      "ShopPurchase",
+      "PurchaseRequest"
+    ],
+    "internal/api/shop/repository.go": [
+      "Repository",
+      "NewRepository",
+      "GetActiveOffers",
+      "GetOfferByID",
+      "GetPlayerPurchaseCount",
+      "CreateShopPurchaseTx",
+      "GetPlayerPurchases"
+    ],
+    "internal/api/shop/service.go": [
+      "Service",
+      "NewService",
+      "GetActiveOffers",
+      "Purchase",
+      "GetPlayerPurchases"
+    ],
+    "internal/game/gamedata/loader.go": [
+      "CharacterConfig",
+      "WeaponConfig",
+      "SkillConfig",
+      "ItemConfig",
+      "SpawnPoint",
+      "TerrainLayer",
+      "MapConfig",
+      "GameData",
+      "BorderPoint",
+      "BrickBorder",
+      "BrickTypeConfig",
+      "PhysicsConfig",
+      "LoadGameData",
+      "LoadGameDataFromDB"
+    ],
+    "internal/game/lobby/handler.go": [
+      "WSHandler",
+      "NewWSHandler",
+      "HandleLobbyMessage",
+      "UnregisterFromLobby"
+    ],
+    "internal/game/lobby/hub.go": [
+      "LobbyHub",
+      "NewLobbyHub",
+      "CreateLobby",
+      "FindLobby",
+      "FindLobbyByPlayer",
+      "UnregisterLobby"
+    ],
+    "internal/game/lobby/lobby.go": [
+      "LobbyRoom",
+      "NewLobbyRoom",
+      "Run",
+      "Join",
+      "Leave",
+      "ProcessEvent",
+      "SetStatus"
+    ],
+    "internal/game/lobby/model.go": [
+      "LobbyState",
+      "LobbyMember",
+      "UpdateLoadoutPayload",
+      "InvitePayload",
+      "JoinLobbyPayload"
+    ],
+    "internal/game/match/bot_ai.go": [
+      "SmartBotBrain",
+      "NewSmartBotBrain",
+      "DecideAction"
+    ],
+    "internal/game/match/bot.go": [
+      "BotBrain",
+      "NewBotBrain",
+      "DecideAction"
+    ],
+    "internal/game/match/damage_test.go": [
+      "TestCalculateExplosionDamage",
+      "TestCalculateFallDamage"
+    ],
+    "internal/game/match/damage.go": [
+      "CalculateExplosionDamage",
+      "CalculateFallDamage"
+    ],
+    "internal/game/match/elo_test.go": [
+      "TestCalculateEloChange",
+      "TestTeamAvgRating"
+    ],
+    "internal/game/match/elo.go": [
+      "EloParams",
+      "CalculateEloChange",
+      "TeamAvgRating"
+    ],
+    "internal/game/match/eventlog.go": [
+      "EventLogger",
+      "NewEventLogger",
+      "Start",
+      "Log"
+    ],
+    "internal/game/match/item_effect.go": [
+      "ApplyImmediateItem"
+    ],
+    "internal/game/match/match.go": [
+      "Match",
+      "RoomHubInterface",
+      "NewMatch",
+      "Run",
+      "ProcessEvent"
+    ],
+    "internal/game/match/model.go": [
+      "Vector2",
+      "StatusEffect",
+      "BattlePlayerState",
+      "WindState",
+      "MatchState",
+      "ShootAction",
+      "MoveAction",
+      "UseItemAction",
+      "ProjectileStep",
+      "ProjectileResult",
+      "MatchHistoryRecord"
+    ],
+    "internal/game/match/physics_test.go": [
+      "TestSimulateProjectile"
+    ],
+    "internal/game/match/polygon.go": [],
+    "internal/game/match/reward.go": [
+      "PlayerStats",
+      "RewardResult",
+      "ProcessMatchRewards"
+    ],
+    "internal/game/match/shooting.go": [
+      "SimulateProjectile"
+    ],
+    "internal/game/match/status_effect.go": [
+      "ApplyStatusEffect",
+      "UpdatePlayerStatusEffects",
+      "TickPlayerStatusEffects",
+      "HasEffect"
+    ],
+    "internal/game/match/terrain_test.go": [
+      "TestNewTerrainFromTiles",
+      "TestDestroyCircleRespectsDestructible",
+      "TestNewTerrainLegacyFallback",
+      "TestNewTerrainPolygonBorder"
+    ],
+    "internal/game/match/terrain.go": [
+      "TerrainZone",
+      "Terrain",
+      "NewTerrain",
+      "GetTerrainTypeAt",
+      "IsSolid",
+      "DestroyCircle",
+      "GetLandingY",
+      "WalkTo"
+    ],
+    "internal/game/matchmaker/map_selection_test.go": [
+      "TestTierIndex",
+      "TestRatingToTier"
+    ],
+    "internal/game/matchmaker/matchmaker.go": [
+      "MatchResult",
+      "RoomCreator",
+      "Matchmaker",
+      "NewMatchmaker",
+      "Run",
+      "Stop",
+      "GetConfig",
+      "EnqueueLobby",
+      "CancelQueue",
+      "IsPlayerInQueue"
+    ],
+    "internal/game/matchmaker/model.go": [
+      "MatchmakingConfig",
+      "EloConfig",
+      "BotTierConfig",
+      "BotDifficultyConfig",
+      "QueueEntry",
+      "DefaultMatchmakingConfig",
+      "DefaultEloConfig",
+      "DefaultBotDifficultyConfig",
+      "LoadConfigFromDB",
+      "LoadMatchmakingConfig",
+      "LoadEloConfig",
+      "LoadBotDifficultyConfig"
+    ],
+    "internal/game/matchmaker/queue.go": [
+      "Queue",
+      "NewQueue",
+      "Enqueue",
+      "Dequeue",
+      "IsPlayerInQueue",
+      "GetAllEntries",
+      "CancelByPlayer"
+    ],
+    "internal/game/room/handler.go": [
+      "WSHandler",
+      "NewWSHandler",
+      "HandleMessage",
+      "Unregister"
+    ],
+    "internal/game/room/hub.go": [
+      "Hub",
+      "SetLobbyNotifier",
+      "NewHub",
+      "CreateRoom",
+      "FindRoom",
+      "UnregisterRoom",
+      "SyncRoomState",
+      "CreateBattleFromMatch"
+    ],
+    "internal/game/room/model.go": [
+      "RoomPlayer",
+      "RoomState",
+      "CreateRoomPayload",
+      "JoinRoomPayload",
+      "ChangeTeamPayload",
+      "SelectCharacterPayload",
+      "SelectItemsPayload"
+    ],
+    "internal/game/room/room.go": [
+      "Room",
+      "NewRoom",
+      "Run",
+      "Join",
+      "Leave",
+      "ProcessEvent",
+      "RegisterClient"
+    ],
+    "internal/game/ws/client.go": [
+      "Client",
+      "HandlerInterface",
+      "ReadPump",
+      "WritePump"
+    ],
+    "internal/game/ws/message.go": [
+      "Message"
+    ],
+    "internal/game/ws/server.go": [
+      "Server",
+      "NewServer",
+      "HandleUpgrade"
+    ],
+    "internal/shared/auth/jwt.go": [
+      "Claims",
+      "JWTManager",
+      "NewJWTManager",
+      "Generate",
+      "Verify"
+    ],
+    "internal/shared/circuitbreaker/breaker.go": [
+      "CircuitBreaker",
+      "NewCircuitBreaker",
+      "Execute"
+    ],
+    "internal/shared/config/config.go": [
+      "Config",
+      "LoadConfig"
+    ],
+    "internal/shared/database/postgres.go": [
+      "PostgresDB",
+      "NewPostgresDB",
+      "Close",
+      "Ping"
+    ],
+    "internal/shared/database/redis.go": [
+      "RedisClient",
+      "NewRedisClient",
+      "Close",
+      "Ping"
+    ],
+    "internal/shared/featureflag/flags.go": [
+      "Manager",
+      "NewManager",
+      "IsEnabled",
+      "Set"
+    ],
+    "internal/shared/idempotency/idempotency.go": [
+      "Manager",
+      "NewManager",
+      "CheckAndSet",
+      "Complete"
+    ],
+    "internal/shared/middleware/auth.go": [
+      "AuthMiddleware"
+    ],
+    "internal/shared/middleware/correlation.go": [
+      "CorrelationID"
+    ],
+    "internal/shared/middleware/ratelimit.go": [
+      "RateLimiter",
+      "NewRateLimiter",
+      "Limit"
+    ],
+    "internal/shared/middleware/version_check.go": [
+      "VersionCheck"
+    ],
+    "internal/shared/model/errors.go": [
+      "AppError",
+      "Error",
+      "ErrorResponse",
+      "WriteError"
+    ],
+    "internal/shared/observability/health.go": [
+      "HealthHandler",
+      "NewHealthHandler",
+      "Healthz",
+      "Readyz",
+      "Livez"
+    ],
+    "internal/shared/observability/logger.go": [
+      "InitLogger",
+      "FromContext"
+    ],
+    "internal/shared/observability/metrics.go": [
+      "WriteHeader",
+      "StatusCode",
+      "MetricsMiddleware"
+    ],
+    "internal/worker/jobs/account_deletion.go": [
+      "NewAccountDeletionJob"
+    ],
+    "internal/worker/jobs/ban_expire.go": [
+      "NewBanExpireJob"
+    ],
+    "internal/worker/jobs/daily_reset.go": [
+      "NewDailyResetJob"
+    ],
+    "internal/worker/scheduler.go": [
+      "Job",
+      "Scheduler",
+      "NewScheduler",
+      "Register",
+      "Start",
+      "Stop"
+    ],
+    "migrate": []
+  },
+  "batches": [
+    {
+      "batchIndex": 1,
+      "files": [
+        {
+          "path": "cmd/api/main.go",
+          "language": "go",
+          "sizeLines": 246,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/appconfig/model.go",
+          "language": "go",
+          "sizeLines": 24,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/auth/model.go",
+          "language": "go",
+          "sizeLines": 59,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/auth/service.go",
+          "language": "go",
+          "sizeLines": 246,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/character/model.go",
+          "language": "go",
+          "sizeLines": 109,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/character/service.go",
+          "language": "go",
+          "sizeLines": 165,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/economy/model.go",
+          "language": "go",
+          "sizeLines": 14,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/economy/repository.go",
+          "language": "go",
+          "sizeLines": 123,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/economy/service.go",
+          "language": "go",
+          "sizeLines": 55,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/giftcode/model.go",
+          "language": "go",
+          "sizeLines": 29,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/giftcode/service.go",
+          "language": "go",
+          "sizeLines": 110,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/iap/model.go",
+          "language": "go",
+          "sizeLines": 32,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/iap/service.go",
+          "language": "go",
+          "sizeLines": 128,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/inventory/handler.go",
+          "language": "go",
+          "sizeLines": 40,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/inventory/model.go",
+          "language": "go",
+          "sizeLines": 23,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/inventory/repository.go",
+          "language": "go",
+          "sizeLines": 160,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/inventory/service.go",
+          "language": "go",
+          "sizeLines": 15,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/matchhistory/model.go",
+          "language": "go",
+          "sizeLines": 14,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/matchhistory/service.go",
+          "language": "go",
+          "sizeLines": 15,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/mission/model.go",
+          "language": "go",
+          "sizeLines": 33,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/mission/service.go",
+          "language": "go",
+          "sizeLines": 80,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/moderation/model.go",
+          "language": "go",
+          "sizeLines": 48,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/player/model.go",
+          "language": "go",
+          "sizeLines": 24,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/player/service.go",
+          "language": "go",
+          "sizeLines": 49,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/rank/model.go",
+          "language": "go",
+          "sizeLines": 38,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/rank/service.go",
+          "language": "go",
+          "sizeLines": 210,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/rooms/model.go",
+          "language": "go",
+          "sizeLines": 12,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/shop/model.go",
+          "language": "go",
+          "sizeLines": 32,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/shop/service.go",
+          "language": "go",
+          "sizeLines": 158,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/match/reward.go",
+          "language": "go",
+          "sizeLines": 456,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/shared/auth/jwt.go",
+          "language": "go",
+          "sizeLines": 74,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/shared/idempotency/idempotency.go",
+          "language": "go",
+          "sizeLines": 41,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/shared/middleware/auth.go",
+          "language": "go",
+          "sizeLines": 43,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/shared/middleware/ratelimit.go",
+          "language": "go",
+          "sizeLines": 90,
+          "fileCategory": "code"
+        }
+      ],
+      "batchImportData": {
+        "cmd/api/main.go": [
+          "internal/api/appconfig/handler.go",
+          "internal/api/appconfig/model.go",
+          "internal/api/appconfig/service.go",
+          "internal/api/auth/handler.go",
+          "internal/api/auth/model.go",
+          "internal/api/auth/repository.go",
+          "internal/api/auth/service.go",
+          "internal/api/character/handler.go",
+          "internal/api/character/model.go",
+          "internal/api/character/repository.go",
+          "internal/api/character/service.go",
+          "internal/api/dev/handler.go",
+          "internal/api/economy/model.go",
+          "internal/api/economy/repository.go",
+          "internal/api/economy/service.go",
+          "internal/api/giftcode/handler.go",
+          "internal/api/giftcode/model.go",
+          "internal/api/giftcode/repository.go",
+          "internal/api/giftcode/service.go",
+          "internal/api/iap/handler.go",
+          "internal/api/iap/model.go",
+          "internal/api/iap/repository.go",
+          "internal/api/iap/service.go",
+          "internal/api/inventory/handler.go",
+          "internal/api/inventory/model.go",
+          "internal/api/inventory/repository.go",
+          "internal/api/inventory/service.go",
+          "internal/api/matchhistory/handler.go",
+          "internal/api/matchhistory/model.go",
+          "internal/api/matchhistory/repository.go",
+          "internal/api/matchhistory/service.go",
+          "internal/api/mission/handler.go",
+          "internal/api/mission/model.go",
+          "internal/api/mission/repository.go",
+          "internal/api/mission/service.go",
+          "internal/api/moderation/handler.go",
+          "internal/api/moderation/model.go",
+          "internal/api/moderation/repository.go",
+          "internal/api/moderation/service.go",
+          "internal/api/player/handler.go",
+          "internal/api/player/model.go",
+          "internal/api/player/repository.go",
+          "internal/api/player/service.go",
+          "internal/api/rank/handler.go",
+          "internal/api/rank/model.go",
+          "internal/api/rank/repository.go",
+          "internal/api/rank/service.go",
+          "internal/api/rooms/handler.go",
+          "internal/api/rooms/model.go",
+          "internal/api/shop/handler.go",
+          "internal/api/shop/model.go",
+          "internal/api/shop/repository.go",
+          "internal/api/shop/service.go",
+          "internal/shared/auth/jwt.go",
+          "internal/shared/config/config.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/idempotency/idempotency.go",
+          "internal/shared/middleware/auth.go",
+          "internal/shared/middleware/correlation.go",
+          "internal/shared/middleware/ratelimit.go",
+          "internal/shared/middleware/version_check.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/api/appconfig/model.go": [],
+        "internal/api/auth/model.go": [],
+        "internal/api/auth/service.go": [
+          "internal/shared/auth/jwt.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/character/model.go": [],
+        "internal/api/character/service.go": [
+          "internal/api/economy/model.go",
+          "internal/api/economy/repository.go",
+          "internal/api/economy/service.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/model/errors.go"
+        ],
+        "internal/api/economy/model.go": [],
+        "internal/api/economy/repository.go": [],
+        "internal/api/economy/service.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/giftcode/model.go": [],
+        "internal/api/giftcode/service.go": [
+          "internal/api/economy/model.go",
+          "internal/api/economy/repository.go",
+          "internal/api/economy/service.go",
+          "internal/api/inventory/handler.go",
+          "internal/api/inventory/model.go",
+          "internal/api/inventory/repository.go",
+          "internal/api/inventory/service.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/iap/model.go": [],
+        "internal/api/iap/service.go": [
+          "internal/api/economy/model.go",
+          "internal/api/economy/repository.go",
+          "internal/api/economy/service.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/inventory/handler.go": [
+          "internal/shared/model/errors.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/api/inventory/model.go": [],
+        "internal/api/inventory/repository.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/inventory/service.go": [],
+        "internal/api/matchhistory/model.go": [],
+        "internal/api/matchhistory/service.go": [],
+        "internal/api/mission/model.go": [],
+        "internal/api/mission/service.go": [
+          "internal/api/economy/model.go",
+          "internal/api/economy/repository.go",
+          "internal/api/economy/service.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/moderation/model.go": [],
+        "internal/api/player/model.go": [],
+        "internal/api/player/service.go": [],
+        "internal/api/rank/model.go": [],
+        "internal/api/rank/service.go": [
+          "internal/api/economy/model.go",
+          "internal/api/economy/repository.go",
+          "internal/api/economy/service.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/rooms/model.go": [],
+        "internal/api/shop/model.go": [],
+        "internal/api/shop/service.go": [
+          "internal/api/economy/model.go",
+          "internal/api/economy/repository.go",
+          "internal/api/economy/service.go",
+          "internal/api/inventory/handler.go",
+          "internal/api/inventory/model.go",
+          "internal/api/inventory/repository.go",
+          "internal/api/inventory/service.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/idempotency/idempotency.go"
+        ],
+        "internal/game/match/reward.go": [
+          "internal/api/economy/model.go",
+          "internal/api/economy/repository.go",
+          "internal/api/economy/service.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/shared/auth/jwt.go": [],
+        "internal/shared/idempotency/idempotency.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/shared/middleware/auth.go": [
+          "internal/shared/auth/jwt.go",
+          "internal/shared/model/errors.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/shared/middleware/ratelimit.go": [
+          "internal/shared/model/errors.go"
+        ]
+      },
+      "neighborMap": {
+        "cmd/api/main.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          },
+          {
+            "path": "internal/shared/config/config.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Config",
+              "LoadConfig"
+            ]
+          },
+          {
+            "path": "internal/api/dev/handler.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "ClearRooms",
+              "ResetData"
+            ]
+          },
+          {
+            "path": "internal/api/character/handler.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "GetCharacters",
+              "AllocateStats",
+              "ResetStats"
+            ]
+          },
+          {
+            "path": "internal/api/giftcode/handler.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "Redeem"
+            ]
+          },
+          {
+            "path": "internal/api/iap/handler.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "GetProducts",
+              "VerifyReceipt"
+            ]
+          },
+          {
+            "path": "internal/api/matchhistory/handler.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "GetHistory"
+            ]
+          },
+          {
+            "path": "internal/api/mission/handler.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "GetDailyMissions",
+              "GetAchievements",
+              "ClaimReward"
+            ]
+          },
+          {
+            "path": "internal/api/moderation/handler.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "CreateReport",
+              "BanPlayer",
+              "RevokeBan"
+            ]
+          },
+          {
+            "path": "internal/api/player/handler.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "GetProfile",
+              "UpdateProfile",
+              "RequestAccountDeletion",
+              "CancelAccountDeletion",
+              "GetAccountDeletionStatus"
+            ]
+          },
+          {
+            "path": "internal/api/rank/handler.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "GetRankMe",
+              "GetLeaderboard",
+              "GetCurrentSeason",
+              "ClaimReward"
+            ]
+          },
+          {
+            "path": "internal/api/shop/handler.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "GetOffers",
+              "Purchase",
+              "GetPurchases"
+            ]
+          },
+          {
+            "path": "internal/api/appconfig/service.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Service",
+              "NewService",
+              "GetVersionPolicy",
+              "GetRemoteConfig"
+            ]
+          },
+          {
+            "path": "internal/api/rooms/handler.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "GetRooms"
+            ]
+          },
+          {
+            "path": "internal/shared/middleware/correlation.go",
+            "batchIndex": 2,
+            "symbols": [
+              "CorrelationID"
+            ]
+          },
+          {
+            "path": "internal/api/auth/repository.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Repository",
+              "NewRepository",
+              "FindIdentity",
+              "FindAccountByID",
+              "CreateGuestAccount",
+              "CreateProviderAccount",
+              "LinkIdentity",
+              "UpdateLastLogin",
+              "GetPlayerProfileByAccountID"
+            ]
+          },
+          {
+            "path": "internal/api/character/repository.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Repository",
+              "NewRepository",
+              "GetPlayerCharacters",
+              "GetPlayerCharacter",
+              "AllocateStats",
+              "ResetStats",
+              "GetConfigValue",
+              "GetCharacterBonuses",
+              "AddExpAndLevelTx"
+            ]
+          },
+          {
+            "path": "internal/api/giftcode/repository.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Repository",
+              "NewRepository",
+              "GetGiftCode",
+              "HasRedeemed",
+              "GetGiftCodeTx",
+              "HasRedeemedTx",
+              "RedeemTx"
+            ]
+          },
+          {
+            "path": "internal/api/iap/repository.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Repository",
+              "NewRepository",
+              "GetActiveProducts",
+              "GetProductByID",
+              "FindTransactionByID",
+              "CreateTransactionTx"
+            ]
+          },
+          {
+            "path": "internal/api/matchhistory/repository.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Repository",
+              "NewRepository",
+              "GetPlayerHistory"
+            ]
+          },
+          {
+            "path": "internal/api/mission/repository.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Repository",
+              "NewRepository",
+              "GetPlayerMissions",
+              "GetMissionProgress",
+              "GetMissionProgressTx",
+              "IncrementProgressTx",
+              "MarkClaimedTx"
+            ]
+          },
+          {
+            "path": "internal/api/moderation/repository.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Repository",
+              "NewRepository",
+              "CreateReport",
+              "GetAccountIDByPlayerID",
+              "GetAccountIDByPlayerIDTx",
+              "BanAccountTx",
+              "RevokeBanTx"
+            ]
+          },
+          {
+            "path": "internal/api/moderation/service.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Service",
+              "NewService",
+              "CreateReport",
+              "BanPlayer",
+              "RevokeBan"
+            ]
+          },
+          {
+            "path": "internal/api/player/repository.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Repository",
+              "NewRepository",
+              "GetProfile",
+              "UpdateDisplayName",
+              "RequestAccountDeletion",
+              "CancelAccountDeletion",
+              "GetAccountDeletionStatus"
+            ]
+          },
+          {
+            "path": "internal/api/rank/repository.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Repository",
+              "NewRepository",
+              "GetActiveSeason",
+              "GetPlayerRank",
+              "GetLeaderboard",
+              "HasClaimedReward",
+              "ClaimRewardTx"
+            ]
+          },
+          {
+            "path": "internal/api/shop/repository.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Repository",
+              "NewRepository",
+              "GetActiveOffers",
+              "GetOfferByID",
+              "GetPlayerPurchaseCount",
+              "CreateShopPurchaseTx",
+              "GetPlayerPurchases"
+            ]
+          },
+          {
+            "path": "internal/shared/middleware/version_check.go",
+            "batchIndex": 4,
+            "symbols": [
+              "VersionCheck"
+            ]
+          },
+          {
+            "path": "internal/api/appconfig/handler.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "GetVersionPolicy",
+              "GetRemoteConfig"
+            ]
+          },
+          {
+            "path": "internal/api/auth/handler.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "GuestLogin",
+              "ProviderLogin",
+              "LinkProvider",
+              "RefreshToken",
+              "Logout"
+            ]
+          }
+        ],
+        "internal/api/auth/service.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          }
+        ],
+        "internal/api/character/service.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/model/errors.go",
+            "batchIndex": 2,
+            "symbols": [
+              "AppError",
+              "Error",
+              "ErrorResponse",
+              "WriteError"
+            ]
+          }
+        ],
+        "internal/api/economy/model.go": [
+          {
+            "path": "internal/game/match/match.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Match",
+              "RoomHubInterface",
+              "NewMatch",
+              "Run",
+              "ProcessEvent"
+            ]
+          },
+          {
+            "path": "internal/game/room/room.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Room",
+              "NewRoom",
+              "Run",
+              "Join",
+              "Leave",
+              "ProcessEvent",
+              "RegisterClient"
+            ]
+          }
+        ],
+        "internal/api/economy/repository.go": [
+          {
+            "path": "internal/game/match/match.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Match",
+              "RoomHubInterface",
+              "NewMatch",
+              "Run",
+              "ProcessEvent"
+            ]
+          },
+          {
+            "path": "internal/game/room/room.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Room",
+              "NewRoom",
+              "Run",
+              "Join",
+              "Leave",
+              "ProcessEvent",
+              "RegisterClient"
+            ]
+          }
+        ],
+        "internal/api/economy/service.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/game/match/match.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Match",
+              "RoomHubInterface",
+              "NewMatch",
+              "Run",
+              "ProcessEvent"
+            ]
+          },
+          {
+            "path": "internal/game/room/room.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Room",
+              "NewRoom",
+              "Run",
+              "Join",
+              "Leave",
+              "ProcessEvent",
+              "RegisterClient"
+            ]
+          }
+        ],
+        "internal/api/giftcode/service.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          }
+        ],
+        "internal/api/iap/service.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          }
+        ],
+        "internal/api/inventory/handler.go": [
+          {
+            "path": "internal/shared/model/errors.go",
+            "batchIndex": 2,
+            "symbols": [
+              "AppError",
+              "Error",
+              "ErrorResponse",
+              "WriteError"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ],
+        "internal/api/inventory/repository.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          }
+        ],
+        "internal/api/mission/service.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          }
+        ],
+        "internal/api/rank/service.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          }
+        ],
+        "internal/api/shop/service.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          }
+        ],
+        "internal/game/match/reward.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/game/room/room.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Room",
+              "NewRoom",
+              "Run",
+              "Join",
+              "Leave",
+              "ProcessEvent",
+              "RegisterClient"
+            ]
+          }
+        ],
+        "internal/shared/auth/jwt.go": [
+          {
+            "path": "cmd/game/main.go",
+            "batchIndex": 3,
+            "symbols": [
+              "CompositeWSHandler",
+              "HandleMessage",
+              "Unregister"
+            ]
+          },
+          {
+            "path": "internal/game/ws/server.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Server",
+              "NewServer",
+              "HandleUpgrade"
+            ]
+          }
+        ],
+        "internal/shared/idempotency/idempotency.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          }
+        ],
+        "internal/shared/middleware/auth.go": [
+          {
+            "path": "internal/shared/model/errors.go",
+            "batchIndex": 2,
+            "symbols": [
+              "AppError",
+              "Error",
+              "ErrorResponse",
+              "WriteError"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ],
+        "internal/shared/middleware/ratelimit.go": [
+          {
+            "path": "internal/shared/model/errors.go",
+            "batchIndex": 2,
+            "symbols": [
+              "AppError",
+              "Error",
+              "ErrorResponse",
+              "WriteError"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "batchIndex": 2,
+      "files": [
+        {
+          "path": "cmd/admin/main.go",
+          "language": "go",
+          "sizeLines": 87,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/admin/handlers_config.go",
+          "language": "go",
+          "sizeLines": 472,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/admin/handlers_dashboard.go",
+          "language": "go",
+          "sizeLines": 20,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/admin/handlers_devtools.go",
+          "language": "go",
+          "sizeLines": 52,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/admin/handlers_map_editor.go",
+          "language": "go",
+          "sizeLines": 339,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/admin/handlers_matchmaking.go",
+          "language": "go",
+          "sizeLines": 65,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/admin/handlers_physics.go",
+          "language": "go",
+          "sizeLines": 53,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/admin/handlers_players.go",
+          "language": "go",
+          "sizeLines": 88,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/admin/handlers_shop.go",
+          "language": "go",
+          "sizeLines": 110,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/admin/seed.go",
+          "language": "go",
+          "sizeLines": 207,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/admin/server.go",
+          "language": "go",
+          "sizeLines": 151,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/appconfig/handler.go",
+          "language": "go",
+          "sizeLines": 45,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/auth/handler.go",
+          "language": "go",
+          "sizeLines": 129,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/character/handler.go",
+          "language": "go",
+          "sizeLines": 120,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/dev/handler.go",
+          "language": "go",
+          "sizeLines": 80,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/giftcode/handler.go",
+          "language": "go",
+          "sizeLines": 45,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/iap/handler.go",
+          "language": "go",
+          "sizeLines": 62,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/matchhistory/handler.go",
+          "language": "go",
+          "sizeLines": 55,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/mission/handler.go",
+          "language": "go",
+          "sizeLines": 89,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/moderation/handler.go",
+          "language": "go",
+          "sizeLines": 107,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/player/handler.go",
+          "language": "go",
+          "sizeLines": 124,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/rank/handler.go",
+          "language": "go",
+          "sizeLines": 112,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/rooms/handler.go",
+          "language": "go",
+          "sizeLines": 87,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/shop/handler.go",
+          "language": "go",
+          "sizeLines": 99,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/lobby/hub.go",
+          "language": "go",
+          "sizeLines": 168,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/match/eventlog.go",
+          "language": "go",
+          "sizeLines": 103,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/match/item_effect.go",
+          "language": "go",
+          "sizeLines": 96,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/shared/middleware/correlation.go",
+          "language": "go",
+          "sizeLines": 32,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/shared/model/errors.go",
+          "language": "go",
+          "sizeLines": 61,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/shared/observability/health.go",
+          "language": "go",
+          "sizeLines": 81,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/shared/observability/logger.go",
+          "language": "go",
+          "sizeLines": 55,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/shared/observability/metrics.go",
+          "language": "go",
+          "sizeLines": 93,
+          "fileCategory": "code"
+        }
+      ],
+      "batchImportData": {
+        "cmd/admin/main.go": [
+          "internal/admin/handlers_config.go",
+          "internal/admin/handlers_dashboard.go",
+          "internal/admin/handlers_devtools.go",
+          "internal/admin/handlers_map_editor.go",
+          "internal/admin/handlers_matchmaking.go",
+          "internal/admin/handlers_physics.go",
+          "internal/admin/handlers_players.go",
+          "internal/admin/handlers_shop.go",
+          "internal/admin/repository.go",
+          "internal/admin/seed.go",
+          "internal/admin/server.go",
+          "internal/shared/config/config.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/admin/handlers_config.go": [
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/admin/handlers_dashboard.go": [
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/admin/handlers_devtools.go": [
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/admin/handlers_map_editor.go": [
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/admin/handlers_matchmaking.go": [
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/admin/handlers_physics.go": [
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/admin/handlers_players.go": [
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/admin/handlers_shop.go": [
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/admin/seed.go": [
+          "internal/game/gamedata/loader.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/admin/server.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/appconfig/handler.go": [
+          "internal/shared/model/errors.go"
+        ],
+        "internal/api/auth/handler.go": [
+          "internal/shared/model/errors.go"
+        ],
+        "internal/api/character/handler.go": [
+          "internal/shared/model/errors.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/api/dev/handler.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/api/giftcode/handler.go": [
+          "internal/shared/model/errors.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/api/iap/handler.go": [
+          "internal/shared/model/errors.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/api/matchhistory/handler.go": [
+          "internal/shared/model/errors.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/api/mission/handler.go": [
+          "internal/shared/model/errors.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/api/moderation/handler.go": [
+          "internal/shared/model/errors.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/api/player/handler.go": [
+          "internal/shared/model/errors.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/api/rank/handler.go": [
+          "internal/shared/model/errors.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/api/rooms/handler.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/model/errors.go"
+        ],
+        "internal/api/shop/handler.go": [
+          "internal/shared/model/errors.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/game/lobby/hub.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/game/match/eventlog.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/game/match/item_effect.go": [
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/shared/middleware/correlation.go": [
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/shared/model/errors.go": [
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/shared/observability/health.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/shared/observability/logger.go": [],
+        "internal/shared/observability/metrics.go": []
+      },
+      "neighborMap": {
+        "cmd/admin/main.go": [
+          {
+            "path": "internal/admin/repository.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Repository",
+              "NewRepository",
+              "DashboardStats",
+              "GetDashboardStats",
+              "GameSetting",
+              "GetAllSettings",
+              "UpdateSetting",
+              "ConfigCharacter",
+              "GetCharacters",
+              "GetCharacter",
+              "UpsertCharacter",
+              "DeleteCharacter",
+              "ConfigWeapon",
+              "GetWeapons",
+              "GetWeapon",
+              "UpsertWeapon",
+              "DeleteWeapon",
+              "ConfigSkill",
+              "GetSkills",
+              "GetSkill",
+              "UpsertSkill",
+              "GetSkillByCharacterID",
+              "DeleteSkill",
+              "ConfigItem",
+              "GetItems",
+              "GetItem",
+              "UpsertItem",
+              "DeleteItem",
+              "ConfigMap",
+              "GetMaps",
+              "GetMap",
+              "UpsertMap",
+              "DeleteMap",
+              "ConfigBrickType",
+              "GetBrickTypes",
+              "GetBrickType",
+              "InsertBrickType",
+              "UpdateBrickType",
+              "DeleteBrickType",
+              "MapTilesData",
+              "GetMapTiles",
+              "SaveMapFull",
+              "ShopOffer",
+              "GetShopOffers",
+              "GetShopOffer",
+              "UpsertShopOffer",
+              "DeleteShopOffer",
+              "PlayerInfo",
+              "GetPlayers",
+              "BanPlayer",
+              "UnbanPlayer",
+              "GetJSONSetting",
+              "UpsertJSONSetting",
+              "ClearRooms",
+              "ResetAllData"
+            ]
+          },
+          {
+            "path": "internal/shared/config/config.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Config",
+              "LoadConfig"
+            ]
+          },
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          }
+        ],
+        "internal/admin/seed.go": [
+          {
+            "path": "internal/game/gamedata/loader.go",
+            "batchIndex": 3,
+            "symbols": [
+              "CharacterConfig",
+              "WeaponConfig",
+              "SkillConfig",
+              "ItemConfig",
+              "SpawnPoint",
+              "TerrainLayer",
+              "MapConfig",
+              "GameData",
+              "BorderPoint",
+              "BrickBorder",
+              "BrickTypeConfig",
+              "PhysicsConfig",
+              "LoadGameData",
+              "LoadGameDataFromDB"
+            ]
+          },
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          }
+        ],
+        "internal/admin/server.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          }
+        ],
+        "internal/api/appconfig/handler.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/auth/handler.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/character/handler.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/dev/handler.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/giftcode/handler.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/iap/handler.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/matchhistory/handler.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/mission/handler.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/moderation/handler.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/player/handler.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/rank/handler.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/rooms/handler.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/shop/handler.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/game/lobby/hub.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "cmd/game/main.go",
+            "batchIndex": 3,
+            "symbols": [
+              "CompositeWSHandler",
+              "HandleMessage",
+              "Unregister"
+            ]
+          }
+        ],
+        "internal/game/match/eventlog.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/game/room/room.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Room",
+              "NewRoom",
+              "Run",
+              "Join",
+              "Leave",
+              "ProcessEvent",
+              "RegisterClient"
+            ]
+          }
+        ],
+        "internal/game/match/item_effect.go": [
+          {
+            "path": "internal/game/room/room.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Room",
+              "NewRoom",
+              "Run",
+              "Join",
+              "Leave",
+              "ProcessEvent",
+              "RegisterClient"
+            ]
+          }
+        ],
+        "internal/shared/middleware/correlation.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/shared/model/errors.go": [
+          {
+            "path": "internal/api/character/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "GetPlayerCharacters",
+              "AllocateStats",
+              "ResetStats"
+            ]
+          },
+          {
+            "path": "internal/api/inventory/handler.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "GetInventory"
+            ]
+          },
+          {
+            "path": "internal/game/lobby/handler.go",
+            "batchIndex": 3,
+            "symbols": [
+              "WSHandler",
+              "NewWSHandler",
+              "HandleLobbyMessage",
+              "UnregisterFromLobby"
+            ]
+          },
+          {
+            "path": "internal/game/room/handler.go",
+            "batchIndex": 3,
+            "symbols": [
+              "WSHandler",
+              "NewWSHandler",
+              "HandleMessage",
+              "Unregister"
+            ]
+          },
+          {
+            "path": "internal/game/ws/server.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Server",
+              "NewServer",
+              "HandleUpgrade"
+            ]
+          },
+          {
+            "path": "internal/shared/middleware/auth.go",
+            "batchIndex": 1,
+            "symbols": [
+              "AuthMiddleware"
+            ]
+          },
+          {
+            "path": "internal/shared/middleware/ratelimit.go",
+            "batchIndex": 1,
+            "symbols": [
+              "RateLimiter",
+              "NewRateLimiter",
+              "Limit"
+            ]
+          },
+          {
+            "path": "internal/shared/middleware/version_check.go",
+            "batchIndex": 4,
+            "symbols": [
+              "VersionCheck"
+            ]
+          }
+        ],
+        "internal/shared/observability/health.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          },
+          {
+            "path": "cmd/game/main.go",
+            "batchIndex": 3,
+            "symbols": [
+              "CompositeWSHandler",
+              "HandleMessage",
+              "Unregister"
+            ]
+          },
+          {
+            "path": "cmd/migrate/main.go",
+            "batchIndex": 4,
+            "symbols": []
+          },
+          {
+            "path": "cmd/worker/main.go",
+            "batchIndex": 4,
+            "symbols": []
+          },
+          {
+            "path": "internal/api/inventory/handler.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "GetInventory"
+            ]
+          },
+          {
+            "path": "internal/game/lobby/handler.go",
+            "batchIndex": 3,
+            "symbols": [
+              "WSHandler",
+              "NewWSHandler",
+              "HandleLobbyMessage",
+              "UnregisterFromLobby"
+            ]
+          },
+          {
+            "path": "internal/game/lobby/lobby.go",
+            "batchIndex": 3,
+            "symbols": [
+              "LobbyRoom",
+              "NewLobbyRoom",
+              "Run",
+              "Join",
+              "Leave",
+              "ProcessEvent",
+              "SetStatus"
+            ]
+          },
+          {
+            "path": "internal/game/match/match.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Match",
+              "RoomHubInterface",
+              "NewMatch",
+              "Run",
+              "ProcessEvent"
+            ]
+          },
+          {
+            "path": "internal/game/matchmaker/matchmaker.go",
+            "batchIndex": 3,
+            "symbols": [
+              "MatchResult",
+              "RoomCreator",
+              "Matchmaker",
+              "NewMatchmaker",
+              "Run",
+              "Stop",
+              "GetConfig",
+              "EnqueueLobby",
+              "CancelQueue",
+              "IsPlayerInQueue"
+            ]
+          },
+          {
+            "path": "internal/game/matchmaker/model.go",
+            "batchIndex": 3,
+            "symbols": [
+              "MatchmakingConfig",
+              "EloConfig",
+              "BotTierConfig",
+              "BotDifficultyConfig",
+              "QueueEntry",
+              "DefaultMatchmakingConfig",
+              "DefaultEloConfig",
+              "DefaultBotDifficultyConfig",
+              "LoadConfigFromDB",
+              "LoadMatchmakingConfig",
+              "LoadEloConfig",
+              "LoadBotDifficultyConfig"
+            ]
+          },
+          {
+            "path": "internal/game/matchmaker/queue.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Queue",
+              "NewQueue",
+              "Enqueue",
+              "Dequeue",
+              "IsPlayerInQueue",
+              "GetAllEntries",
+              "CancelByPlayer"
+            ]
+          },
+          {
+            "path": "internal/game/room/handler.go",
+            "batchIndex": 3,
+            "symbols": [
+              "WSHandler",
+              "NewWSHandler",
+              "HandleMessage",
+              "Unregister"
+            ]
+          },
+          {
+            "path": "internal/game/room/hub.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Hub",
+              "SetLobbyNotifier",
+              "NewHub",
+              "CreateRoom",
+              "FindRoom",
+              "UnregisterRoom",
+              "SyncRoomState",
+              "CreateBattleFromMatch"
+            ]
+          },
+          {
+            "path": "internal/game/room/room.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Room",
+              "NewRoom",
+              "Run",
+              "Join",
+              "Leave",
+              "ProcessEvent",
+              "RegisterClient"
+            ]
+          },
+          {
+            "path": "internal/game/ws/client.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Client",
+              "HandlerInterface",
+              "ReadPump",
+              "WritePump"
+            ]
+          },
+          {
+            "path": "internal/game/ws/server.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Server",
+              "NewServer",
+              "HandleUpgrade"
+            ]
+          },
+          {
+            "path": "internal/shared/middleware/auth.go",
+            "batchIndex": 1,
+            "symbols": [
+              "AuthMiddleware"
+            ]
+          },
+          {
+            "path": "internal/worker/jobs/account_deletion.go",
+            "batchIndex": 4,
+            "symbols": [
+              "NewAccountDeletionJob"
+            ]
+          },
+          {
+            "path": "internal/worker/jobs/ban_expire.go",
+            "batchIndex": 4,
+            "symbols": [
+              "NewBanExpireJob"
+            ]
+          },
+          {
+            "path": "internal/worker/jobs/daily_reset.go",
+            "batchIndex": 4,
+            "symbols": [
+              "NewDailyResetJob"
+            ]
+          },
+          {
+            "path": "internal/worker/scheduler.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Job",
+              "Scheduler",
+              "NewScheduler",
+              "Register",
+              "Start",
+              "Stop"
+            ]
+          }
+        ],
+        "internal/shared/observability/logger.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          },
+          {
+            "path": "cmd/game/main.go",
+            "batchIndex": 3,
+            "symbols": [
+              "CompositeWSHandler",
+              "HandleMessage",
+              "Unregister"
+            ]
+          },
+          {
+            "path": "cmd/migrate/main.go",
+            "batchIndex": 4,
+            "symbols": []
+          },
+          {
+            "path": "cmd/worker/main.go",
+            "batchIndex": 4,
+            "symbols": []
+          },
+          {
+            "path": "internal/api/inventory/handler.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "GetInventory"
+            ]
+          },
+          {
+            "path": "internal/game/lobby/handler.go",
+            "batchIndex": 3,
+            "symbols": [
+              "WSHandler",
+              "NewWSHandler",
+              "HandleLobbyMessage",
+              "UnregisterFromLobby"
+            ]
+          },
+          {
+            "path": "internal/game/lobby/lobby.go",
+            "batchIndex": 3,
+            "symbols": [
+              "LobbyRoom",
+              "NewLobbyRoom",
+              "Run",
+              "Join",
+              "Leave",
+              "ProcessEvent",
+              "SetStatus"
+            ]
+          },
+          {
+            "path": "internal/game/match/match.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Match",
+              "RoomHubInterface",
+              "NewMatch",
+              "Run",
+              "ProcessEvent"
+            ]
+          },
+          {
+            "path": "internal/game/matchmaker/matchmaker.go",
+            "batchIndex": 3,
+            "symbols": [
+              "MatchResult",
+              "RoomCreator",
+              "Matchmaker",
+              "NewMatchmaker",
+              "Run",
+              "Stop",
+              "GetConfig",
+              "EnqueueLobby",
+              "CancelQueue",
+              "IsPlayerInQueue"
+            ]
+          },
+          {
+            "path": "internal/game/matchmaker/model.go",
+            "batchIndex": 3,
+            "symbols": [
+              "MatchmakingConfig",
+              "EloConfig",
+              "BotTierConfig",
+              "BotDifficultyConfig",
+              "QueueEntry",
+              "DefaultMatchmakingConfig",
+              "DefaultEloConfig",
+              "DefaultBotDifficultyConfig",
+              "LoadConfigFromDB",
+              "LoadMatchmakingConfig",
+              "LoadEloConfig",
+              "LoadBotDifficultyConfig"
+            ]
+          },
+          {
+            "path": "internal/game/matchmaker/queue.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Queue",
+              "NewQueue",
+              "Enqueue",
+              "Dequeue",
+              "IsPlayerInQueue",
+              "GetAllEntries",
+              "CancelByPlayer"
+            ]
+          },
+          {
+            "path": "internal/game/room/handler.go",
+            "batchIndex": 3,
+            "symbols": [
+              "WSHandler",
+              "NewWSHandler",
+              "HandleMessage",
+              "Unregister"
+            ]
+          },
+          {
+            "path": "internal/game/room/hub.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Hub",
+              "SetLobbyNotifier",
+              "NewHub",
+              "CreateRoom",
+              "FindRoom",
+              "UnregisterRoom",
+              "SyncRoomState",
+              "CreateBattleFromMatch"
+            ]
+          },
+          {
+            "path": "internal/game/room/room.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Room",
+              "NewRoom",
+              "Run",
+              "Join",
+              "Leave",
+              "ProcessEvent",
+              "RegisterClient"
+            ]
+          },
+          {
+            "path": "internal/game/ws/client.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Client",
+              "HandlerInterface",
+              "ReadPump",
+              "WritePump"
+            ]
+          },
+          {
+            "path": "internal/game/ws/server.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Server",
+              "NewServer",
+              "HandleUpgrade"
+            ]
+          },
+          {
+            "path": "internal/shared/middleware/auth.go",
+            "batchIndex": 1,
+            "symbols": [
+              "AuthMiddleware"
+            ]
+          },
+          {
+            "path": "internal/worker/jobs/account_deletion.go",
+            "batchIndex": 4,
+            "symbols": [
+              "NewAccountDeletionJob"
+            ]
+          },
+          {
+            "path": "internal/worker/jobs/ban_expire.go",
+            "batchIndex": 4,
+            "symbols": [
+              "NewBanExpireJob"
+            ]
+          },
+          {
+            "path": "internal/worker/jobs/daily_reset.go",
+            "batchIndex": 4,
+            "symbols": [
+              "NewDailyResetJob"
+            ]
+          },
+          {
+            "path": "internal/worker/scheduler.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Job",
+              "Scheduler",
+              "NewScheduler",
+              "Register",
+              "Start",
+              "Stop"
+            ]
+          }
+        ],
+        "internal/shared/observability/metrics.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          },
+          {
+            "path": "cmd/game/main.go",
+            "batchIndex": 3,
+            "symbols": [
+              "CompositeWSHandler",
+              "HandleMessage",
+              "Unregister"
+            ]
+          },
+          {
+            "path": "cmd/migrate/main.go",
+            "batchIndex": 4,
+            "symbols": []
+          },
+          {
+            "path": "cmd/worker/main.go",
+            "batchIndex": 4,
+            "symbols": []
+          },
+          {
+            "path": "internal/api/inventory/handler.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "GetInventory"
+            ]
+          },
+          {
+            "path": "internal/game/lobby/handler.go",
+            "batchIndex": 3,
+            "symbols": [
+              "WSHandler",
+              "NewWSHandler",
+              "HandleLobbyMessage",
+              "UnregisterFromLobby"
+            ]
+          },
+          {
+            "path": "internal/game/lobby/lobby.go",
+            "batchIndex": 3,
+            "symbols": [
+              "LobbyRoom",
+              "NewLobbyRoom",
+              "Run",
+              "Join",
+              "Leave",
+              "ProcessEvent",
+              "SetStatus"
+            ]
+          },
+          {
+            "path": "internal/game/match/match.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Match",
+              "RoomHubInterface",
+              "NewMatch",
+              "Run",
+              "ProcessEvent"
+            ]
+          },
+          {
+            "path": "internal/game/matchmaker/matchmaker.go",
+            "batchIndex": 3,
+            "symbols": [
+              "MatchResult",
+              "RoomCreator",
+              "Matchmaker",
+              "NewMatchmaker",
+              "Run",
+              "Stop",
+              "GetConfig",
+              "EnqueueLobby",
+              "CancelQueue",
+              "IsPlayerInQueue"
+            ]
+          },
+          {
+            "path": "internal/game/matchmaker/model.go",
+            "batchIndex": 3,
+            "symbols": [
+              "MatchmakingConfig",
+              "EloConfig",
+              "BotTierConfig",
+              "BotDifficultyConfig",
+              "QueueEntry",
+              "DefaultMatchmakingConfig",
+              "DefaultEloConfig",
+              "DefaultBotDifficultyConfig",
+              "LoadConfigFromDB",
+              "LoadMatchmakingConfig",
+              "LoadEloConfig",
+              "LoadBotDifficultyConfig"
+            ]
+          },
+          {
+            "path": "internal/game/matchmaker/queue.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Queue",
+              "NewQueue",
+              "Enqueue",
+              "Dequeue",
+              "IsPlayerInQueue",
+              "GetAllEntries",
+              "CancelByPlayer"
+            ]
+          },
+          {
+            "path": "internal/game/room/handler.go",
+            "batchIndex": 3,
+            "symbols": [
+              "WSHandler",
+              "NewWSHandler",
+              "HandleMessage",
+              "Unregister"
+            ]
+          },
+          {
+            "path": "internal/game/room/hub.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Hub",
+              "SetLobbyNotifier",
+              "NewHub",
+              "CreateRoom",
+              "FindRoom",
+              "UnregisterRoom",
+              "SyncRoomState",
+              "CreateBattleFromMatch"
+            ]
+          },
+          {
+            "path": "internal/game/room/room.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Room",
+              "NewRoom",
+              "Run",
+              "Join",
+              "Leave",
+              "ProcessEvent",
+              "RegisterClient"
+            ]
+          },
+          {
+            "path": "internal/game/ws/client.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Client",
+              "HandlerInterface",
+              "ReadPump",
+              "WritePump"
+            ]
+          },
+          {
+            "path": "internal/game/ws/server.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Server",
+              "NewServer",
+              "HandleUpgrade"
+            ]
+          },
+          {
+            "path": "internal/shared/middleware/auth.go",
+            "batchIndex": 1,
+            "symbols": [
+              "AuthMiddleware"
+            ]
+          },
+          {
+            "path": "internal/worker/jobs/account_deletion.go",
+            "batchIndex": 4,
+            "symbols": [
+              "NewAccountDeletionJob"
+            ]
+          },
+          {
+            "path": "internal/worker/jobs/ban_expire.go",
+            "batchIndex": 4,
+            "symbols": [
+              "NewBanExpireJob"
+            ]
+          },
+          {
+            "path": "internal/worker/jobs/daily_reset.go",
+            "batchIndex": 4,
+            "symbols": [
+              "NewDailyResetJob"
+            ]
+          },
+          {
+            "path": "internal/worker/scheduler.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Job",
+              "Scheduler",
+              "NewScheduler",
+              "Register",
+              "Start",
+              "Stop"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "batchIndex": 3,
+      "files": [
+        {
+          "path": "cmd/game/main.go",
+          "language": "go",
+          "sizeLines": 226,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/gamedata/loader.go",
+          "language": "go",
+          "sizeLines": 510,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/lobby/handler.go",
+          "language": "go",
+          "sizeLines": 231,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/lobby/lobby.go",
+          "language": "go",
+          "sizeLines": 444,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/lobby/model.go",
+          "language": "go",
+          "sizeLines": 31,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/match/bot.go",
+          "language": "go",
+          "sizeLines": 120,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/match/bot_ai.go",
+          "language": "go",
+          "sizeLines": 313,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/match/damage.go",
+          "language": "go",
+          "sizeLines": 48,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/match/damage_test.go",
+          "language": "go",
+          "sizeLines": 49,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/match/elo.go",
+          "language": "go",
+          "sizeLines": 36,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/match/elo_test.go",
+          "language": "go",
+          "sizeLines": 56,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/match/match.go",
+          "language": "go",
+          "sizeLines": 1388,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/match/model.go",
+          "language": "go",
+          "sizeLines": 109,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/match/physics_test.go",
+          "language": "go",
+          "sizeLines": 73,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/match/polygon.go",
+          "language": "go",
+          "sizeLines": 96,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/match/shooting.go",
+          "language": "go",
+          "sizeLines": 187,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/match/status_effect.go",
+          "language": "go",
+          "sizeLines": 60,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/match/terrain.go",
+          "language": "go",
+          "sizeLines": 265,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/match/terrain_test.go",
+          "language": "go",
+          "sizeLines": 152,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/matchmaker/map_selection_test.go",
+          "language": "go",
+          "sizeLines": 47,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/matchmaker/matchmaker.go",
+          "language": "go",
+          "sizeLines": 528,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/matchmaker/model.go",
+          "language": "go",
+          "sizeLines": 203,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/matchmaker/queue.go",
+          "language": "go",
+          "sizeLines": 196,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/room/handler.go",
+          "language": "go",
+          "sizeLines": 152,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/room/hub.go",
+          "language": "go",
+          "sizeLines": 361,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/room/model.go",
+          "language": "go",
+          "sizeLines": 49,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/room/room.go",
+          "language": "go",
+          "sizeLines": 917,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/ws/client.go",
+          "language": "go",
+          "sizeLines": 109,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/ws/message.go",
+          "language": "go",
+          "sizeLines": 11,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/game/ws/server.go",
+          "language": "go",
+          "sizeLines": 135,
+          "fileCategory": "code"
+        }
+      ],
+      "batchImportData": {
+        "cmd/game/main.go": [
+          "internal/game/gamedata/loader.go",
+          "internal/game/lobby/handler.go",
+          "internal/game/lobby/hub.go",
+          "internal/game/lobby/lobby.go",
+          "internal/game/lobby/model.go",
+          "internal/game/matchmaker/map_selection_test.go",
+          "internal/game/matchmaker/matchmaker.go",
+          "internal/game/matchmaker/model.go",
+          "internal/game/matchmaker/queue.go",
+          "internal/game/room/handler.go",
+          "internal/game/room/hub.go",
+          "internal/game/room/model.go",
+          "internal/game/room/room.go",
+          "internal/game/ws/client.go",
+          "internal/game/ws/message.go",
+          "internal/game/ws/server.go",
+          "internal/shared/auth/jwt.go",
+          "internal/shared/config/config.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/game/gamedata/loader.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/game/lobby/handler.go": [
+          "internal/game/matchmaker/map_selection_test.go",
+          "internal/game/matchmaker/matchmaker.go",
+          "internal/game/matchmaker/model.go",
+          "internal/game/matchmaker/queue.go",
+          "internal/game/ws/client.go",
+          "internal/game/ws/message.go",
+          "internal/game/ws/server.go",
+          "internal/shared/model/errors.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/game/lobby/lobby.go": [
+          "internal/game/ws/client.go",
+          "internal/game/ws/message.go",
+          "internal/game/ws/server.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/game/lobby/model.go": [],
+        "internal/game/match/bot.go": [],
+        "internal/game/match/bot_ai.go": [
+          "internal/game/matchmaker/map_selection_test.go",
+          "internal/game/matchmaker/matchmaker.go",
+          "internal/game/matchmaker/model.go",
+          "internal/game/matchmaker/queue.go"
+        ],
+        "internal/game/match/damage.go": [],
+        "internal/game/match/damage_test.go": [],
+        "internal/game/match/elo.go": [],
+        "internal/game/match/elo_test.go": [],
+        "internal/game/match/match.go": [
+          "internal/api/economy/model.go",
+          "internal/api/economy/repository.go",
+          "internal/api/economy/service.go",
+          "internal/game/gamedata/loader.go",
+          "internal/game/ws/client.go",
+          "internal/game/ws/message.go",
+          "internal/game/ws/server.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/game/match/model.go": [],
+        "internal/game/match/physics_test.go": [
+          "internal/game/gamedata/loader.go"
+        ],
+        "internal/game/match/polygon.go": [
+          "internal/game/gamedata/loader.go"
+        ],
+        "internal/game/match/shooting.go": [
+          "internal/game/gamedata/loader.go"
+        ],
+        "internal/game/match/status_effect.go": [],
+        "internal/game/match/terrain.go": [
+          "internal/game/gamedata/loader.go"
+        ],
+        "internal/game/match/terrain_test.go": [
+          "internal/game/gamedata/loader.go"
+        ],
+        "internal/game/matchmaker/map_selection_test.go": [],
+        "internal/game/matchmaker/matchmaker.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/game/matchmaker/model.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/game/matchmaker/queue.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/game/room/handler.go": [
+          "internal/game/ws/client.go",
+          "internal/game/ws/message.go",
+          "internal/game/ws/server.go",
+          "internal/shared/model/errors.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/game/room/hub.go": [
+          "internal/game/matchmaker/map_selection_test.go",
+          "internal/game/matchmaker/matchmaker.go",
+          "internal/game/matchmaker/model.go",
+          "internal/game/matchmaker/queue.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/game/room/model.go": [],
+        "internal/game/room/room.go": [
+          "internal/api/economy/model.go",
+          "internal/api/economy/repository.go",
+          "internal/api/economy/service.go",
+          "internal/game/gamedata/loader.go",
+          "internal/game/match/bot_ai.go",
+          "internal/game/match/bot.go",
+          "internal/game/match/damage_test.go",
+          "internal/game/match/damage.go",
+          "internal/game/match/elo_test.go",
+          "internal/game/match/elo.go",
+          "internal/game/match/eventlog.go",
+          "internal/game/match/item_effect.go",
+          "internal/game/match/match.go",
+          "internal/game/match/model.go",
+          "internal/game/match/physics_test.go",
+          "internal/game/match/polygon.go",
+          "internal/game/match/reward.go",
+          "internal/game/match/shooting.go",
+          "internal/game/match/status_effect.go",
+          "internal/game/match/terrain_test.go",
+          "internal/game/match/terrain.go",
+          "internal/game/matchmaker/map_selection_test.go",
+          "internal/game/matchmaker/matchmaker.go",
+          "internal/game/matchmaker/model.go",
+          "internal/game/matchmaker/queue.go",
+          "internal/game/ws/client.go",
+          "internal/game/ws/message.go",
+          "internal/game/ws/server.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/game/ws/client.go": [
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "internal/game/ws/message.go": [],
+        "internal/game/ws/server.go": [
+          "internal/shared/auth/jwt.go",
+          "internal/shared/config/config.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/model/errors.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ]
+      },
+      "neighborMap": {
+        "cmd/game/main.go": [
+          {
+            "path": "internal/game/lobby/hub.go",
+            "batchIndex": 2,
+            "symbols": [
+              "LobbyHub",
+              "NewLobbyHub",
+              "CreateLobby",
+              "FindLobby",
+              "FindLobbyByPlayer",
+              "UnregisterLobby"
+            ]
+          },
+          {
+            "path": "internal/shared/auth/jwt.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Claims",
+              "JWTManager",
+              "NewJWTManager",
+              "Generate",
+              "Verify"
+            ]
+          },
+          {
+            "path": "internal/shared/config/config.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Config",
+              "LoadConfig"
+            ]
+          },
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ],
+        "internal/game/gamedata/loader.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/admin/seed.go",
+            "batchIndex": 2,
+            "symbols": [
+              "SeedAll",
+              "SeedSettings",
+              "SeedConfigFromYAML"
+            ]
+          }
+        ],
+        "internal/game/lobby/handler.go": [
+          {
+            "path": "internal/shared/model/errors.go",
+            "batchIndex": 2,
+            "symbols": [
+              "AppError",
+              "Error",
+              "ErrorResponse",
+              "WriteError"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ],
+        "internal/game/lobby/lobby.go": [
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ],
+        "internal/game/match/match.go": [
+          {
+            "path": "internal/api/economy/model.go",
+            "batchIndex": 1,
+            "symbols": [
+              "EconomyTransaction"
+            ]
+          },
+          {
+            "path": "internal/api/economy/repository.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Repository",
+              "NewRepository",
+              "CreditTx",
+              "DebitTx"
+            ]
+          },
+          {
+            "path": "internal/api/economy/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "Credit",
+              "Debit"
+            ]
+          },
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ],
+        "internal/game/matchmaker/matchmaker.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ],
+        "internal/game/matchmaker/model.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ],
+        "internal/game/matchmaker/queue.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ],
+        "internal/game/room/handler.go": [
+          {
+            "path": "internal/shared/model/errors.go",
+            "batchIndex": 2,
+            "symbols": [
+              "AppError",
+              "Error",
+              "ErrorResponse",
+              "WriteError"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ],
+        "internal/game/room/hub.go": [
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ],
+        "internal/game/room/room.go": [
+          {
+            "path": "internal/api/economy/model.go",
+            "batchIndex": 1,
+            "symbols": [
+              "EconomyTransaction"
+            ]
+          },
+          {
+            "path": "internal/api/economy/repository.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Repository",
+              "NewRepository",
+              "CreditTx",
+              "DebitTx"
+            ]
+          },
+          {
+            "path": "internal/api/economy/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "Credit",
+              "Debit"
+            ]
+          },
+          {
+            "path": "internal/game/match/eventlog.go",
+            "batchIndex": 2,
+            "symbols": [
+              "EventLogger",
+              "NewEventLogger",
+              "Start",
+              "Log"
+            ]
+          },
+          {
+            "path": "internal/game/match/item_effect.go",
+            "batchIndex": 2,
+            "symbols": [
+              "ApplyImmediateItem"
+            ]
+          },
+          {
+            "path": "internal/game/match/reward.go",
+            "batchIndex": 1,
+            "symbols": [
+              "PlayerStats",
+              "RewardResult",
+              "ProcessMatchRewards"
+            ]
+          },
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ],
+        "internal/game/ws/client.go": [
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ],
+        "internal/game/ws/server.go": [
+          {
+            "path": "internal/shared/auth/jwt.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Claims",
+              "JWTManager",
+              "NewJWTManager",
+              "Generate",
+              "Verify"
+            ]
+          },
+          {
+            "path": "internal/shared/config/config.go",
+            "batchIndex": 4,
+            "symbols": [
+              "Config",
+              "LoadConfig"
+            ]
+          },
+          {
+            "path": "internal/shared/database/postgres.go",
+            "batchIndex": 4,
+            "symbols": [
+              "PostgresDB",
+              "NewPostgresDB",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/database/redis.go",
+            "batchIndex": 4,
+            "symbols": [
+              "RedisClient",
+              "NewRedisClient",
+              "Close",
+              "Ping"
+            ]
+          },
+          {
+            "path": "internal/shared/model/errors.go",
+            "batchIndex": 2,
+            "symbols": [
+              "AppError",
+              "Error",
+              "ErrorResponse",
+              "WriteError"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "batchIndex": 4,
+      "files": [
+        {
+          "path": "cmd/migrate/main.go",
+          "language": "go",
+          "sizeLines": 56,
+          "fileCategory": "code"
+        },
+        {
+          "path": "cmd/worker/main.go",
+          "language": "go",
+          "sizeLines": 62,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/admin/repository.go",
+          "language": "go",
+          "sizeLines": 941,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/appconfig/service.go",
+          "language": "go",
+          "sizeLines": 86,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/auth/repository.go",
+          "language": "go",
+          "sizeLines": 325,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/character/repository.go",
+          "language": "go",
+          "sizeLines": 219,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/giftcode/repository.go",
+          "language": "go",
+          "sizeLines": 134,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/iap/repository.go",
+          "language": "go",
+          "sizeLines": 141,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/matchhistory/repository.go",
+          "language": "go",
+          "sizeLines": 55,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/mission/repository.go",
+          "language": "go",
+          "sizeLines": 137,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/moderation/repository.go",
+          "language": "go",
+          "sizeLines": 97,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/moderation/service.go",
+          "language": "go",
+          "sizeLines": 114,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/player/repository.go",
+          "language": "go",
+          "sizeLines": 101,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/rank/repository.go",
+          "language": "go",
+          "sizeLines": 137,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/api/shop/repository.go",
+          "language": "go",
+          "sizeLines": 174,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/shared/config/config.go",
+          "language": "go",
+          "sizeLines": 70,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/shared/database/postgres.go",
+          "language": "go",
+          "sizeLines": 49,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/shared/database/redis.go",
+          "language": "go",
+          "sizeLines": 47,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/shared/featureflag/flags.go",
+          "language": "go",
+          "sizeLines": 54,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/shared/middleware/version_check.go",
+          "language": "go",
+          "sizeLines": 43,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/worker/jobs/account_deletion.go",
+          "language": "go",
+          "sizeLines": 57,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/worker/jobs/ban_expire.go",
+          "language": "go",
+          "sizeLines": 57,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/worker/jobs/daily_reset.go",
+          "language": "go",
+          "sizeLines": 66,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/worker/scheduler.go",
+          "language": "go",
+          "sizeLines": 85,
+          "fileCategory": "code"
+        }
+      ],
+      "batchImportData": {
+        "cmd/migrate/main.go": [
+          "internal/shared/config/config.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ],
+        "cmd/worker/main.go": [
+          "internal/shared/config/config.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go",
+          "internal/worker/jobs/account_deletion.go",
+          "internal/worker/jobs/ban_expire.go",
+          "internal/worker/jobs/daily_reset.go",
+          "internal/worker/scheduler.go"
+        ],
+        "internal/admin/repository.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/appconfig/service.go": [
+          "internal/shared/config/config.go",
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/auth/repository.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/character/repository.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/giftcode/repository.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/iap/repository.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/matchhistory/repository.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/mission/repository.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/moderation/repository.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/moderation/service.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/player/repository.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/rank/repository.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/api/shop/repository.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/shared/config/config.go": [],
+        "internal/shared/database/postgres.go": [],
+        "internal/shared/database/redis.go": [],
+        "internal/shared/featureflag/flags.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go"
+        ],
+        "internal/shared/middleware/version_check.go": [
+          "internal/shared/config/config.go",
+          "internal/shared/model/errors.go"
+        ],
+        "internal/worker/jobs/account_deletion.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go",
+          "internal/worker/scheduler.go"
+        ],
+        "internal/worker/jobs/ban_expire.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go",
+          "internal/worker/scheduler.go"
+        ],
+        "internal/worker/jobs/daily_reset.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go",
+          "internal/worker/scheduler.go"
+        ],
+        "internal/worker/scheduler.go": [
+          "internal/shared/database/postgres.go",
+          "internal/shared/database/redis.go",
+          "internal/shared/observability/health.go",
+          "internal/shared/observability/logger.go",
+          "internal/shared/observability/metrics.go"
+        ]
+      },
+      "neighborMap": {
+        "cmd/migrate/main.go": [
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ],
+        "cmd/worker/main.go": [
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ],
+        "internal/admin/repository.go": [
+          {
+            "path": "cmd/admin/main.go",
+            "batchIndex": 2,
+            "symbols": []
+          }
+        ],
+        "internal/api/appconfig/service.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/auth/repository.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/character/repository.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/giftcode/repository.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/iap/repository.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/matchhistory/repository.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/mission/repository.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/moderation/repository.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/moderation/service.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/player/repository.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/rank/repository.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/api/shop/repository.go": [
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/shared/config/config.go": [
+          {
+            "path": "cmd/admin/main.go",
+            "batchIndex": 2,
+            "symbols": []
+          },
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          },
+          {
+            "path": "cmd/game/main.go",
+            "batchIndex": 3,
+            "symbols": [
+              "CompositeWSHandler",
+              "HandleMessage",
+              "Unregister"
+            ]
+          },
+          {
+            "path": "internal/game/ws/server.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Server",
+              "NewServer",
+              "HandleUpgrade"
+            ]
+          }
+        ],
+        "internal/shared/database/postgres.go": [
+          {
+            "path": "cmd/admin/main.go",
+            "batchIndex": 2,
+            "symbols": []
+          },
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          },
+          {
+            "path": "cmd/game/main.go",
+            "batchIndex": 3,
+            "symbols": [
+              "CompositeWSHandler",
+              "HandleMessage",
+              "Unregister"
+            ]
+          },
+          {
+            "path": "internal/admin/seed.go",
+            "batchIndex": 2,
+            "symbols": [
+              "SeedAll",
+              "SeedSettings",
+              "SeedConfigFromYAML"
+            ]
+          },
+          {
+            "path": "internal/admin/server.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Server",
+              "NewServer",
+              "Routes"
+            ]
+          },
+          {
+            "path": "internal/api/auth/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "GuestLogin",
+              "ProviderLogin",
+              "LinkProvider",
+              "RefreshToken",
+              "Logout"
+            ]
+          },
+          {
+            "path": "internal/api/character/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "GetPlayerCharacters",
+              "AllocateStats",
+              "ResetStats"
+            ]
+          },
+          {
+            "path": "internal/api/dev/handler.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "ClearRooms",
+              "ResetData"
+            ]
+          },
+          {
+            "path": "internal/api/economy/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "Credit",
+              "Debit"
+            ]
+          },
+          {
+            "path": "internal/api/giftcode/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "RedeemCode"
+            ]
+          },
+          {
+            "path": "internal/api/iap/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "GetActiveProducts",
+              "VerifyReceipt"
+            ]
+          },
+          {
+            "path": "internal/api/inventory/repository.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Repository",
+              "NewRepository",
+              "GetAvailableInventory",
+              "AddItemsTx",
+              "ReserveItemsTx",
+              "ConsumeReservationTx",
+              "ReleaseReservationTx"
+            ]
+          },
+          {
+            "path": "internal/api/mission/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "GetMissions",
+              "ClaimReward"
+            ]
+          },
+          {
+            "path": "internal/api/rank/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "GetCurrentSeason",
+              "GetPlayerRank",
+              "GetLeaderboard",
+              "ClaimSeasonReward"
+            ]
+          },
+          {
+            "path": "internal/api/rooms/handler.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "GetRooms"
+            ]
+          },
+          {
+            "path": "internal/api/shop/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "GetActiveOffers",
+              "Purchase",
+              "GetPlayerPurchases"
+            ]
+          },
+          {
+            "path": "internal/game/gamedata/loader.go",
+            "batchIndex": 3,
+            "symbols": [
+              "CharacterConfig",
+              "WeaponConfig",
+              "SkillConfig",
+              "ItemConfig",
+              "SpawnPoint",
+              "TerrainLayer",
+              "MapConfig",
+              "GameData",
+              "BorderPoint",
+              "BrickBorder",
+              "BrickTypeConfig",
+              "PhysicsConfig",
+              "LoadGameData",
+              "LoadGameDataFromDB"
+            ]
+          },
+          {
+            "path": "internal/game/lobby/hub.go",
+            "batchIndex": 2,
+            "symbols": [
+              "LobbyHub",
+              "NewLobbyHub",
+              "CreateLobby",
+              "FindLobby",
+              "FindLobbyByPlayer",
+              "UnregisterLobby"
+            ]
+          },
+          {
+            "path": "internal/game/match/eventlog.go",
+            "batchIndex": 2,
+            "symbols": [
+              "EventLogger",
+              "NewEventLogger",
+              "Start",
+              "Log"
+            ]
+          },
+          {
+            "path": "internal/game/match/match.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Match",
+              "RoomHubInterface",
+              "NewMatch",
+              "Run",
+              "ProcessEvent"
+            ]
+          },
+          {
+            "path": "internal/game/match/reward.go",
+            "batchIndex": 1,
+            "symbols": [
+              "PlayerStats",
+              "RewardResult",
+              "ProcessMatchRewards"
+            ]
+          },
+          {
+            "path": "internal/game/matchmaker/matchmaker.go",
+            "batchIndex": 3,
+            "symbols": [
+              "MatchResult",
+              "RoomCreator",
+              "Matchmaker",
+              "NewMatchmaker",
+              "Run",
+              "Stop",
+              "GetConfig",
+              "EnqueueLobby",
+              "CancelQueue",
+              "IsPlayerInQueue"
+            ]
+          },
+          {
+            "path": "internal/game/matchmaker/model.go",
+            "batchIndex": 3,
+            "symbols": [
+              "MatchmakingConfig",
+              "EloConfig",
+              "BotTierConfig",
+              "BotDifficultyConfig",
+              "QueueEntry",
+              "DefaultMatchmakingConfig",
+              "DefaultEloConfig",
+              "DefaultBotDifficultyConfig",
+              "LoadConfigFromDB",
+              "LoadMatchmakingConfig",
+              "LoadEloConfig",
+              "LoadBotDifficultyConfig"
+            ]
+          },
+          {
+            "path": "internal/game/matchmaker/queue.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Queue",
+              "NewQueue",
+              "Enqueue",
+              "Dequeue",
+              "IsPlayerInQueue",
+              "GetAllEntries",
+              "CancelByPlayer"
+            ]
+          },
+          {
+            "path": "internal/game/room/hub.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Hub",
+              "SetLobbyNotifier",
+              "NewHub",
+              "CreateRoom",
+              "FindRoom",
+              "UnregisterRoom",
+              "SyncRoomState",
+              "CreateBattleFromMatch"
+            ]
+          },
+          {
+            "path": "internal/game/room/room.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Room",
+              "NewRoom",
+              "Run",
+              "Join",
+              "Leave",
+              "ProcessEvent",
+              "RegisterClient"
+            ]
+          },
+          {
+            "path": "internal/game/ws/server.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Server",
+              "NewServer",
+              "HandleUpgrade"
+            ]
+          },
+          {
+            "path": "internal/shared/idempotency/idempotency.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Manager",
+              "NewManager",
+              "CheckAndSet",
+              "Complete"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          }
+        ],
+        "internal/shared/database/redis.go": [
+          {
+            "path": "cmd/admin/main.go",
+            "batchIndex": 2,
+            "symbols": []
+          },
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          },
+          {
+            "path": "cmd/game/main.go",
+            "batchIndex": 3,
+            "symbols": [
+              "CompositeWSHandler",
+              "HandleMessage",
+              "Unregister"
+            ]
+          },
+          {
+            "path": "internal/admin/seed.go",
+            "batchIndex": 2,
+            "symbols": [
+              "SeedAll",
+              "SeedSettings",
+              "SeedConfigFromYAML"
+            ]
+          },
+          {
+            "path": "internal/admin/server.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Server",
+              "NewServer",
+              "Routes"
+            ]
+          },
+          {
+            "path": "internal/api/auth/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "GuestLogin",
+              "ProviderLogin",
+              "LinkProvider",
+              "RefreshToken",
+              "Logout"
+            ]
+          },
+          {
+            "path": "internal/api/character/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "GetPlayerCharacters",
+              "AllocateStats",
+              "ResetStats"
+            ]
+          },
+          {
+            "path": "internal/api/dev/handler.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "ClearRooms",
+              "ResetData"
+            ]
+          },
+          {
+            "path": "internal/api/economy/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "Credit",
+              "Debit"
+            ]
+          },
+          {
+            "path": "internal/api/giftcode/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "RedeemCode"
+            ]
+          },
+          {
+            "path": "internal/api/iap/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "GetActiveProducts",
+              "VerifyReceipt"
+            ]
+          },
+          {
+            "path": "internal/api/inventory/repository.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Repository",
+              "NewRepository",
+              "GetAvailableInventory",
+              "AddItemsTx",
+              "ReserveItemsTx",
+              "ConsumeReservationTx",
+              "ReleaseReservationTx"
+            ]
+          },
+          {
+            "path": "internal/api/mission/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "GetMissions",
+              "ClaimReward"
+            ]
+          },
+          {
+            "path": "internal/api/rank/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "GetCurrentSeason",
+              "GetPlayerRank",
+              "GetLeaderboard",
+              "ClaimSeasonReward"
+            ]
+          },
+          {
+            "path": "internal/api/rooms/handler.go",
+            "batchIndex": 2,
+            "symbols": [
+              "Handler",
+              "NewHandler",
+              "GetRooms"
+            ]
+          },
+          {
+            "path": "internal/api/shop/service.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Service",
+              "NewService",
+              "GetActiveOffers",
+              "Purchase",
+              "GetPlayerPurchases"
+            ]
+          },
+          {
+            "path": "internal/game/gamedata/loader.go",
+            "batchIndex": 3,
+            "symbols": [
+              "CharacterConfig",
+              "WeaponConfig",
+              "SkillConfig",
+              "ItemConfig",
+              "SpawnPoint",
+              "TerrainLayer",
+              "MapConfig",
+              "GameData",
+              "BorderPoint",
+              "BrickBorder",
+              "BrickTypeConfig",
+              "PhysicsConfig",
+              "LoadGameData",
+              "LoadGameDataFromDB"
+            ]
+          },
+          {
+            "path": "internal/game/lobby/hub.go",
+            "batchIndex": 2,
+            "symbols": [
+              "LobbyHub",
+              "NewLobbyHub",
+              "CreateLobby",
+              "FindLobby",
+              "FindLobbyByPlayer",
+              "UnregisterLobby"
+            ]
+          },
+          {
+            "path": "internal/game/match/eventlog.go",
+            "batchIndex": 2,
+            "symbols": [
+              "EventLogger",
+              "NewEventLogger",
+              "Start",
+              "Log"
+            ]
+          },
+          {
+            "path": "internal/game/match/match.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Match",
+              "RoomHubInterface",
+              "NewMatch",
+              "Run",
+              "ProcessEvent"
+            ]
+          },
+          {
+            "path": "internal/game/match/reward.go",
+            "batchIndex": 1,
+            "symbols": [
+              "PlayerStats",
+              "RewardResult",
+              "ProcessMatchRewards"
+            ]
+          },
+          {
+            "path": "internal/game/matchmaker/matchmaker.go",
+            "batchIndex": 3,
+            "symbols": [
+              "MatchResult",
+              "RoomCreator",
+              "Matchmaker",
+              "NewMatchmaker",
+              "Run",
+              "Stop",
+              "GetConfig",
+              "EnqueueLobby",
+              "CancelQueue",
+              "IsPlayerInQueue"
+            ]
+          },
+          {
+            "path": "internal/game/matchmaker/model.go",
+            "batchIndex": 3,
+            "symbols": [
+              "MatchmakingConfig",
+              "EloConfig",
+              "BotTierConfig",
+              "BotDifficultyConfig",
+              "QueueEntry",
+              "DefaultMatchmakingConfig",
+              "DefaultEloConfig",
+              "DefaultBotDifficultyConfig",
+              "LoadConfigFromDB",
+              "LoadMatchmakingConfig",
+              "LoadEloConfig",
+              "LoadBotDifficultyConfig"
+            ]
+          },
+          {
+            "path": "internal/game/matchmaker/queue.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Queue",
+              "NewQueue",
+              "Enqueue",
+              "Dequeue",
+              "IsPlayerInQueue",
+              "GetAllEntries",
+              "CancelByPlayer"
+            ]
+          },
+          {
+            "path": "internal/game/room/hub.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Hub",
+              "SetLobbyNotifier",
+              "NewHub",
+              "CreateRoom",
+              "FindRoom",
+              "UnregisterRoom",
+              "SyncRoomState",
+              "CreateBattleFromMatch"
+            ]
+          },
+          {
+            "path": "internal/game/room/room.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Room",
+              "NewRoom",
+              "Run",
+              "Join",
+              "Leave",
+              "ProcessEvent",
+              "RegisterClient"
+            ]
+          },
+          {
+            "path": "internal/game/ws/server.go",
+            "batchIndex": 3,
+            "symbols": [
+              "Server",
+              "NewServer",
+              "HandleUpgrade"
+            ]
+          },
+          {
+            "path": "internal/shared/idempotency/idempotency.go",
+            "batchIndex": 1,
+            "symbols": [
+              "Manager",
+              "NewManager",
+              "CheckAndSet",
+              "Complete"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          }
+        ],
+        "internal/shared/middleware/version_check.go": [
+          {
+            "path": "internal/shared/model/errors.go",
+            "batchIndex": 2,
+            "symbols": [
+              "AppError",
+              "Error",
+              "ErrorResponse",
+              "WriteError"
+            ]
+          },
+          {
+            "path": "cmd/api/main.go",
+            "batchIndex": 1,
+            "symbols": []
+          }
+        ],
+        "internal/worker/jobs/account_deletion.go": [
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ],
+        "internal/worker/jobs/ban_expire.go": [
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ],
+        "internal/worker/jobs/daily_reset.go": [
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ],
+        "internal/worker/scheduler.go": [
+          {
+            "path": "internal/shared/observability/health.go",
+            "batchIndex": 2,
+            "symbols": [
+              "HealthHandler",
+              "NewHealthHandler",
+              "Healthz",
+              "Readyz",
+              "Livez"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/logger.go",
+            "batchIndex": 2,
+            "symbols": [
+              "InitLogger",
+              "FromContext"
+            ]
+          },
+          {
+            "path": "internal/shared/observability/metrics.go",
+            "batchIndex": 2,
+            "symbols": [
+              "WriteHeader",
+              "StatusCode",
+              "MetricsMiddleware"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "batchIndex": 5,
+      "files": [
+        {
+          "path": "migrations/001_init_schema.down.sql",
+          "language": "sql",
+          "sizeLines": 25,
+          "fileCategory": "data"
+        },
+        {
+          "path": "migrations/001_init_schema.up.sql",
+          "language": "sql",
+          "sizeLines": 275,
+          "fileCategory": "data"
+        },
+        {
+          "path": "migrations/002_add_account_role.down.sql",
+          "language": "sql",
+          "sizeLines": 1,
+          "fileCategory": "data"
+        },
+        {
+          "path": "migrations/002_add_account_role.up.sql",
+          "language": "sql",
+          "sizeLines": 1,
+          "fileCategory": "data"
+        },
+        {
+          "path": "migrations/003_add_match_event_logs.down.sql",
+          "language": "sql",
+          "sizeLines": 1,
+          "fileCategory": "data"
+        },
+        {
+          "path": "migrations/003_add_match_event_logs.up.sql",
+          "language": "sql",
+          "sizeLines": 12,
+          "fileCategory": "data"
+        },
+        {
+          "path": "migrations/004_admin_config_tables.down.sql",
+          "language": "sql",
+          "sizeLines": 6,
+          "fileCategory": "data"
+        },
+        {
+          "path": "migrations/004_admin_config_tables.up.sql",
+          "language": "sql",
+          "sizeLines": 75,
+          "fileCategory": "data"
+        },
+        {
+          "path": "migrations/005_add_loadouts_and_matchmaking.down.sql",
+          "language": "sql",
+          "sizeLines": 2,
+          "fileCategory": "data"
+        },
+        {
+          "path": "migrations/005_add_loadouts_and_matchmaking.up.sql",
+          "language": "sql",
+          "sizeLines": 14,
+          "fileCategory": "data"
+        },
+        {
+          "path": "migrations/006_character_progression.down.sql",
+          "language": "sql",
+          "sizeLines": 12,
+          "fileCategory": "data"
+        },
+        {
+          "path": "migrations/006_character_progression.up.sql",
+          "language": "sql",
+          "sizeLines": 15,
+          "fileCategory": "data"
+        },
+        {
+          "path": "migrations/007_map_editor.down.sql",
+          "language": "sql",
+          "sizeLines": 9,
+          "fileCategory": "data"
+        },
+        {
+          "path": "migrations/007_map_editor.up.sql",
+          "language": "sql",
+          "sizeLines": 9,
+          "fileCategory": "data"
+        },
+        {
+          "path": "migrations/008_brick_border_v2.down.sql",
+          "language": "sql",
+          "sizeLines": 12,
+          "fileCategory": "data"
+        },
+        {
+          "path": "migrations/008_brick_border_v2.up.sql",
+          "language": "sql",
+          "sizeLines": 18,
+          "fileCategory": "data"
+        },
+        {
+          "path": "migrations/009_map_rank_tier.down.sql",
+          "language": "sql",
+          "sizeLines": 3,
+          "fileCategory": "data"
+        },
+        {
+          "path": "migrations/009_map_rank_tier.up.sql",
+          "language": "sql",
+          "sizeLines": 3,
+          "fileCategory": "data"
+        }
+      ],
+      "batchImportData": {
+        "migrations/001_init_schema.down.sql": [],
+        "migrations/001_init_schema.up.sql": [],
+        "migrations/002_add_account_role.down.sql": [],
+        "migrations/002_add_account_role.up.sql": [],
+        "migrations/003_add_match_event_logs.down.sql": [],
+        "migrations/003_add_match_event_logs.up.sql": [],
+        "migrations/004_admin_config_tables.down.sql": [],
+        "migrations/004_admin_config_tables.up.sql": [],
+        "migrations/005_add_loadouts_and_matchmaking.down.sql": [],
+        "migrations/005_add_loadouts_and_matchmaking.up.sql": [],
+        "migrations/006_character_progression.down.sql": [],
+        "migrations/006_character_progression.up.sql": [],
+        "migrations/007_map_editor.down.sql": [],
+        "migrations/007_map_editor.up.sql": [],
+        "migrations/008_brick_border_v2.down.sql": [],
+        "migrations/008_brick_border_v2.up.sql": [],
+        "migrations/009_map_rank_tier.down.sql": [],
+        "migrations/009_map_rank_tier.up.sql": []
+      },
+      "neighborMap": {}
+    },
+    {
+      "batchIndex": 6,
+      "files": [
+        {
+          "path": ".env.example",
+          "language": "config",
+          "sizeLines": 22,
+          "fileCategory": "config"
+        },
+        {
+          "path": "CLAUDE.md",
+          "language": "markdown",
+          "sizeLines": 119,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "Dockerfile.api",
+          "language": "dockerfile",
+          "sizeLines": 14,
+          "fileCategory": "infra"
+        },
+        {
+          "path": "Dockerfile.game",
+          "language": "dockerfile",
+          "sizeLines": 15,
+          "fileCategory": "infra"
+        },
+        {
+          "path": "Dockerfile.worker",
+          "language": "dockerfile",
+          "sizeLines": 13,
+          "fileCategory": "infra"
+        },
+        {
+          "path": "Makefile",
+          "language": "makefile",
+          "sizeLines": 46,
+          "fileCategory": "infra"
+        },
+        {
+          "path": "README.md",
+          "language": "markdown",
+          "sizeLines": 316,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "docker-compose.yml",
+          "language": "yaml",
+          "sizeLines": 77,
+          "fileCategory": "infra"
+        },
+        {
+          "path": "go.mod",
+          "language": "mod",
+          "sizeLines": 39,
+          "fileCategory": "config"
+        },
+        {
+          "path": "go.sum",
+          "language": "sum",
+          "sizeLines": 96,
+          "fileCategory": "config"
+        }
+      ],
+      "batchImportData": {
+        ".env.example": [],
+        "CLAUDE.md": [],
+        "Dockerfile.api": [],
+        "Dockerfile.game": [],
+        "Dockerfile.worker": [],
+        "Makefile": [],
+        "README.md": [],
+        "docker-compose.yml": [],
+        "go.mod": [],
+        "go.sum": []
+      },
+      "neighborMap": {}
+    },
+    {
+      "batchIndex": 7,
+      "files": [
+        {
+          "path": "configs/characters.yaml",
+          "language": "yaml",
+          "sizeLines": 51,
+          "fileCategory": "config"
+        },
+        {
+          "path": "configs/items.yaml",
+          "language": "yaml",
+          "sizeLines": 63,
+          "fileCategory": "config"
+        },
+        {
+          "path": "configs/maps.yaml",
+          "language": "yaml",
+          "sizeLines": 80,
+          "fileCategory": "config"
+        },
+        {
+          "path": "configs/skills.yaml",
+          "language": "yaml",
+          "sizeLines": 33,
+          "fileCategory": "config"
+        },
+        {
+          "path": "configs/weapons.yaml",
+          "language": "yaml",
+          "sizeLines": 35,
+          "fileCategory": "config"
+        }
+      ],
+      "batchImportData": {
+        "configs/characters.yaml": [],
+        "configs/items.yaml": [],
+        "configs/maps.yaml": [],
+        "configs/skills.yaml": [],
+        "configs/weapons.yaml": []
+      },
+      "neighborMap": {}
+    },
+    {
+      "batchIndex": 8,
+      "files": [
+        {
+          "path": "docs/database-erd.html",
+          "language": "html",
+          "sizeLines": 455,
+          "fileCategory": "markup"
+        },
+        {
+          "path": "docs/database-erd.md",
+          "language": "markdown",
+          "sizeLines": 440,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "docs/technical-documentation.md",
+          "language": "markdown",
+          "sizeLines": 676,
+          "fileCategory": "docs"
+        }
+      ],
+      "batchImportData": {
+        "docs/database-erd.html": [],
+        "docs/database-erd.md": [],
+        "docs/technical-documentation.md": []
+      },
+      "neighborMap": {}
+    },
+    {
+      "batchIndex": 9,
+      "files": [
+        {
+          "path": "docs/superpowers/plans/2026-07-07-character-progression.md",
+          "language": "markdown",
+          "sizeLines": 1226,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "docs/superpowers/plans/2026-07-07-ranked-matchmaking.md",
+          "language": "markdown",
+          "sizeLines": 3033,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "docs/superpowers/plans/2026-07-08-battle-fixes.md",
+          "language": "markdown",
+          "sizeLines": 828,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "docs/superpowers/plans/2026-07-08-map-editor.md",
+          "language": "markdown",
+          "sizeLines": 2354,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "docs/superpowers/plans/2026-07-09-map-editor-v2.md",
+          "language": "markdown",
+          "sizeLines": 1253,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "docs/superpowers/plans/2026-07-09-map-rank-restriction-and-editor-unification.md",
+          "language": "markdown",
+          "sizeLines": 1783,
+          "fileCategory": "docs"
+        }
+      ],
+      "batchImportData": {
+        "docs/superpowers/plans/2026-07-07-character-progression.md": [],
+        "docs/superpowers/plans/2026-07-07-ranked-matchmaking.md": [],
+        "docs/superpowers/plans/2026-07-08-battle-fixes.md": [],
+        "docs/superpowers/plans/2026-07-08-map-editor.md": [],
+        "docs/superpowers/plans/2026-07-09-map-editor-v2.md": [],
+        "docs/superpowers/plans/2026-07-09-map-rank-restriction-and-editor-unification.md": []
+      },
+      "neighborMap": {}
+    },
+    {
+      "batchIndex": 10,
+      "files": [
+        {
+          "path": "docs/superpowers/specs/2026-07-07-character-progression-design.md",
+          "language": "markdown",
+          "sizeLines": 358,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "docs/superpowers/specs/2026-07-07-ranked-matchmaking-design.md",
+          "language": "markdown",
+          "sizeLines": 580,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "docs/superpowers/specs/2026-07-08-battle-fixes-design.md",
+          "language": "markdown",
+          "sizeLines": 114,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "docs/superpowers/specs/2026-07-08-map-editor-design.md",
+          "language": "markdown",
+          "sizeLines": 217,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "docs/superpowers/specs/2026-07-09-map-rank-restriction-and-editor-unification-design.md",
+          "language": "markdown",
+          "sizeLines": 232,
+          "fileCategory": "docs"
+        }
+      ],
+      "batchImportData": {
+        "docs/superpowers/specs/2026-07-07-character-progression-design.md": [],
+        "docs/superpowers/specs/2026-07-07-ranked-matchmaking-design.md": [],
+        "docs/superpowers/specs/2026-07-08-battle-fixes-design.md": [],
+        "docs/superpowers/specs/2026-07-08-map-editor-design.md": [],
+        "docs/superpowers/specs/2026-07-09-map-rank-restriction-and-editor-unification-design.md": []
+      },
+      "neighborMap": {}
+    },
+    {
+      "batchIndex": 11,
+      "files": [
+        {
+          "path": "internal/admin/templates/brick_editor.html",
+          "language": "html",
+          "sizeLines": 78,
+          "fileCategory": "markup"
+        },
+        {
+          "path": "internal/admin/templates/brick_types.html",
+          "language": "html",
+          "sizeLines": 73,
+          "fileCategory": "markup"
+        },
+        {
+          "path": "internal/admin/templates/character_detail.html",
+          "language": "html",
+          "sizeLines": 145,
+          "fileCategory": "markup"
+        },
+        {
+          "path": "internal/admin/templates/character_progression.html",
+          "language": "html",
+          "sizeLines": 209,
+          "fileCategory": "markup"
+        },
+        {
+          "path": "internal/admin/templates/config_edit.html",
+          "language": "html",
+          "sizeLines": 25,
+          "fileCategory": "markup"
+        },
+        {
+          "path": "internal/admin/templates/config_list.html",
+          "language": "html",
+          "sizeLines": 93,
+          "fileCategory": "markup"
+        },
+        {
+          "path": "internal/admin/templates/dashboard.html",
+          "language": "html",
+          "sizeLines": 13,
+          "fileCategory": "markup"
+        },
+        {
+          "path": "internal/admin/templates/devtools.html",
+          "language": "html",
+          "sizeLines": 29,
+          "fileCategory": "markup"
+        },
+        {
+          "path": "internal/admin/templates/layout.html",
+          "language": "html",
+          "sizeLines": 85,
+          "fileCategory": "markup"
+        },
+        {
+          "path": "internal/admin/templates/map_editor.html",
+          "language": "html",
+          "sizeLines": 115,
+          "fileCategory": "markup"
+        },
+        {
+          "path": "internal/admin/templates/matchmaking.html",
+          "language": "html",
+          "sizeLines": 240,
+          "fileCategory": "markup"
+        },
+        {
+          "path": "internal/admin/templates/physics.html",
+          "language": "html",
+          "sizeLines": 26,
+          "fileCategory": "markup"
+        },
+        {
+          "path": "internal/admin/templates/players.html",
+          "language": "html",
+          "sizeLines": 54,
+          "fileCategory": "markup"
+        },
+        {
+          "path": "internal/admin/templates/shop.html",
+          "language": "html",
+          "sizeLines": 34,
+          "fileCategory": "markup"
+        },
+        {
+          "path": "internal/admin/templates/shop_edit.html",
+          "language": "html",
+          "sizeLines": 55,
+          "fileCategory": "markup"
+        }
+      ],
+      "batchImportData": {
+        "internal/admin/templates/brick_editor.html": [],
+        "internal/admin/templates/brick_types.html": [],
+        "internal/admin/templates/character_detail.html": [],
+        "internal/admin/templates/character_progression.html": [],
+        "internal/admin/templates/config_edit.html": [],
+        "internal/admin/templates/config_list.html": [],
+        "internal/admin/templates/dashboard.html": [],
+        "internal/admin/templates/devtools.html": [],
+        "internal/admin/templates/layout.html": [],
+        "internal/admin/templates/map_editor.html": [],
+        "internal/admin/templates/matchmaking.html": [],
+        "internal/admin/templates/physics.html": [],
+        "internal/admin/templates/players.html": [],
+        "internal/admin/templates/shop.html": [],
+        "internal/admin/templates/shop_edit.html": []
+      },
+      "neighborMap": {}
+    },
+    {
+      "batchIndex": 12,
+      "files": [
+        {
+          "path": ".understand-anything/.understandignore",
+          "language": "unknown",
+          "sizeLines": 64,
+          "fileCategory": "code"
+        },
+        {
+          "path": ".understand-anything/config.json",
+          "language": "json",
+          "sizeLines": 0,
+          "fileCategory": "config"
+        },
+        {
+          "path": "admin",
+          "language": "unknown",
+          "sizeLines": 99180,
+          "fileCategory": "code"
+        },
+        {
+          "path": "api",
+          "language": "unknown",
+          "sizeLines": 78732,
+          "fileCategory": "code"
+        },
+        {
+          "path": "docs/specs/2026-07-06-admin-dashboard-design.md",
+          "language": "markdown",
+          "sizeLines": 255,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "docs/specs/2026-07-06-admin-dashboard-plan.md",
+          "language": "markdown",
+          "sizeLines": 931,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "documents/Battle_Squad_Technical_Spec.docx",
+          "language": "docx",
+          "sizeLines": 112,
+          "fileCategory": "code"
+        },
+        {
+          "path": "documents/Gameplay_Spec_Battle_Squad.docx",
+          "language": "docx",
+          "sizeLines": 54,
+          "fileCategory": "code"
+        },
+        {
+          "path": "documents/MVP Feature List.docx",
+          "language": "docx",
+          "sizeLines": 54,
+          "fileCategory": "code"
+        },
+        {
+          "path": "documents/MVP_Feature_List.docx",
+          "language": "docx",
+          "sizeLines": 44,
+          "fileCategory": "code"
+        },
+        {
+          "path": "documents/server_implementation_plan.md",
+          "language": "markdown",
+          "sizeLines": 852,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "documents/server_implementation_walkthrough.md",
+          "language": "markdown",
+          "sizeLines": 61,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "game",
+          "language": "unknown",
+          "sizeLines": 77172,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/admin/static/brick_editor.js",
+          "language": "javascript",
+          "sizeLines": 304,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/admin/static/map_editor.js",
+          "language": "javascript",
+          "sizeLines": 733,
+          "fileCategory": "code"
+        },
+        {
+          "path": "internal/shared/circuitbreaker/breaker.go",
+          "language": "go",
+          "sizeLines": 91,
+          "fileCategory": "code"
+        },
+        {
+          "path": "migrate",
+          "language": "unknown",
+          "sizeLines": 64997,
+          "fileCategory": "code"
+        }
+      ],
+      "batchImportData": {
+        ".understand-anything/.understandignore": [],
+        ".understand-anything/config.json": [],
+        "admin": [],
+        "api": [],
+        "docs/specs/2026-07-06-admin-dashboard-design.md": [],
+        "docs/specs/2026-07-06-admin-dashboard-plan.md": [],
+        "documents/Battle_Squad_Technical_Spec.docx": [],
+        "documents/Gameplay_Spec_Battle_Squad.docx": [],
+        "documents/MVP Feature List.docx": [],
+        "documents/MVP_Feature_List.docx": [],
+        "documents/server_implementation_plan.md": [],
+        "documents/server_implementation_walkthrough.md": [],
+        "game": [],
+        "internal/admin/static/brick_editor.js": [],
+        "internal/admin/static/map_editor.js": [],
+        "internal/shared/circuitbreaker/breaker.go": [],
+        "migrate": []
+      },
+      "neighborMap": {}
+    }
+  ]
+}
