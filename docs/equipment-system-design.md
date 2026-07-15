@@ -182,32 +182,79 @@ Khi mặc đủ 6 món cùng tier (Bạc/Vàng/Titan/Kim cương), nhận bonus 
 
 - Trang bị nâng cấp từ **+0 đến +16**
 - Dùng **đá nâng cấp** (upgrade stone) để nâng
-- Mỗi cấp nâng cấp yêu cầu đá ở level tối thiểu nhất định
-- Tỷ lệ thành công giảm dần mỗi 2 cấp
-- Tỷ lệ thành công **config được** trong Admin Dashboard → Game Config
+- Player tự chọn bỏ bao nhiêu viên đá, loại nào — tỷ lệ tính từ tổng power đá
+- Mỗi cấp nâng cấp có **tỷ lệ tối đa** (max percent) giảm dần, **config được** trong Admin Dashboard
+
+### Công thức tỷ lệ nâng cấp (theo mô hình NSO)
+
+```
+percent = (tổng_power_đá_bỏ_vào × 100) / upgrade_cost[current_level]
+
+if percent > max_percent[current_level]:
+    percent = max_percent[current_level]
+
+Thành công nếu: random(0..100) < percent
+```
+
+**Player tự quyết tỷ lệ:** bỏ nhiều đá = tỷ lệ cao (nhưng cap), bỏ ít đá = tỷ lệ thấp nhưng tiết kiệm.
+
+### Power đá (tăng theo cấp số nhân ×3)
+
+| Cấp đá | Power | Nguồn |
+|--------|-------|-------|
+| 1 | 1 | Shop (coin) |
+| 2 | 3 | Shop (coin) |
+| 3 | 9 | Shop (coin) |
+| 4 | 27 | Shop (coin) |
+| 5 | 81 | Shop (coin) |
+| 6 | 243 | Shop (coin) |
+| 7 | 729 | Shop (**gem**) |
+| 8 | 2,187 | Shop (**gem**) |
+| 9 | 6,561 | Shop (**gem**) |
+| 10 | 19,683 | Shop (**gem**) |
+| 11 | 59,049 | Chỉ ghép |
+| 12 | 177,147 | Chỉ ghép |
+
+> Battle Squad dùng cấp số nhân ×3 (thay vì ×4 của NSO) để phù hợp với 12 cấp đá.
 
 ### Bảng nâng cấp
 
-| Nâng cấp | Đá tối thiểu | Tỷ lệ gợi ý | Thất bại |
-|----------|-------------|-------------|----------|
-| +0 → +1 | Đá cấp 1 | 100% | Giữ +0 |
-| +1 → +2 | Đá cấp 1 | 95% | Giữ +1 |
-| +2 → +3 | Đá cấp 2 | 90% | Giữ +2 |
-| +3 → +4 | Đá cấp 2 | 85% | Giữ +3 |
-| +4 → +5 | Đá cấp 3 | 75% | Giữ +4 |
-| +5 → +6 | Đá cấp 3 | 65% | Giữ +5 |
-| +6 → +7 | Đá cấp 5 | 50% | **Quay về +6** |
-| +7 → +8 | Đá cấp 5 | 40% | **Quay về +6** |
-| +8 → +9 | Đá cấp 7 | 30% | **Quay về +6** |
-| +9 → +10 | Đá cấp 7 | 25% | **Quay về +6** |
-| +10 → +11 | Đá cấp 9 | 20% | **Quay về +10** |
-| +11 → +12 | Đá cấp 9 | 15% | **Quay về +10** |
-| +12 → +13 | Đá cấp 10 | 10% | **Quay về +10** |
-| +13 → +14 | Đá cấp 10 | 8% | **Quay về +10** |
-| +14 → +15 | Đá cấp 11 | 5% | **Quay về +14** |
-| +15 → +16 | Đá cấp 12 | 3% | **Quay về +14** |
+| Nâng cấp | Cost | Max % | Đá min để max | Thất bại |
+|----------|------|-------|--------------|----------|
+| +0 → +1 | 1 | 80% | 1× đá cấp 1 | Giữ nguyên |
+| +1 → +2 | 2 | 76% | 1× đá cấp 2 | Giữ nguyên |
+| +2 → +3 | 6 | 72% | 1× đá cấp 3 | Giữ nguyên |
+| +3 → +4 | 18 | 68% | 1× đá cấp 4 | Giữ nguyên |
+| +4 → +5 | 40 | 64% | 1× đá cấp 4 | Giữ nguyên |
+| +5 → +6 | 80 | 60% | 1× đá cấp 5 | Giữ nguyên |
+| +6 → +7 | 180 | 56% | 1× đá cấp 6 | **Quay về +6** |
+| +7 → +8 | 500 | 52% | 1× đá cấp 7 | **Quay về +6** |
+| +8 → +9 | 1,200 | 45% | 1× đá cấp 7 | **Quay về +6** |
+| +9 → +10 | 3,000 | 40% | 1× đá cấp 8 | **Quay về +6** |
+| +10 → +11 | 6,000 | 35% | 1× đá cấp 8 | **Quay về +10** |
+| +11 → +12 | 15,000 | 30% | 1× đá cấp 9 | **Quay về +10** |
+| +12 → +13 | 25,000 | 25% | 1× đá cấp 9 | **Quay về +10** |
+| +13 → +14 | 50,000 | 20% | 1× đá cấp 10 | **Quay về +10** |
+| +14 → +15 | 80,000 | 15% | 1× đá cấp 10 | **Quay về +14** |
+| +15 → +16 | 200,000 | 10% | 1× đá cấp 11 | **Quay về +14** |
 
-> Tỷ lệ là gợi ý, **cấu hình được từ Admin Dashboard**.
+> Cost và Max % đều **cấu hình được từ Admin Dashboard** (`config_upgrade_rates`).
+
+### Ví dụ nâng cấp
+
+```
+Nâng +8 → +9 (cost = 1200, max = 45%):
+
+  Bỏ 1 viên cấp 6 (power 243):   243 × 100 / 1200 = 20%
+  Bỏ 2 viên cấp 6 (power 486):   486 × 100 / 1200 = 40%
+  Bỏ 1 viên cấp 7 (power 729):   729 × 100 / 1200 = 60% → cap 45%
+  Bỏ 5 viên cấp 5 (power 405):   405 × 100 / 1200 = 33%
+
+→ Player có thể mix đá: 1 viên cấp 6 + 3 viên cấp 4 = 243 + 81 = 324
+  324 × 100 / 1200 = 27%
+```
+
+**Player tự quyết trade-off:** tiết kiệm đá (tỷ lệ thấp, nhiều lần thử) vs bỏ nhiều đá (tỷ lệ cao, ít lần thử).
 
 ### Milestone bonus
 
@@ -253,20 +300,20 @@ Ví dụ: Vũ khí base DMG 50, nâng lên +10
 
 ### 12 cấp độ đá
 
-| Cấp đá | % thêm khi nâng cấp | Nguồn |
-|--------|---------------------|-------|
-| Đá cấp 1 | Base rate | Shop (coin) |
-| Đá cấp 2 | +2% | Shop (coin) |
-| Đá cấp 3 | +4% | Shop (coin) |
-| Đá cấp 4 | +6% | Shop (coin) |
-| Đá cấp 5 | +8% | Shop (coin) |
-| Đá cấp 6 | +10% | Shop (coin) |
-| Đá cấp 7 | +13% | Shop (**gem**) |
-| Đá cấp 8 | +16% | Shop (**gem**) |
-| Đá cấp 9 | +20% | Shop (**gem**) |
-| Đá cấp 10 | +25% | Shop (**gem**) |
-| Đá cấp 11 | Không bán | Chỉ ghép (4 × đá cấp 10) |
-| Đá cấp 12 | Không bán | Chỉ ghép (4 × đá cấp 11) |
+| Cấp đá | Power | Nguồn | Giá gợi ý |
+|--------|-------|-------|----------|
+| 1 | 1 | Shop (coin) | 100 coin |
+| 2 | 3 | Shop (coin) | 250 coin |
+| 3 | 9 | Shop (coin) | 700 coin |
+| 4 | 27 | Shop (coin) | 2,000 coin |
+| 5 | 81 | Shop (coin) | 5,500 coin |
+| 6 | 243 | Shop (coin) | 15,000 coin |
+| 7 | 729 | Shop (**gem**) | 50 gem |
+| 8 | 2,187 | Shop (**gem**) | 140 gem |
+| 9 | 6,561 | Shop (**gem**) | 400 gem |
+| 10 | 19,683 | Shop (**gem**) | 1,100 gem |
+| 11 | 59,049 | Chỉ ghép | — |
+| 12 | 177,147 | Chỉ ghép | — |
 
 ### Nguồn thu thập
 
@@ -281,15 +328,25 @@ Ví dụ: Vũ khí base DMG 50, nâng lên +10
 
 ### Cách dùng đá khi nâng cấp
 
+Player bỏ **1 hoặc nhiều viên** đá bất kỳ cấp nào vào. Server tính:
+
 ```
-Tỷ lệ thực tế = Tỷ lệ base (config) + % bonus từ cấp đá
+tổng_power = sum(power[stone_level] cho mỗi viên bỏ vào)
+percent = tổng_power × 100 / upgrade_cost[current_level]
+percent = min(percent, max_percent[current_level])
+```
 
-Ví dụ: Nâng +6 → +7, tỷ lệ base 50%
-  Dùng đá cấp 5 (tối thiểu): 50% + 8% = 58%
-  Dùng đá cấp 8 (cao hơn): 50% + 16% = 66%
-  Dùng đá cấp 10: 50% + 25% = 75%
+Player có thể mix nhiều loại đá để đạt tỷ lệ mong muốn:
 
-→ Đá cấp cao hơn yêu cầu tối thiểu sẽ tăng tỷ lệ thành công.
+```
+Ví dụ nâng +6 → +7 (cost = 180, max = 56%):
+
+  1 viên cấp 6 (243):  243×100/180 = 135% → cap 56%   ← dư power, lãng phí
+  1 viên cấp 5 (81):   81×100/180 = 45%                ← tiết kiệm, tỷ lệ OK
+  2 viên cấp 4 (54):   54×100/180 = 30%                ← rẻ nhất, rủi ro cao
+  1 cấp 4 + 2 cấp 3 (45): 45×100/180 = 25%            ← mix đá nhỏ
+
+→ Tối ưu: bỏ vừa đủ power để đạt max%, không bỏ dư.
 ```
 
 ---
@@ -305,20 +362,20 @@ Ví dụ: Nâng +6 → +7, tỷ lệ base 50%
 ### Quy tắc
 
 - Chỉ ghép đá **cùng cấp độ**
-- Cần đúng **4 viên** để ghép
-- Tỷ lệ thành công: mỗi viên đóng góp **25%**, tối đa **50%**
+- Mỗi viên đóng góp **25%** tỷ lệ thành công, tối đa **100%**
+- Tối thiểu **2 viên** (50%) để được phép ghép
 
 ### Cơ chế tỷ lệ
 
 | Số viên bỏ vào | Tỷ lệ | Cho phép ghép? |
 |----------------|--------|---------------|
 | 1 viên | 25% | Không (dưới 50%) |
-| 2 viên | 50% | **Có** (đạt 50% — tối đa) |
-| 3 viên | 50% | Có (cap tại 50%) |
-| 4 viên | 50% | Có (cap tại 50%) |
+| 2 viên | 50% | **Có** |
+| 3 viên | 75% | Có |
+| 4 viên | 100% | Có (guaranteed) |
 
-> Cần tối thiểu **2 viên** (50%) để ghép. Bỏ thêm viên không tăng tỷ lệ (cap 50%).
-> 4 viên bỏ vào = consume cả 4, nhưng tỷ lệ vẫn 50%.
+> Bỏ **4 viên = 100% thành công** nhưng tốn nhiều đá.
+> Bỏ **2 viên = 50%** tiết kiệm nhưng rủi ro cao.
 
 ### Kết quả
 
@@ -401,7 +458,7 @@ Cơ chế giống hệt ghép đá nâng cấp:
 
 - Chỉ ghép ngọc **cùng loại VÀ cùng cấp** (VD: 4 × Ngọc HP cấp 3 → 1 × Ngọc HP cấp 4)
 - Không ghép khác loại (HP + DMG = không được)
-- Tỷ lệ: mỗi viên 25%, cap 50%, tối thiểu 2 viên
+- Tỷ lệ: mỗi viên 25%, tối đa 100%, tối thiểu 2 viên (50%)
 - Thất bại: mất toàn bộ ngọc bỏ vào
 - Cấp 10 là cấp cao nhất
 
@@ -749,8 +806,8 @@ CREATE TABLE IF NOT EXISTS config_materials (
 CREATE TABLE IF NOT EXISTS config_upgrade_rates (
     from_level      SMALLINT NOT NULL,  -- 0 → 15
     to_level        SMALLINT NOT NULL,  -- 1 → 16
-    base_rate       NUMERIC(5,2) NOT NULL,  -- % tỷ lệ base
-    min_stone_level SMALLINT NOT NULL,      -- cấp đá tối thiểu
+    upgrade_cost    INT NOT NULL,           -- power cost (tổng power đá cần bỏ vào)
+    max_percent     NUMERIC(5,2) NOT NULL,  -- % tỷ lệ tối đa (cap)
     fail_reset_to   SMALLINT NOT NULL,      -- quay về level nào khi fail
     PRIMARY KEY (from_level, to_level)
 );
@@ -777,10 +834,10 @@ CREATE TABLE IF NOT EXISTS config_gems (
 -- Config đá nâng cấp
 CREATE TABLE IF NOT EXISTS config_stones (
     stone_level     SMALLINT PRIMARY KEY,
-    bonus_rate      NUMERIC(5,2) NOT NULL,  -- % bonus thêm khi dùng nâng cấp
+    power           INT NOT NULL,               -- power value (1, 3, 9, 27, ...)
     price_coin      INT DEFAULT 0,
     price_gem       INT DEFAULT 0,
-    source          VARCHAR(20) NOT NULL    -- 'coin_shop', 'gem_shop', 'merge_only'
+    source          VARCHAR(20) NOT NULL        -- 'coin_shop', 'gem_shop', 'merge_only'
 );
 ```
 
