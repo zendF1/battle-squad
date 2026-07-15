@@ -42,6 +42,9 @@ func SeedAll(ctx context.Context, db *database.PostgresDB, configDir string) err
 	if err := SeedConfigFromYAML(ctx, db, configDir); err != nil {
 		return fmt.Errorf("seed config from YAML: %w", err)
 	}
+	if err := SeedEquipmentConfig(ctx, db); err != nil {
+		return fmt.Errorf("seed equipment config: %w", err)
+	}
 	return nil
 }
 
@@ -202,6 +205,153 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 		}
 	}
 	observability.Log.Info().Int("count", len(data.Maps)).Msg("seeded config_maps")
+
+	return nil
+}
+
+// SeedEquipmentConfig inserts default equipment configuration rows into
+// config_upgrade_rates, config_stones, config_gems, and config_set_bonuses.
+// Uses ON CONFLICT DO NOTHING so re-running is safe.
+func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
+	// ── Upgrade rates ─────────────────────────────────────────────────────────
+	type upgradeRate struct {
+		fromLevel    int
+		toLevel      int
+		upgradeCost  int
+		maxPercent   float64
+		failResetTo  int
+	}
+	upgradeRates := []upgradeRate{
+		{0, 1, 1, 80, 0},
+		{1, 2, 2, 76, 1},
+		{2, 3, 6, 72, 2},
+		{3, 4, 18, 68, 3},
+		{4, 5, 40, 64, 4},
+		{5, 6, 80, 60, 5},
+		{6, 7, 180, 56, 6},
+		{7, 8, 500, 52, 6},
+		{8, 9, 1200, 45, 6},
+		{9, 10, 3000, 40, 6},
+		{10, 11, 6000, 35, 10},
+		{11, 12, 15000, 30, 10},
+		{12, 13, 25000, 25, 10},
+		{13, 14, 50000, 20, 10},
+		{14, 15, 80000, 15, 14},
+		{15, 16, 200000, 10, 14},
+	}
+	upgradeRateQuery := `INSERT INTO config_upgrade_rates (from_level, to_level, upgrade_cost, max_percent, fail_reset_to)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (from_level, to_level) DO NOTHING`
+	for _, r := range upgradeRates {
+		if _, err := db.Pool.Exec(ctx, upgradeRateQuery, r.fromLevel, r.toLevel, r.upgradeCost, r.maxPercent, r.failResetTo); err != nil {
+			return fmt.Errorf("insert upgrade rate %d->%d: %w", r.fromLevel, r.toLevel, err)
+		}
+	}
+	observability.Log.Info().Int("count", len(upgradeRates)).Msg("seeded config_upgrade_rates")
+
+	// ── Stone configs ──────────────────────────────────────────────────────────
+	type stoneConfig struct {
+		stoneLevel int
+		power      int
+		priceCoin  int
+		priceGem   int
+		source     string
+	}
+	stones := []stoneConfig{
+		{1, 1, 100, 0, "coin_shop"},
+		{2, 3, 250, 0, "coin_shop"},
+		{3, 9, 700, 0, "coin_shop"},
+		{4, 27, 2000, 0, "coin_shop"},
+		{5, 81, 5500, 0, "coin_shop"},
+		{6, 243, 15000, 0, "coin_shop"},
+		{7, 729, 0, 50, "gem_shop"},
+		{8, 2187, 0, 140, "gem_shop"},
+		{9, 6561, 0, 400, "gem_shop"},
+		{10, 19683, 0, 1100, "gem_shop"},
+		{11, 59049, 0, 0, "merge_only"},
+		{12, 177147, 0, 0, "merge_only"},
+	}
+	stoneQuery := `INSERT INTO config_stones (stone_level, power, price_coin, price_gem, source)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (stone_level) DO NOTHING`
+	for _, s := range stones {
+		if _, err := db.Pool.Exec(ctx, stoneQuery, s.stoneLevel, s.power, s.priceCoin, s.priceGem, s.source); err != nil {
+			return fmt.Errorf("insert stone level %d: %w", s.stoneLevel, err)
+		}
+	}
+	observability.Log.Info().Int("count", len(stones)).Msg("seeded config_stones")
+
+	// ── Gem configs ────────────────────────────────────────────────────────────
+	type gemConfig struct {
+		gemType  string
+		gemLevel int
+		statValue float64
+	}
+	hpValues := []float64{20, 40, 70, 110, 160, 220, 300, 400, 520, 660}
+	damageValues := []float64{3, 6, 10, 15, 22, 30, 40, 52, 67, 85}
+	defenseValues := []float64{2, 4, 7, 11, 16, 22, 30, 40, 52, 66}
+	criticalValues := []float64{1, 2, 3, 5, 7, 9, 12, 15, 18, 22}
+
+	var gems []gemConfig
+	for i, v := range hpValues {
+		gems = append(gems, gemConfig{"hp", i + 1, v})
+	}
+	for i, v := range damageValues {
+		gems = append(gems, gemConfig{"damage", i + 1, v})
+	}
+	for i, v := range defenseValues {
+		gems = append(gems, gemConfig{"defense", i + 1, v})
+	}
+	for i, v := range criticalValues {
+		gems = append(gems, gemConfig{"critical", i + 1, v})
+	}
+
+	gemQuery := `INSERT INTO config_gems (gem_type, gem_level, stat_value)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (gem_type, gem_level) DO NOTHING`
+	for _, g := range gems {
+		if _, err := db.Pool.Exec(ctx, gemQuery, g.gemType, g.gemLevel, g.statValue); err != nil {
+			return fmt.Errorf("insert gem %s level %d: %w", g.gemType, g.gemLevel, err)
+		}
+	}
+	observability.Log.Info().Int("count", len(gems)).Msg("seeded config_gems")
+
+	// ── Set bonuses ────────────────────────────────────────────────────────────
+	type setBonus struct {
+		tier           string
+		piecesRequired int
+		bonusHP        float64
+		bonusDmg       float64
+		bonusDef       float64
+		bonusCrit      float64
+	}
+	setBonuses := []setBonus{
+		// silver
+		{"silver", 2, 3, 0, 0, 0},
+		{"silver", 4, 0, 0, 3, 0},
+		{"silver", 6, 5, 0, 5, 0},
+		// gold
+		{"gold", 2, 5, 0, 0, 0},
+		{"gold", 4, 0, 5, 0, 0},
+		{"gold", 6, 8, 8, 5, 0},
+		// titan
+		{"titan", 2, 8, 0, 0, 0},
+		{"titan", 4, 0, 8, 0, 0},
+		{"titan", 6, 12, 12, 8, 5},
+		// diamond
+		{"diamond", 2, 10, 0, 0, 0},
+		{"diamond", 4, 0, 10, 0, 0},
+		{"diamond", 6, 15, 15, 12, 10},
+	}
+	setBonusQuery := `INSERT INTO config_set_bonuses (tier, pieces_required, bonus_hp_pct, bonus_dmg_pct, bonus_def_pct, bonus_crit_pct)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (tier, pieces_required) DO NOTHING`
+	for _, b := range setBonuses {
+		if _, err := db.Pool.Exec(ctx, setBonusQuery, b.tier, b.piecesRequired, b.bonusHP, b.bonusDmg, b.bonusDef, b.bonusCrit); err != nil {
+			return fmt.Errorf("insert set bonus %s %dpc: %w", b.tier, b.piecesRequired, err)
+		}
+	}
+	observability.Log.Info().Int("count", len(setBonuses)).Msg("seeded config_set_bonuses")
 
 	return nil
 }

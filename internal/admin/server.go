@@ -133,6 +133,20 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/api/config/character-levels", s.handleMatchmakingConfigGet("character_levels"))
 	r.Post("/api/config/character-levels", s.handleMatchmakingConfigSave("character_levels"))
 
+	// Equipment config
+	r.Get("/equipment-items", s.handleEquipmentItemsList)
+	r.Get("/equipment-items/edit", s.handleEquipmentItemEdit)
+	r.Post("/equipment-items/save", s.handleEquipmentItemSave)
+	r.Post("/equipment-items/delete", s.handleEquipmentItemDelete)
+	r.Get("/upgrade-rates", s.handleUpgradeRates)
+	r.Post("/upgrade-rates/save", s.handleUpgradeRateSave)
+	r.Get("/equipment-stones", s.handleStoneConfigs)
+	r.Post("/equipment-stones/save", s.handleStoneConfigSave)
+	r.Get("/equipment-gems", s.handleGemConfigs)
+	r.Post("/equipment-gems/save", s.handleGemConfigSave)
+	r.Get("/set-bonuses", s.handleSetBonuses)
+	r.Post("/set-bonuses/save", s.handleSetBonusSave)
+
 	return r
 }
 

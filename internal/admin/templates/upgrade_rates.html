@@ -1,0 +1,47 @@
+{{define "content"}}
+<div class="top-bar">
+    <h1>Upgrade Rates</h1>
+</div>
+{{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+
+<div class="card">
+<p style="margin-bottom:16px;font-size:14px;color:#666;">Each row defines the cost and success rate for upgrading from one level to the next. Submit a row to save it.</p>
+<table>
+<thead>
+<tr>
+    <th>From Level</th>
+    <th>To Level</th>
+    <th>Cost (Power)</th>
+    <th>Max Success %</th>
+    <th>Fail Resets To</th>
+    <th>Action</th>
+</tr>
+</thead>
+<tbody>
+{{range .Rates}}
+<tr>
+<form method="POST" action="/upgrade-rates/save">
+    <td><input type="number" name="from_level" value="{{index . "FromLevel"}}" style="width:80px"></td>
+    <td><input type="number" name="to_level" value="{{index . "ToLevel"}}" style="width:80px"></td>
+    <td><input type="number" name="upgrade_cost" value="{{index . "Cost"}}" style="width:100px"></td>
+    <td><input type="number" name="max_percent" value="{{index . "MaxPct"}}" step="0.01" style="width:100px"></td>
+    <td><input type="number" name="fail_reset_to" value="{{index . "FailReset"}}" style="width:80px"></td>
+    <td><button type="submit" class="btn btn-success btn-sm">Save</button></td>
+</form>
+</tr>
+{{end}}
+<tr>
+<form method="POST" action="/upgrade-rates/save">
+    <td><input type="number" name="from_level" placeholder="from" style="width:80px"></td>
+    <td><input type="number" name="to_level" placeholder="to" style="width:80px"></td>
+    <td><input type="number" name="upgrade_cost" placeholder="cost" style="width:100px"></td>
+    <td><input type="number" name="max_percent" placeholder="%" step="0.01" style="width:100px"></td>
+    <td><input type="number" name="fail_reset_to" placeholder="reset" style="width:80px"></td>
+    <td><button type="submit" class="btn btn-primary btn-sm">Add</button></td>
+</form>
+</tr>
+</tbody>
+</table>
+</div>
+{{end}}

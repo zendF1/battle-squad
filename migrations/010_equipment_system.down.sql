@@ -1,0 +1,12 @@
+DROP TABLE IF EXISTS equipment_upgrade_log;
+DROP TABLE IF EXISTS player_materials;
+DROP TABLE IF EXISTS player_stones;
+DROP TABLE IF EXISTS player_equipment;
+DROP TABLE IF EXISTS player_gems;
+DROP TABLE IF EXISTS config_crafting_recipes;
+DROP TABLE IF EXISTS config_materials;
+DROP TABLE IF EXISTS config_stones;
+DROP TABLE IF EXISTS config_gems;
+DROP TABLE IF EXISTS config_set_bonuses;
+DROP TABLE IF EXISTS config_upgrade_rates;
+DROP TABLE IF EXISTS config_equipment_items;

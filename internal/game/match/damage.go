@@ -2,6 +2,7 @@ package match
 
 import (
 	"math"
+	"math/rand"
 )
 
 const (
@@ -35,6 +36,17 @@ func CalculateExplosionDamage(playerPos Vector2, explosionCenter Vector2, baseDa
 	finalDamage := rawDamage * defenseFactor
 
 	return int(math.Round(finalDamage))
+}
+
+func ApplyCritical(damage int, critChance float64) (int, bool) {
+	if critChance <= 0 {
+		return damage, false
+	}
+	roll := rand.Float64() * 100.0
+	if roll < critChance {
+		return int(math.Round(float64(damage) * 1.5)), true
+	}
+	return damage, false
 }
 
 func CalculateFallDamage(fallDistance float64) int {

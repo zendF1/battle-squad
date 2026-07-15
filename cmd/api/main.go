@@ -20,6 +20,7 @@ import (
 	"battle-squad/internal/api/rank"
 	"battle-squad/internal/api/moderation"
 	"battle-squad/internal/api/appconfig"
+	"battle-squad/internal/api/equipment"
 	"battle-squad/internal/api/matchhistory"
 	"battle-squad/internal/api/rooms"
 	"battle-squad/internal/api/dev"
@@ -68,7 +69,6 @@ func main() {
 
 	// 5. Init Modules
 	economyRepo := economy.NewRepository()
-	_ = economyRepo
 
 	inventoryRepo := inventory.NewRepository(db)
 	inventoryService := inventory.NewService(inventoryRepo)
@@ -118,6 +118,10 @@ func main() {
 	matchhistoryRepo := matchhistory.NewRepository(db)
 	matchhistoryService := matchhistory.NewService(matchhistoryRepo)
 	matchhistoryHandler := matchhistory.NewHandler(matchhistoryService)
+
+	equipmentRepo := equipment.NewRepository(db)
+	equipmentService := equipment.NewService(equipmentRepo, economyRepo, db)
+	equipmentHandler := equipment.NewHandler(equipmentService)
 
 	roomsHandler := rooms.NewHandler(redisClient)
 
@@ -203,6 +207,34 @@ func main() {
 
 		r.Get("/player/match-history", matchhistoryHandler.GetHistory)
 		r.Get("/rooms", roomsHandler.GetRooms)
+
+		// Equipment
+		r.Get("/player/equipment", equipmentHandler.GetEquipment)
+		r.Post("/player/equipment/equip", equipmentHandler.EquipItem)
+		r.Post("/player/equipment/unequip", equipmentHandler.UnequipItem)
+		r.Post("/player/equipment/upgrade", equipmentHandler.Upgrade)
+		r.Post("/player/equipment/dismantle", equipmentHandler.Dismantle)
+		r.Post("/player/equipment/socket", equipmentHandler.SocketGem)
+		r.Post("/player/equipment/unsocket", equipmentHandler.UnsocketGem)
+
+		r.Get("/player/stones", equipmentHandler.GetStones)
+		r.Get("/player/gems", equipmentHandler.GetGems)
+		r.Get("/player/materials", equipmentHandler.GetMaterials)
+
+		r.Get("/shop/equipment", equipmentHandler.GetShopEquipment)
+		r.Post("/shop/equipment/buy", equipmentHandler.BuyEquipment)
+		r.Get("/shop/stones", equipmentHandler.GetShopStones)
+		r.Post("/shop/stones/buy", equipmentHandler.BuyStones)
+		r.Get("/shop/gems", equipmentHandler.GetShopGems)
+		r.Post("/shop/gems/buy", equipmentHandler.BuyGems)
+		r.Get("/shop/materials", equipmentHandler.GetShopMaterials)
+		r.Post("/shop/materials/buy", equipmentHandler.BuyMaterials)
+
+		r.Post("/merge/stone", equipmentHandler.MergeStones)
+		r.Post("/merge/gem", equipmentHandler.MergeGems)
+
+		r.Get("/crafting/recipes", equipmentHandler.GetRecipes)
+		r.Post("/crafting/craft", equipmentHandler.Craft)
 	})
 
 	// Dev-only endpoints (only available in development)

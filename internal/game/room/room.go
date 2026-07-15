@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"battle-squad/internal/api/economy"
@@ -36,20 +37,20 @@ type Room struct {
 	matchDone chan struct{}
 }
 
-func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense int) (int, int) {
+func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense int) (int, int, int, float64) {
 	var bonusHP, bonusDefense int
 	err := r.db.Pool.QueryRow(context.Background(),
 		`SELECT COALESCE(bonus_hp, 0), COALESCE(bonus_defense, 0) FROM player_characters WHERE player_id = $1 AND character_id = $2`,
 		playerID, characterID).Scan(&bonusHP, &bonusDefense)
 	if err != nil {
-		return baseHP, baseDefense
+		return baseHP, baseDefense, 0, 0
 	}
 
 	var cfgVal string
 	err = r.db.Pool.QueryRow(context.Background(),
 		`SELECT value FROM game_settings WHERE key = 'character_progression'`).Scan(&cfgVal)
 	if err != nil {
-		return baseHP, baseDefense
+		return baseHP, baseDefense, 0, 0
 	}
 
 	type progConfig struct {
@@ -57,7 +58,7 @@ func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense 
 	}
 	var cfg progConfig
 	if json.Unmarshal([]byte(cfgVal), &cfg) != nil || cfg.StatMultipliers == nil {
-		return baseHP, baseDefense
+		return baseHP, baseDefense, 0, 0
 	}
 
 	hpMul := cfg.StatMultipliers["hp"]
@@ -69,7 +70,101 @@ func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense 
 		defMul = 5
 	}
 
-	return baseHP + bonusHP*hpMul, baseDefense + bonusDefense*defMul
+	var equipHP, equipDEF, equipMoveEnergy int
+	var equipCrit float64
+
+	eqRows, eqErr := r.db.Pool.Query(context.Background(),
+		`SELECT cei.stat_hp, cei.stat_damage, cei.stat_defense, cei.stat_crit, cei.stat_move_energy,
+		        pe.upgrade_level, pe.category, pe.tier, pe.gem_slot_1::text, pe.gem_slot_2::text
+		 FROM player_equipment pe
+		 JOIN config_equipment_items cei ON pe.item_id = cei.item_id
+		 WHERE pe.player_id = $1 AND pe.equipped_on = $2 AND pe.is_equipped = TRUE`,
+		playerID, characterID)
+	if eqErr == nil {
+		defer eqRows.Close()
+		craftedTierCount := make(map[string]int)
+		for eqRows.Next() {
+			var statHP, statDMG, statDEF, statMoveEnergy, upgradeLevel int
+			var statCrit float64
+			var category string
+			var tier, gem1, gem2 *string
+			if err := eqRows.Scan(&statHP, &statDMG, &statDEF, &statCrit, &statMoveEnergy,
+				&upgradeLevel, &category, &tier, &gem1, &gem2); err != nil {
+				continue
+			}
+			upgradeBonus := float64(upgradeLevel) * 0.02
+			milestoneBonus := 0.0
+			if upgradeLevel >= 6 {
+				milestoneBonus += 0.10
+			}
+			if upgradeLevel >= 10 {
+				milestoneBonus += 0.20
+			}
+			if upgradeLevel >= 14 {
+				milestoneBonus += 0.40
+			}
+			if upgradeLevel >= 16 {
+				milestoneBonus += 1.00
+			}
+			mul := 1.0 + upgradeBonus + milestoneBonus
+
+			equipHP += int(math.Round(float64(statHP) * mul))
+			equipDEF += int(math.Round(float64(statDEF) * mul))
+			equipCrit += statCrit * mul
+			equipMoveEnergy += int(math.Round(float64(statMoveEnergy) * mul))
+
+			if category == "crafted" && tier != nil {
+				craftedTierCount[*tier]++
+			}
+
+			for _, gemID := range []*string{gem1, gem2} {
+				if gemID == nil {
+					continue
+				}
+				var gemType string
+				var statVal float64
+				gerr := r.db.Pool.QueryRow(context.Background(),
+					`SELECT g.gem_type, cg.stat_value
+					 FROM player_gems g JOIN config_gems cg ON g.gem_type = cg.gem_type AND g.gem_level = cg.gem_level
+					 WHERE g.gem_id = $1`, *gemID).Scan(&gemType, &statVal)
+				if gerr != nil {
+					continue
+				}
+				switch gemType {
+				case "hp":
+					equipHP += int(statVal)
+				case "defense":
+					equipDEF += int(statVal)
+				case "critical":
+					equipCrit += statVal
+				}
+			}
+		}
+
+		for t, count := range craftedTierCount {
+			bonusRows, berr := r.db.Pool.Query(context.Background(),
+				`SELECT pieces_required, bonus_hp_pct, bonus_def_pct, bonus_crit_pct
+				 FROM config_set_bonuses WHERE tier = $1 ORDER BY pieces_required`, t)
+			if berr != nil {
+				continue
+			}
+			for bonusRows.Next() {
+				var pieces int
+				var hpPct, defPct, critPct float64
+				if err := bonusRows.Scan(&pieces, &hpPct, &defPct, &critPct); err != nil {
+					continue
+				}
+				if count >= pieces {
+					equipHP = int(math.Round(float64(equipHP) * (1 + hpPct/100)))
+					equipDEF = int(math.Round(float64(equipDEF) * (1 + defPct/100)))
+					equipCrit += critPct
+				}
+			}
+			bonusRows.Close()
+		}
+	}
+
+	return baseHP + bonusHP*hpMul + equipHP, baseDefense + bonusDefense*defMul + equipDEF, equipMoveEnergy, equipCrit
 }
 
 func NewRoom(roomID string, initialState RoomState, hub *Hub, db *database.PostgresDB) *Room {
@@ -554,22 +649,24 @@ func (r *Room) processStartMatch(client *ws.Client) {
 			hp = charData.HP
 			defense = charData.Defense
 		}
-		hp, defense = r.getActualStats(p.PlayerID, p.CharacterID, hp, defense)
+		hp, defense, moveEnergyBonus, critChance := r.getActualStats(p.PlayerID, p.CharacterID, hp, defense)
 
 		matchPlayers = append(matchPlayers, &match.BattlePlayerState{
-			PlayerID:      p.PlayerID,
-			DisplayName:   p.DisplayName,
-			TeamID:        p.TeamID,
-			CharacterID:   p.CharacterID,
-			HP:            hp,
-			MaxHP:         hp,
-			Defense:       defense,
-			Position:      spawnPos,
-			MoveEnergy:    100,
-			Items:         p.Items,
-			StatusEffects: []match.StatusEffect{},
-			IsAlive:       true,
-			IsBot:         false,
+			PlayerID:        p.PlayerID,
+			DisplayName:     p.DisplayName,
+			TeamID:          p.TeamID,
+			CharacterID:     p.CharacterID,
+			HP:              hp,
+			MaxHP:           hp,
+			Defense:         defense,
+			Position:        spawnPos,
+			MoveEnergy:      100,
+			MoveEnergyBonus: moveEnergyBonus,
+			CritChance:      critChance,
+			Items:           p.Items,
+			StatusEffects:   []match.StatusEffect{},
+			IsAlive:         true,
+			IsBot:           false,
 		})
 	}
 
@@ -726,24 +823,28 @@ func (r *Room) startRankedMatch(matchID string, botTierConfig matchmaker.BotTier
 		}
 
 		isBot := len(p.PlayerID) >= 4 && p.PlayerID[:4] == "bot_"
+		var moveEnergyBonus int
+		var critChance float64
 		if !isBot {
-			hp, defense = r.getActualStats(p.PlayerID, p.CharacterID, hp, defense)
+			hp, defense, moveEnergyBonus, critChance = r.getActualStats(p.PlayerID, p.CharacterID, hp, defense)
 		}
 
 		matchPlayers = append(matchPlayers, &match.BattlePlayerState{
-			PlayerID:      p.PlayerID,
-			DisplayName:   p.DisplayName,
-			TeamID:        p.TeamID,
-			CharacterID:   p.CharacterID,
-			HP:            hp,
-			MaxHP:         hp,
-			Defense:       defense,
-			Position:      spawnPos,
-			MoveEnergy:    100,
-			Items:         p.Items,
-			StatusEffects: []match.StatusEffect{},
-			IsAlive:       true,
-			IsBot:         isBot,
+			PlayerID:        p.PlayerID,
+			DisplayName:     p.DisplayName,
+			TeamID:          p.TeamID,
+			CharacterID:     p.CharacterID,
+			HP:              hp,
+			MaxHP:           hp,
+			Defense:         defense,
+			Position:        spawnPos,
+			MoveEnergy:      100,
+			MoveEnergyBonus: moveEnergyBonus,
+			CritChance:      critChance,
+			Items:           p.Items,
+			StatusEffects:   []match.StatusEffect{},
+			IsAlive:         true,
+			IsBot:           isBot,
 		})
 	}
 

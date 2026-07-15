@@ -906,6 +906,290 @@ func (r *Repository) UpsertJSONSetting(ctx context.Context, key, value string) e
 }
 
 // ---------------------------------------------------------------------------
+// Equipment Items
+// ---------------------------------------------------------------------------
+
+// GetAllEquipmentItems returns all rows from config_equipment_items as generic maps.
+func (r *Repository) GetAllEquipmentItems(ctx context.Context) ([]map[string]interface{}, error) {
+	rows, err := r.db.Pool.Query(ctx,
+		`SELECT item_id, name, slot, category, tier, required_level, character_id,
+		        gem_slots, stat_hp, stat_damage, stat_defense, stat_crit,
+		        stat_move_energy, price_coin, price_gem, is_active
+		 FROM config_equipment_items ORDER BY item_id`)
+	if err != nil {
+		return nil, fmt.Errorf("query equipment items: %w", err)
+	}
+	defer rows.Close()
+
+	var results []map[string]interface{}
+	for rows.Next() {
+		var (
+			itemID, name, slot, category string
+			tier, characterID            *string
+			requiredLevel, gemSlots      int
+			statHP, statDMG, statDEF     int
+			statCrit                     float64
+			statMoveEnergy               int
+			priceCoin, priceGem          int
+			isActive                     bool
+		)
+		if err := rows.Scan(&itemID, &name, &slot, &category, &tier, &requiredLevel, &characterID,
+			&gemSlots, &statHP, &statDMG, &statDEF, &statCrit, &statMoveEnergy,
+			&priceCoin, &priceGem, &isActive); err != nil {
+			return nil, fmt.Errorf("scan equipment item: %w", err)
+		}
+		m := map[string]interface{}{
+			"ItemID":        itemID,
+			"Name":          name,
+			"Slot":          slot,
+			"Category":      category,
+			"Tier":          tier,
+			"RequiredLevel": requiredLevel,
+			"CharacterID":   characterID,
+			"GemSlots":      gemSlots,
+			"StatHP":        statHP,
+			"StatDMG":       statDMG,
+			"StatDEF":       statDEF,
+			"StatCrit":      statCrit,
+			"StatMoveEnergy": statMoveEnergy,
+			"PriceCoin":     priceCoin,
+			"PriceGem":      priceGem,
+			"IsActive":      isActive,
+		}
+		results = append(results, m)
+	}
+	return results, rows.Err()
+}
+
+// UpsertEquipmentItem inserts or updates a config_equipment_items row.
+func (r *Repository) UpsertEquipmentItem(ctx context.Context,
+	itemID, name, slot, category string,
+	tier, characterID *string,
+	requiredLevel, gemSlots, statHP, statDMG, statDEF, statMoveEnergy, priceCoin, priceGem int,
+	statCrit float64,
+	isActive bool,
+) error {
+	_, err := r.db.Pool.Exec(ctx,
+		`INSERT INTO config_equipment_items
+		 (item_id, name, slot, category, tier, required_level, character_id,
+		  gem_slots, stat_hp, stat_damage, stat_defense, stat_crit,
+		  stat_move_energy, price_coin, price_gem, is_active, updated_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16, CURRENT_TIMESTAMP)
+		 ON CONFLICT (item_id) DO UPDATE SET
+		   name=EXCLUDED.name, slot=EXCLUDED.slot, category=EXCLUDED.category,
+		   tier=EXCLUDED.tier, required_level=EXCLUDED.required_level,
+		   character_id=EXCLUDED.character_id, gem_slots=EXCLUDED.gem_slots,
+		   stat_hp=EXCLUDED.stat_hp, stat_damage=EXCLUDED.stat_damage,
+		   stat_defense=EXCLUDED.stat_defense, stat_crit=EXCLUDED.stat_crit,
+		   stat_move_energy=EXCLUDED.stat_move_energy,
+		   price_coin=EXCLUDED.price_coin, price_gem=EXCLUDED.price_gem,
+		   is_active=EXCLUDED.is_active, updated_at=CURRENT_TIMESTAMP`,
+		itemID, name, slot, category, tier, requiredLevel, characterID,
+		gemSlots, statHP, statDMG, statDEF, statCrit, statMoveEnergy,
+		priceCoin, priceGem, isActive)
+	if err != nil {
+		return fmt.Errorf("upsert equipment item %s: %w", itemID, err)
+	}
+	return nil
+}
+
+// DeleteEquipmentItem deletes a config_equipment_items row by item_id.
+func (r *Repository) DeleteEquipmentItem(ctx context.Context, itemID string) error {
+	_, err := r.db.Pool.Exec(ctx, `DELETE FROM config_equipment_items WHERE item_id = $1`, itemID)
+	if err != nil {
+		return fmt.Errorf("delete equipment item %s: %w", itemID, err)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Upgrade Rates
+// ---------------------------------------------------------------------------
+
+// GetAllUpgradeRates returns all rows from config_upgrade_rates ordered by from_level.
+func (r *Repository) GetAllUpgradeRates(ctx context.Context) ([]map[string]interface{}, error) {
+	rows, err := r.db.Pool.Query(ctx,
+		`SELECT from_level, to_level, upgrade_cost, max_percent, fail_reset_to
+		 FROM config_upgrade_rates ORDER BY from_level, to_level`)
+	if err != nil {
+		return nil, fmt.Errorf("query upgrade rates: %w", err)
+	}
+	defer rows.Close()
+
+	var results []map[string]interface{}
+	for rows.Next() {
+		var fromLevel, toLevel, cost, failReset int
+		var maxPct float64
+		if err := rows.Scan(&fromLevel, &toLevel, &cost, &maxPct, &failReset); err != nil {
+			return nil, fmt.Errorf("scan upgrade rate: %w", err)
+		}
+		results = append(results, map[string]interface{}{
+			"FromLevel": fromLevel,
+			"ToLevel":   toLevel,
+			"Cost":      cost,
+			"MaxPct":    maxPct,
+			"FailReset": failReset,
+		})
+	}
+	return results, rows.Err()
+}
+
+// UpsertUpgradeRate inserts or updates a config_upgrade_rates row.
+func (r *Repository) UpsertUpgradeRate(ctx context.Context, from, to, cost int, maxPct float64, failReset int) error {
+	_, err := r.db.Pool.Exec(ctx,
+		`INSERT INTO config_upgrade_rates (from_level, to_level, upgrade_cost, max_percent, fail_reset_to)
+		 VALUES ($1,$2,$3,$4,$5)
+		 ON CONFLICT (from_level, to_level) DO UPDATE SET
+		   upgrade_cost=EXCLUDED.upgrade_cost, max_percent=EXCLUDED.max_percent,
+		   fail_reset_to=EXCLUDED.fail_reset_to`,
+		from, to, cost, maxPct, failReset)
+	if err != nil {
+		return fmt.Errorf("upsert upgrade rate %d->%d: %w", from, to, err)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Stone Configs
+// ---------------------------------------------------------------------------
+
+// GetAllStoneConfigs returns all rows from config_stones ordered by stone_level.
+func (r *Repository) GetAllStoneConfigs(ctx context.Context) ([]map[string]interface{}, error) {
+	rows, err := r.db.Pool.Query(ctx,
+		`SELECT stone_level, power, price_coin, price_gem, source
+		 FROM config_stones ORDER BY stone_level`)
+	if err != nil {
+		return nil, fmt.Errorf("query stone configs: %w", err)
+	}
+	defer rows.Close()
+
+	var results []map[string]interface{}
+	for rows.Next() {
+		var level, power, priceCoin, priceGem int
+		var source string
+		if err := rows.Scan(&level, &power, &priceCoin, &priceGem, &source); err != nil {
+			return nil, fmt.Errorf("scan stone config: %w", err)
+		}
+		results = append(results, map[string]interface{}{
+			"StoneLevel": level,
+			"Power":      power,
+			"PriceCoin":  priceCoin,
+			"PriceGem":   priceGem,
+			"Source":     source,
+		})
+	}
+	return results, rows.Err()
+}
+
+// UpsertStoneConfig inserts or updates a config_stones row.
+func (r *Repository) UpsertStoneConfig(ctx context.Context, level, power, coin, gem int, source string) error {
+	_, err := r.db.Pool.Exec(ctx,
+		`INSERT INTO config_stones (stone_level, power, price_coin, price_gem, source)
+		 VALUES ($1,$2,$3,$4,$5)
+		 ON CONFLICT (stone_level) DO UPDATE SET
+		   power=EXCLUDED.power, price_coin=EXCLUDED.price_coin,
+		   price_gem=EXCLUDED.price_gem, source=EXCLUDED.source`,
+		level, power, coin, gem, source)
+	if err != nil {
+		return fmt.Errorf("upsert stone config level %d: %w", level, err)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Gem Configs
+// ---------------------------------------------------------------------------
+
+// GetAllGemConfigs returns all rows from config_gems ordered by gem_type, gem_level.
+func (r *Repository) GetAllGemConfigs(ctx context.Context) ([]map[string]interface{}, error) {
+	rows, err := r.db.Pool.Query(ctx,
+		`SELECT gem_type, gem_level, stat_value
+		 FROM config_gems ORDER BY gem_type, gem_level`)
+	if err != nil {
+		return nil, fmt.Errorf("query gem configs: %w", err)
+	}
+	defer rows.Close()
+
+	var results []map[string]interface{}
+	for rows.Next() {
+		var gemType string
+		var gemLevel int
+		var statValue float64
+		if err := rows.Scan(&gemType, &gemLevel, &statValue); err != nil {
+			return nil, fmt.Errorf("scan gem config: %w", err)
+		}
+		results = append(results, map[string]interface{}{
+			"GemType":   gemType,
+			"GemLevel":  gemLevel,
+			"StatValue": statValue,
+		})
+	}
+	return results, rows.Err()
+}
+
+// UpsertGemConfig inserts or updates a config_gems row.
+func (r *Repository) UpsertGemConfig(ctx context.Context, gemType string, gemLevel int, statValue float64) error {
+	_, err := r.db.Pool.Exec(ctx,
+		`INSERT INTO config_gems (gem_type, gem_level, stat_value)
+		 VALUES ($1,$2,$3)
+		 ON CONFLICT (gem_type, gem_level) DO UPDATE SET stat_value=EXCLUDED.stat_value`,
+		gemType, gemLevel, statValue)
+	if err != nil {
+		return fmt.Errorf("upsert gem config %s/%d: %w", gemType, gemLevel, err)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Set Bonuses
+// ---------------------------------------------------------------------------
+
+// GetAllSetBonuses returns all rows from config_set_bonuses ordered by tier, pieces_required.
+func (r *Repository) GetAllSetBonuses(ctx context.Context) ([]map[string]interface{}, error) {
+	rows, err := r.db.Pool.Query(ctx,
+		`SELECT tier, pieces_required, bonus_hp_pct, bonus_dmg_pct, bonus_def_pct, bonus_crit_pct
+		 FROM config_set_bonuses ORDER BY tier, pieces_required`)
+	if err != nil {
+		return nil, fmt.Errorf("query set bonuses: %w", err)
+	}
+	defer rows.Close()
+
+	var results []map[string]interface{}
+	for rows.Next() {
+		var tier string
+		var pieces int
+		var hp, dmg, def, crit float64
+		if err := rows.Scan(&tier, &pieces, &hp, &dmg, &def, &crit); err != nil {
+			return nil, fmt.Errorf("scan set bonus: %w", err)
+		}
+		results = append(results, map[string]interface{}{
+			"Tier":   tier,
+			"Pieces": pieces,
+			"HP":     hp,
+			"DMG":    dmg,
+			"DEF":    def,
+			"Crit":   crit,
+		})
+	}
+	return results, rows.Err()
+}
+
+// UpsertSetBonus inserts or updates a config_set_bonuses row.
+func (r *Repository) UpsertSetBonus(ctx context.Context, tier string, pieces int, hp, dmg, def, crit float64) error {
+	_, err := r.db.Pool.Exec(ctx,
+		`INSERT INTO config_set_bonuses (tier, pieces_required, bonus_hp_pct, bonus_dmg_pct, bonus_def_pct, bonus_crit_pct)
+		 VALUES ($1,$2,$3,$4,$5,$6)
+		 ON CONFLICT (tier, pieces_required) DO UPDATE SET
+		   bonus_hp_pct=EXCLUDED.bonus_hp_pct, bonus_dmg_pct=EXCLUDED.bonus_dmg_pct,
+		   bonus_def_pct=EXCLUDED.bonus_def_pct, bonus_crit_pct=EXCLUDED.bonus_crit_pct`,
+		tier, pieces, hp, dmg, def, crit)
+	if err != nil {
+		return fmt.Errorf("upsert set bonus %s/%d: %w", tier, pieces, err)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
 // Dev Tools
 // ---------------------------------------------------------------------------
 
