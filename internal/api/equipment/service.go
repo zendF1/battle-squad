@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"strconv"
 
 	"battle-squad/internal/api/economy"
 	"battle-squad/internal/shared/database"
@@ -22,6 +23,20 @@ func NewService(repo *Repository, economyRepo *economy.Repository, db *database.
 		economyRepo: economyRepo,
 		db:          db,
 	}
+}
+
+func (s *Service) getMergeRatePerItem(ctx context.Context) float64 {
+	var val string
+	err := s.db.Pool.QueryRow(ctx,
+		`SELECT value FROM game_settings WHERE key = 'equipment.merge_rate_per_item'`).Scan(&val)
+	if err != nil {
+		return 25.0 // default
+	}
+	rate, err := strconv.ParseFloat(val, 64)
+	if err != nil {
+		return 25.0
+	}
+	return rate
 }
 
 // ---------------------------------------------------------------------------
@@ -224,7 +239,7 @@ func (s *Service) BuyMaterials(ctx context.Context, playerID string, req BuyMate
 	if cfg == nil {
 		return model.ErrNotFound
 	}
-	if cfg.Source != "gem_shop" {
+	if cfg.PriceGem <= 0 {
 		return model.ErrBadRequest
 	}
 
@@ -637,8 +652,9 @@ func (s *Service) MergeStones(ctx context.Context, playerID string, req MergeSto
 		return nil, model.ErrInsufficientStones
 	}
 
-	// Roll: count*25% success rate
-	successRate := float64(req.Count) * 25.0
+	// Roll: count * configurable rate per item
+	ratePerItem := s.getMergeRatePerItem(ctx)
+	successRate := float64(req.Count) * ratePerItem
 	success := rand.Float64()*100 < successRate
 
 	if success {
@@ -699,8 +715,9 @@ func (s *Service) MergeGems(ctx context.Context, playerID string, req MergeGemRe
 		return nil, err
 	}
 
-	// Roll: count*25% success rate
-	successRate := float64(req.Count) * 25.0
+	// Roll: count * configurable rate per item
+	ratePerItem := s.getMergeRatePerItem(ctx)
+	successRate := float64(req.Count) * ratePerItem
 	success := rand.Float64()*100 < successRate
 
 	if success {

@@ -1190,6 +1190,121 @@ func (r *Repository) UpsertSetBonus(ctx context.Context, tier string, pieces int
 }
 
 // ---------------------------------------------------------------------------
+// Materials
+// ---------------------------------------------------------------------------
+
+// GetAllMaterialConfigs returns all rows from config_materials ordered by tier, material_id.
+func (r *Repository) GetAllMaterialConfigs(ctx context.Context) ([]map[string]interface{}, error) {
+	rows, err := r.db.Pool.Query(ctx,
+		`SELECT material_id, name, description, source, price_gem, tier, is_active
+		 FROM config_materials ORDER BY tier, material_id`)
+	if err != nil {
+		return nil, fmt.Errorf("query materials: %w", err)
+	}
+	defer rows.Close()
+
+	var results []map[string]interface{}
+	for rows.Next() {
+		var materialID, name, description, source, tier string
+		var priceGem int
+		var isActive bool
+		if err := rows.Scan(&materialID, &name, &description, &source, &priceGem, &tier, &isActive); err != nil {
+			return nil, fmt.Errorf("scan material: %w", err)
+		}
+		results = append(results, map[string]interface{}{
+			"MaterialID":  materialID,
+			"Name":        name,
+			"Description": description,
+			"Source":      source,
+			"PriceGem":    priceGem,
+			"Tier":        tier,
+			"IsActive":    isActive,
+		})
+	}
+	return results, rows.Err()
+}
+
+// UpsertMaterial inserts or updates a config_materials row.
+func (r *Repository) UpsertMaterial(ctx context.Context, materialID, name, description, source string, priceGem int, tier string, isActive bool) error {
+	_, err := r.db.Pool.Exec(ctx,
+		`INSERT INTO config_materials (material_id, name, description, source, price_gem, tier, is_active)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7)
+		 ON CONFLICT (material_id) DO UPDATE SET
+		   name=EXCLUDED.name, description=EXCLUDED.description,
+		   source=EXCLUDED.source, price_gem=EXCLUDED.price_gem,
+		   tier=EXCLUDED.tier, is_active=EXCLUDED.is_active`,
+		materialID, name, description, source, priceGem, tier, isActive)
+	if err != nil {
+		return fmt.Errorf("upsert material %s: %w", materialID, err)
+	}
+	return nil
+}
+
+// DeleteMaterial deletes a config_materials row by material_id.
+func (r *Repository) DeleteMaterial(ctx context.Context, materialID string) error {
+	_, err := r.db.Pool.Exec(ctx, `DELETE FROM config_materials WHERE material_id = $1`, materialID)
+	if err != nil {
+		return fmt.Errorf("delete material %s: %w", materialID, err)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Crafting Recipes
+// ---------------------------------------------------------------------------
+
+// GetAllCraftingRecipes returns all rows from config_crafting_recipes ordered by recipe_id.
+func (r *Repository) GetAllCraftingRecipes(ctx context.Context) ([]map[string]interface{}, error) {
+	rows, err := r.db.Pool.Query(ctx,
+		`SELECT recipe_id, result_item_id, materials::text, is_active
+		 FROM config_crafting_recipes ORDER BY recipe_id`)
+	if err != nil {
+		return nil, fmt.Errorf("query crafting recipes: %w", err)
+	}
+	defer rows.Close()
+
+	var results []map[string]interface{}
+	for rows.Next() {
+		var recipeID, resultItemID, materialsJSON string
+		var isActive bool
+		if err := rows.Scan(&recipeID, &resultItemID, &materialsJSON, &isActive); err != nil {
+			return nil, fmt.Errorf("scan crafting recipe: %w", err)
+		}
+		results = append(results, map[string]interface{}{
+			"RecipeID":     recipeID,
+			"ResultItemID": resultItemID,
+			"Materials":    materialsJSON,
+			"IsActive":     isActive,
+		})
+	}
+	return results, rows.Err()
+}
+
+// UpsertCraftingRecipe inserts or updates a config_crafting_recipes row.
+func (r *Repository) UpsertCraftingRecipe(ctx context.Context, recipeID, resultItemID, materialsJSON string, isActive bool) error {
+	_, err := r.db.Pool.Exec(ctx,
+		`INSERT INTO config_crafting_recipes (recipe_id, result_item_id, materials, is_active)
+		 VALUES ($1,$2,$3::jsonb,$4)
+		 ON CONFLICT (recipe_id) DO UPDATE SET
+		   result_item_id=EXCLUDED.result_item_id, materials=EXCLUDED.materials,
+		   is_active=EXCLUDED.is_active`,
+		recipeID, resultItemID, materialsJSON, isActive)
+	if err != nil {
+		return fmt.Errorf("upsert crafting recipe %s: %w", recipeID, err)
+	}
+	return nil
+}
+
+// DeleteCraftingRecipe deletes a config_crafting_recipes row by recipe_id.
+func (r *Repository) DeleteCraftingRecipe(ctx context.Context, recipeID string) error {
+	_, err := r.db.Pool.Exec(ctx, `DELETE FROM config_crafting_recipes WHERE recipe_id = $1`, recipeID)
+	if err != nil {
+		return fmt.Errorf("delete crafting recipe %s: %w", recipeID, err)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
 // Dev Tools
 // ---------------------------------------------------------------------------
 

@@ -1,0 +1,34 @@
+{{define "content"}}
+<div class="top-bar">
+    <h1>{{if .IsNew}}New{{else}}Edit{{end}} Crafting Recipe</h1>
+    <a href="/crafting-recipes" class="btn btn-primary">Back to List</a>
+</div>
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+<div class="card">
+<form method="POST" action="/crafting-recipes/save">
+<div class="form-group">
+    <label>Recipe ID</label>
+    <input type="text" name="recipe_id" value="{{index .Recipe "RecipeID"}}" {{if not .IsNew}}readonly{{end}}>
+    <div class="desc">Unique identifier (e.g. craft_sword_iron). Cannot be changed after creation.</div>
+</div>
+<div class="form-group">
+    <label>Result Item ID</label>
+    <input type="text" name="result_item_id" value="{{index .Recipe "ResultItemID"}}">
+    <div class="desc">The equipment item produced by this recipe (must match an equipment item_id).</div>
+</div>
+<div class="form-group">
+    <label>Materials (JSON)</label>
+    <textarea name="materials" style="min-height:120px;font-family:monospace">{{index .Recipe "Materials"}}</textarea>
+    <div class="desc">JSON array of required materials, e.g. [{"material_id":"iron_ore","quantity":3}]</div>
+</div>
+<div class="form-group">
+    <label>Active</label>
+    <select name="is_active">
+        <option value="true" {{if index .Recipe "IsActive"}}selected{{end}}>Yes</option>
+        <option value="false" {{if not (index .Recipe "IsActive")}}selected{{end}}>No</option>
+    </select>
+</div>
+<button type="submit" class="btn btn-primary">{{if .IsNew}}Create{{else}}Save Changes{{end}}</button>
+</form>
+</div>
+{{end}}

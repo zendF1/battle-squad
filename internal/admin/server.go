@@ -147,6 +147,18 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/set-bonuses", s.handleSetBonuses)
 	r.Post("/set-bonuses/save", s.handleSetBonusSave)
 
+	// Materials config
+	r.Get("/materials", s.handleMaterialsList)
+	r.Get("/materials/edit", s.handleMaterialEdit)
+	r.Post("/materials/save", s.handleMaterialSave)
+	r.Post("/materials/delete", s.handleMaterialDelete)
+
+	// Crafting recipes config
+	r.Get("/crafting-recipes", s.handleCraftingRecipesList)
+	r.Get("/crafting-recipes/edit", s.handleCraftingRecipeEdit)
+	r.Post("/crafting-recipes/save", s.handleCraftingRecipeSave)
+	r.Post("/crafting-recipes/delete", s.handleCraftingRecipeDelete)
+
 	return r
 }
 

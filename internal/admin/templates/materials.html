@@ -1,0 +1,42 @@
+{{define "content"}}
+<div class="top-bar">
+    <h1>Materials</h1>
+    <a href="/materials/edit" class="btn btn-primary">+ Add New Material</a>
+</div>
+{{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+<div class="card">
+<table>
+<thead>
+<tr>
+    <th>Material ID</th>
+    <th>Name</th>
+    <th>Source</th>
+    <th>Price Gem</th>
+    <th>Tier</th>
+    <th>Active</th>
+    <th>Actions</th>
+</tr>
+</thead>
+<tbody>
+{{range .Materials}}
+<tr>
+    <td>{{index . "MaterialID"}}</td>
+    <td>{{index . "Name"}}</td>
+    <td>{{index . "Source"}}</td>
+    <td>{{index . "PriceGem"}}</td>
+    <td>{{index . "Tier"}}</td>
+    <td>{{if index . "IsActive"}}<span class="badge badge-success">Yes</span>{{else}}<span class="badge badge-danger">No</span>{{end}}</td>
+    <td>
+        <a href="/materials/edit?id={{index . "MaterialID"}}" class="btn btn-primary btn-sm">Edit</a>
+        <form method="POST" action="/materials/delete" style="display:inline" onsubmit="return confirm('Delete this material?')">
+            <input type="hidden" name="id" value="{{index . "MaterialID"}}">
+            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+        </form>
+    </td>
+</tr>
+{{end}}
+</tbody>
+</table>
+</div>
+{{end}}

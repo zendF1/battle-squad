@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"time"
 
 	"battle-squad/internal/api/economy"
@@ -35,6 +36,34 @@ type Room struct {
 	cancel    context.CancelFunc
 	match     *match.Match
 	matchDone chan struct{}
+}
+
+type milestoneConfig struct {
+	Bonus6  float64
+	Bonus10 float64
+	Bonus14 float64
+	Bonus16 float64
+}
+
+func (r *Room) getMilestoneConfig() milestoneConfig {
+	cfg := milestoneConfig{Bonus6: 0.10, Bonus10: 0.20, Bonus14: 0.40, Bonus16: 1.00}
+	keys := map[string]*float64{
+		"equipment.milestone_6_bonus":  &cfg.Bonus6,
+		"equipment.milestone_10_bonus": &cfg.Bonus10,
+		"equipment.milestone_14_bonus": &cfg.Bonus14,
+		"equipment.milestone_16_bonus": &cfg.Bonus16,
+	}
+	for key, target := range keys {
+		var val string
+		err := r.db.Pool.QueryRow(context.Background(),
+			`SELECT value FROM game_settings WHERE key = $1`, key).Scan(&val)
+		if err == nil {
+			if parsed, err := strconv.ParseFloat(val, 64); err == nil {
+				*target = parsed
+			}
+		}
+	}
+	return cfg
 }
 
 func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense int) (hp, defense, damageBonus, moveEnergyBonus int, critChance float64) {
@@ -73,6 +102,8 @@ func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense 
 	var equipHP, equipDMG, equipDEF, equipMoveEnergy int
 	var equipCrit float64
 
+	ms := r.getMilestoneConfig()
+
 	eqRows, eqErr := r.db.Pool.Query(context.Background(),
 		`SELECT cei.stat_hp, cei.stat_damage, cei.stat_defense, cei.stat_crit, cei.stat_move_energy,
 		        pe.upgrade_level, pe.category, pe.tier, pe.gem_slot_1::text, pe.gem_slot_2::text
@@ -95,16 +126,16 @@ func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense 
 			upgradeBonus := float64(upgradeLevel) * 0.02
 			milestoneBonus := 0.0
 			if upgradeLevel >= 6 {
-				milestoneBonus += 0.10
+				milestoneBonus += ms.Bonus6
 			}
 			if upgradeLevel >= 10 {
-				milestoneBonus += 0.20
+				milestoneBonus += ms.Bonus10
 			}
 			if upgradeLevel >= 14 {
-				milestoneBonus += 0.40
+				milestoneBonus += ms.Bonus14
 			}
 			if upgradeLevel >= 16 {
-				milestoneBonus += 1.00
+				milestoneBonus += ms.Bonus16
 			}
 			mul := 1.0 + upgradeBonus + milestoneBonus
 

@@ -1,0 +1,55 @@
+{{define "content"}}
+<div class="top-bar">
+    <h1>{{if .IsNew}}New{{else}}Edit{{end}} Material</h1>
+    <a href="/materials" class="btn btn-primary">Back to List</a>
+</div>
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+<div class="card">
+<form method="POST" action="/materials/save">
+<div class="form-group">
+    <label>Material ID</label>
+    <input type="text" name="material_id" value="{{index .Material "MaterialID"}}" {{if not .IsNew}}readonly{{end}}>
+    <div class="desc">Unique identifier (e.g. iron_ore). Cannot be changed after creation.</div>
+</div>
+<div class="form-group">
+    <label>Name</label>
+    <input type="text" name="name" value="{{index .Material "Name"}}">
+</div>
+<div class="form-group">
+    <label>Description</label>
+    <textarea name="description">{{index .Material "Description"}}</textarea>
+</div>
+<div class="form-group">
+    <label>Source</label>
+    <select name="source">
+        {{$source := index .Material "Source"}}
+        <option value="drop" {{if eq $source "drop"}}selected{{end}}>Drop</option>
+        <option value="gem_shop" {{if eq $source "gem_shop"}}selected{{end}}>Gem Shop</option>
+    </select>
+</div>
+<div class="form-group">
+    <label>Price (Gems)</label>
+    <input type="number" name="price_gem" value="{{index .Material "PriceGem"}}" min="0" step="1">
+    <div class="desc">Only relevant when source is gem_shop.</div>
+</div>
+<div class="form-group">
+    <label>Tier</label>
+    <select name="tier">
+        {{$tier := index .Material "Tier"}}
+        <option value="silver" {{if eq $tier "silver"}}selected{{end}}>Silver</option>
+        <option value="gold" {{if eq $tier "gold"}}selected{{end}}>Gold</option>
+        <option value="titan" {{if eq $tier "titan"}}selected{{end}}>Titan</option>
+        <option value="diamond" {{if eq $tier "diamond"}}selected{{end}}>Diamond</option>
+    </select>
+</div>
+<div class="form-group">
+    <label>Active</label>
+    <select name="is_active">
+        <option value="true" {{if index .Material "IsActive"}}selected{{end}}>Yes</option>
+        <option value="false" {{if not (index .Material "IsActive")}}selected{{end}}>No</option>
+    </select>
+</div>
+<button type="submit" class="btn btn-primary">{{if .IsNew}}Create{{else}}Save Changes{{end}}</button>
+</form>
+</div>
+{{end}}

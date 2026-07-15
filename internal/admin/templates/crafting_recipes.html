@@ -1,0 +1,38 @@
+{{define "content"}}
+<div class="top-bar">
+    <h1>Crafting Recipes</h1>
+    <a href="/crafting-recipes/edit" class="btn btn-primary">+ Add New Recipe</a>
+</div>
+{{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+<div class="card">
+<table>
+<thead>
+<tr>
+    <th>Recipe ID</th>
+    <th>Result Item ID</th>
+    <th>Materials (JSON)</th>
+    <th>Active</th>
+    <th>Actions</th>
+</tr>
+</thead>
+<tbody>
+{{range .Recipes}}
+<tr>
+    <td>{{index . "RecipeID"}}</td>
+    <td>{{index . "ResultItemID"}}</td>
+    <td><code style="font-size:11px;word-break:break-all">{{index . "Materials"}}</code></td>
+    <td>{{if index . "IsActive"}}<span class="badge badge-success">Yes</span>{{else}}<span class="badge badge-danger">No</span>{{end}}</td>
+    <td>
+        <a href="/crafting-recipes/edit?id={{index . "RecipeID"}}" class="btn btn-primary btn-sm">Edit</a>
+        <form method="POST" action="/crafting-recipes/delete" style="display:inline" onsubmit="return confirm('Delete this recipe?')">
+            <input type="hidden" name="id" value="{{index . "RecipeID"}}">
+            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+        </form>
+    </td>
+</tr>
+{{end}}
+</tbody>
+</table>
+</div>
+{{end}}

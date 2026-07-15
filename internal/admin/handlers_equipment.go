@@ -145,6 +145,220 @@ func (s *Server) handleEquipmentItemDelete(w http.ResponseWriter, r *http.Reques
 }
 
 // ---------------------------------------------------------------------------
+// Materials
+// ---------------------------------------------------------------------------
+
+func (s *Server) handleMaterialsList(w http.ResponseWriter, r *http.Request) {
+	materials, err := s.repo.GetAllMaterialConfigs(r.Context())
+	if err != nil {
+		observability.Log.Error().Err(err).Msg("failed to get materials")
+	}
+	s.render(w, "materials", map[string]interface{}{
+		"ActivePage": "materials",
+		"Materials":  materials,
+		"Flash":      r.URL.Query().Get("flash"),
+		"Error":      r.URL.Query().Get("error"),
+	})
+}
+
+func (s *Server) handleMaterialEdit(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	isNew := id == ""
+
+	material := map[string]interface{}{
+		"MaterialID":  "",
+		"Name":        "",
+		"Description": "",
+		"Source":      "drop",
+		"PriceGem":    0,
+		"Tier":        "silver",
+		"IsActive":    true,
+	}
+
+	if !isNew {
+		materials, err := s.repo.GetAllMaterialConfigs(r.Context())
+		if err != nil {
+			http.Redirect(w, r, "/materials?error=Failed+to+load+material", http.StatusSeeOther)
+			return
+		}
+		found := false
+		for _, m := range materials {
+			if m["MaterialID"] == id {
+				material = m
+				found = true
+				break
+			}
+		}
+		if !found {
+			http.Redirect(w, r, "/materials?error=Material+not+found", http.StatusSeeOther)
+			return
+		}
+	}
+
+	s.render(w, "material_edit", map[string]interface{}{
+		"ActivePage": "materials",
+		"Material":   material,
+		"IsNew":      isNew,
+		"Error":      r.URL.Query().Get("error"),
+	})
+}
+
+func (s *Server) handleMaterialSave(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/materials?error=Invalid+form+data", http.StatusSeeOther)
+		return
+	}
+
+	materialID := strings.TrimSpace(r.FormValue("material_id"))
+	if materialID == "" {
+		http.Redirect(w, r, "/materials/edit?error=Material+ID+is+required", http.StatusSeeOther)
+		return
+	}
+
+	err := s.repo.UpsertMaterial(r.Context(),
+		materialID,
+		r.FormValue("name"),
+		r.FormValue("description"),
+		r.FormValue("source"),
+		formInt(r, "price_gem"),
+		r.FormValue("tier"),
+		r.FormValue("is_active") == "true",
+	)
+	if err != nil {
+		observability.Log.Error().Err(err).Msg("failed to upsert material")
+		http.Redirect(w, r, "/materials?error=Failed+to+save+material", http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/materials?flash=Material+saved+successfully", http.StatusSeeOther)
+}
+
+func (s *Server) handleMaterialDelete(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/materials?error=Invalid+form+data", http.StatusSeeOther)
+		return
+	}
+
+	id := r.FormValue("id")
+	if id == "" {
+		http.Redirect(w, r, "/materials?error=Missing+ID", http.StatusSeeOther)
+		return
+	}
+
+	if err := s.repo.DeleteMaterial(r.Context(), id); err != nil {
+		observability.Log.Error().Err(err).Msg("failed to delete material")
+		http.Redirect(w, r, "/materials?error=Failed+to+delete+material", http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/materials?flash=Material+deleted+successfully", http.StatusSeeOther)
+}
+
+// ---------------------------------------------------------------------------
+// Crafting Recipes
+// ---------------------------------------------------------------------------
+
+func (s *Server) handleCraftingRecipesList(w http.ResponseWriter, r *http.Request) {
+	recipes, err := s.repo.GetAllCraftingRecipes(r.Context())
+	if err != nil {
+		observability.Log.Error().Err(err).Msg("failed to get crafting recipes")
+	}
+	s.render(w, "crafting_recipes", map[string]interface{}{
+		"ActivePage": "crafting-recipes",
+		"Recipes":    recipes,
+		"Flash":      r.URL.Query().Get("flash"),
+		"Error":      r.URL.Query().Get("error"),
+	})
+}
+
+func (s *Server) handleCraftingRecipeEdit(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	isNew := id == ""
+
+	recipe := map[string]interface{}{
+		"RecipeID":     "",
+		"ResultItemID": "",
+		"Materials":    "[]",
+		"IsActive":     true,
+	}
+
+	if !isNew {
+		recipes, err := s.repo.GetAllCraftingRecipes(r.Context())
+		if err != nil {
+			http.Redirect(w, r, "/crafting-recipes?error=Failed+to+load+recipe", http.StatusSeeOther)
+			return
+		}
+		found := false
+		for _, rc := range recipes {
+			if rc["RecipeID"] == id {
+				recipe = rc
+				found = true
+				break
+			}
+		}
+		if !found {
+			http.Redirect(w, r, "/crafting-recipes?error=Recipe+not+found", http.StatusSeeOther)
+			return
+		}
+	}
+
+	s.render(w, "crafting_recipe_edit", map[string]interface{}{
+		"ActivePage": "crafting-recipes",
+		"Recipe":     recipe,
+		"IsNew":      isNew,
+		"Error":      r.URL.Query().Get("error"),
+	})
+}
+
+func (s *Server) handleCraftingRecipeSave(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/crafting-recipes?error=Invalid+form+data", http.StatusSeeOther)
+		return
+	}
+
+	recipeID := strings.TrimSpace(r.FormValue("recipe_id"))
+	if recipeID == "" {
+		http.Redirect(w, r, "/crafting-recipes/edit?error=Recipe+ID+is+required", http.StatusSeeOther)
+		return
+	}
+
+	err := s.repo.UpsertCraftingRecipe(r.Context(),
+		recipeID,
+		r.FormValue("result_item_id"),
+		r.FormValue("materials"),
+		r.FormValue("is_active") == "true",
+	)
+	if err != nil {
+		observability.Log.Error().Err(err).Msg("failed to upsert crafting recipe")
+		http.Redirect(w, r, "/crafting-recipes?error=Failed+to+save+recipe", http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/crafting-recipes?flash=Recipe+saved+successfully", http.StatusSeeOther)
+}
+
+func (s *Server) handleCraftingRecipeDelete(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/crafting-recipes?error=Invalid+form+data", http.StatusSeeOther)
+		return
+	}
+
+	id := r.FormValue("id")
+	if id == "" {
+		http.Redirect(w, r, "/crafting-recipes?error=Missing+ID", http.StatusSeeOther)
+		return
+	}
+
+	if err := s.repo.DeleteCraftingRecipe(r.Context(), id); err != nil {
+		observability.Log.Error().Err(err).Msg("failed to delete crafting recipe")
+		http.Redirect(w, r, "/crafting-recipes?error=Failed+to+delete+recipe", http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/crafting-recipes?flash=Recipe+deleted+successfully", http.StatusSeeOther)
+}
+
+// ---------------------------------------------------------------------------
 // Upgrade Rates
 // ---------------------------------------------------------------------------
 
