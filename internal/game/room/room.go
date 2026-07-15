@@ -37,20 +37,20 @@ type Room struct {
 	matchDone chan struct{}
 }
 
-func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense int) (int, int, int, float64) {
+func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense int) (hp, defense, damageBonus, moveEnergyBonus int, critChance float64) {
 	var bonusHP, bonusDefense int
 	err := r.db.Pool.QueryRow(context.Background(),
 		`SELECT COALESCE(bonus_hp, 0), COALESCE(bonus_defense, 0) FROM player_characters WHERE player_id = $1 AND character_id = $2`,
 		playerID, characterID).Scan(&bonusHP, &bonusDefense)
 	if err != nil {
-		return baseHP, baseDefense, 0, 0
+		return baseHP, baseDefense, 0, 0, 0
 	}
 
 	var cfgVal string
 	err = r.db.Pool.QueryRow(context.Background(),
 		`SELECT value FROM game_settings WHERE key = 'character_progression'`).Scan(&cfgVal)
 	if err != nil {
-		return baseHP, baseDefense, 0, 0
+		return baseHP, baseDefense, 0, 0, 0
 	}
 
 	type progConfig struct {
@@ -58,7 +58,7 @@ func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense 
 	}
 	var cfg progConfig
 	if json.Unmarshal([]byte(cfgVal), &cfg) != nil || cfg.StatMultipliers == nil {
-		return baseHP, baseDefense, 0, 0
+		return baseHP, baseDefense, 0, 0, 0
 	}
 
 	hpMul := cfg.StatMultipliers["hp"]
@@ -70,7 +70,7 @@ func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense 
 		defMul = 5
 	}
 
-	var equipHP, equipDEF, equipMoveEnergy int
+	var equipHP, equipDMG, equipDEF, equipMoveEnergy int
 	var equipCrit float64
 
 	eqRows, eqErr := r.db.Pool.Query(context.Background(),
@@ -109,6 +109,7 @@ func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense 
 			mul := 1.0 + upgradeBonus + milestoneBonus
 
 			equipHP += int(math.Round(float64(statHP) * mul))
+			equipDMG += int(math.Round(float64(statDMG) * mul))
 			equipDEF += int(math.Round(float64(statDEF) * mul))
 			equipCrit += statCrit * mul
 			equipMoveEnergy += int(math.Round(float64(statMoveEnergy) * mul))
@@ -117,6 +118,7 @@ func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense 
 				craftedTierCount[*tier]++
 			}
 
+			// BUG 2 fix: handle all 4 gem types (hp, damage, defense, critical)
 			for _, gemID := range []*string{gem1, gem2} {
 				if gemID == nil {
 					continue
@@ -133,6 +135,8 @@ func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense 
 				switch gemType {
 				case "hp":
 					equipHP += int(statVal)
+				case "damage":
+					equipDMG += int(statVal)
 				case "defense":
 					equipDEF += int(statVal)
 				case "critical":
@@ -141,30 +145,48 @@ func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense 
 			}
 		}
 
+		// BUG 4+5 fix: additive set bonus (sum all % first, apply once) + include bonus_dmg_pct
 		for t, count := range craftedTierCount {
+			var totalHPPct, totalDMGPct, totalDEFPct, totalCritPct float64
 			bonusRows, berr := r.db.Pool.Query(context.Background(),
-				`SELECT pieces_required, bonus_hp_pct, bonus_def_pct, bonus_crit_pct
+				`SELECT pieces_required, bonus_hp_pct, bonus_dmg_pct, bonus_def_pct, bonus_crit_pct
 				 FROM config_set_bonuses WHERE tier = $1 ORDER BY pieces_required`, t)
 			if berr != nil {
 				continue
 			}
 			for bonusRows.Next() {
 				var pieces int
-				var hpPct, defPct, critPct float64
-				if err := bonusRows.Scan(&pieces, &hpPct, &defPct, &critPct); err != nil {
+				var hpPct, dmgPct, defPct, critPct float64
+				if err := bonusRows.Scan(&pieces, &hpPct, &dmgPct, &defPct, &critPct); err != nil {
 					continue
 				}
 				if count >= pieces {
-					equipHP = int(math.Round(float64(equipHP) * (1 + hpPct/100)))
-					equipDEF = int(math.Round(float64(equipDEF) * (1 + defPct/100)))
-					equipCrit += critPct
+					totalHPPct += hpPct
+					totalDMGPct += dmgPct
+					totalDEFPct += defPct
+					totalCritPct += critPct
 				}
 			}
 			bonusRows.Close()
+			// Apply additive bonus once
+			if totalHPPct > 0 {
+				equipHP = int(math.Round(float64(equipHP) * (1 + totalHPPct/100)))
+			}
+			if totalDMGPct > 0 {
+				equipDMG = int(math.Round(float64(equipDMG) * (1 + totalDMGPct/100)))
+			}
+			if totalDEFPct > 0 {
+				equipDEF = int(math.Round(float64(equipDEF) * (1 + totalDEFPct/100)))
+			}
+			equipCrit += totalCritPct
 		}
 	}
 
-	return baseHP + bonusHP*hpMul + equipHP, baseDefense + bonusDefense*defMul + equipDEF, equipMoveEnergy, equipCrit
+	return baseHP + bonusHP*hpMul + equipHP,
+		baseDefense + bonusDefense*defMul + equipDEF,
+		equipDMG,
+		equipMoveEnergy,
+		equipCrit
 }
 
 func NewRoom(roomID string, initialState RoomState, hub *Hub, db *database.PostgresDB) *Room {
@@ -649,7 +671,7 @@ func (r *Room) processStartMatch(client *ws.Client) {
 			hp = charData.HP
 			defense = charData.Defense
 		}
-		hp, defense, moveEnergyBonus, critChance := r.getActualStats(p.PlayerID, p.CharacterID, hp, defense)
+		hp, defense, dmgBonus, moveEnergyBonus, critChance := r.getActualStats(p.PlayerID, p.CharacterID, hp, defense)
 
 		matchPlayers = append(matchPlayers, &match.BattlePlayerState{
 			PlayerID:        p.PlayerID,
@@ -659,6 +681,7 @@ func (r *Room) processStartMatch(client *ws.Client) {
 			HP:              hp,
 			MaxHP:           hp,
 			Defense:         defense,
+			DamageBonus:     dmgBonus,
 			Position:        spawnPos,
 			MoveEnergy:      100,
 			MoveEnergyBonus: moveEnergyBonus,
@@ -823,10 +846,10 @@ func (r *Room) startRankedMatch(matchID string, botTierConfig matchmaker.BotTier
 		}
 
 		isBot := len(p.PlayerID) >= 4 && p.PlayerID[:4] == "bot_"
-		var moveEnergyBonus int
+		var dmgBonus, moveEnergyBonus int
 		var critChance float64
 		if !isBot {
-			hp, defense, moveEnergyBonus, critChance = r.getActualStats(p.PlayerID, p.CharacterID, hp, defense)
+			hp, defense, dmgBonus, moveEnergyBonus, critChance = r.getActualStats(p.PlayerID, p.CharacterID, hp, defense)
 		}
 
 		matchPlayers = append(matchPlayers, &match.BattlePlayerState{
@@ -837,6 +860,7 @@ func (r *Room) startRankedMatch(matchID string, botTierConfig matchmaker.BotTier
 			HP:              hp,
 			MaxHP:           hp,
 			Defense:         defense,
+			DamageBonus:     dmgBonus,
 			Position:        spawnPos,
 			MoveEnergy:      100,
 			MoveEnergyBonus: moveEnergyBonus,

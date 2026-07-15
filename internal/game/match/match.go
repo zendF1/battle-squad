@@ -745,7 +745,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 					damage := CalculateExplosionDamage(
 						p.Position,
 						explosionCenter,
-						float64(weaponConfig.Damage)*damageFactor,
+						float64(weaponConfig.Damage+player.DamageBonus)*damageFactor,
 						r.ExplosionRadius,
 						p.Defense,
 					)
@@ -1016,7 +1016,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 			damage := CalculateExplosionDamage(
 				p.Position,
 				explosionCenter,
-				float64(weaponConfig.Damage)*damageFactor,
+				float64(weaponConfig.Damage+player.DamageBonus)*damageFactor,
 				result.ExplosionRadius,
 				p.Defense,
 			)

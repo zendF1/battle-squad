@@ -29,6 +29,7 @@ type BattlePlayerState struct {
 	StatusEffects []StatusEffect `json:"statusEffects"`
 	IsAlive         bool           `json:"isAlive"`
 	IsBot           bool           `json:"isBot"`
+	DamageBonus     int            `json:"damageBonus"`
 	CritChance      float64        `json:"critChance"`
 	MoveEnergyBonus int            `json:"moveEnergyBonus"`
 	SkillEnergy     int            `json:"skillEnergy"` // 0-100, skill usable at 100

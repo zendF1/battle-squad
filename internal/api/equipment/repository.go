@@ -170,7 +170,7 @@ func (r *Repository) GetUpgradeLogForDismantle(ctx context.Context, equipmentID 
 	query := `
 		SELECT stones_used, total_power
 		FROM equipment_upgrade_log
-		WHERE equipment_id = $1 AND from_level >= $2 AND success = TRUE
+		WHERE equipment_id = $1 AND from_level >= $2
 		ORDER BY from_level ASC
 	`
 	rows, err := r.db.Pool.Query(ctx, query, equipmentID, fromLevel)
@@ -606,6 +606,20 @@ func (r *Repository) GetAllGemConfigs(ctx context.Context) ([]GemConfig, error) 
 	return result, nil
 }
 
+func (r *Repository) GetCharacterLevel(ctx context.Context, playerID, characterID string) (int, error) {
+	var level int
+	err := r.db.Pool.QueryRow(ctx,
+		`SELECT COALESCE(level, 1) FROM player_characters WHERE player_id = $1 AND character_id = $2`,
+		playerID, characterID).Scan(&level)
+	if err == pgx.ErrNoRows {
+		return 1, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return level, nil
+}
+
 func (r *Repository) GetSetBonuses(ctx context.Context, tier string) ([]SetBonusConfig, error) {
 	query := `
 		SELECT tier, pieces_required, bonus_hp_pct, bonus_dmg_pct, bonus_def_pct, bonus_crit_pct
@@ -873,14 +887,26 @@ func (r *Repository) GetEquipmentStatsForCharacter(ctx context.Context, playerID
 
 	for tier, count := range tierCount {
 		bonuses := tierBonuses[tier]
+		// Sum all applicable bonus percentages additively, then apply once
+		var totalHPPct, totalDMGPct, totalDEFPct, totalCritPct float64
 		for _, sb := range bonuses {
 			if count >= sb.PiecesRequired {
-				totals.HP = int(math.Round(float64(totals.HP) * (1 + sb.BonusHPPct/100)))
-				totals.Damage = int(math.Round(float64(totals.Damage) * (1 + sb.BonusDMGPct/100)))
-				totals.Defense = int(math.Round(float64(totals.Defense) * (1 + sb.BonusDEFPct/100)))
-				totals.CritPct += sb.BonusCritPct
+				totalHPPct += sb.BonusHPPct
+				totalDMGPct += sb.BonusDMGPct
+				totalDEFPct += sb.BonusDEFPct
+				totalCritPct += sb.BonusCritPct
 			}
 		}
+		if totalHPPct > 0 {
+			totals.HP = int(math.Round(float64(totals.HP) * (1 + totalHPPct/100)))
+		}
+		if totalDMGPct > 0 {
+			totals.Damage = int(math.Round(float64(totals.Damage) * (1 + totalDMGPct/100)))
+		}
+		if totalDEFPct > 0 {
+			totals.Defense = int(math.Round(float64(totals.Defense) * (1 + totalDEFPct/100)))
+		}
+		totals.CritPct += totalCritPct
 	}
 
 	return totals, nil
@@ -915,10 +941,8 @@ func applyGemStat(stats *EquipmentStats, gemType string, value float64) {
 		stats.Damage += int(math.Round(value))
 	case "defense":
 		stats.Defense += int(math.Round(value))
-	case "crit":
+	case "critical":
 		stats.CritPct += value
-	case "move_energy":
-		stats.MoveEnergy += int(math.Round(value))
 	}
 }
 

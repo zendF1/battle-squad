@@ -263,6 +263,21 @@ func (s *Service) EquipItem(ctx context.Context, playerID string, req EquipReque
 		return model.ErrEquipmentAlreadyEquipped
 	}
 
+	// Check character level requirement
+	itemCfg, err := s.repo.GetEquipmentItemConfig(ctx, equip.ItemID)
+	if err != nil {
+		return err
+	}
+	if itemCfg != nil && itemCfg.RequiredLevel > 0 {
+		charLevel, err := s.repo.GetCharacterLevel(ctx, playerID, req.CharacterID)
+		if err != nil {
+			return err
+		}
+		if charLevel < itemCfg.RequiredLevel {
+			return model.ErrEquipmentLevelRequired
+		}
+	}
+
 	// Auto-unequip existing item in same slot (same character+slot)
 	existing, err := s.repo.GetEquippedInSlot(ctx, playerID, req.CharacterID, equip.Slot)
 	if err != nil {
