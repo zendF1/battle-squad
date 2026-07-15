@@ -29,7 +29,7 @@ type BattlePlayerState struct {
 	StatusEffects []StatusEffect `json:"statusEffects"`
 	IsAlive       bool           `json:"isAlive"`
 	IsBot         bool           `json:"isBot"`
-	SkillCooldown int            `json:"skillCooldown"`
+	SkillEnergy   int            `json:"skillEnergy"` // 0-100, skill usable at 100
 	DamageDealt   int            `json:"damageDealt"`
 	KillCount     int            `json:"killCount"`
 	ShotsFired    int            `json:"shotsFired"`
@@ -38,7 +38,7 @@ type BattlePlayerState struct {
 
 type WindState struct {
 	Direction int `json:"direction"` // -1: left, 0: no wind, 1: right
-	Power     int `json:"power"`     // 0 to 4
+	Power     float64 `json:"power"` // 0.0 to 4.0
 }
 
 type MatchState struct {

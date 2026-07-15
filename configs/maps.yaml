@@ -2,7 +2,10 @@
   name: Grassland Valley
   width: 1600
   height: 900
-  defaultWindPowerRange: [0, 4]
+  gridWidth: 100
+  gridHeight: 56
+  cellSize: 16
+  defaultWindPowerRange: [0.0, 4.0]
   terrainLayers:
     - type: dirt
       hardness: 20
@@ -10,6 +13,8 @@
     - type: rock
       hardness: 60
       yRange: [750, 900]
+  tiles: []
+  minRankTier: bronze
   spawnPoints:
     - x: 200
       y: 400
@@ -24,7 +29,10 @@
   name: Frozen Peak
   width: 1600
   height: 900
-  defaultWindPowerRange: [1, 4]
+  gridWidth: 100
+  gridHeight: 56
+  cellSize: 16
+  defaultWindPowerRange: [1.0, 4.0]
   terrainLayers:
     - type: ice
       hardness: 10
@@ -32,6 +40,8 @@
     - type: rock
       hardness: 70
       yRange: [650, 900]
+  tiles: []
+  minRankTier: silver
   spawnPoints:
     - x: 300
       y: 350
@@ -46,7 +56,10 @@
   name: Steel Base
   width: 1600
   height: 900
-  defaultWindPowerRange: [0, 2]
+  gridWidth: 100
+  gridHeight: 56
+  cellSize: 16
+  defaultWindPowerRange: [0.0, 2.0]
   terrainLayers:
     - type: lava
       hardness: 90
@@ -54,6 +67,8 @@
     - type: fragile
       hardness: 30
       yRange: [500, 700]
+  tiles: []
+  minRankTier: gold
   spawnPoints:
     - x: 250
       y: 300

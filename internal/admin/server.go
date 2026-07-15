@@ -3,6 +3,7 @@ package admin
 import (
 	"embed"
 	"html/template"
+	"io/fs"
 	"net/http"
 
 	"battle-squad/internal/shared/database"
@@ -12,6 +13,9 @@ import (
 
 //go:embed templates/*.html
 var templateFS embed.FS
+
+//go:embed static/*
+var staticFS embed.FS
 
 // Server holds all dependencies for the admin dashboard.
 type Server struct {
@@ -34,6 +38,7 @@ func NewServer(db *database.PostgresDB, redis *database.RedisClient, configDir s
 var tmplFuncMap = template.FuncMap{
 	"add": func(a, b int) int { return a + b },
 	"sub": func(a, b int) int { return a - b },
+	"safeJS": func(s string) template.JS { return template.JS(s) },
 	"deref": func(p *int) int {
 		if p == nil {
 			return 0
@@ -46,6 +51,10 @@ var tmplFuncMap = template.FuncMap{
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
 
+	// Serve static JS/CSS files
+	staticContent, _ := fs.Sub(staticFS, "static")
+	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticContent))))
+
 	r.Get("/", s.handleDashboard)
 
 	// Config CRUD routes
@@ -53,6 +62,8 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/characters/edit", s.handleConfigEdit("characters"))
 	r.Post("/characters/save", s.handleConfigSave("characters"))
 	r.Post("/characters/delete", s.handleConfigDelete("characters"))
+	r.Get("/characters/detail", s.handleCharacterDetail())
+	r.Post("/characters/detail/save", s.handleCharacterDetailSave())
 
 	r.Get("/weapons", s.handleConfigList("weapons"))
 	r.Get("/weapons/edit", s.handleConfigEdit("weapons"))
@@ -70,9 +81,20 @@ func (s *Server) Routes() http.Handler {
 	r.Post("/items/delete", s.handleConfigDelete("items"))
 
 	r.Get("/maps", s.handleConfigList("maps"))
-	r.Get("/maps/edit", s.handleConfigEdit("maps"))
-	r.Post("/maps/save", s.handleConfigSave("maps"))
 	r.Post("/maps/delete", s.handleConfigDelete("maps"))
+
+	// Brick Types
+	r.Get("/brick-types", s.handleBrickTypesList)
+	r.Get("/brick-types/editor", s.handleBrickTypeEditor)
+	r.Post("/brick-types/save", s.handleBrickTypeSave)
+	r.Post("/brick-types/delete", s.handleBrickTypeDelete)
+
+	// Map Editor
+	r.Get("/maps/editor", s.handleMapEditor)
+	r.Get("/api/maps/tiles", s.handleMapTilesGet)
+	r.Put("/api/maps/save", s.handleMapSave)
+	r.Get("/api/maps/export", s.handleMapExport)
+	r.Get("/api/brick-types", s.handleBrickTypesAPI)
 
 	// Physics settings
 	r.Get("/physics", s.handlePhysics)

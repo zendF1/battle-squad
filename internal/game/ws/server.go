@@ -2,8 +2,10 @@ package ws
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"strconv"
+	"sync"
 
 	"battle-squad/internal/shared/auth"
 	"battle-squad/internal/shared/config"
@@ -14,6 +16,10 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const (
+	maxConnsPerIP = 5
+)
+
 type Server struct {
 	upgrader    websocket.Upgrader
 	jwtManager  *auth.JWTManager
@@ -21,6 +27,8 @@ type Server struct {
 	redis       *database.RedisClient
 	handler     HandlerInterface
 	cfg         *config.Config
+	ipConns     map[string]int
+	ipConnsMu   sync.Mutex
 }
 
 func NewServer(
@@ -44,6 +52,7 @@ func NewServer(
 		redis:      redis,
 		handler:    handler,
 		cfg:        cfg,
+		ipConns:    make(map[string]int),
 	}
 }
 
@@ -95,10 +104,28 @@ func (s *Server) HandleUpgrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 4. Upgrade connection
+	// 4. IP connection limit
+	clientIP := extractIP(r)
+	s.ipConnsMu.Lock()
+	if s.ipConns[clientIP] >= maxConnsPerIP {
+		s.ipConnsMu.Unlock()
+		log.Warn().Str("ip", clientIP).Int("count", s.ipConns[clientIP]).Msg("IP connection limit reached")
+		http.Error(w, "too many connections", http.StatusTooManyRequests)
+		return
+	}
+	s.ipConns[clientIP]++
+	s.ipConnsMu.Unlock()
+
+	// 5. Upgrade connection
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to upgrade websocket connection")
+		s.ipConnsMu.Lock()
+		s.ipConns[clientIP]--
+		if s.ipConns[clientIP] <= 0 {
+			delete(s.ipConns, clientIP)
+		}
+		s.ipConnsMu.Unlock()
 		return
 	}
 
@@ -111,12 +138,44 @@ func (s *Server) HandleUpgrade(w http.ResponseWriter, r *http.Request) {
 		PlayerID:      claims.PlayerID,
 		AccountID:     claims.AccountID,
 		WSHandHandler: s.handler,
+		server:        s,
+		ip:            clientIP,
 	}
 
 	go client.WritePump()
 	go client.ReadPump()
 
-	log.Info().Str("playerId", client.PlayerID).Msg("websocket client connected")
+	log.Info().Str("playerId", client.PlayerID).Str("ip", clientIP).Msg("websocket client connected")
+}
+
+func extractIP(r *http.Request) string {
+	// Check X-Forwarded-For for proxied connections
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// First IP in the list is the client
+		if idx := len(xff); idx > 0 {
+			for i, ch := range xff {
+				if ch == ',' {
+					return xff[:i]
+				}
+			}
+			return xff
+		}
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+// DecrementIPConn is called when a client disconnects to release the IP slot.
+func (s *Server) DecrementIPConn(ip string) {
+	s.ipConnsMu.Lock()
+	s.ipConns[ip]--
+	if s.ipConns[ip] <= 0 {
+		delete(s.ipConns, ip)
+	}
+	s.ipConnsMu.Unlock()
 }
 
 func (s *Server) checkAccountBan(ctx context.Context, accountID string) (bool, error) {

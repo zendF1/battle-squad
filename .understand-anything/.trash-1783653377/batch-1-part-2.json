@@ -1,0 +1,797 @@
+{
+  "nodes": [
+    {
+      "id": "file:internal/api/inventory/handler.go",
+      "type": "file",
+      "name": "handler.go",
+      "filePath": "internal/api/inventory/handler.go",
+      "summary": "HTTP handler cho endpoint GET /player/inventory: lấy playerID từ context, gọi service, trả về JSON array các InventoryItem (trả mảng rỗng thay vì null nếu không có item).",
+      "tags": ["api-handler", "service"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/inventory/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/inventory/model.go",
+      "summary": "Định nghĩa kiểu dữ liệu inventory: InventoryItem (item_id, quantity, source, acquired_at, expires_at) và InventoryReservation (trạng thái reserved/consumed/released cho item trong match).",
+      "tags": ["type-definition", "data-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/inventory/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/inventory/repository.go",
+      "summary": "Repository inventory: lấy danh sách item khả dụng (trừ reservation), thêm item (upsert), và quản lý inventory reservation trong match (reserve/consume/release) với SELECT FOR UPDATE để tránh race condition.",
+      "tags": ["service", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:internal/api/inventory/repository.go:GetAvailableInventory",
+      "type": "function",
+      "name": "GetAvailableInventory",
+      "filePath": "internal/api/inventory/repository.go",
+      "lineRange": [31, 68],
+      "summary": "Truy vấn inventory khả dụng: LEFT JOIN với inventory_reservations để tính quantity thực tế sau khi trừ lượng đang reserved trong match.",
+      "tags": ["service", "data-model"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:internal/api/inventory/repository.go:ReserveItemsTx",
+      "type": "function",
+      "name": "ReserveItemsTx",
+      "filePath": "internal/api/inventory/repository.go",
+      "lineRange": [85, 115],
+      "summary": "Đặt trước item cho match trong transaction: kiểm tra số lượng khả dụng với FOR UPDATE lock, insert inventory_reservations.",
+      "tags": ["service", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:internal/api/inventory/repository.go:ConsumeReservationTx",
+      "type": "function",
+      "name": "ConsumeReservationTx",
+      "filePath": "internal/api/inventory/repository.go",
+      "lineRange": [117, 150],
+      "summary": "Tiêu thụ reservation khi match kết thúc: trừ quantity trong inventory_items, đánh dấu reservation là consumed.",
+      "tags": ["service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/inventory/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/inventory/service.go",
+      "summary": "Service inventory mỏng — wrap repository GetAvailableInventory, không có business logic bổ sung.",
+      "tags": ["service"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/matchhistory/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/matchhistory/model.go",
+      "summary": "Định nghĩa MatchHistoryEntry — bản ghi lịch sử trận đấu của người chơi gồm mode, map, kết quả, exp/coin nhận được và rating change.",
+      "tags": ["type-definition", "data-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/matchhistory/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/matchhistory/service.go",
+      "summary": "Service lịch sử trận đấu mỏng — wrap repository GetPlayerHistory với phân trang (limit/offset).",
+      "tags": ["service"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/mission/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/mission/model.go",
+      "summary": "Định nghĩa kiểu dữ liệu mission: Mission (daily/achievement với target và required_value), MissionProgress (tiến độ + trạng thái claimed), và ClaimRewardRequest.",
+      "tags": ["type-definition", "data-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/mission/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/mission/service.go",
+      "summary": "Logic mission: lấy danh sách mission theo type (daily/achievement) và xử lý claim reward trong Postgres transaction với lock FOR UPDATE để tránh double-claim.",
+      "tags": ["service", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:internal/api/mission/service.go:ClaimReward",
+      "type": "function",
+      "name": "ClaimReward",
+      "filePath": "internal/api/mission/service.go",
+      "lineRange": [30, 80],
+      "summary": "Claim phần thưởng mission trong transaction: lock progress row, validate đã hoàn thành và chưa claim, credit coin/gem, mark claimed.",
+      "tags": ["service", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/moderation/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/moderation/model.go",
+      "summary": "Định nghĩa kiểu dữ liệu moderation: PlayerReport (tố cáo người chơi), AccountBan (ban tài khoản với thời hạn tùy chọn), và các request types.",
+      "tags": ["type-definition", "data-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/player/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/player/model.go",
+      "summary": "Định nghĩa PlayerProfile (thông tin người chơi gồm level, exp, coin, gem), UpdateProfileRequest và AccountDeletionStatusResponse.",
+      "tags": ["type-definition", "data-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/player/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/player/service.go",
+      "summary": "Service player: lấy profile, cập nhật display name (validate độ dài), yêu cầu/hủy xóa tài khoản với grace period 7 ngày.",
+      "tags": ["service", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/rank/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/rank/model.go",
+      "summary": "Định nghĩa kiểu dữ liệu rank: Season (thông tin mùa giải), PlayerRank (rating, tier, division, wins/losses, win streak, highest tier), và LeaderboardResponse.",
+      "tags": ["type-definition", "data-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/rank/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/rank/service.go",
+      "summary": "Logic xếp hạng: lấy mùa giải active, lấy/tạo PlayerRank, leaderboard với phân trang, claim season reward (tính thưởng theo tier cao nhất trong mùa).",
+      "tags": ["service", "validation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:internal/api/rank/service.go:ClaimSeasonReward",
+      "type": "function",
+      "name": "ClaimSeasonReward",
+      "filePath": "internal/api/rank/service.go",
+      "lineRange": [118, 185],
+      "summary": "Claim phần thưởng cuối mùa: kiểm tra đã claim chưa, validate season đã kết thúc, tính thưởng theo highest_tier, credit coin/gem, ghi claim log.",
+      "tags": ["service", "validation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:internal/api/rank/service.go:calculateReward",
+      "type": "function",
+      "name": "calculateReward",
+      "filePath": "internal/api/rank/service.go",
+      "lineRange": [187, 210],
+      "summary": "Tính phần thưởng cuối mùa theo tier: bronze 100 coin, silver 300+10gem, gold 500+30gem, platinum 1000+50gem, diamond 2000+100gem, master 5000+200gem.",
+      "tags": ["utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/rooms/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/rooms/model.go",
+      "summary": "Định nghĩa RoomSummary — thông tin tóm tắt của một game room gồm host, mode, map, player count và trạng thái.",
+      "tags": ["type-definition", "data-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/shop/model.go",
+      "type": "file",
+      "name": "model.go",
+      "filePath": "internal/api/shop/model.go",
+      "summary": "Định nghĩa kiểu dữ liệu shop: ShopOffer (item/character_unlock/bundle với giá coin/gem, giới hạn mua, thời hạn), ShopPurchase và PurchaseRequest (với idempotency key).",
+      "tags": ["type-definition", "data-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/shop/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/shop/service.go",
+      "summary": "Logic mua hàng trong shop: idempotency check qua Redis, validate offer active/thời hạn/limit, trừ currency, cấp item hoặc unlock character, ghi purchase record trong Postgres transaction.",
+      "tags": ["service", "validation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:internal/api/shop/service.go:Purchase",
+      "type": "function",
+      "name": "Purchase",
+      "filePath": "internal/api/shop/service.go",
+      "lineRange": [45, 146],
+      "summary": "Xử lý mua hàng: kiểm tra idempotency, validate offer, kiểm tra giới hạn mua, debit currency, cấp item/unlock character, ghi purchase record — tất cả trong Postgres transaction.",
+      "tags": ["service", "validation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/game/match/reward.go",
+      "type": "file",
+      "name": "reward.go",
+      "filePath": "internal/game/match/reward.go",
+      "summary": "Xử lý phần thưởng sau trận đấu: tiêu thụ item reservations, tính exp/coin cho mỗi người chơi, cập nhật Elo rating (PvP 1v1 và ranked 2v2), cập nhật character exp/level, ghi match history — tất cả trong một Postgres transaction.",
+      "tags": ["service", "event-handler"],
+      "complexity": "complex",
+      "languageNotes": "Hàm ProcessMatchRewards là transaction lớn nhất trong hệ thống — gộp nhiều bảng (inventory, player_profiles, player_ranks, match_histories, player_characters) vào một atomic operation."
+    },
+    {
+      "id": "function:internal/game/match/reward.go:ProcessMatchRewards",
+      "type": "function",
+      "name": "ProcessMatchRewards",
+      "filePath": "internal/game/match/reward.go",
+      "lineRange": [41, 286],
+      "summary": "Hàm chính xử lý phần thưởng match: consume item reservations, tính exp/coin/rating, cập nhật profile/rank/character trong một transaction duy nhất.",
+      "tags": ["service", "event-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:internal/game/match/reward.go:updateProfilePostMatch",
+      "type": "function",
+      "name": "updateProfilePostMatch",
+      "filePath": "internal/game/match/reward.go",
+      "lineRange": [288, 322],
+      "summary": "Cập nhật level/exp người chơi sau match trong transaction: tính level-up theo công thức N*100 exp, credit coins qua economy repository.",
+      "tags": ["service", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:internal/game/match/reward.go:updatePlayerRank",
+      "type": "function",
+      "name": "updatePlayerRank",
+      "filePath": "internal/game/match/reward.go",
+      "lineRange": [324, 401],
+      "summary": "Cập nhật hoặc tạo mới player_ranks trong transaction: SELECT FOR UPDATE, tính wins/losses/win_streak, cộng rating change, tính tier/division, cập nhật highest_tier.",
+      "tags": ["service"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:internal/game/match/reward.go:getTierAndDivision",
+      "type": "function",
+      "name": "getTierAndDivision",
+      "filePath": "internal/game/match/reward.go",
+      "lineRange": [403, 444],
+      "summary": "Map rating sang tier (bronze/silver/gold/platinum/diamond/master) và division (1-3) theo ngưỡng cố định.",
+      "tags": ["utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/shared/auth/jwt.go",
+      "type": "file",
+      "name": "jwt.go",
+      "filePath": "internal/shared/auth/jwt.go",
+      "summary": "JWT Manager dùng chung: sinh và xác thực JWT HS256 với claims (accountId, playerId, role), phân biệt lỗi ErrInvalidToken và ErrExpiredToken.",
+      "tags": ["utility", "middleware", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:internal/shared/auth/jwt.go:Generate",
+      "type": "function",
+      "name": "Generate",
+      "filePath": "internal/shared/auth/jwt.go",
+      "lineRange": [34, 47],
+      "summary": "Sinh JWT token với claims accountId/playerId/role và thời gian hết hạn theo tokenDuration của manager.",
+      "tags": ["utility", "service"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:internal/shared/auth/jwt.go:Verify",
+      "type": "function",
+      "name": "Verify",
+      "filePath": "internal/shared/auth/jwt.go",
+      "lineRange": [49, 74],
+      "summary": "Xác thực JWT token: parse, kiểm tra signing method HMAC, phân biệt lỗi hết hạn và lỗi không hợp lệ.",
+      "tags": ["utility", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/shared/idempotency/idempotency.go",
+      "type": "file",
+      "name": "idempotency.go",
+      "filePath": "internal/shared/idempotency/idempotency.go",
+      "summary": "Idempotency Manager dùng Redis SETNX: CheckAndSet trả về true nếu key đã tồn tại (duplicate request), Complete đánh dấu key là completed với TTL.",
+      "tags": ["utility", "middleware", "service"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/middleware/auth.go",
+      "type": "file",
+      "name": "auth.go",
+      "filePath": "internal/shared/middleware/auth.go",
+      "summary": "HTTP middleware xác thực JWT: parse Bearer token từ Authorization header, xác thực qua JWTManager, inject playerID/accountId/role vào request context.",
+      "tags": ["middleware", "validation", "service"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/middleware/ratelimit.go",
+      "type": "file",
+      "name": "ratelimit.go",
+      "filePath": "internal/shared/middleware/ratelimit.go",
+      "summary": "HTTP middleware rate limiting theo IP: dùng golang.org/x/time/rate (token bucket), lưu limiter per IP trong map với cleanup goroutine mỗi 1 phút.",
+      "tags": ["middleware", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:internal/shared/middleware/auth.go:AuthMiddleware",
+      "type": "function",
+      "name": "AuthMiddleware",
+      "filePath": "internal/shared/middleware/auth.go",
+      "lineRange": [13, 43],
+      "summary": "Tạo HTTP middleware xác thực JWT: parse Bearer token, xác thực qua JWTManager, inject playerID/accountId/role vào context.",
+      "tags": ["middleware", "factory", "validation"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:internal/shared/middleware/ratelimit.go:NewRateLimiter",
+      "type": "function",
+      "name": "NewRateLimiter",
+      "filePath": "internal/shared/middleware/ratelimit.go",
+      "lineRange": [25, 36],
+      "summary": "Khởi tạo RateLimiter với rate/burst và bắt đầu goroutine cleanup định kỳ.",
+      "tags": ["factory", "middleware"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:internal/shared/middleware/ratelimit.go:Limit",
+      "type": "function",
+      "name": "Limit",
+      "filePath": "internal/shared/middleware/ratelimit.go",
+      "lineRange": [38, 58],
+      "summary": "HTTP middleware handler: lấy IP từ RemoteAddr, kiểm tra rate limiter, trả 429 nếu vượt giới hạn.",
+      "tags": ["middleware", "validation"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:internal/api/inventory/handler.go",
+      "target": "file:internal/shared/model/errors.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/inventory/handler.go",
+      "target": "file:internal/shared/observability/health.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/inventory/handler.go",
+      "target": "file:internal/shared/observability/logger.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/inventory/handler.go",
+      "target": "file:internal/shared/observability/metrics.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/inventory/repository.go",
+      "target": "function:internal/api/inventory/repository.go:GetAvailableInventory",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/inventory/repository.go",
+      "target": "function:internal/api/inventory/repository.go:ReserveItemsTx",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/inventory/repository.go",
+      "target": "function:internal/api/inventory/repository.go:ConsumeReservationTx",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/inventory/repository.go",
+      "target": "file:internal/shared/database/postgres.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/inventory/repository.go",
+      "target": "file:internal/shared/database/redis.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/mission/service.go",
+      "target": "function:internal/api/mission/service.go:ClaimReward",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/mission/service.go",
+      "target": "file:internal/api/economy/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/mission/service.go",
+      "target": "file:internal/api/economy/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/mission/service.go",
+      "target": "file:internal/api/economy/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/mission/service.go",
+      "target": "file:internal/shared/database/postgres.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/mission/service.go",
+      "target": "file:internal/shared/database/redis.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/rank/service.go",
+      "target": "function:internal/api/rank/service.go:ClaimSeasonReward",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/rank/service.go",
+      "target": "function:internal/api/rank/service.go:calculateReward",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/rank/service.go",
+      "target": "file:internal/api/economy/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/rank/service.go",
+      "target": "file:internal/api/economy/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/rank/service.go",
+      "target": "file:internal/api/economy/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/rank/service.go",
+      "target": "file:internal/shared/database/postgres.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/rank/service.go",
+      "target": "file:internal/shared/database/redis.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "function:internal/api/shop/service.go:Purchase",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "file:internal/api/economy/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "file:internal/api/economy/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "file:internal/api/economy/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "file:internal/api/inventory/handler.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "file:internal/api/inventory/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "file:internal/api/inventory/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "file:internal/api/inventory/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "file:internal/shared/database/postgres.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "file:internal/shared/database/redis.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "file:internal/shared/idempotency/idempotency.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/game/match/reward.go",
+      "target": "function:internal/game/match/reward.go:ProcessMatchRewards",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/game/match/reward.go",
+      "target": "function:internal/game/match/reward.go:updateProfilePostMatch",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/game/match/reward.go",
+      "target": "function:internal/game/match/reward.go:updatePlayerRank",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/game/match/reward.go",
+      "target": "function:internal/game/match/reward.go:getTierAndDivision",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/game/match/reward.go",
+      "target": "file:internal/api/economy/model.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/game/match/reward.go",
+      "target": "file:internal/api/economy/repository.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/game/match/reward.go",
+      "target": "file:internal/api/economy/service.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/game/match/reward.go",
+      "target": "file:internal/shared/database/postgres.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/game/match/reward.go",
+      "target": "file:internal/shared/database/redis.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/shared/auth/jwt.go",
+      "target": "function:internal/shared/auth/jwt.go:Generate",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/shared/auth/jwt.go",
+      "target": "function:internal/shared/auth/jwt.go:Verify",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/shared/idempotency/idempotency.go",
+      "target": "file:internal/shared/database/postgres.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/shared/idempotency/idempotency.go",
+      "target": "file:internal/shared/database/redis.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/shared/middleware/auth.go",
+      "target": "function:internal/shared/middleware/auth.go:AuthMiddleware",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/shared/middleware/auth.go",
+      "target": "file:internal/shared/auth/jwt.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/shared/middleware/auth.go",
+      "target": "file:internal/shared/model/errors.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/shared/middleware/auth.go",
+      "target": "file:internal/shared/observability/health.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/shared/middleware/auth.go",
+      "target": "file:internal/shared/observability/logger.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/shared/middleware/auth.go",
+      "target": "file:internal/shared/observability/metrics.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:internal/shared/middleware/ratelimit.go",
+      "target": "function:internal/shared/middleware/ratelimit.go:NewRateLimiter",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/shared/middleware/ratelimit.go",
+      "target": "function:internal/shared/middleware/ratelimit.go:Limit",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/shared/middleware/ratelimit.go",
+      "target": "file:internal/shared/model/errors.go",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:internal/game/match/reward.go:ProcessMatchRewards",
+      "target": "function:internal/api/economy/repository.go:CreditTx",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/api/character/service.go:ResetStats",
+      "target": "function:internal/api/economy/repository.go:DebitTx",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/api/giftcode/service.go:RedeemCode",
+      "target": "function:internal/api/economy/repository.go:CreditTx",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/api/shop/service.go:Purchase",
+      "target": "function:internal/api/economy/repository.go:DebitTx",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/api/iap/service.go:VerifyReceipt",
+      "target": "function:internal/api/economy/repository.go:CreditTx",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/api/auth/service.go:generateLoginTokens",
+      "target": "function:internal/shared/auth/jwt.go:Generate",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/api/auth/service.go:RefreshToken",
+      "target": "function:internal/shared/auth/jwt.go:Verify",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/shared/middleware/auth.go:AuthMiddleware",
+      "target": "function:internal/shared/auth/jwt.go:Verify",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}

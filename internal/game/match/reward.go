@@ -24,15 +24,15 @@ type PlayerStats struct {
 }
 
 type RewardResult struct {
-	PlayerID         string
-	ExpGained        int
-	CoinGained       int
-	RatingChange     int
-	NewRating        int
-	NewTier          string
-	NewDivision      int
-	LevelUp          bool
-	NewLevel         int
+	PlayerID         string `json:"playerId"`
+	ExpGained        int    `json:"expGained"`
+	CoinGained       int    `json:"coinGained"`
+	RatingChange     int    `json:"ratingChange"`
+	NewRating        int    `json:"newRating"`
+	NewTier          string `json:"newTier"`
+	NewDivision      int    `json:"newDivision"`
+	LevelUp          bool   `json:"levelUp"`
+	NewLevel         int    `json:"newLevel"`
 	CharLevelUp      bool   `json:"charLevelUp"`
 	CharNewLevel     int    `json:"charNewLevel"`
 	CharLevelsGained int    `json:"charLevelsGained"`
@@ -97,6 +97,11 @@ func ProcessMatchRewards(
 	results := make(map[string]RewardResult)
 
 	for _, p := range stats {
+		// Skip bot players — they have no player_profiles record
+		if len(p.PlayerID) >= 4 && p.PlayerID[:4] == "bot_" {
+			continue
+		}
+
 		// 1. Calculate experience
 		// baseExp = 50, winBonusExp = 30
 		// damageBonusExp = totalDamage * 0.05
@@ -326,8 +331,11 @@ func updatePlayerRank(ctx context.Context, tx pgx.Tx, playerID string, ratingCha
 	var seasonID string
 	err := tx.QueryRow(ctx, "SELECT season_id FROM rank_seasons WHERE status = 'active' LIMIT 1").Scan(&seasonID)
 	if err != nil {
-		// Fallback to default season for local test if none configured
+		// No active season — ensure a default one exists for local dev/testing
 		seasonID = "season_1"
+		_, _ = tx.Exec(ctx, `INSERT INTO rank_seasons (season_id, name, starts_at, ends_at, status)
+			VALUES ($1, 'Default Season', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '90 days', 'active')
+			ON CONFLICT (season_id) DO NOTHING`, seasonID)
 	}
 
 	// Find or initialize player rank config

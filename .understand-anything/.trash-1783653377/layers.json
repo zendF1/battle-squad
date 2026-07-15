@@ -1,0 +1,351 @@
+[
+  {
+    "id": "layer:entry-points",
+    "name": "Điểm Khởi Động (Entry Points)",
+    "description": "Các file main.go của từng binary server: API server, Game server, Admin dashboard, Worker và Migration runner. Đây là điểm bắt đầu thực thi của toàn bộ hệ thống, chịu trách nhiệm khởi tạo dependency và graceful shutdown.",
+    "nodeIds": [
+      "file:cmd/api/main.go",
+      "file:cmd/game/main.go",
+      "file:cmd/admin/main.go",
+      "file:cmd/migrate/main.go",
+      "file:cmd/worker/main.go"
+    ]
+  },
+  {
+    "id": "layer:infrastructure",
+    "name": "Hạ Tầng & Cấu Hình (Infrastructure & Configuration)",
+    "description": "Lớp hạ tầng bao gồm: cấu hình môi trường (env vars), kết nối database PostgreSQL và Redis, Dockerfile cho từng service, Docker Compose, Makefile và Go module files. Đây là nền tảng kỹ thuật mà toàn bộ ứng dụng chạy trên đó.",
+    "nodeIds": [
+      "file:internal/shared/config/config.go",
+      "file:internal/shared/database/postgres.go",
+      "file:internal/shared/database/redis.go",
+      "config:.env.example",
+      "config:Makefile",
+      "config:docker-compose.yml",
+      "config:go.mod",
+      "config:go.sum",
+      "service:Dockerfile.api",
+      "service:Dockerfile.game",
+      "service:Dockerfile.worker"
+    ]
+  },
+  {
+    "id": "layer:shared-middleware",
+    "name": "Middleware & Tiện Ích Dùng Chung (Shared Middleware & Utilities)",
+    "description": "Các thành phần dùng chung cho nhiều module: JWT authentication, middleware HTTP (auth, rate limit, correlation ID, version check), circuit breaker, idempotency dựa trên Redis, mô hình lỗi chuẩn và observability (logging, metrics, health check).",
+    "nodeIds": [
+      "file:internal/shared/auth/jwt.go",
+      "file:internal/shared/middleware/auth.go",
+      "file:internal/shared/middleware/ratelimit.go",
+      "file:internal/shared/middleware/correlation.go",
+      "file:internal/shared/middleware/version_check.go",
+      "file:internal/shared/idempotency/idempotency.go",
+      "file:internal/shared/circuitbreaker/breaker.go",
+      "file:internal/shared/featureflag/flags.go",
+      "file:internal/shared/model/errors.go",
+      "file:internal/shared/observability/logger.go",
+      "file:internal/shared/observability/metrics.go",
+      "file:internal/shared/observability/health.go"
+    ]
+  },
+  {
+    "id": "layer:api-handlers",
+    "name": "Lớp Xử Lý HTTP (REST API Handlers)",
+    "description": "Các HTTP handler của REST API server (cổng :8080). Mỗi handler nhận request, validate input, gọi service tương ứng và trả về response. Bao gồm auth, player, shop, inventory, IAP, giftcode, mission, rank, moderation, character, matchhistory, rooms, appconfig và dev tools.",
+    "nodeIds": [
+      "file:internal/api/auth/handler.go",
+      "file:internal/api/player/handler.go",
+      "file:internal/api/shop/handler.go",
+      "file:internal/api/inventory/handler.go",
+      "file:internal/api/iap/handler.go",
+      "file:internal/api/giftcode/handler.go",
+      "file:internal/api/mission/handler.go",
+      "file:internal/api/rank/handler.go",
+      "file:internal/api/moderation/handler.go",
+      "file:internal/api/character/handler.go",
+      "file:internal/api/matchhistory/handler.go",
+      "file:internal/api/rooms/handler.go",
+      "file:internal/api/appconfig/handler.go",
+      "file:internal/api/dev/handler.go"
+    ]
+  },
+  {
+    "id": "layer:api-services",
+    "name": "Lớp Logic Nghiệp Vụ API (API Business Logic Services)",
+    "description": "Các service chứa logic nghiệp vụ của REST API: xác thực người dùng, quản lý kinh tế (credit/debit), mua sắm, kho vật phẩm, IAP, mã quà tặng, nhiệm vụ, xếp hạng, kiểm duyệt, nhân vật, lịch sử trận và cấu hình ứng dụng.",
+    "nodeIds": [
+      "file:internal/api/auth/service.go",
+      "file:internal/api/economy/service.go",
+      "file:internal/api/shop/service.go",
+      "file:internal/api/inventory/service.go",
+      "file:internal/api/iap/service.go",
+      "file:internal/api/giftcode/service.go",
+      "file:internal/api/mission/service.go",
+      "file:internal/api/rank/service.go",
+      "file:internal/api/moderation/service.go",
+      "file:internal/api/player/service.go",
+      "file:internal/api/character/service.go",
+      "file:internal/api/matchhistory/service.go",
+      "file:internal/api/appconfig/service.go"
+    ]
+  },
+  {
+    "id": "layer:api-repositories",
+    "name": "Lớp Truy Cập Dữ Liệu API (API Data Repositories)",
+    "description": "Các repository thực hiện truy vấn PostgreSQL cho tầng API: xác thực/tài khoản, kinh tế, kho vật phẩm, cửa hàng, IAP, mã quà tặng, nhiệm vụ, xếp hạng, kiểm duyệt, người chơi, nhân vật và lịch sử trận đấu.",
+    "nodeIds": [
+      "file:internal/api/auth/repository.go",
+      "file:internal/api/economy/repository.go",
+      "file:internal/api/inventory/repository.go",
+      "file:internal/api/shop/repository.go",
+      "file:internal/api/iap/repository.go",
+      "file:internal/api/giftcode/repository.go",
+      "file:internal/api/mission/repository.go",
+      "file:internal/api/rank/repository.go",
+      "file:internal/api/moderation/repository.go",
+      "file:internal/api/player/repository.go",
+      "file:internal/api/character/repository.go",
+      "file:internal/api/matchhistory/repository.go"
+    ]
+  },
+  {
+    "id": "layer:api-models",
+    "name": "Mô Hình Dữ Liệu API (API Domain Models)",
+    "description": "Các struct định nghĩa kiểu dữ liệu, request/response payload và domain model cho từng module API: auth, player, economy, shop, inventory, IAP, giftcode, mission, rank, moderation, character, matchhistory và rooms.",
+    "nodeIds": [
+      "file:internal/api/auth/model.go",
+      "file:internal/api/player/model.go",
+      "file:internal/api/economy/model.go",
+      "file:internal/api/shop/model.go",
+      "file:internal/api/inventory/model.go",
+      "file:internal/api/iap/model.go",
+      "file:internal/api/giftcode/model.go",
+      "file:internal/api/mission/model.go",
+      "file:internal/api/rank/model.go",
+      "file:internal/api/moderation/model.go",
+      "file:internal/api/character/model.go",
+      "file:internal/api/matchhistory/model.go",
+      "file:internal/api/rooms/model.go",
+      "file:internal/api/appconfig/model.go"
+    ]
+  },
+  {
+    "id": "layer:game-websocket",
+    "name": "Lớp WebSocket Game Server (Game WebSocket Layer)",
+    "description": "Thành phần xử lý kết nối WebSocket của Game server (cổng :8081): server nâng cấp HTTP lên WebSocket, client với read/write pump goroutine, định nghĩa format message giao thức và xác thực JWT khi kết nối.",
+    "nodeIds": [
+      "file:internal/game/ws/server.go",
+      "file:internal/game/ws/client.go",
+      "file:internal/game/ws/message.go"
+    ]
+  },
+  {
+    "id": "layer:game-room",
+    "name": "Lớp Phòng Chơi (Game Room Layer)",
+    "description": "Quản lý phòng chơi thời gian thực: Hub lưu registry phòng trên Redis, Room goroutine actor xử lý vòng lặp sự kiện, handler WebSocket định tuyến CreateRoom/JoinRoom/QuickPlay và các model dữ liệu phòng.",
+    "nodeIds": [
+      "file:internal/game/room/hub.go",
+      "file:internal/game/room/room.go",
+      "file:internal/game/room/handler.go",
+      "file:internal/game/room/model.go"
+    ]
+  },
+  {
+    "id": "layer:game-lobby",
+    "name": "Lớp Phòng Chờ Ranked (Ranked Lobby Layer)",
+    "description": "Hệ thống lobby trước khi vào trận ranked 2v2: LobbyHub registry, LobbyRoom goroutine vòng lặp sự kiện, handler WebSocket cho CreateLobby/JoinLobby/StartQueue và model dữ liệu lobby.",
+    "nodeIds": [
+      "file:internal/game/lobby/hub.go",
+      "file:internal/game/lobby/lobby.go",
+      "file:internal/game/lobby/handler.go",
+      "file:internal/game/lobby/model.go"
+    ]
+  },
+  {
+    "id": "layer:game-matchmaker",
+    "name": "Lớp Ghép Trận (Matchmaking Layer)",
+    "description": "Hệ thống ghép trận ranked dựa trên Elo rating và Redis: Matchmaker với leader election, queue sorted set, lọc bản đồ theo rank tier, cấu hình matchmaking/elo/bot difficulty và model dữ liệu ghép trận.",
+    "nodeIds": [
+      "file:internal/game/matchmaker/matchmaker.go",
+      "file:internal/game/matchmaker/queue.go",
+      "file:internal/game/matchmaker/model.go",
+      "file:internal/game/matchmaker/map_selection_test.go"
+    ]
+  },
+  {
+    "id": "layer:game-match-engine",
+    "name": "Lớp Engine Trận Đấu (Match Engine Layer)",
+    "description": "Toàn bộ engine xử lý logic trận đấu theo lượt: mô phỏng vật lý đạn, tính sát thương nổ và rơi, terrain collision mask, hiệu ứng trạng thái, vật phẩm tức thì, phần thưởng sau trận và ghi log sự kiện. Bao gồm cả model game state trung tâm.",
+    "nodeIds": [
+      "file:internal/game/match/model.go",
+      "file:internal/game/match/shooting.go",
+      "file:internal/game/match/damage.go",
+      "file:internal/game/match/terrain.go",
+      "file:internal/game/match/polygon.go",
+      "file:internal/game/match/elo.go",
+      "file:internal/game/match/reward.go",
+      "file:internal/game/match/item_effect.go",
+      "file:internal/game/match/status_effect.go",
+      "file:internal/game/match/eventlog.go"
+    ]
+  },
+  {
+    "id": "layer:game-bot-ai",
+    "name": "Lớp Trí Tuệ Nhân Tạo Bot (Bot AI Layer)",
+    "description": "AI điều khiển bot trong trận đấu: BotBrain đơn giản cho tutorial (tìm kẻ địch, tính góc bắn với sai số theo độ khó) và SmartBotBrain cho ranked (AI dựa trên trạng thái với scoring system cho shoot/move/useItem).",
+    "nodeIds": [
+      "file:internal/game/match/bot.go",
+      "file:internal/game/match/bot_ai.go"
+    ]
+  },
+  {
+    "id": "layer:game-tests",
+    "name": "Kiểm Thử Game Engine (Game Engine Tests)",
+    "description": "Các file unit test cho engine game: test tính toán sát thương nổ/rơi, Elo rating, mô phỏng đạn (vật lý), terrain collision (tile và legacy) và lọc bản đồ theo rank tier.",
+    "nodeIds": [
+      "file:internal/game/match/damage_test.go",
+      "file:internal/game/match/elo_test.go",
+      "file:internal/game/match/physics_test.go",
+      "file:internal/game/match/terrain_test.go"
+    ]
+  },
+  {
+    "id": "layer:game-data",
+    "name": "Lớp Dữ Liệu Game (Game Data Configuration Layer)",
+    "description": "Load và quản lý cấu hình game data: loader đọc từ PostgreSQL (ưu tiên) hoặc YAML fallback, bao gồm maps (grid v2 với tiles và min_rank_tier), brick types, nhân vật, vũ khí, kỹ năng, vật phẩm và physics config.",
+    "nodeIds": [
+      "file:internal/game/gamedata/loader.go"
+    ]
+  },
+  {
+    "id": "layer:game-configs-yaml",
+    "name": "Cấu Hình Game YAML (Game Data YAML Files)",
+    "description": "Các file YAML định nghĩa dữ liệu tĩnh của game: 4 nhân vật (Rookie/Tanko/Spark/Flora), 4 vũ khí, 4 kỹ năng, 8 vật phẩm chiến đấu và 3 bản đồ với rank tier tối thiểu. Dùng làm nguồn dữ liệu fallback khi DB không khả dụng.",
+    "nodeIds": [
+      "config:configs/characters.yaml",
+      "config:configs/weapons.yaml",
+      "config:configs/skills.yaml",
+      "config:configs/items.yaml",
+      "config:configs/maps.yaml"
+    ]
+  },
+  {
+    "id": "layer:admin-server",
+    "name": "Lớp Server Admin (Admin Server Layer)",
+    "description": "Admin dashboard server (cổng :9000): server khởi động với embedded templates/static, đăng ký toàn bộ routes và render HTML templates. Bao gồm repository CRUD tổng hợp và seed data ban đầu từ YAML.",
+    "nodeIds": [
+      "file:internal/admin/server.go",
+      "file:internal/admin/repository.go",
+      "file:internal/admin/seed.go"
+    ]
+  },
+  {
+    "id": "layer:admin-handlers",
+    "name": "Lớp Xử Lý Admin (Admin HTTP Handlers)",
+    "description": "Các HTTP handler của admin dashboard: quản lý cấu hình game (nhân vật/vũ khí/kỹ năng/vật phẩm/bản đồ), map editor và brick type editor, matchmaking settings, physics settings, quản lý người chơi (ban/unban), shop offers, dashboard stats và dev tools.",
+    "nodeIds": [
+      "file:internal/admin/handlers_config.go",
+      "file:internal/admin/handlers_map_editor.go",
+      "file:internal/admin/handlers_matchmaking.go",
+      "file:internal/admin/handlers_physics.go",
+      "file:internal/admin/handlers_players.go",
+      "file:internal/admin/handlers_shop.go",
+      "file:internal/admin/handlers_dashboard.go",
+      "file:internal/admin/handlers_devtools.go"
+    ]
+  },
+  {
+    "id": "layer:admin-templates",
+    "name": "Giao Diện Admin Dashboard (Admin HTML Templates)",
+    "description": "Các template HTML server-rendered cho admin dashboard: layout chung với sidebar, dashboard thống kê, danh sách và form chỉnh sửa config game, map editor canvas, brick type editor, matchmaking config, physics settings, quản lý người chơi và shop offers.",
+    "nodeIds": [
+      "file:internal/admin/templates/layout.html",
+      "file:internal/admin/templates/dashboard.html",
+      "file:internal/admin/templates/config_list.html",
+      "file:internal/admin/templates/config_edit.html",
+      "file:internal/admin/templates/map_editor.html",
+      "file:internal/admin/templates/brick_editor.html",
+      "file:internal/admin/templates/brick_types.html",
+      "file:internal/admin/templates/matchmaking.html",
+      "file:internal/admin/templates/physics.html",
+      "file:internal/admin/templates/players.html",
+      "file:internal/admin/templates/shop.html",
+      "file:internal/admin/templates/shop_edit.html",
+      "file:internal/admin/templates/character_detail.html",
+      "file:internal/admin/templates/character_progression.html",
+      "file:internal/admin/templates/devtools.html"
+    ]
+  },
+  {
+    "id": "layer:admin-static",
+    "name": "Tài Nguyên Tĩnh Admin (Admin Static Assets)",
+    "description": "Các file JavaScript tĩnh cho admin dashboard: MapEditor class (canvas-based map editor với paint/erase/fill/spawn tools, zoom/pan, undo/redo, polygon brick rendering) và BrickEditor class (pixel editor 16x16 cho polygon border của brick type).",
+    "nodeIds": [
+      "file:internal/admin/static/map_editor.js",
+      "file:internal/admin/static/brick_editor.js"
+    ]
+  },
+  {
+    "id": "layer:worker",
+    "name": "Lớp Worker Nền (Background Worker Layer)",
+    "description": "Hệ thống các job chạy nền theo lịch: Scheduler quản lý ticker goroutine cho từng job, job hết hạn ban tài khoản (5 phút), job reset nhiệm vụ hàng ngày (1 giờ, Redis dedup) và job ẩn danh hóa tài khoản đang chờ xóa (1 giờ).",
+    "nodeIds": [
+      "file:internal/worker/scheduler.go",
+      "file:internal/worker/jobs/ban_expire.go",
+      "file:internal/worker/jobs/daily_reset.go",
+      "file:internal/worker/jobs/account_deletion.go"
+    ]
+  },
+  {
+    "id": "layer:migrations",
+    "name": "Lớp Migration Cơ Sở Dữ Liệu (Database Migrations)",
+    "description": "Các file SQL migration idempotent (001-009): khởi tạo toàn bộ schema 24 bảng, thêm role tài khoản, match event logs, bảng cấu hình admin (game_settings/config_*), loadout và matchmaking settings, character progression, tilemap columns, brick types v2 với polygon border, và cột min_rank_tier cho bản đồ.",
+    "nodeIds": [
+      "file:migrations/001_init_schema.up.sql",
+      "file:migrations/001_init_schema.down.sql",
+      "file:migrations/002_add_account_role.up.sql",
+      "file:migrations/002_add_account_role.down.sql",
+      "file:migrations/003_add_match_event_logs.up.sql",
+      "file:migrations/003_add_match_event_logs.down.sql",
+      "file:migrations/004_admin_config_tables.up.sql",
+      "file:migrations/004_admin_config_tables.down.sql",
+      "file:migrations/005_add_loadouts_and_matchmaking.up.sql",
+      "file:migrations/005_add_loadouts_and_matchmaking.down.sql",
+      "file:migrations/006_character_progression.up.sql",
+      "file:migrations/006_character_progression.down.sql",
+      "file:migrations/007_map_editor.up.sql",
+      "file:migrations/007_map_editor.down.sql",
+      "file:migrations/008_brick_border_v2.up.sql",
+      "file:migrations/008_brick_border_v2.down.sql",
+      "file:migrations/009_map_rank_tier.up.sql",
+      "file:migrations/009_map_rank_tier.down.sql"
+    ]
+  },
+  {
+    "id": "layer:documentation",
+    "name": "Tài Liệu Dự Án (Project Documentation)",
+    "description": "Toàn bộ tài liệu của dự án: README tổng quan, CLAUDE.md hướng dẫn AI, tài liệu kỹ thuật đầy đủ, ERD database (HTML tương tác và Markdown Mermaid), kế hoạch và spec thiết kế cho các tính năng (character progression, ranked matchmaking, battle fixes, map editor, map rank restriction).",
+    "nodeIds": [
+      "document:README.md",
+      "document:CLAUDE.md",
+      "document:docs/technical-documentation.md",
+      "file:docs/database-erd.html",
+      "document:docs/database-erd.md",
+      "document:docs/specs/2026-07-06-admin-dashboard-design.md",
+      "document:docs/specs/2026-07-06-admin-dashboard-plan.md",
+      "document:docs/superpowers/specs/2026-07-07-character-progression-design.md",
+      "document:docs/superpowers/specs/2026-07-07-ranked-matchmaking-design.md",
+      "document:docs/superpowers/specs/2026-07-08-battle-fixes-design.md",
+      "document:docs/superpowers/specs/2026-07-08-map-editor-design.md",
+      "document:docs/superpowers/specs/2026-07-09-map-rank-restriction-and-editor-unification-design.md",
+      "document:docs/superpowers/plans/2026-07-07-character-progression.md",
+      "document:docs/superpowers/plans/2026-07-07-ranked-matchmaking.md",
+      "document:docs/superpowers/plans/2026-07-08-battle-fixes.md",
+      "document:docs/superpowers/plans/2026-07-08-map-editor.md",
+      "document:docs/superpowers/plans/2026-07-09-map-editor-v2.md",
+      "document:docs/superpowers/plans/2026-07-09-map-rank-restriction-and-editor-unification.md",
+      "document:documents/server_implementation_plan.md",
+      "document:documents/server_implementation_walkthrough.md"
+    ]
+  }
+]

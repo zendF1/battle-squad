@@ -1,0 +1,548 @@
+{
+  "nodes": [
+    {
+      "id": "file:cmd/migrate/main.go",
+      "type": "file",
+      "name": "main.go",
+      "filePath": "cmd/migrate/main.go",
+      "summary": "Chạy 9 file SQL migration tuần tự. Tất cả migrations idempotent với IF NOT EXISTS và ON CONFLICT DO NOTHING.",
+      "tags": ["entry-point", "migrate", "sql", "idempotent"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:cmd/worker/main.go",
+      "type": "file",
+      "name": "main.go",
+      "filePath": "cmd/worker/main.go",
+      "summary": "Worker server: tạo Scheduler, đăng ký 3 jobs (ban_expire, daily_reset, account_deletion), khởi động và chờ signal.",
+      "tags": ["entry-point", "worker", "scheduler", "jobs"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/admin/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/admin/repository.go",
+      "summary": "Admin repository: DashboardStats, CRUD game settings, character/weapon/skill/item/map, brick type CRUD, MapTilesData, SaveMapFull, shop offer CRUD, player management, ClearRooms, ResetAllData.",
+      "tags": ["repository", "admin", "crud", "map", "brick-types", "postgres"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:internal/api/appconfig/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/appconfig/service.go",
+      "summary": "GetVersionPolicy (DB lookup với mock fallback) và GetRemoteConfig (trả về config với env URLs và active items list).",
+      "tags": ["service", "appconfig", "version", "remote-config"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/auth/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/auth/repository.go",
+      "summary": "FindIdentity, FindAccountByID, CreateGuestAccount, CreateProviderAccount, LinkIdentity, UpdateLastLogin, GetPlayerProfileByAccountID.",
+      "tags": ["repository", "auth", "account", "identity", "postgres"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/character/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/character/repository.go",
+      "summary": "GetPlayerCharacters, GetPlayerCharacter, AllocateStats, ResetStats, GetConfigValue, GetCharacterBonuses, AddExpAndLevelTx.",
+      "tags": ["repository", "character", "stats", "exp", "postgres"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/giftcode/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/giftcode/repository.go",
+      "summary": "GetGiftCode, HasRedeemed, GetGiftCodeTx, HasRedeemedTx, RedeemTx cho hệ thống mã quà tặng.",
+      "tags": ["repository", "giftcode", "transaction", "postgres"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/iap/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/iap/repository.go",
+      "summary": "GetActiveProducts, GetProductByID, FindTransactionByID, CreateTransactionTx cho thanh toán trong ứng dụng.",
+      "tags": ["repository", "iap", "payment", "transaction", "postgres"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/matchhistory/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/matchhistory/repository.go",
+      "summary": "GetPlayerHistory với phân trang query từ database.",
+      "tags": ["repository", "match-history", "pagination", "postgres"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/api/mission/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/mission/repository.go",
+      "summary": "GetPlayerMissions, GetMissionProgress, GetMissionProgressTx, IncrementProgressTx, MarkClaimedTx.",
+      "tags": ["repository", "mission", "progress", "transaction", "postgres"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/moderation/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/moderation/repository.go",
+      "summary": "CreateReport, GetAccountIDByPlayerID, BanAccountTx, RevokeBanTx cho hệ thống kiểm duyệt.",
+      "tags": ["repository", "moderation", "ban", "report", "postgres"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/moderation/service.go",
+      "type": "file",
+      "name": "service.go",
+      "filePath": "internal/api/moderation/service.go",
+      "summary": "CreateReport, BanPlayer (TX: get accountID, tạo ban, cập nhật status), RevokeBan.",
+      "tags": ["service", "moderation", "ban", "report"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/player/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/player/repository.go",
+      "summary": "GetProfile, UpdateDisplayName, RequestAccountDeletion, CancelAccountDeletion, GetAccountDeletionStatus.",
+      "tags": ["repository", "player", "profile", "account-deletion", "postgres"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/rank/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/rank/repository.go",
+      "summary": "GetActiveSeason, GetPlayerRank, GetLeaderboard, HasClaimedReward, ClaimRewardTx cho hệ thống xếp hạng.",
+      "tags": ["repository", "rank", "season", "leaderboard", "postgres"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/api/shop/repository.go",
+      "type": "file",
+      "name": "repository.go",
+      "filePath": "internal/api/shop/repository.go",
+      "summary": "GetActiveOffers, GetOfferByID, GetPlayerPurchaseCount, CreateShopPurchaseTx, GetPlayerPurchases.",
+      "tags": ["repository", "shop", "purchase", "transaction", "postgres"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/shared/config/config.go",
+      "type": "file",
+      "name": "config.go",
+      "filePath": "internal/shared/config/config.go",
+      "summary": "Config struct và LoadConfig đọc từ env vars với giá trị mặc định cho local dev. Các biến chính: PostgresDSN, RedisAddr, JWTSecret, ports.",
+      "tags": ["config", "env", "shared", "server-config"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/database/postgres.go",
+      "type": "file",
+      "name": "postgres.go",
+      "filePath": "internal/shared/database/postgres.go",
+      "summary": "PostgresDB bọc pgxpool.Pool. NewPostgresDB với pool config (max 25, min 5, idle 30min, lifetime 1h), Close, Ping.",
+      "tags": ["database", "postgres", "pgx", "connection-pool"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/database/redis.go",
+      "type": "file",
+      "name": "redis.go",
+      "filePath": "internal/shared/database/redis.go",
+      "summary": "RedisClient bọc redis.Client. NewRedisClient với pool 50 connections, min idle 10, Close, Ping.",
+      "tags": ["database", "redis", "connection-pool"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/featureflag/flags.go",
+      "type": "file",
+      "name": "flags.go",
+      "filePath": "internal/shared/featureflag/flags.go",
+      "summary": "Feature flag Manager dựa trên Redis: IsEnabled, Set và getDefaultValue cho các flag đã biết (shop_enabled, iap_ios/android_enabled, ranked_mode).",
+      "tags": ["feature-flag", "redis", "shared"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/shared/middleware/version_check.go",
+      "type": "file",
+      "name": "version_check.go",
+      "filePath": "internal/shared/middleware/version_check.go",
+      "summary": "VersionCheck middleware: kiểm tra header X-Protocol-Version và trả ErrForceUpdate nếu client cũ hơn.",
+      "tags": ["middleware", "version", "protocol", "force-update"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:internal/worker/jobs/account_deletion.go",
+      "type": "file",
+      "name": "account_deletion.go",
+      "filePath": "internal/worker/jobs/account_deletion.go",
+      "summary": "Job chạy mỗi 1h: ẩn danh hóa player_profiles cho tài khoản đang chờ xóa, đánh dấu accounts là deleted.",
+      "tags": ["worker", "job", "account-deletion", "scheduled"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/worker/jobs/ban_expire.go",
+      "type": "file",
+      "name": "ban_expire.go",
+      "filePath": "internal/worker/jobs/ban_expire.go",
+      "summary": "Job chạy mỗi 5min: hết hạn các ban quá hạn, kích hoạt lại tài khoản không còn ban active.",
+      "tags": ["worker", "job", "ban", "scheduled"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/worker/jobs/daily_reset.go",
+      "type": "file",
+      "name": "daily_reset.go",
+      "filePath": "internal/worker/jobs/daily_reset.go",
+      "summary": "Job chạy mỗi 1h: reset tiến độ nhiệm vụ hàng ngày một lần mỗi ngày UTC (Redis dedup qua key worker:daily_reset:last_run_date).",
+      "tags": ["worker", "job", "daily-reset", "mission", "redis"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:internal/worker/scheduler.go",
+      "type": "file",
+      "name": "scheduler.go",
+      "filePath": "internal/worker/scheduler.go",
+      "summary": "Job struct và Scheduler: chạy mỗi job trong goroutine với ticker. Register, Start, Stop.",
+      "tags": ["worker", "scheduler", "goroutine", "ticker"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:cmd/migrate/main.go:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "cmd/migrate/main.go",
+      "summary": "Kết nối DB và chạy tuần tự 9 file SQL migration từ thư mục migrations/.",
+      "tags": ["migrate", "sql", "entry-point"]
+    },
+    {
+      "id": "function:cmd/worker/main.go:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "cmd/worker/main.go",
+      "summary": "Khởi động worker: tạo scheduler, đăng ký jobs và bắt đầu chạy cho đến khi nhận SIGTERM.",
+      "tags": ["worker", "scheduler", "entry-point"]
+    },
+    {
+      "id": "function:internal/admin/repository.go:SaveMapFull",
+      "type": "function",
+      "name": "SaveMapFull",
+      "filePath": "internal/admin/repository.go",
+      "summary": "Lưu toàn bộ dữ liệu bản đồ: metadata, tiles JSONB 2D array và spawn_points vào bảng config_maps.",
+      "tags": ["repository", "map", "save", "tiles", "jsonb"]
+    },
+    {
+      "id": "function:internal/admin/repository.go:GetBrickTypes",
+      "type": "function",
+      "name": "GetBrickTypes",
+      "filePath": "internal/admin/repository.go",
+      "summary": "Lấy danh sách tất cả brick types từ bảng config_brick_types.",
+      "tags": ["repository", "brick-types", "query"]
+    },
+    {
+      "id": "function:internal/admin/repository.go:DashboardStats",
+      "type": "function",
+      "name": "DashboardStats",
+      "filePath": "internal/admin/repository.go",
+      "summary": "Lấy thống kê dashboard: số phòng đang hoạt động và tổng số người chơi.",
+      "tags": ["repository", "admin", "stats", "dashboard"]
+    },
+    {
+      "id": "function:internal/admin/repository.go:ClearRooms",
+      "type": "function",
+      "name": "ClearRooms",
+      "filePath": "internal/admin/repository.go",
+      "summary": "Xóa tất cả phòng đang hoạt động khỏi Redis và database, dùng cho dev tools.",
+      "tags": ["repository", "admin", "rooms", "devtools"]
+    },
+    {
+      "id": "function:internal/shared/config/config.go:LoadConfig",
+      "type": "function",
+      "name": "LoadConfig",
+      "filePath": "internal/shared/config/config.go",
+      "summary": "Đọc cấu hình server từ env vars với giá trị mặc định cho phát triển local.",
+      "tags": ["config", "env", "init"]
+    },
+    {
+      "id": "function:internal/shared/database/postgres.go:NewPostgresDB",
+      "type": "function",
+      "name": "NewPostgresDB",
+      "filePath": "internal/shared/database/postgres.go",
+      "summary": "Tạo kết nối PostgreSQL pool mới với pgxpool và cấu hình pool size, idle timeout, lifetime.",
+      "tags": ["database", "postgres", "connection-pool", "init"]
+    },
+    {
+      "id": "function:internal/shared/database/redis.go:NewRedisClient",
+      "type": "function",
+      "name": "NewRedisClient",
+      "filePath": "internal/shared/database/redis.go",
+      "summary": "Tạo Redis client mới với pool 50 connections và min idle 10.",
+      "tags": ["database", "redis", "connection-pool", "init"]
+    },
+    {
+      "id": "function:internal/worker/scheduler.go:Start",
+      "type": "function",
+      "name": "Start",
+      "filePath": "internal/worker/scheduler.go",
+      "summary": "Khởi động tất cả jobs đã đăng ký, mỗi job chạy trong goroutine riêng với ticker.",
+      "tags": ["scheduler", "start", "goroutine"]
+    },
+    {
+      "id": "function:internal/api/character/repository.go:AddExpAndLevelTx",
+      "type": "function",
+      "name": "AddExpAndLevelTx",
+      "filePath": "internal/api/character/repository.go",
+      "summary": "Cộng EXP cho nhân vật và tự động lên level nếu đủ EXP trong một transaction.",
+      "tags": ["character", "exp", "level", "transaction"]
+    },
+    {
+      "id": "function:internal/api/moderation/service.go:BanPlayer",
+      "type": "function",
+      "name": "BanPlayer",
+      "filePath": "internal/api/moderation/service.go",
+      "summary": "Ban tài khoản người chơi: lấy accountID, tạo ban record và cập nhật trạng thái trong transaction.",
+      "tags": ["moderation", "ban", "transaction"]
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:cmd/migrate/main.go",
+      "target": "file:internal/shared/config/config.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/migrate/main.go",
+      "target": "file:internal/shared/database/postgres.go",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:cmd/migrate/main.go",
+      "contains": "function:cmd/migrate/main.go:main",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:cmd/worker/main.go",
+      "target": "file:internal/worker/scheduler.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/worker/main.go",
+      "target": "file:internal/worker/jobs/ban_expire.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/worker/main.go",
+      "target": "file:internal/worker/jobs/daily_reset.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/worker/main.go",
+      "target": "file:internal/worker/jobs/account_deletion.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:cmd/worker/main.go",
+      "contains": "function:cmd/worker/main.go:main",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/admin/repository.go",
+      "contains": "function:internal/admin/repository.go:SaveMapFull",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/admin/repository.go",
+      "contains": "function:internal/admin/repository.go:GetBrickTypes",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/admin/repository.go",
+      "contains": "function:internal/admin/repository.go:DashboardStats",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/admin/repository.go",
+      "contains": "function:internal/admin/repository.go:ClearRooms",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/shared/config/config.go",
+      "contains": "function:internal/shared/config/config.go:LoadConfig",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/shared/database/postgres.go",
+      "contains": "function:internal/shared/database/postgres.go:NewPostgresDB",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/shared/database/redis.go",
+      "contains": "function:internal/shared/database/redis.go:NewRedisClient",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/worker/scheduler.go",
+      "contains": "function:internal/worker/scheduler.go:Start",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/character/repository.go",
+      "contains": "function:internal/api/character/repository.go:AddExpAndLevelTx",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/moderation/service.go",
+      "target": "file:internal/api/moderation/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/moderation/service.go",
+      "contains": "function:internal/api/moderation/service.go:BanPlayer",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:internal/api/auth/service.go",
+      "target": "file:internal/api/auth/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/character/service.go",
+      "target": "file:internal/api/character/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/giftcode/service.go",
+      "target": "file:internal/api/giftcode/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/iap/service.go",
+      "target": "file:internal/api/iap/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/matchhistory/service.go",
+      "target": "file:internal/api/matchhistory/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/mission/service.go",
+      "target": "file:internal/api/mission/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/player/service.go",
+      "target": "file:internal/api/player/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/rank/service.go",
+      "target": "file:internal/api/rank/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/api/shop/service.go",
+      "target": "file:internal/api/shop/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/shared/featureflag/flags.go",
+      "target": "file:internal/shared/database/redis.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/worker/jobs/daily_reset.go",
+      "target": "file:internal/shared/database/redis.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/game/match/reward.go",
+      "target": "file:internal/api/character/repository.go",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "function:internal/api/moderation/service.go:BanPlayer",
+      "target": "function:internal/api/moderation/repository.go:BanAccountTx",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:cmd/worker/main.go:main",
+      "target": "function:internal/worker/scheduler.go:Start",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:internal/game/match/reward.go:ProcessMatchRewards",
+      "target": "function:internal/api/character/repository.go:AddExpAndLevelTx",
+      "type": "calls",
+      "weight": 0.8
+    }
+  ],
+  "batchFiles": [
+    {"path": "cmd/migrate/main.go", "language": "go", "sizeLines": 56, "fileCategory": "entry-point"},
+    {"path": "cmd/worker/main.go", "language": "go", "sizeLines": 62, "fileCategory": "entry-point"},
+    {"path": "internal/admin/repository.go", "language": "go", "sizeLines": 941, "fileCategory": "repository"},
+    {"path": "internal/api/appconfig/service.go", "language": "go", "sizeLines": 86, "fileCategory": "service"},
+    {"path": "internal/api/auth/repository.go", "language": "go", "sizeLines": 325, "fileCategory": "repository"},
+    {"path": "internal/api/character/repository.go", "language": "go", "sizeLines": 219, "fileCategory": "repository"},
+    {"path": "internal/api/giftcode/repository.go", "language": "go", "sizeLines": 134, "fileCategory": "repository"},
+    {"path": "internal/api/iap/repository.go", "language": "go", "sizeLines": 141, "fileCategory": "repository"},
+    {"path": "internal/api/matchhistory/repository.go", "language": "go", "sizeLines": 55, "fileCategory": "repository"},
+    {"path": "internal/api/mission/repository.go", "language": "go", "sizeLines": 137, "fileCategory": "repository"},
+    {"path": "internal/api/moderation/repository.go", "language": "go", "sizeLines": 97, "fileCategory": "repository"},
+    {"path": "internal/api/moderation/service.go", "language": "go", "sizeLines": 114, "fileCategory": "service"},
+    {"path": "internal/api/player/repository.go", "language": "go", "sizeLines": 101, "fileCategory": "repository"},
+    {"path": "internal/api/rank/repository.go", "language": "go", "sizeLines": 137, "fileCategory": "repository"},
+    {"path": "internal/api/shop/repository.go", "language": "go", "sizeLines": 174, "fileCategory": "repository"},
+    {"path": "internal/shared/config/config.go", "language": "go", "sizeLines": 70, "fileCategory": "shared"},
+    {"path": "internal/shared/database/postgres.go", "language": "go", "sizeLines": 49, "fileCategory": "shared"},
+    {"path": "internal/shared/database/redis.go", "language": "go", "sizeLines": 47, "fileCategory": "shared"},
+    {"path": "internal/shared/featureflag/flags.go", "language": "go", "sizeLines": 54, "fileCategory": "shared"},
+    {"path": "internal/shared/middleware/version_check.go", "language": "go", "sizeLines": 43, "fileCategory": "middleware"},
+    {"path": "internal/worker/jobs/account_deletion.go", "language": "go", "sizeLines": 57, "fileCategory": "worker"},
+    {"path": "internal/worker/jobs/ban_expire.go", "language": "go", "sizeLines": 57, "fileCategory": "worker"},
+    {"path": "internal/worker/jobs/daily_reset.go", "language": "go", "sizeLines": 66, "fileCategory": "worker"},
+    {"path": "internal/worker/scheduler.go", "language": "go", "sizeLines": 85, "fileCategory": "worker"}
+  ]
+}

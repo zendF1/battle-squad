@@ -1,0 +1,145 @@
+{{define "content"}}
+<div class="top-bar">
+    <h1>{{if .IsNew}}Tạo nhân vật mới{{else}}Cấu hình: {{.Character.Name}}{{end}}</h1>
+    <a href="/characters" class="btn btn-primary">← Danh sách nhân vật</a>
+</div>
+{{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+
+<form method="POST" action="/characters/detail/save">
+{{if not .IsNew}}<input type="hidden" name="_original_id" value="{{.Character.CharacterID}}">{{end}}
+
+<div class="card">
+    <h2 style="margin-bottom:4px;font-size:18px;color:#1a1a2e;">Chỉ số nhân vật</h2>
+    <p style="margin-bottom:16px;font-size:13px;color:#888;">Đây là chỉ số mặc định ở Level 1. Khi lên cấp, chỉ số sẽ được cộng thêm theo cấu hình Character Progression.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;">
+        <div class="form-group">
+            <label>Character ID</label>
+            <input type="text" name="character_id" value="{{.Character.CharacterID}}" {{if not .IsNew}}readonly style="background:#f0f0f0;color:#888"{{end}}>
+            <div class="desc">Mã định danh duy nhất, không thể thay đổi sau khi tạo</div>
+        </div>
+        <div class="form-group">
+            <label>Tên nhân vật</label>
+            <input type="text" name="name" value="{{.Character.Name}}">
+            <div class="desc">Tên hiển thị trong game</div>
+        </div>
+        <div class="form-group">
+            <label>Vai trò</label>
+            <select name="role">
+                <option value="dps" {{if eq .Character.Role "dps"}}selected{{end}}>DPS - Tấn công</option>
+                <option value="tank" {{if eq .Character.Role "tank"}}selected{{end}}>Tank - Phòng thủ</option>
+                <option value="support" {{if eq .Character.Role "support"}}selected{{end}}>Support - Hỗ trợ</option>
+                <option value="assassin" {{if eq .Character.Role "assassin"}}selected{{end}}>Assassin - Sát thủ</option>
+            </select>
+            <div class="desc">Vai trò ảnh hưởng đến chỉ số ngẫu nhiên khi tạo trang bị</div>
+        </div>
+        <div class="form-group">
+            <label>HP (Máu)</label>
+            <input type="number" name="hp" value="{{.Character.HP}}" step="1">
+            <div class="desc">Lượng máu tối đa. Hết máu = thua cuộc</div>
+        </div>
+        <div class="form-group">
+            <label>Damage (Sát thương)</label>
+            <input type="number" name="damage" value="{{.Character.Damage}}" step="1">
+            <div class="desc">Chỉ số sát thương cơ bản, ảnh hưởng đến lượng damage gây ra</div>
+        </div>
+        <div class="form-group">
+            <label>Mobility (Di chuyển)</label>
+            <input type="number" name="mobility" value="{{.Character.Mobility}}" step="1">
+            <div class="desc">Năng lượng di chuyển mỗi lượt. Cao = đi được xa hơn</div>
+        </div>
+        <div class="form-group">
+            <label>Defense (Phòng thủ)</label>
+            <input type="number" name="defense" value="{{.Character.Defense}}" step="1">
+            <div class="desc">Giảm sát thương nhận vào. Công thức: dmg × 100/(100+defense)</div>
+        </div>
+        <div class="form-group">
+            <label>Skill Power (Sức mạnh kỹ năng)</label>
+            <input type="number" name="skill_power" value="{{.Character.SkillPower}}" step="1">
+            <div class="desc">Hệ số nhân cho hiệu ứng kỹ năng</div>
+        </div>
+        <div class="form-group">
+            <label>Terrain Damage (Phá địa hình)</label>
+            <input type="number" name="terrain_damage" value="{{.Character.TerrainDamage}}" step="1">
+            <div class="desc">Bán kính phá hủy địa hình khi đạn nổ. Cao = phá nhiều đất hơn</div>
+        </div>
+        <div class="form-group">
+            <label>Difficulty (Độ khó)</label>
+            <select name="difficulty">
+                <option value="1" {{if eq .Character.Difficulty 1}}selected{{end}}>1 - Dễ chơi</option>
+                <option value="2" {{if eq .Character.Difficulty 2}}selected{{end}}>2 - Trung bình</option>
+                <option value="3" {{if eq .Character.Difficulty 3}}selected{{end}}>3 - Khó</option>
+                <option value="4" {{if eq .Character.Difficulty 4}}selected{{end}}>4 - Rất khó</option>
+                <option value="5" {{if eq .Character.Difficulty 5}}selected{{end}}>5 - Chuyên gia</option>
+            </select>
+            <div class="desc">Mức độ khó sử dụng, hiển thị cho người chơi tham khảo</div>
+        </div>
+        <div class="form-group">
+            <label>Weapon ID (Mã vũ khí)</label>
+            <input type="text" name="weapon_id" value="{{.Character.WeaponID}}" readonly style="background:#f0f0f0;color:#888">
+            <div class="desc">Vũ khí mặc định của nhân vật. Cấu hình chi tiết tại trang Weapons</div>
+        </div>
+    </div>
+    <div class="form-group">
+        <label>Mô tả nhân vật</label>
+        <textarea name="char_description" rows="2">{{.Character.Description}}</textarea>
+        <div class="desc">Mô tả ngắn hiển thị khi chọn nhân vật</div>
+    </div>
+</div>
+
+<div class="card">
+    <h2 style="margin-bottom:4px;font-size:18px;color:#1a1a2e;">Cấu hình kỹ năng (Skill)</h2>
+    <p style="margin-bottom:16px;font-size:13px;color:#888;">Kỹ năng đặc biệt của nhân vật. Cần 100 điểm nộ để sử dụng (+20 mỗi lượt).</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;">
+        <div class="form-group">
+            <label>Skill ID</label>
+            <input type="text" name="skill_id" value="{{.Skill.SkillID}}" readonly style="background:#f0f0f0;color:#888">
+            <div class="desc">Mã định danh kỹ năng, không thể thay đổi</div>
+        </div>
+        <div class="form-group">
+            <label>Tên kỹ năng</label>
+            <input type="text" name="skill_name" value="{{.Skill.Name}}">
+            <div class="desc">Tên hiển thị trong game</div>
+        </div>
+        <div class="form-group">
+            <label>Loại hiệu ứng</label>
+            <input type="text" name="effect_type" value="{{.Skill.EffectType}}" readonly style="background:#f0f0f0;color:#888">
+            <div class="desc">
+                {{if eq .Skill.EffectType "multi_projectile"}}Bắn nhiều viên đạn cùng lúc
+                {{else if eq .Skill.EffectType "single_large_bomb"}}Bắn 1 viên đạn nổ lớn
+                {{else if eq .Skill.EffectType "debuff"}}Gây hiệu ứng bất lợi cho địch
+                {{else if eq .Skill.EffectType "heal"}}Hồi máu cho bản thân
+                {{else}}Loại hiệu ứng kỹ năng{{end}}
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Số viên đạn</label>
+            <input type="number" name="projectile_count" value="{{.Skill.ProjectileCount}}" step="1">
+            <div class="desc">Số lượng đạn bắn ra khi dùng kỹ năng. VD: Triple Shot = 3</div>
+        </div>
+        <div class="form-group">
+            <label>Hệ số sát thương</label>
+            <input type="number" name="damage_multiplier" value="{{.Skill.DamageMultiplier}}" step="0.05">
+            <div class="desc">Nhân với sát thương vũ khí. VD: 1.25 = mỗi viên đạn gây 125% damage</div>
+        </div>
+        <div class="form-group">
+            <label>Status Effect ID</label>
+            <input type="text" name="status_effect_id" value="{{.Skill.StatusEffectID}}" readonly style="background:#f0f0f0;color:#888">
+            <div class="desc">
+                {{if eq .Skill.StatusEffectID "net"}}Làm chậm di chuyển của địch
+                {{else if eq .Skill.StatusEffectID "heal"}}Hồi máu qua các lượt
+                {{else if .Skill.StatusEffectID}}Hiệu ứng: {{.Skill.StatusEffectID}}
+                {{else}}Không có hiệu ứng đặc biệt{{end}}
+            </div>
+        </div>
+    </div>
+    <div class="form-group">
+        <label>Mô tả kỹ năng</label>
+        <textarea name="skill_description" rows="2">{{.Skill.Description}}</textarea>
+        <div class="desc">Mô tả kỹ năng hiển thị cho người chơi</div>
+    </div>
+</div>
+
+<button type="submit" class="btn btn-primary" style="margin-top:8px;">{{if .IsNew}}Tạo nhân vật{{else}}Lưu thay đổi{{end}}</button>
+</form>
+{{end}}

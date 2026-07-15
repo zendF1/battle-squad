@@ -362,6 +362,22 @@ func (r *Repository) UpsertSkill(ctx context.Context, s *ConfigSkill) error {
 	return nil
 }
 
+// GetSkillByCharacterID returns the skill for a given character.
+func (r *Repository) GetSkillByCharacterID(ctx context.Context, characterID string) (*ConfigSkill, error) {
+	var s ConfigSkill
+	err := r.db.Pool.QueryRow(ctx,
+		`SELECT skill_id, character_id, name, cooldown_turn, effect_type,
+		        projectile_count, status_effect_id, damage_multiplier, description
+		 FROM config_skills WHERE character_id = $1`, characterID).
+		Scan(&s.SkillID, &s.CharacterID, &s.Name, &s.CooldownTurn,
+			&s.EffectType, &s.ProjectileCount, &s.StatusEffectID, &s.DamageMultiplier,
+			&s.Description)
+	if err != nil {
+		return nil, fmt.Errorf("get skill for character %s: %w", characterID, err)
+	}
+	return &s, nil
+}
+
 // DeleteSkill deletes a skill by ID.
 func (r *Repository) DeleteSkill(ctx context.Context, id string) error {
 	_, err := r.db.Pool.Exec(ctx, `DELETE FROM config_skills WHERE skill_id = $1`, id)
@@ -461,17 +477,22 @@ type ConfigMap struct {
 	Name                  string
 	Width                 int
 	Height                int
+	GridWidth             int
+	GridHeight            int
+	CellSize              int
 	DefaultWindPowerRange json.RawMessage
 	TerrainLayers         json.RawMessage
 	SpawnPoints           json.RawMessage
+	Tiles                 json.RawMessage
 	Description           string
+	MinRankTier           string
 }
 
 // GetMaps returns all maps ordered by map_id.
 func (r *Repository) GetMaps(ctx context.Context) ([]ConfigMap, error) {
 	rows, err := r.db.Pool.Query(ctx,
-		`SELECT map_id, name, width, height, default_wind_power_range,
-		        terrain_layers, spawn_points, description
+		`SELECT map_id, name, width, height, grid_width, grid_height, cell_size,
+		        default_wind_power_range, terrain_layers, spawn_points, tiles, description, min_rank_tier
 		 FROM config_maps ORDER BY map_id`)
 	if err != nil {
 		return nil, fmt.Errorf("query maps: %w", err)
@@ -482,8 +503,9 @@ func (r *Repository) GetMaps(ctx context.Context) ([]ConfigMap, error) {
 	for rows.Next() {
 		var m ConfigMap
 		if err := rows.Scan(&m.MapID, &m.Name, &m.Width, &m.Height,
+			&m.GridWidth, &m.GridHeight, &m.CellSize,
 			&m.DefaultWindPowerRange, &m.TerrainLayers, &m.SpawnPoints,
-			&m.Description); err != nil {
+			&m.Tiles, &m.Description, &m.MinRankTier); err != nil {
 			return nil, fmt.Errorf("scan map: %w", err)
 		}
 		maps = append(maps, m)
@@ -495,12 +517,13 @@ func (r *Repository) GetMaps(ctx context.Context) ([]ConfigMap, error) {
 func (r *Repository) GetMap(ctx context.Context, id string) (*ConfigMap, error) {
 	var m ConfigMap
 	err := r.db.Pool.QueryRow(ctx,
-		`SELECT map_id, name, width, height, default_wind_power_range,
-		        terrain_layers, spawn_points, description
+		`SELECT map_id, name, width, height, grid_width, grid_height, cell_size,
+		        default_wind_power_range, terrain_layers, spawn_points, tiles, description, min_rank_tier
 		 FROM config_maps WHERE map_id = $1`, id).
 		Scan(&m.MapID, &m.Name, &m.Width, &m.Height,
+			&m.GridWidth, &m.GridHeight, &m.CellSize,
 			&m.DefaultWindPowerRange, &m.TerrainLayers, &m.SpawnPoints,
-			&m.Description)
+			&m.Tiles, &m.Description, &m.MinRankTier)
 	if err != nil {
 		return nil, fmt.Errorf("get map %s: %w", id, err)
 	}
@@ -511,16 +534,20 @@ func (r *Repository) GetMap(ctx context.Context, id string) (*ConfigMap, error) 
 func (r *Repository) UpsertMap(ctx context.Context, m *ConfigMap) error {
 	_, err := r.db.Pool.Exec(ctx,
 		`INSERT INTO config_maps
-		 (map_id, name, width, height, default_wind_power_range,
-		  terrain_layers, spawn_points, description, updated_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8, CURRENT_TIMESTAMP)
+		 (map_id, name, width, height, grid_width, grid_height, cell_size,
+		  default_wind_power_range, terrain_layers, spawn_points, tiles, description, min_rank_tier, updated_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, CURRENT_TIMESTAMP)
 		 ON CONFLICT (map_id) DO UPDATE SET
 		   name=EXCLUDED.name, width=EXCLUDED.width, height=EXCLUDED.height,
+		   grid_width=EXCLUDED.grid_width, grid_height=EXCLUDED.grid_height,
+		   cell_size=EXCLUDED.cell_size,
 		   default_wind_power_range=EXCLUDED.default_wind_power_range,
 		   terrain_layers=EXCLUDED.terrain_layers, spawn_points=EXCLUDED.spawn_points,
-		   description=EXCLUDED.description, updated_at=CURRENT_TIMESTAMP`,
-		m.MapID, m.Name, m.Width, m.Height,
-		m.DefaultWindPowerRange, m.TerrainLayers, m.SpawnPoints, m.Description)
+		   tiles=EXCLUDED.tiles,
+		   description=EXCLUDED.description, min_rank_tier=EXCLUDED.min_rank_tier,
+		   updated_at=CURRENT_TIMESTAMP`,
+		m.MapID, m.Name, m.Width, m.Height, m.GridWidth, m.GridHeight, m.CellSize,
+		m.DefaultWindPowerRange, m.TerrainLayers, m.SpawnPoints, m.Tiles, m.Description, m.MinRankTier)
 	if err != nil {
 		return fmt.Errorf("upsert map %s: %w", m.MapID, err)
 	}
@@ -534,6 +561,129 @@ func (r *Repository) DeleteMap(ctx context.Context, id string) error {
 		return fmt.Errorf("delete map %s: %w", id, err)
 	}
 	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Brick Types CRUD
+// ---------------------------------------------------------------------------
+
+// ConfigBrickType represents a row in config_brick_types.
+type ConfigBrickType struct {
+	BrickTypeID  int
+	Name         string
+	ImageID      string
+	Destructible bool
+	Border       json.RawMessage
+	Color        string
+}
+
+// GetBrickTypes returns all brick types ordered by brick_type_id.
+func (r *Repository) GetBrickTypes(ctx context.Context) ([]ConfigBrickType, error) {
+	rows, err := r.db.Pool.Query(ctx,
+		`SELECT brick_type_id, name, image_id, destructible, border, color
+		 FROM config_brick_types ORDER BY brick_type_id`)
+	if err != nil {
+		return nil, fmt.Errorf("query brick types: %w", err)
+	}
+	defer rows.Close()
+
+	var types []ConfigBrickType
+	for rows.Next() {
+		var bt ConfigBrickType
+		if err := rows.Scan(&bt.BrickTypeID, &bt.Name, &bt.ImageID, &bt.Destructible,
+			&bt.Border, &bt.Color); err != nil {
+			return nil, fmt.Errorf("scan brick type: %w", err)
+		}
+		types = append(types, bt)
+	}
+	return types, rows.Err()
+}
+
+// GetBrickType returns a single brick type by ID.
+func (r *Repository) GetBrickType(ctx context.Context, id int) (*ConfigBrickType, error) {
+	var bt ConfigBrickType
+	err := r.db.Pool.QueryRow(ctx,
+		`SELECT brick_type_id, name, image_id, destructible, border, color
+		 FROM config_brick_types WHERE brick_type_id = $1`, id).
+		Scan(&bt.BrickTypeID, &bt.Name, &bt.ImageID, &bt.Destructible,
+			&bt.Border, &bt.Color)
+	if err != nil {
+		return nil, fmt.Errorf("get brick type %d: %w", id, err)
+	}
+	return &bt, nil
+}
+
+// InsertBrickType inserts a new brick type and returns the generated serial PK.
+func (r *Repository) InsertBrickType(ctx context.Context, bt *ConfigBrickType) (int, error) {
+	var id int
+	err := r.db.Pool.QueryRow(ctx,
+		`INSERT INTO config_brick_types (name, image_id, destructible, border, color)
+		 VALUES ($1, $2, $3, $4, $5) RETURNING brick_type_id`,
+		bt.Name, bt.ImageID, bt.Destructible, bt.Border, bt.Color).Scan(&id)
+	if err != nil {
+		return 0, fmt.Errorf("insert brick type: %w", err)
+	}
+	return id, nil
+}
+
+// UpdateBrickType updates an existing brick type by ID.
+func (r *Repository) UpdateBrickType(ctx context.Context, bt *ConfigBrickType) error {
+	_, err := r.db.Pool.Exec(ctx,
+		`UPDATE config_brick_types SET name=$1, image_id=$2, destructible=$3,
+		 border=$4, color=$5, updated_at=CURRENT_TIMESTAMP
+		 WHERE brick_type_id=$6`,
+		bt.Name, bt.ImageID, bt.Destructible, bt.Border, bt.Color, bt.BrickTypeID)
+	if err != nil {
+		return fmt.Errorf("update brick type %d: %w", bt.BrickTypeID, err)
+	}
+	return nil
+}
+
+// DeleteBrickType deletes a brick type by ID.
+func (r *Repository) DeleteBrickType(ctx context.Context, id int) error {
+	_, err := r.db.Pool.Exec(ctx, `DELETE FROM config_brick_types WHERE brick_type_id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("delete brick type %d: %w", id, err)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Map Tiles (Editor data)
+// ---------------------------------------------------------------------------
+
+// MapTilesData holds the tile grid and spawn points for the editor API.
+type MapTilesData struct {
+	MapID                 string          `json:"mapId"`
+	Name                  string          `json:"name"`
+	GridWidth             int             `json:"gridWidth"`
+	GridHeight            int             `json:"gridHeight"`
+	CellSize              int             `json:"cellSize"`
+	DefaultWindPowerRange json.RawMessage `json:"defaultWindPowerRange"`
+	Tiles                 json.RawMessage `json:"tiles"`
+	SpawnPoints           json.RawMessage `json:"spawnPoints"`
+	MinRankTier           string          `json:"minRankTier"`
+	Description           string          `json:"description"`
+}
+
+// GetMapTiles returns tiles data for the map editor.
+func (r *Repository) GetMapTiles(ctx context.Context, id string) (*MapTilesData, error) {
+	var d MapTilesData
+	err := r.db.Pool.QueryRow(ctx,
+		`SELECT map_id, name, grid_width, grid_height, cell_size,
+		        default_wind_power_range, tiles, spawn_points, min_rank_tier, description
+		 FROM config_maps WHERE map_id = $1`, id).
+		Scan(&d.MapID, &d.Name, &d.GridWidth, &d.GridHeight, &d.CellSize,
+			&d.DefaultWindPowerRange, &d.Tiles, &d.SpawnPoints, &d.MinRankTier, &d.Description)
+	if err != nil {
+		return nil, fmt.Errorf("get map tiles %s: %w", id, err)
+	}
+	return &d, nil
+}
+
+// SaveMapFull saves the full map record (delegates to UpsertMap).
+func (r *Repository) SaveMapFull(ctx context.Context, m *ConfigMap) error {
+	return r.UpsertMap(ctx, m)
 }
 
 // ---------------------------------------------------------------------------

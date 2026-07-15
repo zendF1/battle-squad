@@ -1,0 +1,118 @@
+{
+  "nodes": [
+    {
+      "id": "config:configs/characters.yaml",
+      "type": "config",
+      "name": "characters.yaml",
+      "filePath": "configs/characters.yaml",
+      "summary": "Định nghĩa 4 nhân vật chơi được: Rookie (balanced, hp:100), Tanko (heavy_gunner, hp:130), Spark (controller, hp:90), Flora (support, hp:95) — mỗi nhân vật có stats đầy đủ, weaponId và skillId tương ứng.",
+      "tags": ["config", "yaml", "characters", "gamedata"],
+      "complexity": "low"
+    },
+    {
+      "id": "config:configs/items.yaml",
+      "type": "config",
+      "name": "items.yaml",
+      "filePath": "configs/items.yaml",
+      "summary": "Định nghĩa 8 vật phẩm chiến đấu: medkit (hồi máu), teleport (dịch chuyển), power_shot (tăng sát thương), drill_bomb (xuyên địa hình), spider_net (giảm di chuyển), freeze_bomb (đóng băng), air_strike (không kích), wind_stopper (triệt gió).",
+      "tags": ["config", "yaml", "items", "gamedata"],
+      "complexity": "low"
+    },
+    {
+      "id": "config:configs/maps.yaml",
+      "type": "config",
+      "name": "maps.yaml",
+      "filePath": "configs/maps.yaml",
+      "summary": "Định nghĩa 3 bản đồ: Grassland Valley (minRankTier: bronze), Frozen Peak (minRankTier: silver), Steel Base (minRankTier: gold) — mỗi map có gridWidth/Height/cellSize, defaultWindPowerRange, terrainLayers và spawnPoints, tiles hiện để trống (dùng legacy terrain).",
+      "tags": ["config", "yaml", "maps", "gamedata", "terrain", "rank"],
+      "complexity": "medium"
+    },
+    {
+      "id": "config:configs/skills.yaml",
+      "type": "config",
+      "name": "skills.yaml",
+      "filePath": "configs/skills.yaml",
+      "summary": "Định nghĩa 4 kỹ năng đặc biệt gắn với nhân vật: triple_shot (Rookie, multi_projectile), heavy_bomb (Tanko, single_large_bomb), shock_field (Spark, debuff/net), healing_bloom (Flora, heal).",
+      "tags": ["config", "yaml", "skills", "gamedata"],
+      "complexity": "low"
+    },
+    {
+      "id": "config:configs/weapons.yaml",
+      "type": "config",
+      "name": "weapons.yaml",
+      "filePath": "configs/weapons.yaml",
+      "summary": "Định nghĩa 4 vũ khí chính cho từng nhân vật: basic_rocket (Rookie), cannon_ball (Tanko, terrainDamage:85), electric_orb (Spark, windInfluence:1.2), seed_bomb (Flora) với các thông số damage, explosionRadius, terrainDamage, projectileWeight, windInfluence.",
+      "tags": ["config", "yaml", "weapons", "gamedata"],
+      "complexity": "low"
+    }
+  ],
+  "edges": [
+    {
+      "source": "config:configs/characters.yaml",
+      "target": "config:configs/weapons.yaml",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "config:configs/characters.yaml",
+      "target": "config:configs/skills.yaml",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "config:configs/skills.yaml",
+      "target": "config:configs/characters.yaml",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "config:configs/maps.yaml",
+      "target": "file:migrations/009_map_rank_tier.up.sql",
+      "type": "configures",
+      "weight": 0.6
+    },
+    {
+      "source": "config:configs/maps.yaml",
+      "target": "file:migrations/007_map_editor.up.sql",
+      "type": "configures",
+      "weight": 0.6
+    },
+    {
+      "source": "service:Dockerfile.game",
+      "target": "config:configs/characters.yaml",
+      "type": "configures",
+      "weight": 0.6
+    },
+    {
+      "source": "service:Dockerfile.game",
+      "target": "config:configs/items.yaml",
+      "type": "configures",
+      "weight": 0.6
+    },
+    {
+      "source": "service:Dockerfile.game",
+      "target": "config:configs/maps.yaml",
+      "type": "configures",
+      "weight": 0.6
+    },
+    {
+      "source": "service:Dockerfile.game",
+      "target": "config:configs/skills.yaml",
+      "type": "configures",
+      "weight": 0.6
+    },
+    {
+      "source": "service:Dockerfile.game",
+      "target": "config:configs/weapons.yaml",
+      "type": "configures",
+      "weight": 0.6
+    }
+  ],
+  "batchFiles": [
+    {"path": "configs/characters.yaml", "language": "yaml", "sizeLines": 51, "fileCategory": "config"},
+    {"path": "configs/items.yaml", "language": "yaml", "sizeLines": 63, "fileCategory": "config"},
+    {"path": "configs/maps.yaml", "language": "yaml", "sizeLines": 80, "fileCategory": "config"},
+    {"path": "configs/skills.yaml", "language": "yaml", "sizeLines": 33, "fileCategory": "config"},
+    {"path": "configs/weapons.yaml", "language": "yaml", "sizeLines": 35, "fileCategory": "config"}
+  ]
+}

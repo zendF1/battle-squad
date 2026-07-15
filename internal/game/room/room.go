@@ -94,6 +94,13 @@ func (r *Room) Run() {
 		r.hub.UnregisterRoom(context.Background(), r.ID)
 	}()
 
+	observability.Log.Info().
+		Str("roomId", r.ID).
+		Str("status", r.State.Status).
+		Int("clientCount", len(r.Clients)).
+		Bool("hasMatch", r.match != nil).
+		Msg("[RANKED-DEBUG] Room.Run() goroutine started")
+
 	ticker := time.NewTicker(30 * time.Minute)
 	defer ticker.Stop()
 
@@ -185,8 +192,13 @@ func (r *Room) handleEvent(ev roomEvent) {
 
 	log.Debug().Str("event", msg.Event).Str("roomId", r.ID).Msg("processing room event")
 
+	if msg.Event == "__register_client" {
+		r.processRegisterClient(client)
+		return
+	}
+
 	if r.State.Status == "in_match" {
-		if msg.Event == "Leave" {
+		if msg.Event == "Leave" || msg.Event == "__internal_leave" {
 			r.processLeave(client)
 			return
 		}
@@ -223,6 +235,27 @@ func (r *Room) handleEvent(ev roomEvent) {
 	case "__start_tutorial":
 		r.processStartTutorial(client)
 	}
+}
+
+// RegisterClient adds a WS client to the room without going through the normal
+// join flow. Used by ranked matchmaking to transfer lobby clients into the
+// battle room before the match goroutine starts.
+func (r *Room) RegisterClient(client *ws.Client) {
+	r.Clients[client.PlayerID] = client
+	client.RoomID = r.ID
+	observability.Log.Info().
+		Str("roomId", r.ID).
+		Str("playerId", client.PlayerID).
+		Msg("registered ranked client in battle room")
+}
+
+func (r *Room) processRegisterClient(client *ws.Client) {
+	r.Clients[client.PlayerID] = client
+	client.RoomID = r.ID
+	observability.Log.Info().
+		Str("roomId", r.ID).
+		Str("playerId", client.PlayerID).
+		Msg("registered ranked client in battle room")
 }
 
 func (r *Room) processJoin(client *ws.Client) {
@@ -274,7 +307,19 @@ func (r *Room) processJoin(client *ws.Client) {
 
 func (r *Room) processLeave(client *ws.Client) {
 	if r.match != nil {
+		// Match goroutine owns the Clients map during in_match — let it
+		// handle the delete via its own event loop to avoid a concurrent
+		// map write between the room and match goroutines.
 		r.match.ProcessEvent(context.Background(), client, ws.Message{Event: "Leave"})
+		client.RoomID = ""
+
+		// Tutorial room: destroy as soon as the user leaves (only bots remain)
+		if r.State.IsTutorial {
+			observability.Log.Info().Str("roomId", r.ID).Msg("tutorial room user left, destroying room")
+			r.match.Stop()
+			r.cancel()
+		}
+		return
 	}
 
 	delete(r.Clients, client.PlayerID)
@@ -630,6 +675,12 @@ func (r *Room) processStartTutorial(client *ws.Client) {
 }
 
 func (r *Room) startRankedMatch(matchID string, botTierConfig matchmaker.BotTierConfig, eloConfig matchmaker.EloConfig, matchResult matchmaker.MatchResult) {
+	observability.Log.Info().
+		Str("roomId", r.ID).
+		Str("matchId", matchID).
+		Int("clientCount", len(r.Clients)).
+		Int("playerCount", len(r.State.Players)).
+		Msg("[RANKED-DEBUG] startRankedMatch called")
 	// Build team spawn point queues from map config
 	team1Spawns := []gamedata.SpawnPoint{}
 	team2Spawns := []gamedata.SpawnPoint{}
@@ -726,6 +777,31 @@ func (r *Room) startRankedMatch(matchID string, botTierConfig matchmaker.BotTier
 		RatingFloor: eloConfig.RatingFloor,
 		BotModifier: botModifier,
 		HasBot:      matchResult.HasBot,
+	}
+
+	// [RANKED-DEBUG] Log match players
+	for _, mp := range matchPlayers {
+		observability.Log.Info().
+			Str("roomId", r.ID).
+			Str("matchId", matchID).
+			Str("playerId", mp.PlayerID).
+			Str("displayName", mp.DisplayName).
+			Int("teamId", mp.TeamID).
+			Bool("isBot", mp.IsBot).
+			Int("hp", mp.HP).
+			Msg("[RANKED-DEBUG] match player")
+	}
+
+	observability.Log.Info().
+		Str("roomId", r.ID).
+		Int("clientCount", len(r.Clients)).
+		Msg("[RANKED-DEBUG] r.Clients before NewMatch")
+
+	for pid := range r.Clients {
+		observability.Log.Info().
+			Str("roomId", r.ID).
+			Str("clientPlayerId", pid).
+			Msg("[RANKED-DEBUG] client in r.Clients")
 	}
 
 	// Create match

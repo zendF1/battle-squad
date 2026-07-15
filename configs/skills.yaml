@@ -4,7 +4,7 @@
   cooldownTurn: 2
   effectType: multi_projectile
   projectileCount: 3
-  damageMultiplier: 0.7
+  damageMultiplier: 1.25
 
 - skillId: heavy_bomb
   characterId: tanko

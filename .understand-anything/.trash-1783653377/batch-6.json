@@ -1,0 +1,192 @@
+{
+  "nodes": [
+    {
+      "id": "config:.env.example",
+      "type": "config",
+      "name": ".env.example",
+      "filePath": ".env.example",
+      "summary": "File mẫu biến môi trường cho toàn bộ server: APP_ENV, API_PORT (8080), GAME_PORT (8081), POSTGRES_DSN, REDIS_ADDR, JWT_SECRET, NODE_ID. Dùng làm tài liệu tham khảo cấu hình local dev.",
+      "tags": ["config", "env", "environment", "secrets"],
+      "complexity": "low"
+    },
+    {
+      "id": "document:CLAUDE.md",
+      "type": "document",
+      "name": "CLAUDE.md",
+      "filePath": "CLAUDE.md",
+      "summary": "Hướng dẫn cho Claude Code khi làm việc với codebase: build & run commands, kiến trúc tổng quan, hệ thống map Grid v2, quy tắc migration idempotent, rank system, git conventions.",
+      "tags": ["docs", "claude", "instructions", "architecture"],
+      "complexity": "medium"
+    },
+    {
+      "id": "service:Dockerfile.api",
+      "type": "service",
+      "name": "Dockerfile.api",
+      "filePath": "Dockerfile.api",
+      "summary": "Multi-stage Dockerfile build API server (REST :8080): stage builder dùng golang:1.25-alpine để biên dịch, stage runtime dùng alpine:3.20 với user appuser không có quyền root, health check qua /healthz.",
+      "tags": ["docker", "infra", "api", "build"],
+      "complexity": "low"
+    },
+    {
+      "id": "service:Dockerfile.game",
+      "type": "service",
+      "name": "Dockerfile.game",
+      "filePath": "Dockerfile.game",
+      "summary": "Multi-stage Dockerfile build Game server (WebSocket :8081): tương tự Dockerfile.api nhưng copy thêm thư mục `configs/` vào image để load YAML game data lúc khởi động.",
+      "tags": ["docker", "infra", "game", "build", "configs"],
+      "complexity": "low"
+    },
+    {
+      "id": "service:Dockerfile.worker",
+      "type": "service",
+      "name": "Dockerfile.worker",
+      "filePath": "Dockerfile.worker",
+      "summary": "Multi-stage Dockerfile build Worker (background jobs): copy thêm thư mục `migrations/` vào image để worker có thể chạy database migration khi khởi động.",
+      "tags": ["docker", "infra", "worker", "build", "migrations"],
+      "complexity": "low"
+    },
+    {
+      "id": "config:Makefile",
+      "type": "config",
+      "name": "Makefile",
+      "filePath": "Makefile",
+      "summary": "Makefile định nghĩa các lệnh build (build-api, build-game, build-worker, build-migrate, build-all), run, test với coverage, lint, migrate và quản lý Docker Compose cho môi trường phát triển.",
+      "tags": ["makefile", "build", "infra", "dev"],
+      "complexity": "low"
+    },
+    {
+      "id": "document:README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "README.md",
+      "summary": "Tài liệu chính của project: mô tả tổng quan kiến trúc 3 process (API/Game/Worker), tech stack (Go 1.25, chi, gorilla/websocket, pgx/v5, go-redis, JWT, zerolog, Prometheus), hướng dẫn chạy local và cấu trúc thư mục.",
+      "tags": ["docs", "readme", "overview"],
+      "complexity": "medium"
+    },
+    {
+      "id": "config:docker-compose.yml",
+      "type": "config",
+      "name": "docker-compose.yml",
+      "filePath": "docker-compose.yml",
+      "summary": "Định nghĩa Docker Compose services: postgres (15-alpine, port 5432), redis (7-alpine, port 6379), api (port 8080), game (port 8081), worker — tất cả trong network `battlesquad_network`, dùng volume cho data persistence.",
+      "tags": ["docker", "compose", "infra", "postgresql", "redis"],
+      "complexity": "medium"
+    },
+    {
+      "id": "config:go.mod",
+      "type": "config",
+      "name": "go.mod",
+      "filePath": "go.mod",
+      "summary": "Go module file khai báo module `battle-squad` với Go 1.25, liệt kê các dependency chính: chi/v5, golang-jwt/v5, gorilla/websocket, pgx/v5, prometheus/client_golang, go-redis/v9, zerolog, yaml.v3.",
+      "tags": ["go", "module", "dependencies"],
+      "complexity": "low"
+    },
+    {
+      "id": "config:go.sum",
+      "type": "config",
+      "name": "go.sum",
+      "filePath": "go.sum",
+      "summary": "File checksum Go module đảm bảo tính toàn vẹn của tất cả dependency được khai báo trong go.mod.",
+      "tags": ["go", "module", "checksums", "security"],
+      "complexity": "low"
+    }
+  ],
+  "edges": [
+    {
+      "source": "config:docker-compose.yml",
+      "target": "service:Dockerfile.api",
+      "type": "deploys",
+      "weight": 0.7
+    },
+    {
+      "source": "config:docker-compose.yml",
+      "target": "service:Dockerfile.game",
+      "type": "deploys",
+      "weight": 0.7
+    },
+    {
+      "source": "config:docker-compose.yml",
+      "target": "service:Dockerfile.worker",
+      "type": "deploys",
+      "weight": 0.7
+    },
+    {
+      "source": "config:Makefile",
+      "target": "config:docker-compose.yml",
+      "type": "configures",
+      "weight": 0.6
+    },
+    {
+      "source": "config:Makefile",
+      "target": "config:go.mod",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "service:Dockerfile.api",
+      "target": "config:go.mod",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "service:Dockerfile.game",
+      "target": "config:go.mod",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "service:Dockerfile.game",
+      "target": "config:configs/maps.yaml",
+      "type": "configures",
+      "weight": 0.6
+    },
+    {
+      "source": "service:Dockerfile.worker",
+      "target": "config:go.mod",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "config:go.mod",
+      "target": "config:go.sum",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "document:CLAUDE.md",
+      "target": "config:docker-compose.yml",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "config:docker-compose.yml",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "config:Makefile",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "config:.env.example",
+      "target": "config:docker-compose.yml",
+      "type": "configures",
+      "weight": 0.6
+    }
+  ],
+  "batchFiles": [
+    {"path": ".env.example", "language": "config", "sizeLines": 22, "fileCategory": "config"},
+    {"path": "CLAUDE.md", "language": "markdown", "sizeLines": 119, "fileCategory": "docs"},
+    {"path": "Dockerfile.api", "language": "dockerfile", "sizeLines": 14, "fileCategory": "infra"},
+    {"path": "Dockerfile.game", "language": "dockerfile", "sizeLines": 15, "fileCategory": "infra"},
+    {"path": "Dockerfile.worker", "language": "dockerfile", "sizeLines": 13, "fileCategory": "infra"},
+    {"path": "Makefile", "language": "makefile", "sizeLines": 46, "fileCategory": "infra"},
+    {"path": "README.md", "language": "markdown", "sizeLines": 316, "fileCategory": "docs"},
+    {"path": "docker-compose.yml", "language": "yaml", "sizeLines": 77, "fileCategory": "infra"},
+    {"path": "go.mod", "language": "mod", "sizeLines": 39, "fileCategory": "config"},
+    {"path": "go.sum", "language": "sum", "sizeLines": 96, "fileCategory": "config"}
+  ]
+}

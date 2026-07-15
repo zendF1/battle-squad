@@ -130,10 +130,36 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 	}
 	observability.Log.Info().Int("count", len(data.Items)).Msg("seeded config_items")
 
+	// Seed brick types (v2 — SERIAL PK, auto-increment)
+	var brickCount int
+	db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM config_brick_types`).Scan(&brickCount)
+	if brickCount == 0 {
+		brickQuery := `INSERT INTO config_brick_types (name, image_id, destructible, color)
+			VALUES ($1, $2, $3, $4)`
+		defaultBricks := []struct {
+			Name         string
+			Destructible bool
+			Color        string
+		}{
+			{"Dirt", true, "#8B4513"},
+			{"Rock", false, "#808080"},
+			{"Ice", true, "#87CEEB"},
+			{"Lava", false, "#FF4500"},
+			{"Fragile", true, "#DEB887"},
+		}
+		for _, b := range defaultBricks {
+			if _, err := db.Pool.Exec(ctx, brickQuery, b.Name, "", b.Destructible, b.Color); err != nil {
+				return fmt.Errorf("insert brick type %s: %w", b.Name, err)
+			}
+		}
+		observability.Log.Info().Int("count", len(defaultBricks)).Msg("seeded config_brick_types")
+	}
+
 	// Seed maps (JSONB fields need marshaling)
 	mapQuery := `INSERT INTO config_maps
-		(map_id, name, width, height, default_wind_power_range, terrain_layers, spawn_points)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		(map_id, name, width, height, default_wind_power_range, terrain_layers, spawn_points,
+		 grid_width, grid_height, cell_size, tiles, min_rank_tier)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT (map_id) DO NOTHING`
 	for _, m := range data.Maps {
 		windRange, err := json.Marshal(m.DefaultWindPowerRange)
@@ -148,8 +174,29 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 		if err != nil {
 			return fmt.Errorf("marshal spawn points for map %s: %w", m.MapID, err)
 		}
+		tiles, err := json.Marshal(m.Tiles)
+		if err != nil {
+			tiles = []byte("[]")
+		}
+		gridWidth := m.GridWidth
+		if gridWidth == 0 {
+			gridWidth = 100
+		}
+		gridHeight := m.GridHeight
+		if gridHeight == 0 {
+			gridHeight = 56
+		}
+		cellSize := m.CellSize
+		if cellSize == 0 {
+			cellSize = 16
+		}
+		minRankTier := m.MinRankTier
+		if minRankTier == "" {
+			minRankTier = "bronze"
+		}
 		if _, err := db.Pool.Exec(ctx, mapQuery,
 			m.MapID, m.Name, m.Width, m.Height, windRange, terrainLayers, spawnPoints,
+			gridWidth, gridHeight, cellSize, tiles, minRankTier,
 		); err != nil {
 			return fmt.Errorf("insert map %s: %w", m.MapID, err)
 		}

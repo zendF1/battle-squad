@@ -1,0 +1,98 @@
+{
+  "nodes": [
+    {
+      "id": "file:docs/database-erd.html",
+      "type": "file",
+      "name": "database-erd.html",
+      "filePath": "docs/database-erd.html",
+      "summary": "Trang HTML tương tác hiển thị Entity-Relationship Diagram của database Battle Squad: canvas kéo thả, zoom, hiển thị tất cả bảng theo domain (auth, inventory, shop, match, rank, config) với các cột PK/FK/UK và đường quan hệ SVG.",
+      "tags": ["docs", "html", "erd", "database", "visualization"],
+      "complexity": "medium"
+    },
+    {
+      "id": "document:docs/database-erd.md",
+      "type": "document",
+      "name": "database-erd.md",
+      "filePath": "docs/database-erd.md",
+      "summary": "Tài liệu ERD dạng Mermaid diagram mô tả đầy đủ tất cả bảng và quan hệ của database Battle Squad theo 7 nhóm domain: Auth/Player, Inventory/Economy, Shop/IAP, Missions/Giftcode, Moderation, Rank/Season, Match/Config.",
+      "tags": ["docs", "markdown", "erd", "database", "mermaid"],
+      "complexity": "high"
+    },
+    {
+      "id": "document:docs/technical-documentation.md",
+      "type": "document",
+      "name": "technical-documentation.md",
+      "filePath": "docs/technical-documentation.md",
+      "summary": "Tài liệu kỹ thuật toàn diện của Battle Squad server: kiến trúc 4 process, tech stack, cấu hình env, cấu trúc thư mục, toàn bộ REST API endpoints, WebSocket events, match lifecycle, bot AI, matchmaking flow và Elo system.",
+      "tags": ["docs", "markdown", "technical", "api", "architecture"],
+      "complexity": "high"
+    }
+  ],
+  "edges": [
+    {
+      "source": "document:docs/database-erd.md",
+      "target": "file:migrations/001_init_schema.up.sql",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/database-erd.md",
+      "target": "file:migrations/002_add_account_role.up.sql",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/database-erd.md",
+      "target": "file:migrations/004_admin_config_tables.up.sql",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/database-erd.md",
+      "target": "file:migrations/005_add_loadouts_and_matchmaking.up.sql",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/database-erd.md",
+      "target": "file:migrations/006_character_progression.up.sql",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "file:docs/database-erd.html",
+      "target": "document:docs/database-erd.md",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/technical-documentation.md",
+      "target": "config:docker-compose.yml",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/technical-documentation.md",
+      "target": "config:go.mod",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/technical-documentation.md",
+      "target": "document:docs/database-erd.md",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/technical-documentation.md",
+      "target": "file:migrations/001_init_schema.up.sql",
+      "type": "documents",
+      "weight": 0.5
+    }
+  ],
+  "batchFiles": [
+    {"path": "docs/database-erd.html", "language": "html", "sizeLines": 455, "fileCategory": "markup"},
+    {"path": "docs/database-erd.md", "language": "markdown", "sizeLines": 440, "fileCategory": "docs"},
+    {"path": "docs/technical-documentation.md", "language": "markdown", "sizeLines": 676, "fileCategory": "docs"}
+  ]
+}

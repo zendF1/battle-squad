@@ -56,7 +56,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	db, err := database.NewPostgresDB(ctx, cfg.PostgresDSN)
+	db, err := database.NewPostgresDB(ctx, cfg.PostgresDSN, cfg.DBMaxConns, cfg.DBMinConns)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect to Postgres")
 	}
@@ -71,7 +71,7 @@ func main() {
 	}
 	log.Info().Msg("game configurations loaded successfully")
 
-	redisClient, err := database.NewRedisClient(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
+	redisClient, err := database.NewRedisClient(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB, cfg.RedisPoolSize, cfg.RedisMinIdle)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect to Redis")
 	}
@@ -94,33 +94,82 @@ func main() {
 	// Lobby hub
 	lobbyHub := lobby.NewLobbyHub(db, redisClient, nodeID)
 
-	// Collect available map IDs
+	// Collect available map IDs and their tier restrictions
 	mapIDs := make([]string, 0)
-	for mapID := range gamedata.Data.Maps {
+	mapTiers := make(map[string]string)
+	for mapID, mapCfg := range gamedata.Data.Maps {
 		mapIDs = append(mapIDs, mapID)
+		tier := mapCfg.MinRankTier
+		if tier == "" {
+			tier = "bronze"
+		}
+		mapTiers[mapID] = tier
 	}
 
 	// Matchmaker
-	mm := matchmaker.NewMatchmaker(db, redisClient, nodeID, roomHub, mapIDs)
+	mm := matchmaker.NewMatchmaker(db, redisClient, nodeID, roomHub, mapIDs, mapTiers)
 	go mm.Run()
 
 	// Lobby WS handler
 	lobbyWSHandler := lobby.NewWSHandler(lobbyHub, mm)
 
-	// Wire lobby notifier so room hub can notify lobby clients on MatchFound
-	roomHub.SetLobbyNotifier(func(lobbyID string, event string, data interface{}) {
+	// Wire lobby notifier so room hub can notify lobby clients on MatchFound.
+	// The battleRoom is passed directly to avoid deadlock (CreateBattleFromMatch
+	// holds hub lock, so we cannot call FindRoom which also needs the lock).
+	roomHub.SetLobbyNotifier(func(lobbyID string, event string, data interface{}, battleRoom *room.Room) {
+		observability.Log.Info().
+			Str("lobbyId", lobbyID).
+			Str("event", event).
+			Msg("[RANKED-DEBUG] lobbyNotifier called")
+
 		l, err := lobbyHub.FindLobby(lobbyID)
 		if err != nil {
+			observability.Log.Error().Err(err).
+				Str("lobbyId", lobbyID).
+				Msg("[RANKED-DEBUG] lobbyNotifier: FindLobby FAILED")
 			return
 		}
+
+		observability.Log.Info().
+			Str("lobbyId", lobbyID).
+			Int("lobbyClientCount", len(l.Clients)).
+			Msg("[RANKED-DEBUG] lobbyNotifier: found lobby")
+
 		payload, _ := json.Marshal(data)
 		for _, c := range l.Clients {
+			observability.Log.Info().
+				Str("lobbyId", lobbyID).
+				Str("playerId", c.PlayerID).
+				Str("event", event).
+				Msg("[RANKED-DEBUG] lobbyNotifier: sending event to lobby client")
 			select {
 			case c.Send <- ws.Message{Event: event, Data: payload}:
+				observability.Log.Info().
+					Str("playerId", c.PlayerID).
+					Msg("[RANKED-DEBUG] lobbyNotifier: event sent OK")
 			default:
+				observability.Log.Warn().
+					Str("playerId", c.PlayerID).
+					Msg("[RANKED-DEBUG] lobbyNotifier: Send channel FULL, event DROPPED")
 			}
 		}
+
+		// For MatchFound, register lobby clients directly in the battle room
+		// so they receive MatchStarted and subsequent match events.
+		if event == "MatchFound" && battleRoom != nil {
+			for _, c := range l.Clients {
+				observability.Log.Info().
+					Str("roomId", battleRoom.ID).
+					Str("playerId", c.PlayerID).
+					Msg("[RANKED-DEBUG] lobbyNotifier: calling RegisterClient")
+				battleRoom.RegisterClient(c)
+			}
+		}
+
 		l.SetStatus("in_match")
+		observability.Log.Info().
+			Str("lobbyId", lobbyID).
+			Msg("[RANKED-DEBUG] lobbyNotifier: done, lobby set to in_match")
 	})
 
 	// Composite handler

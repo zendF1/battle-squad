@@ -72,13 +72,20 @@ type TerrainLayer struct {
 }
 
 type MapConfig struct {
-	MapID                string         `yaml:"mapId"`
-	Name                 string         `yaml:"name"`
-	Width                int            `yaml:"width"`
-	Height               int            `yaml:"height"`
-	DefaultWindPowerRange []int          `yaml:"defaultWindPowerRange"`
-	TerrainLayers        []TerrainLayer `yaml:"terrainLayers"`
-	SpawnPoints          []SpawnPoint   `yaml:"spawnPoints"`
+	MapID                 string       `yaml:"mapId"`
+	Name                  string       `yaml:"name"`
+	GridWidth             int          `yaml:"gridWidth"`
+	GridHeight            int          `yaml:"gridHeight"`
+	CellSize              int          `yaml:"cellSize"`
+	DefaultWindPowerRange []float64    `yaml:"defaultWindPowerRange"`
+	Tiles                 [][]int      `yaml:"tiles"` // 0 = air, >0 = brick_type_id
+	SpawnPoints           []SpawnPoint `yaml:"spawnPoints"`
+	MinRankTier           string       `yaml:"minRankTier"`
+
+	// Legacy fields (for backward compatibility during transition)
+	Width         int            `yaml:"width,omitempty"`
+	Height        int            `yaml:"height,omitempty"`
+	TerrainLayers []TerrainLayer `yaml:"terrainLayers,omitempty"`
 }
 
 type GameData struct {
@@ -88,6 +95,30 @@ type GameData struct {
 	Items      map[string]ItemConfig
 	Maps       map[string]MapConfig
 }
+
+type BorderPoint struct {
+	X float64 `json:"x" yaml:"x"`
+	Y float64 `json:"y" yaml:"y"`
+}
+
+type BrickBorder struct {
+	Top    []BorderPoint `json:"top" yaml:"top"`
+	Right  []BorderPoint `json:"right" yaml:"right"`
+	Bottom []BorderPoint `json:"bottom" yaml:"bottom"`
+	Left   []BorderPoint `json:"left" yaml:"left"`
+}
+
+type BrickTypeConfig struct {
+	BrickTypeID  int         `yaml:"brickTypeId"`
+	Name         string      `yaml:"name"`
+	ImageID      string      `yaml:"imageId"`
+	Destructible bool        `yaml:"destructible"`
+	Border       BrickBorder `yaml:"border"`
+	Color        string      `yaml:"color"`
+}
+
+// BrickTypes is loaded from config_brick_types table.
+var BrickTypes map[int]BrickTypeConfig
 
 // PhysicsConfig holds physics constants loaded from game_settings table
 type PhysicsConfig struct {
@@ -279,25 +310,37 @@ func LoadGameDataFromDB(db *database.PostgresDB) error {
 	}
 
 	// 5. Load maps (with JSONB fields)
-	rows, err = db.Pool.Query(ctx, `SELECT map_id, name, width, height, default_wind_power_range, terrain_layers, spawn_points FROM config_maps`)
+	rows, err = db.Pool.Query(ctx, `SELECT map_id, name, grid_width, grid_height, cell_size,
+		default_wind_power_range, tiles, spawn_points,
+		width, height, terrain_layers, min_rank_tier
+		FROM config_maps`)
 	if err != nil {
 		return fmt.Errorf("failed to query config_maps: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var m MapConfig
-		var windRangeJSON, terrainJSON, spawnJSON []byte
-		if err := rows.Scan(&m.MapID, &m.Name, &m.Width, &m.Height, &windRangeJSON, &terrainJSON, &spawnJSON); err != nil {
+		var windRangeJSON, tilesJSON, spawnJSON, terrainJSON []byte
+		var legacyWidth, legacyHeight int
+		if err := rows.Scan(&m.MapID, &m.Name, &m.GridWidth, &m.GridHeight, &m.CellSize,
+			&windRangeJSON, &tilesJSON, &spawnJSON,
+			&legacyWidth, &legacyHeight, &terrainJSON, &m.MinRankTier); err != nil {
 			return fmt.Errorf("failed to scan config_maps row: %w", err)
 		}
+		m.Width = legacyWidth
+		m.Height = legacyHeight
 		if err := json.Unmarshal(windRangeJSON, &m.DefaultWindPowerRange); err != nil {
 			return fmt.Errorf("failed to unmarshal wind_power_range for map %s: %w", m.MapID, err)
 		}
-		if err := json.Unmarshal(terrainJSON, &m.TerrainLayers); err != nil {
-			return fmt.Errorf("failed to unmarshal terrain_layers for map %s: %w", m.MapID, err)
+		if err := json.Unmarshal(tilesJSON, &m.Tiles); err != nil {
+			// Tiles might be empty array, that's OK
+			m.Tiles = nil
 		}
 		if err := json.Unmarshal(spawnJSON, &m.SpawnPoints); err != nil {
 			return fmt.Errorf("failed to unmarshal spawn_points for map %s: %w", m.MapID, err)
+		}
+		if terrainJSON != nil {
+			json.Unmarshal(terrainJSON, &m.TerrainLayers)
 		}
 		gData.Maps[m.MapID] = m
 	}
@@ -308,7 +351,29 @@ func LoadGameDataFromDB(db *database.PostgresDB) error {
 		return fmt.Errorf("config_maps table is empty")
 	}
 
-	// 6. Load physics settings from game_settings
+	// 6. Load brick types
+	BrickTypes = make(map[int]BrickTypeConfig)
+	rows, err = db.Pool.Query(ctx, `SELECT brick_type_id, name, image_id, destructible, border, color FROM config_brick_types`)
+	if err != nil {
+		return fmt.Errorf("failed to query config_brick_types: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var bt BrickTypeConfig
+		var borderJSON []byte
+		if err := rows.Scan(&bt.BrickTypeID, &bt.Name, &bt.ImageID, &bt.Destructible, &borderJSON, &bt.Color); err != nil {
+			return fmt.Errorf("failed to scan config_brick_types row: %w", err)
+		}
+		if borderJSON != nil {
+			json.Unmarshal(borderJSON, &bt.Border)
+		}
+		BrickTypes[bt.BrickTypeID] = bt
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating config_brick_types: %w", err)
+	}
+
+	// 7. Load physics settings from game_settings
 	physics, err := loadPhysicsFromDB(ctx, db)
 	if err != nil {
 		return fmt.Errorf("failed to load game_settings: %w", err)

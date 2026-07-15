@@ -1,0 +1,130 @@
+{
+  "nodes": [
+    {
+      "id": "document:docs/specs/2026-07-06-admin-dashboard-design.md",
+      "type": "document",
+      "name": "2026-07-06-admin-dashboard-design.md",
+      "filePath": "docs/specs/2026-07-06-admin-dashboard-design.md",
+      "summary": "Thiết kế spec cho Admin Dashboard: server-rendered bằng Go html/template trên port 9000, không authentication ở dev phase, mô tả kiến trúc file structure handlers/templates và các trang CRUD cho game config và player management.",
+      "tags": ["spec", "admin", "dashboard", "server-rendered", "go-template", "crud"],
+      "complexity": "medium"
+    },
+    {
+      "id": "document:docs/specs/2026-07-06-admin-dashboard-plan.md",
+      "type": "document",
+      "name": "2026-07-06-admin-dashboard-plan.md",
+      "filePath": "docs/specs/2026-07-06-admin-dashboard-plan.md",
+      "summary": "Kế hoạch triển khai Admin Dashboard: binary mới cmd/admin, Chi router, config tables trong Postgres thay thế YAML, game server load config từ DB với YAML fallback. Bao gồm danh sách task checkbox chi tiết.",
+      "tags": ["plan", "admin", "dashboard", "chi-router", "postgres", "config-tables", "migration"],
+      "complexity": "high"
+    },
+    {
+      "id": "document:documents/server_implementation_plan.md",
+      "type": "document",
+      "name": "server_implementation_plan.md",
+      "filePath": "documents/server_implementation_plan.md",
+      "summary": "Kế hoạch triển khai server Battle Squad v2: tech stack (Go/WebSocket/PostgreSQL/Redis), kiến trúc 3 process (API/Game/Migrate), các module REST API và gameplay realtime. Tài liệu lập kế hoạch tổng thể ban đầu của dự án.",
+      "tags": ["plan", "server", "architecture", "go", "websocket", "postgresql", "redis", "tech-stack"],
+      "complexity": "high"
+    },
+    {
+      "id": "document:documents/server_implementation_walkthrough.md",
+      "type": "document",
+      "name": "server_implementation_walkthrough.md",
+      "filePath": "documents/server_implementation_walkthrough.md",
+      "summary": "Tóm tắt kết quả triển khai server Battle Squad: các phân hệ đã hoàn thành (Auth/Inventory/Shop/IAP/Missions/Ranks/Match Physics/Bot AI), kết quả unit test physics, và E2E verification script thành công.",
+      "tags": ["walkthrough", "server", "implementation", "unit-test", "e2e", "physics", "bot-ai"],
+      "complexity": "low"
+    },
+    {
+      "id": "file:internal/admin/static/brick_editor.js",
+      "type": "file",
+      "name": "brick_editor.js",
+      "filePath": "internal/admin/static/brick_editor.js",
+      "summary": "JavaScript cho brick type editor 16x16 pixel: class BrickEditor với tọa độ grid 16x16 (scale 25px/unit), drag-and-drop point editing, thêm/xóa point trên từng cạnh polygon (top/right/bottom/left), render preview canvas và save qua POST /brick-types/save.",
+      "tags": ["javascript", "admin", "brick-editor", "canvas", "polygon", "drag-drop", "16x16"],
+      "complexity": "high"
+    },
+    {
+      "id": "file:internal/admin/static/map_editor.js",
+      "type": "file",
+      "name": "map_editor.js",
+      "filePath": "internal/admin/static/map_editor.js",
+      "summary": "JavaScript cho map editor canvas-based: class MapEditor hỗ trợ paint/erase/fill/select/spawn tools, zoom/pan, undo/redo stack, polygon brick rendering từ border data, load/save qua REST API, export YAML. Là file JS lớn nhất và phức tạp nhất trong admin.",
+      "tags": ["javascript", "admin", "map-editor", "canvas", "tilemap", "polygon", "undo-redo", "zoom-pan", "flood-fill"],
+      "complexity": "high"
+    },
+    {
+      "id": "file:internal/shared/circuitbreaker/breaker.go",
+      "type": "file",
+      "name": "breaker.go",
+      "filePath": "internal/shared/circuitbreaker/breaker.go",
+      "summary": "Circuit breaker pattern cho Go: 3 trạng thái Closed/Open/HalfOpen với threshold lỗi và cooldown duration, thread-safe với sync.Mutex, Execute() bao bọc function và tự động chuyển trạng thái theo kết quả.",
+      "tags": ["go", "circuit-breaker", "reliability", "concurrency", "shared", "pattern"],
+      "complexity": "medium"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:internal/admin/static/brick_editor.js",
+      "target": "file:internal/admin/templates/brick_editor.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/static/map_editor.js",
+      "target": "file:internal/admin/templates/map_editor.html",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:internal/admin/static/brick_editor.js",
+      "target": "file:internal/admin/static/map_editor.js",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/specs/2026-07-06-admin-dashboard-design.md",
+      "target": "document:docs/specs/2026-07-06-admin-dashboard-plan.md",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/specs/2026-07-06-admin-dashboard-plan.md",
+      "target": "file:internal/admin/templates/layout.html",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:documents/server_implementation_walkthrough.md",
+      "target": "document:documents/server_implementation_plan.md",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "file:internal/shared/circuitbreaker/breaker.go",
+      "target": "document:documents/server_implementation_walkthrough.md",
+      "type": "related",
+      "weight": 0.5
+    }
+  ],
+  "batchFiles": [
+    {"path": ".understand-anything/.understandignore", "language": "unknown", "sizeLines": 64, "fileCategory": "code"},
+    {"path": ".understand-anything/config.json", "language": "json", "sizeLines": 0, "fileCategory": "config"},
+    {"path": "admin", "language": "unknown", "sizeLines": 99180, "fileCategory": "code"},
+    {"path": "api", "language": "unknown", "sizeLines": 78732, "fileCategory": "code"},
+    {"path": "docs/specs/2026-07-06-admin-dashboard-design.md", "language": "markdown", "sizeLines": 255, "fileCategory": "docs"},
+    {"path": "docs/specs/2026-07-06-admin-dashboard-plan.md", "language": "markdown", "sizeLines": 931, "fileCategory": "docs"},
+    {"path": "documents/Battle_Squad_Technical_Spec.docx", "language": "docx", "sizeLines": 112, "fileCategory": "code"},
+    {"path": "documents/Gameplay_Spec_Battle_Squad.docx", "language": "docx", "sizeLines": 54, "fileCategory": "code"},
+    {"path": "documents/MVP Feature List.docx", "language": "docx", "sizeLines": 54, "fileCategory": "code"},
+    {"path": "documents/MVP_Feature_List.docx", "language": "docx", "sizeLines": 44, "fileCategory": "code"},
+    {"path": "documents/server_implementation_plan.md", "language": "markdown", "sizeLines": 852, "fileCategory": "docs"},
+    {"path": "documents/server_implementation_walkthrough.md", "language": "markdown", "sizeLines": 61, "fileCategory": "docs"},
+    {"path": "game", "language": "unknown", "sizeLines": 77172, "fileCategory": "code"},
+    {"path": "internal/admin/static/brick_editor.js", "language": "javascript", "sizeLines": 304, "fileCategory": "code"},
+    {"path": "internal/admin/static/map_editor.js", "language": "javascript", "sizeLines": 733, "fileCategory": "code"},
+    {"path": "internal/shared/circuitbreaker/breaker.go", "language": "go", "sizeLines": 91, "fileCategory": "code"},
+    {"path": "migrate", "language": "unknown", "sizeLines": 64997, "fileCategory": "code"}
+  ]
+}

@@ -1,0 +1,5503 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 34,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "cmd/api/main.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 246,
+      "nonEmptyLines": 194,
+      "functions": [
+        {
+          "name": "main",
+          "startLine": 40,
+          "endLine": 246,
+          "params": []
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "main",
+          "callee": "config.LoadConfig",
+          "lineNumber": 42
+        },
+        {
+          "caller": "main",
+          "callee": "observability.InitLogger",
+          "lineNumber": 45
+        },
+        {
+          "caller": "main",
+          "callee": "log.Info().Msg",
+          "lineNumber": 47
+        },
+        {
+          "caller": "main",
+          "callee": "log.Info",
+          "lineNumber": 47
+        },
+        {
+          "caller": "main",
+          "callee": "context.WithTimeout",
+          "lineNumber": 50
+        },
+        {
+          "caller": "main",
+          "callee": "context.Background",
+          "lineNumber": 50
+        },
+        {
+          "caller": "main",
+          "callee": "cancel",
+          "lineNumber": 51
+        },
+        {
+          "caller": "main",
+          "callee": "database.NewPostgresDB",
+          "lineNumber": 53
+        },
+        {
+          "caller": "main",
+          "callee": "log.Fatal().Err(err).Msg",
+          "lineNumber": 55
+        },
+        {
+          "caller": "main",
+          "callee": "log.Fatal().Err",
+          "lineNumber": 55
+        },
+        {
+          "caller": "main",
+          "callee": "log.Fatal",
+          "lineNumber": 55
+        },
+        {
+          "caller": "main",
+          "callee": "db.Close",
+          "lineNumber": 57
+        },
+        {
+          "caller": "main",
+          "callee": "database.NewRedisClient",
+          "lineNumber": 59
+        },
+        {
+          "caller": "main",
+          "callee": "log.Fatal().Err(err).Msg",
+          "lineNumber": 61
+        },
+        {
+          "caller": "main",
+          "callee": "log.Fatal().Err",
+          "lineNumber": 61
+        },
+        {
+          "caller": "main",
+          "callee": "log.Fatal",
+          "lineNumber": 61
+        },
+        {
+          "caller": "main",
+          "callee": "redisClient.Close",
+          "lineNumber": 63
+        },
+        {
+          "caller": "main",
+          "callee": "sharedAuth.NewJWTManager",
+          "lineNumber": 66
+        },
+        {
+          "caller": "main",
+          "callee": "sharedAuth.NewJWTManager",
+          "lineNumber": 67
+        },
+        {
+          "caller": "main",
+          "callee": "economy.NewRepository",
+          "lineNumber": 70
+        },
+        {
+          "caller": "main",
+          "callee": "inventory.NewRepository",
+          "lineNumber": 73
+        },
+        {
+          "caller": "main",
+          "callee": "inventory.NewService",
+          "lineNumber": 74
+        },
+        {
+          "caller": "main",
+          "callee": "inventory.NewHandler",
+          "lineNumber": 75
+        },
+        {
+          "caller": "main",
+          "callee": "character.NewRepository",
+          "lineNumber": 77
+        },
+        {
+          "caller": "main",
+          "callee": "character.NewService",
+          "lineNumber": 78
+        },
+        {
+          "caller": "main",
+          "callee": "character.NewHandler",
+          "lineNumber": 79
+        },
+        {
+          "caller": "main",
+          "callee": "idempotency.NewManager",
+          "lineNumber": 81
+        },
+        {
+          "caller": "main",
+          "callee": "shop.NewRepository",
+          "lineNumber": 83
+        },
+        {
+          "caller": "main",
+          "callee": "shop.NewService",
+          "lineNumber": 84
+        },
+        {
+          "caller": "main",
+          "callee": "shop.NewHandler",
+          "lineNumber": 85
+        },
+        {
+          "caller": "main",
+          "callee": "iap.NewRepository",
+          "lineNumber": 87
+        },
+        {
+          "caller": "main",
+          "callee": "iap.NewService",
+          "lineNumber": 88
+        },
+        {
+          "caller": "main",
+          "callee": "iap.NewHandler",
+          "lineNumber": 89
+        },
+        {
+          "caller": "main",
+          "callee": "giftcode.NewRepository",
+          "lineNumber": 91
+        },
+        {
+          "caller": "main",
+          "callee": "giftcode.NewService",
+          "lineNumber": 92
+        },
+        {
+          "caller": "main",
+          "callee": "giftcode.NewHandler",
+          "lineNumber": 93
+        },
+        {
+          "caller": "main",
+          "callee": "mission.NewRepository",
+          "lineNumber": 95
+        },
+        {
+          "caller": "main",
+          "callee": "mission.NewService",
+          "lineNumber": 96
+        },
+        {
+          "caller": "main",
+          "callee": "mission.NewHandler",
+          "lineNumber": 97
+        },
+        {
+          "caller": "main",
+          "callee": "rank.NewRepository",
+          "lineNumber": 99
+        },
+        {
+          "caller": "main",
+          "callee": "rank.NewService",
+          "lineNumber": 100
+        },
+        {
+          "caller": "main",
+          "callee": "rank.NewHandler",
+          "lineNumber": 101
+        },
+        {
+          "caller": "main",
+          "callee": "moderation.NewRepository",
+          "lineNumber": 103
+        },
+        {
+          "caller": "main",
+          "callee": "moderation.NewService",
+          "lineNumber": 104
+        },
+        {
+          "caller": "main",
+          "callee": "moderation.NewHandler",
+          "lineNumber": 105
+        },
+        {
+          "caller": "main",
+          "callee": "auth.NewRepository",
+          "lineNumber": 107
+        },
+        {
+          "caller": "main",
+          "callee": "auth.NewService",
+          "lineNumber": 108
+        },
+        {
+          "caller": "main",
+          "callee": "auth.NewHandler",
+          "lineNumber": 109
+        },
+        {
+          "caller": "main",
+          "callee": "player.NewRepository",
+          "lineNumber": 111
+        },
+        {
+          "caller": "main",
+          "callee": "player.NewService",
+          "lineNumber": 112
+        },
+        {
+          "caller": "main",
+          "callee": "player.NewHandler",
+          "lineNumber": 113
+        },
+        {
+          "caller": "main",
+          "callee": "appconfig.NewService",
+          "lineNumber": 115
+        },
+        {
+          "caller": "main",
+          "callee": "appconfig.NewHandler",
+          "lineNumber": 116
+        },
+        {
+          "caller": "main",
+          "callee": "matchhistory.NewRepository",
+          "lineNumber": 118
+        },
+        {
+          "caller": "main",
+          "callee": "matchhistory.NewService",
+          "lineNumber": 119
+        },
+        {
+          "caller": "main",
+          "callee": "matchhistory.NewHandler",
+          "lineNumber": 120
+        },
+        {
+          "caller": "main",
+          "callee": "rooms.NewHandler",
+          "lineNumber": 122
+        },
+        {
+          "caller": "main",
+          "callee": "dev.NewHandler",
+          "lineNumber": 124
+        },
+        {
+          "caller": "main",
+          "callee": "observability.NewHealthHandler",
+          "lineNumber": 126
+        },
+        {
+          "caller": "main",
+          "callee": "chi.NewRouter",
+          "lineNumber": 129
+        },
+        {
+          "caller": "main",
+          "callee": "r.Use",
+          "lineNumber": 132
+        },
+        {
+          "caller": "main",
+          "callee": "cors.Handler",
+          "lineNumber": 132
+        },
+        {
+          "caller": "main",
+          "callee": "r.Use",
+          "lineNumber": 140
+        },
+        {
+          "caller": "main",
+          "callee": "r.Use",
+          "lineNumber": 141
+        },
+        {
+          "caller": "main",
+          "callee": "r.Use",
+          "lineNumber": 142
+        },
+        {
+          "caller": "main",
+          "callee": "r.Use",
+          "lineNumber": 143
+        },
+        {
+          "caller": "main",
+          "callee": "middleware.VersionCheck",
+          "lineNumber": 143
+        },
+        {
+          "caller": "main",
+          "callee": "r.Use",
+          "lineNumber": 144
+        },
+        {
+          "caller": "main",
+          "callee": "middleware.NewRateLimiter",
+          "lineNumber": 147
+        },
+        {
+          "caller": "main",
+          "callee": "rate.Limit",
+          "lineNumber": 147
+        },
+        {
+          "caller": "main",
+          "callee": "r.Use",
+          "lineNumber": 148
+        },
+        {
+          "caller": "main",
+          "callee": "r.Handle",
+          "lineNumber": 151
+        },
+        {
+          "caller": "main",
+          "callee": "promhttp.Handler",
+          "lineNumber": 151
+        },
+        {
+          "caller": "main",
+          "callee": "r.HandleFunc",
+          "lineNumber": 152
+        },
+        {
+          "caller": "main",
+          "callee": "r.HandleFunc",
+          "lineNumber": 153
+        },
+        {
+          "caller": "main",
+          "callee": "r.HandleFunc",
+          "lineNumber": 154
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 156
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 157
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 158
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 159
+        },
+        {
+          "caller": "main",
+          "callee": "r.Get",
+          "lineNumber": 161
+        },
+        {
+          "caller": "main",
+          "callee": "r.Get",
+          "lineNumber": 162
+        },
+        {
+          "caller": "main",
+          "callee": "r.Group",
+          "lineNumber": 165
+        },
+        {
+          "caller": "main",
+          "callee": "r.Use",
+          "lineNumber": 166
+        },
+        {
+          "caller": "main",
+          "callee": "middleware.AuthMiddleware",
+          "lineNumber": 166
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 168
+        },
+        {
+          "caller": "main",
+          "callee": "r.Get",
+          "lineNumber": 170
+        },
+        {
+          "caller": "main",
+          "callee": "r.Put",
+          "lineNumber": 171
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 172
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 173
+        },
+        {
+          "caller": "main",
+          "callee": "r.Get",
+          "lineNumber": 174
+        },
+        {
+          "caller": "main",
+          "callee": "r.Get",
+          "lineNumber": 176
+        },
+        {
+          "caller": "main",
+          "callee": "r.Get",
+          "lineNumber": 178
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 179
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 180
+        },
+        {
+          "caller": "main",
+          "callee": "r.Get",
+          "lineNumber": 182
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 183
+        },
+        {
+          "caller": "main",
+          "callee": "r.Get",
+          "lineNumber": 184
+        },
+        {
+          "caller": "main",
+          "callee": "r.Get",
+          "lineNumber": 186
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 187
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 189
+        },
+        {
+          "caller": "main",
+          "callee": "r.Get",
+          "lineNumber": 191
+        },
+        {
+          "caller": "main",
+          "callee": "r.Get",
+          "lineNumber": 192
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 193
+        },
+        {
+          "caller": "main",
+          "callee": "r.Get",
+          "lineNumber": 195
+        },
+        {
+          "caller": "main",
+          "callee": "r.Get",
+          "lineNumber": 196
+        },
+        {
+          "caller": "main",
+          "callee": "r.Get",
+          "lineNumber": 197
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 198
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 200
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 201
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 202
+        },
+        {
+          "caller": "main",
+          "callee": "r.Get",
+          "lineNumber": 204
+        },
+        {
+          "caller": "main",
+          "callee": "r.Get",
+          "lineNumber": 205
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 210
+        },
+        {
+          "caller": "main",
+          "callee": "r.Post",
+          "lineNumber": 211
+        },
+        {
+          "caller": "main",
+          "callee": "log.Warn().Msg",
+          "lineNumber": 212
+        },
+        {
+          "caller": "main",
+          "callee": "log.Warn",
+          "lineNumber": 212
+        },
+        {
+          "caller": "main",
+          "callee": "func() {\n\t\tlog.Info().Str(\"port\", cfg.APIPort).Msg(\"API Server listening\")\n\t\tif err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {\n\t\t\tlog.Fatal().Err(err).Msg(\"API Server failed to start\")\n\t\t}\n\t}",
+          "lineNumber": 224
+        },
+        {
+          "caller": "main",
+          "callee": "log.Info().Str(\"port\", cfg.APIPort).Msg",
+          "lineNumber": 225
+        },
+        {
+          "caller": "main",
+          "callee": "log.Info().Str",
+          "lineNumber": 225
+        },
+        {
+          "caller": "main",
+          "callee": "log.Info",
+          "lineNumber": 225
+        },
+        {
+          "caller": "main",
+          "callee": "srv.ListenAndServe",
+          "lineNumber": 226
+        },
+        {
+          "caller": "main",
+          "callee": "log.Fatal().Err(err).Msg",
+          "lineNumber": 227
+        },
+        {
+          "caller": "main",
+          "callee": "log.Fatal().Err",
+          "lineNumber": 227
+        },
+        {
+          "caller": "main",
+          "callee": "log.Fatal",
+          "lineNumber": 227
+        },
+        {
+          "caller": "main",
+          "callee": "make",
+          "lineNumber": 232
+        },
+        {
+          "caller": "main",
+          "callee": "signal.Notify",
+          "lineNumber": 233
+        },
+        {
+          "caller": "main",
+          "callee": "log.Info().Msg",
+          "lineNumber": 236
+        },
+        {
+          "caller": "main",
+          "callee": "log.Info",
+          "lineNumber": 236
+        },
+        {
+          "caller": "main",
+          "callee": "context.WithTimeout",
+          "lineNumber": 238
+        },
+        {
+          "caller": "main",
+          "callee": "context.Background",
+          "lineNumber": 238
+        },
+        {
+          "caller": "main",
+          "callee": "shutdownCancel",
+          "lineNumber": 239
+        },
+        {
+          "caller": "main",
+          "callee": "srv.Shutdown",
+          "lineNumber": 241
+        },
+        {
+          "caller": "main",
+          "callee": "log.Error().Err(err).Msg",
+          "lineNumber": 242
+        },
+        {
+          "caller": "main",
+          "callee": "log.Error().Err",
+          "lineNumber": 242
+        },
+        {
+          "caller": "main",
+          "callee": "log.Error",
+          "lineNumber": 242
+        },
+        {
+          "caller": "main",
+          "callee": "log.Info().Msg",
+          "lineNumber": 245
+        },
+        {
+          "caller": "main",
+          "callee": "log.Info",
+          "lineNumber": 245
+        }
+      ],
+      "metrics": {
+        "importCount": 65,
+        "exportCount": 0,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "internal/api/appconfig/model.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 24,
+      "nonEmptyLines": 21,
+      "classes": [
+        {
+          "name": "ClientVersionPolicy",
+          "startLine": 5,
+          "endLine": 14,
+          "methods": [],
+          "properties": [
+            "Platform",
+            "MinSupportedVersion",
+            "LatestVersion",
+            "ProtocolVersion",
+            "ForceUpdate",
+            "SoftUpdateMessage",
+            "StoreURL",
+            "UpdatedAt"
+          ]
+        },
+        {
+          "name": "RemoteConfig",
+          "startLine": 16,
+          "endLine": 24,
+          "methods": [],
+          "properties": [
+            "APIUrl",
+            "GameWSUrl",
+            "DefaultCharacterSelect",
+            "ShopEnabled",
+            "ActiveItems",
+            "MaintenanceMode",
+            "ClientParams"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "ClientVersionPolicy",
+          "line": 5,
+          "isDefault": false
+        },
+        {
+          "name": "RemoteConfig",
+          "line": 16,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 2,
+        "functionCount": 0,
+        "classCount": 2
+      }
+    },
+    {
+      "path": "internal/api/auth/model.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 59,
+      "nonEmptyLines": 50,
+      "classes": [
+        {
+          "name": "Account",
+          "startLine": 5,
+          "endLine": 14,
+          "methods": [],
+          "properties": [
+            "AccountID",
+            "AccountType",
+            "Status",
+            "Role",
+            "PrimaryPlayerID",
+            "CreatedAt",
+            "LastLoginAt",
+            "DeletedAt"
+          ]
+        },
+        {
+          "name": "AuthIdentity",
+          "startLine": 16,
+          "endLine": 24,
+          "methods": [],
+          "properties": [
+            "IdentityID",
+            "AccountID",
+            "Provider",
+            "ProviderUserID",
+            "EmailHash",
+            "CreatedAt",
+            "LastUsedAt"
+          ]
+        },
+        {
+          "name": "Session",
+          "startLine": 26,
+          "endLine": 33,
+          "methods": [],
+          "properties": [
+            "SessionID",
+            "AccountID",
+            "AccessToken",
+            "RefreshToken",
+            "ExpiresAt",
+            "RevokedAt"
+          ]
+        },
+        {
+          "name": "GuestLoginRequest",
+          "startLine": 35,
+          "endLine": 37,
+          "methods": [],
+          "properties": [
+            "DeviceInstallID"
+          ]
+        },
+        {
+          "name": "ProviderLoginRequest",
+          "startLine": 39,
+          "endLine": 42,
+          "methods": [],
+          "properties": [
+            "Provider",
+            "IDToken"
+          ]
+        },
+        {
+          "name": "LinkProviderRequest",
+          "startLine": 44,
+          "endLine": 47,
+          "methods": [],
+          "properties": [
+            "Provider",
+            "IDToken"
+          ]
+        },
+        {
+          "name": "RefreshTokenRequest",
+          "startLine": 49,
+          "endLine": 51,
+          "methods": [],
+          "properties": [
+            "RefreshToken"
+          ]
+        },
+        {
+          "name": "LoginResponse",
+          "startLine": 53,
+          "endLine": 59,
+          "methods": [],
+          "properties": [
+            "AccessToken",
+            "RefreshToken",
+            "PlayerID",
+            "DisplayName",
+            "Level"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Account",
+          "line": 5,
+          "isDefault": false
+        },
+        {
+          "name": "AuthIdentity",
+          "line": 16,
+          "isDefault": false
+        },
+        {
+          "name": "Session",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "GuestLoginRequest",
+          "line": 35,
+          "isDefault": false
+        },
+        {
+          "name": "ProviderLoginRequest",
+          "line": 39,
+          "isDefault": false
+        },
+        {
+          "name": "LinkProviderRequest",
+          "line": 44,
+          "isDefault": false
+        },
+        {
+          "name": "RefreshTokenRequest",
+          "line": 49,
+          "isDefault": false
+        },
+        {
+          "name": "LoginResponse",
+          "line": 53,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 8,
+        "functionCount": 0,
+        "classCount": 8
+      }
+    },
+    {
+      "path": "internal/api/auth/service.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 246,
+      "nonEmptyLines": 209,
+      "functions": [
+        {
+          "name": "NewService",
+          "startLine": 21,
+          "endLine": 28,
+          "params": [
+            "repo",
+            "redis",
+            "jwtAccess",
+            "jwtRefresh"
+          ]
+        },
+        {
+          "name": "GuestLogin",
+          "startLine": 30,
+          "endLine": 84,
+          "params": [
+            "ctx",
+            "deviceInstallID"
+          ]
+        },
+        {
+          "name": "ProviderLogin",
+          "startLine": 86,
+          "endLine": 141,
+          "params": [
+            "ctx",
+            "provider",
+            "idToken"
+          ]
+        },
+        {
+          "name": "LinkProvider",
+          "startLine": 143,
+          "endLine": 154,
+          "params": [
+            "ctx",
+            "accountID",
+            "provider",
+            "idToken"
+          ]
+        },
+        {
+          "name": "RefreshToken",
+          "startLine": 156,
+          "endLine": 192,
+          "params": [
+            "ctx",
+            "refreshToken"
+          ]
+        },
+        {
+          "name": "Logout",
+          "startLine": 194,
+          "endLine": 197,
+          "params": [
+            "ctx",
+            "refreshToken"
+          ]
+        },
+        {
+          "name": "generateLoginTokens",
+          "startLine": 199,
+          "endLine": 229,
+          "params": [
+            "ctx",
+            "accountID",
+            "playerID",
+            "role",
+            "displayName",
+            "level"
+          ]
+        },
+        {
+          "name": "verifyToken",
+          "startLine": 231,
+          "endLine": 246,
+          "params": [
+            "token",
+            "provider"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Service",
+          "startLine": 14,
+          "endLine": 19,
+          "methods": [
+            "GuestLogin",
+            "ProviderLogin",
+            "LinkProvider",
+            "RefreshToken",
+            "Logout",
+            "generateLoginTokens",
+            "verifyToken"
+          ],
+          "properties": [
+            "repo",
+            "redis",
+            "jwtAccess",
+            "jwtRefresh"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Service",
+          "line": 14,
+          "isDefault": false
+        },
+        {
+          "name": "NewService",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "GuestLogin",
+          "line": 30,
+          "isDefault": false
+        },
+        {
+          "name": "ProviderLogin",
+          "line": 86,
+          "isDefault": false
+        },
+        {
+          "name": "LinkProvider",
+          "line": 143,
+          "isDefault": false
+        },
+        {
+          "name": "RefreshToken",
+          "line": 156,
+          "isDefault": false
+        },
+        {
+          "name": "Logout",
+          "line": 194,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "GuestLogin",
+          "callee": "errors.New",
+          "lineNumber": 32
+        },
+        {
+          "caller": "GuestLogin",
+          "callee": "s.repo.FindIdentity",
+          "lineNumber": 36
+        },
+        {
+          "caller": "GuestLogin",
+          "callee": "s.repo.GetPlayerProfileByAccountID",
+          "lineNumber": 49
+        },
+        {
+          "caller": "GuestLogin",
+          "callee": "s.repo.UpdateLastLogin",
+          "lineNumber": 58
+        },
+        {
+          "caller": "GuestLogin",
+          "callee": "s.repo.CreateGuestAccount",
+          "lineNumber": 61
+        },
+        {
+          "caller": "GuestLogin",
+          "callee": "len",
+          "lineNumber": 68
+        },
+        {
+          "caller": "GuestLogin",
+          "callee": "s.repo.FindAccountByID",
+          "lineNumber": 75
+        },
+        {
+          "caller": "GuestLogin",
+          "callee": "errors.New",
+          "lineNumber": 80
+        },
+        {
+          "caller": "GuestLogin",
+          "callee": "s.generateLoginTokens",
+          "lineNumber": 83
+        },
+        {
+          "caller": "ProviderLogin",
+          "callee": "errors.New",
+          "lineNumber": 88
+        },
+        {
+          "caller": "ProviderLogin",
+          "callee": "s.verifyToken",
+          "lineNumber": 92
+        },
+        {
+          "caller": "ProviderLogin",
+          "callee": "fmt.Errorf",
+          "lineNumber": 94
+        },
+        {
+          "caller": "ProviderLogin",
+          "callee": "s.repo.FindIdentity",
+          "lineNumber": 98
+        },
+        {
+          "caller": "ProviderLogin",
+          "callee": "s.repo.GetPlayerProfileByAccountID",
+          "lineNumber": 110
+        },
+        {
+          "caller": "ProviderLogin",
+          "callee": "s.repo.UpdateLastLogin",
+          "lineNumber": 118
+        },
+        {
+          "caller": "ProviderLogin",
+          "callee": "s.repo.CreateProviderAccount",
+          "lineNumber": 121
+        },
+        {
+          "caller": "ProviderLogin",
+          "callee": "s.repo.FindAccountByID",
+          "lineNumber": 132
+        },
+        {
+          "caller": "ProviderLogin",
+          "callee": "errors.New",
+          "lineNumber": 137
+        },
+        {
+          "caller": "ProviderLogin",
+          "callee": "s.generateLoginTokens",
+          "lineNumber": 140
+        },
+        {
+          "caller": "LinkProvider",
+          "callee": "errors.New",
+          "lineNumber": 145
+        },
+        {
+          "caller": "LinkProvider",
+          "callee": "s.verifyToken",
+          "lineNumber": 148
+        },
+        {
+          "caller": "LinkProvider",
+          "callee": "s.repo.LinkIdentity",
+          "lineNumber": 153
+        },
+        {
+          "caller": "RefreshToken",
+          "callee": "s.jwtRefresh.Verify",
+          "lineNumber": 158
+        },
+        {
+          "caller": "RefreshToken",
+          "callee": "s.redis.Client.Get(ctx, redisKey).Result",
+          "lineNumber": 165
+        },
+        {
+          "caller": "RefreshToken",
+          "callee": "s.redis.Client.Get",
+          "lineNumber": 165
+        },
+        {
+          "caller": "RefreshToken",
+          "callee": "errors.New",
+          "lineNumber": 167
+        },
+        {
+          "caller": "RefreshToken",
+          "callee": "s.repo.FindAccountByID",
+          "lineNumber": 171
+        },
+        {
+          "caller": "RefreshToken",
+          "callee": "errors.New",
+          "lineNumber": 176
+        },
+        {
+          "caller": "RefreshToken",
+          "callee": "fmt.Errorf",
+          "lineNumber": 179
+        },
+        {
+          "caller": "RefreshToken",
+          "callee": "s.repo.GetPlayerProfileByAccountID",
+          "lineNumber": 183
+        },
+        {
+          "caller": "RefreshToken",
+          "callee": "s.redis.Client.Del",
+          "lineNumber": 189
+        },
+        {
+          "caller": "RefreshToken",
+          "callee": "s.generateLoginTokens",
+          "lineNumber": 191
+        },
+        {
+          "caller": "Logout",
+          "callee": "s.redis.Client.Del(ctx, redisKey).Err",
+          "lineNumber": 196
+        },
+        {
+          "caller": "Logout",
+          "callee": "s.redis.Client.Del",
+          "lineNumber": 196
+        },
+        {
+          "caller": "generateLoginTokens",
+          "callee": "s.jwtAccess.Generate",
+          "lineNumber": 204
+        },
+        {
+          "caller": "generateLoginTokens",
+          "callee": "s.jwtRefresh.Generate",
+          "lineNumber": 209
+        },
+        {
+          "caller": "generateLoginTokens",
+          "callee": "fmt.Sprintf",
+          "lineNumber": 216
+        },
+        {
+          "caller": "generateLoginTokens",
+          "callee": "s.redis.Client.Set(ctx, redisKey, val, 30*24*time.Hour).Err",
+          "lineNumber": 217
+        },
+        {
+          "caller": "generateLoginTokens",
+          "callee": "s.redis.Client.Set",
+          "lineNumber": 217
+        },
+        {
+          "caller": "generateLoginTokens",
+          "callee": "fmt.Errorf",
+          "lineNumber": 219
+        },
+        {
+          "caller": "verifyToken",
+          "callee": "errors.New",
+          "lineNumber": 235
+        },
+        {
+          "caller": "verifyToken",
+          "callee": "hex.EncodeToString",
+          "lineNumber": 239
+        },
+        {
+          "caller": "verifyToken",
+          "callee": "len",
+          "lineNumber": 240
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 7,
+        "functionCount": 8,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "internal/api/character/model.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 109,
+      "nonEmptyLines": 98,
+      "functions": [
+        {
+          "name": "LoadProgressionConfig",
+          "startLine": 62,
+          "endLine": 76,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "LoadLevelsConfig",
+          "startLine": 79,
+          "endLine": 85,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "CalcLevelFromExp",
+          "startLine": 90,
+          "endLine": 109,
+          "params": [
+            "exp",
+            "levels"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "PlayerCharacter",
+          "startLine": 9,
+          "endLine": 24,
+          "methods": [],
+          "properties": [
+            "PlayerID",
+            "CharacterID",
+            "Level",
+            "Exp",
+            "NextLevelExp",
+            "IsMaxLevel",
+            "StatPoints",
+            "BonusHP",
+            "BonusDamage",
+            "BonusMobility",
+            "BonusDefense",
+            "BonusSkillPower",
+            "BonusTerrainDmg",
+            "UnlockedAt"
+          ]
+        },
+        {
+          "name": "AllocateStatsPayload",
+          "startLine": 27,
+          "endLine": 35,
+          "methods": [],
+          "properties": [
+            "CharacterID",
+            "HP",
+            "Damage",
+            "Mobility",
+            "Defense",
+            "SkillPower",
+            "TerrainDamage"
+          ]
+        },
+        {
+          "name": "ResetStatsPayload",
+          "startLine": 38,
+          "endLine": 40,
+          "methods": [],
+          "properties": [
+            "CharacterID"
+          ]
+        },
+        {
+          "name": "ProgressionConfig",
+          "startLine": 43,
+          "endLine": 48,
+          "methods": [],
+          "properties": [
+            "PointsPerLevel",
+            "ResetCostCurrency",
+            "ResetCostAmount",
+            "StatMultipliers"
+          ]
+        },
+        {
+          "name": "LevelEntry",
+          "startLine": 51,
+          "endLine": 54,
+          "methods": [],
+          "properties": [
+            "Level",
+            "ExpRequired"
+          ]
+        },
+        {
+          "name": "CharacterLevelsConfig",
+          "startLine": 57,
+          "endLine": 59,
+          "methods": [],
+          "properties": [
+            "Levels"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "PlayerCharacter",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "AllocateStatsPayload",
+          "line": 27,
+          "isDefault": false
+        },
+        {
+          "name": "ResetStatsPayload",
+          "line": 38,
+          "isDefault": false
+        },
+        {
+          "name": "ProgressionConfig",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "LevelEntry",
+          "line": 51,
+          "isDefault": false
+        },
+        {
+          "name": "CharacterLevelsConfig",
+          "line": 57,
+          "isDefault": false
+        },
+        {
+          "name": "LoadProgressionConfig",
+          "line": 62,
+          "isDefault": false
+        },
+        {
+          "name": "LoadLevelsConfig",
+          "line": 79,
+          "isDefault": false
+        },
+        {
+          "name": "CalcLevelFromExp",
+          "line": 90,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "LoadProgressionConfig",
+          "callee": "json.Unmarshal",
+          "lineNumber": 70
+        },
+        {
+          "caller": "LoadLevelsConfig",
+          "callee": "json.Unmarshal",
+          "lineNumber": 82
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 9,
+        "functionCount": 3,
+        "classCount": 6
+      }
+    },
+    {
+      "path": "internal/api/character/service.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 165,
+      "nonEmptyLines": 144,
+      "functions": [
+        {
+          "name": "NewService",
+          "startLine": 24,
+          "endLine": 30,
+          "params": [
+            "repo",
+            "economyRepo",
+            "db"
+          ]
+        },
+        {
+          "name": "GetPlayerCharacters",
+          "startLine": 33,
+          "endLine": 54,
+          "params": [
+            "ctx",
+            "playerID"
+          ]
+        },
+        {
+          "name": "AllocateStats",
+          "startLine": 57,
+          "endLine": 97,
+          "params": [
+            "ctx",
+            "playerID",
+            "payload"
+          ]
+        },
+        {
+          "name": "ResetStats",
+          "startLine": 100,
+          "endLine": 165,
+          "params": [
+            "ctx",
+            "playerID",
+            "characterID"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Service",
+          "startLine": 17,
+          "endLine": 21,
+          "methods": [
+            "GetPlayerCharacters",
+            "AllocateStats",
+            "ResetStats"
+          ],
+          "properties": [
+            "repo",
+            "economyRepo",
+            "db"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Service",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "NewService",
+          "line": 24,
+          "isDefault": false
+        },
+        {
+          "name": "GetPlayerCharacters",
+          "line": 33,
+          "isDefault": false
+        },
+        {
+          "name": "AllocateStats",
+          "line": 57,
+          "isDefault": false
+        },
+        {
+          "name": "ResetStats",
+          "line": 100,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "GetPlayerCharacters",
+          "callee": "s.repo.GetPlayerCharacters",
+          "lineNumber": 34
+        },
+        {
+          "caller": "GetPlayerCharacters",
+          "callee": "s.repo.GetConfigValue",
+          "lineNumber": 40
+        },
+        {
+          "caller": "GetPlayerCharacters",
+          "callee": "errors.Is",
+          "lineNumber": 41
+        },
+        {
+          "caller": "GetPlayerCharacters",
+          "callee": "fmt.Errorf",
+          "lineNumber": 42
+        },
+        {
+          "caller": "GetPlayerCharacters",
+          "callee": "LoadLevelsConfig",
+          "lineNumber": 44
+        },
+        {
+          "caller": "GetPlayerCharacters",
+          "callee": "CalcLevelFromExp",
+          "lineNumber": 47
+        },
+        {
+          "caller": "AllocateStats",
+          "callee": "s.repo.AllocateStats",
+          "lineNumber": 81
+        },
+        {
+          "caller": "AllocateStats",
+          "callee": "err.Error",
+          "lineNumber": 87
+        },
+        {
+          "caller": "ResetStats",
+          "callee": "s.repo.GetConfigValue",
+          "lineNumber": 106
+        },
+        {
+          "caller": "ResetStats",
+          "callee": "errors.Is",
+          "lineNumber": 107
+        },
+        {
+          "caller": "ResetStats",
+          "callee": "fmt.Errorf",
+          "lineNumber": 108
+        },
+        {
+          "caller": "ResetStats",
+          "callee": "LoadProgressionConfig",
+          "lineNumber": 110
+        },
+        {
+          "caller": "ResetStats",
+          "callee": "s.repo.GetPlayerCharacter",
+          "lineNumber": 113
+        },
+        {
+          "caller": "ResetStats",
+          "callee": "errors.Is",
+          "lineNumber": 115
+        },
+        {
+          "caller": "ResetStats",
+          "callee": "s.db.Pool.Begin",
+          "lineNumber": 136
+        },
+        {
+          "caller": "ResetStats",
+          "callee": "fmt.Errorf",
+          "lineNumber": 138
+        },
+        {
+          "caller": "ResetStats",
+          "callee": "tx.Rollback",
+          "lineNumber": 140
+        },
+        {
+          "caller": "ResetStats",
+          "callee": "s.economyRepo.DebitTx",
+          "lineNumber": 143
+        },
+        {
+          "caller": "ResetStats",
+          "callee": "err.Error",
+          "lineNumber": 149
+        },
+        {
+          "caller": "ResetStats",
+          "callee": "err.Error",
+          "lineNumber": 149
+        },
+        {
+          "caller": "ResetStats",
+          "callee": "fmt.Sprintf",
+          "lineNumber": 152
+        },
+        {
+          "caller": "ResetStats",
+          "callee": "fmt.Errorf",
+          "lineNumber": 156
+        },
+        {
+          "caller": "ResetStats",
+          "callee": "s.repo.ResetStats",
+          "lineNumber": 159
+        },
+        {
+          "caller": "ResetStats",
+          "callee": "fmt.Errorf",
+          "lineNumber": 161
+        },
+        {
+          "caller": "ResetStats",
+          "callee": "tx.Commit",
+          "lineNumber": 164
+        }
+      ],
+      "metrics": {
+        "importCount": 6,
+        "exportCount": 5,
+        "functionCount": 4,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "internal/api/economy/model.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 14,
+      "nonEmptyLines": 12,
+      "classes": [
+        {
+          "name": "EconomyTransaction",
+          "startLine": 5,
+          "endLine": 14,
+          "methods": [],
+          "properties": [
+            "TransactionID",
+            "PlayerID",
+            "Currency",
+            "Amount",
+            "BalanceAfter",
+            "Source",
+            "RefID",
+            "CreatedAt"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "EconomyTransaction",
+          "line": 5,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "internal/api/economy/repository.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 123,
+      "nonEmptyLines": 104,
+      "functions": [
+        {
+          "name": "NewRepository",
+          "startLine": 15,
+          "endLine": 17,
+          "params": []
+        },
+        {
+          "name": "generateID",
+          "startLine": 19,
+          "endLine": 25,
+          "params": []
+        },
+        {
+          "name": "CreditTx",
+          "startLine": 27,
+          "endLine": 71,
+          "params": [
+            "ctx",
+            "tx",
+            "playerID",
+            "currency",
+            "amount",
+            "source",
+            "refID"
+          ]
+        },
+        {
+          "name": "DebitTx",
+          "startLine": 73,
+          "endLine": 123,
+          "params": [
+            "ctx",
+            "tx",
+            "playerID",
+            "currency",
+            "amount",
+            "source",
+            "refID",
+            "allowNegative"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Repository",
+          "startLine": 13,
+          "endLine": 13,
+          "methods": [
+            "CreditTx",
+            "DebitTx"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "Repository",
+          "line": 13,
+          "isDefault": false
+        },
+        {
+          "name": "NewRepository",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "CreditTx",
+          "line": 27,
+          "isDefault": false
+        },
+        {
+          "name": "DebitTx",
+          "line": 73,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "generateID",
+          "callee": "make",
+          "lineNumber": 20
+        },
+        {
+          "caller": "generateID",
+          "callee": "rand.Read",
+          "lineNumber": 21
+        },
+        {
+          "caller": "generateID",
+          "callee": "hex.EncodeToString",
+          "lineNumber": 24
+        },
+        {
+          "caller": "CreditTx",
+          "callee": "errors.New",
+          "lineNumber": 29
+        },
+        {
+          "caller": "CreditTx",
+          "callee": "tx.QueryRow(ctx, querySelect, playerID).Scan",
+          "lineNumber": 35
+        },
+        {
+          "caller": "CreditTx",
+          "callee": "tx.QueryRow",
+          "lineNumber": 35
+        },
+        {
+          "caller": "CreditTx",
+          "callee": "fmt.Errorf",
+          "lineNumber": 37
+        },
+        {
+          "caller": "CreditTx",
+          "callee": "fmt.Errorf",
+          "lineNumber": 50
+        },
+        {
+          "caller": "CreditTx",
+          "callee": "tx.Exec",
+          "lineNumber": 54
+        },
+        {
+          "caller": "CreditTx",
+          "callee": "fmt.Errorf",
+          "lineNumber": 56
+        },
+        {
+          "caller": "CreditTx",
+          "callee": "generateID",
+          "lineNumber": 60
+        },
+        {
+          "caller": "CreditTx",
+          "callee": "tx.Exec",
+          "lineNumber": 65
+        },
+        {
+          "caller": "CreditTx",
+          "callee": "fmt.Errorf",
+          "lineNumber": 67
+        },
+        {
+          "caller": "DebitTx",
+          "callee": "errors.New",
+          "lineNumber": 75
+        },
+        {
+          "caller": "DebitTx",
+          "callee": "tx.QueryRow(ctx, querySelect, playerID).Scan",
+          "lineNumber": 81
+        },
+        {
+          "caller": "DebitTx",
+          "callee": "tx.QueryRow",
+          "lineNumber": 81
+        },
+        {
+          "caller": "DebitTx",
+          "callee": "fmt.Errorf",
+          "lineNumber": 83
+        },
+        {
+          "caller": "DebitTx",
+          "callee": "errors.New",
+          "lineNumber": 92
+        },
+        {
+          "caller": "DebitTx",
+          "callee": "errors.New",
+          "lineNumber": 98
+        },
+        {
+          "caller": "DebitTx",
+          "callee": "fmt.Errorf",
+          "lineNumber": 102
+        },
+        {
+          "caller": "DebitTx",
+          "callee": "tx.Exec",
+          "lineNumber": 106
+        },
+        {
+          "caller": "DebitTx",
+          "callee": "fmt.Errorf",
+          "lineNumber": 108
+        },
+        {
+          "caller": "DebitTx",
+          "callee": "generateID",
+          "lineNumber": 112
+        },
+        {
+          "caller": "DebitTx",
+          "callee": "tx.Exec",
+          "lineNumber": 117
+        },
+        {
+          "caller": "DebitTx",
+          "callee": "fmt.Errorf",
+          "lineNumber": 119
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 4,
+        "functionCount": 4,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "internal/api/economy/service.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 55,
+      "nonEmptyLines": 43,
+      "functions": [
+        {
+          "name": "NewService",
+          "startLine": 15,
+          "endLine": 17,
+          "params": [
+            "repo",
+            "db"
+          ]
+        },
+        {
+          "name": "Credit",
+          "startLine": 19,
+          "endLine": 36,
+          "params": [
+            "ctx",
+            "playerID",
+            "currency",
+            "amount",
+            "source",
+            "refID"
+          ]
+        },
+        {
+          "name": "Debit",
+          "startLine": 38,
+          "endLine": 55,
+          "params": [
+            "ctx",
+            "playerID",
+            "currency",
+            "amount",
+            "source",
+            "refID",
+            "allowNegative"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Service",
+          "startLine": 10,
+          "endLine": 13,
+          "methods": [
+            "Credit",
+            "Debit"
+          ],
+          "properties": [
+            "repo",
+            "db"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Service",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "NewService",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "Credit",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "Debit",
+          "line": 38,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Credit",
+          "callee": "s.db.Pool.Begin",
+          "lineNumber": 20
+        },
+        {
+          "caller": "Credit",
+          "callee": "tx.Rollback",
+          "lineNumber": 24
+        },
+        {
+          "caller": "Credit",
+          "callee": "s.repo.CreditTx",
+          "lineNumber": 26
+        },
+        {
+          "caller": "Credit",
+          "callee": "tx.Commit",
+          "lineNumber": 31
+        },
+        {
+          "caller": "Credit",
+          "callee": "fmt.Errorf",
+          "lineNumber": 32
+        },
+        {
+          "caller": "Debit",
+          "callee": "s.db.Pool.Begin",
+          "lineNumber": 39
+        },
+        {
+          "caller": "Debit",
+          "callee": "tx.Rollback",
+          "lineNumber": 43
+        },
+        {
+          "caller": "Debit",
+          "callee": "s.repo.DebitTx",
+          "lineNumber": 45
+        },
+        {
+          "caller": "Debit",
+          "callee": "tx.Commit",
+          "lineNumber": 50
+        },
+        {
+          "caller": "Debit",
+          "callee": "fmt.Errorf",
+          "lineNumber": 51
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 4,
+        "functionCount": 3,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "internal/api/giftcode/model.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 29,
+      "nonEmptyLines": 24,
+      "classes": [
+        {
+          "name": "RewardItem",
+          "startLine": 5,
+          "endLine": 8,
+          "methods": [],
+          "properties": [
+            "ItemID",
+            "Quantity"
+          ]
+        },
+        {
+          "name": "GiftCode",
+          "startLine": 10,
+          "endLine": 19,
+          "methods": [],
+          "properties": [
+            "Code",
+            "RewardCoin",
+            "RewardGem",
+            "RewardItems",
+            "MaxUses",
+            "UsedCount",
+            "ExpiredAt",
+            "IsActive"
+          ]
+        },
+        {
+          "name": "GiftCodeRedemption",
+          "startLine": 21,
+          "endLine": 25,
+          "methods": [],
+          "properties": [
+            "PlayerID",
+            "Code",
+            "RedeemedAt"
+          ]
+        },
+        {
+          "name": "RedeemRequest",
+          "startLine": 27,
+          "endLine": 29,
+          "methods": [],
+          "properties": [
+            "Code"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "RewardItem",
+          "line": 5,
+          "isDefault": false
+        },
+        {
+          "name": "GiftCode",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "GiftCodeRedemption",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "RedeemRequest",
+          "line": 27,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 4,
+        "functionCount": 0,
+        "classCount": 4
+      }
+    },
+    {
+      "path": "internal/api/giftcode/service.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 110,
+      "nonEmptyLines": 95,
+      "functions": [
+        {
+          "name": "NewService",
+          "startLine": 21,
+          "endLine": 33,
+          "params": [
+            "repo",
+            "economyRepo",
+            "inventoryRepo",
+            "db"
+          ]
+        },
+        {
+          "name": "RedeemCode",
+          "startLine": 35,
+          "endLine": 110,
+          "params": [
+            "ctx",
+            "playerID",
+            "code"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Service",
+          "startLine": 14,
+          "endLine": 19,
+          "methods": [
+            "RedeemCode"
+          ],
+          "properties": [
+            "repo",
+            "economyRepo",
+            "inventoryRepo",
+            "db"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Service",
+          "line": 14,
+          "isDefault": false
+        },
+        {
+          "name": "NewService",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "RedeemCode",
+          "line": 35,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "RedeemCode",
+          "callee": "errors.New",
+          "lineNumber": 37
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "s.db.Pool.Begin",
+          "lineNumber": 41
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "tx.Rollback",
+          "lineNumber": 45
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "s.repo.GetGiftCodeTx",
+          "lineNumber": 48
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "errors.New",
+          "lineNumber": 53
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "time.Now().After",
+          "lineNumber": 57
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "time.Now",
+          "lineNumber": 57
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "errors.New",
+          "lineNumber": 58
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "errors.New",
+          "lineNumber": 63
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "s.repo.HasRedeemedTx",
+          "lineNumber": 67
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "errors.New",
+          "lineNumber": 72
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "s.economyRepo.CreditTx",
+          "lineNumber": 78
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "fmt.Errorf",
+          "lineNumber": 80
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "s.economyRepo.CreditTx",
+          "lineNumber": 86
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "fmt.Errorf",
+          "lineNumber": 88
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "s.inventoryRepo.AddItemsTx",
+          "lineNumber": 95
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "fmt.Errorf",
+          "lineNumber": 97
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "s.repo.RedeemTx",
+          "lineNumber": 103
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "fmt.Errorf",
+          "lineNumber": 105
+        },
+        {
+          "caller": "RedeemCode",
+          "callee": "tx.Commit",
+          "lineNumber": 109
+        }
+      ],
+      "metrics": {
+        "importCount": 9,
+        "exportCount": 3,
+        "functionCount": 2,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "internal/api/iap/model.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 32,
+      "nonEmptyLines": 28,
+      "classes": [
+        {
+          "name": "IAPProduct",
+          "startLine": 5,
+          "endLine": 12,
+          "methods": [],
+          "properties": [
+            "ProductID",
+            "PlatformSkuID",
+            "GemAmount",
+            "BonusGemAmount",
+            "PriceUSD",
+            "IsActive"
+          ]
+        },
+        {
+          "name": "PaymentTransaction",
+          "startLine": 14,
+          "endLine": 26,
+          "methods": [],
+          "properties": [
+            "TransactionID",
+            "PlayerID",
+            "ProductID",
+            "Platform",
+            "PurchaseToken",
+            "AmountUSD",
+            "GemGranted",
+            "Status",
+            "CreatedAt",
+            "VerifiedAt",
+            "RefundedAt"
+          ]
+        },
+        {
+          "name": "VerifyReceiptRequest",
+          "startLine": 28,
+          "endLine": 32,
+          "methods": [],
+          "properties": [
+            "ProductID",
+            "Platform",
+            "PurchaseToken"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "IAPProduct",
+          "line": 5,
+          "isDefault": false
+        },
+        {
+          "name": "PaymentTransaction",
+          "line": 14,
+          "isDefault": false
+        },
+        {
+          "name": "VerifyReceiptRequest",
+          "line": 28,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 3,
+        "functionCount": 0,
+        "classCount": 3
+      }
+    },
+    {
+      "path": "internal/api/iap/service.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 128,
+      "nonEmptyLines": 108,
+      "functions": [
+        {
+          "name": "NewService",
+          "startLine": 20,
+          "endLine": 26,
+          "params": [
+            "repo",
+            "economyRepo",
+            "db"
+          ]
+        },
+        {
+          "name": "GetActiveProducts",
+          "startLine": 28,
+          "endLine": 30,
+          "params": [
+            "ctx"
+          ]
+        },
+        {
+          "name": "VerifyReceipt",
+          "startLine": 32,
+          "endLine": 106,
+          "params": [
+            "ctx",
+            "playerID",
+            "productID",
+            "platform",
+            "purchaseToken"
+          ]
+        },
+        {
+          "name": "mockStoreVerification",
+          "startLine": 108,
+          "endLine": 128,
+          "params": [
+            "ctx",
+            "platform",
+            "purchaseToken"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Service",
+          "startLine": 14,
+          "endLine": 18,
+          "methods": [
+            "GetActiveProducts",
+            "VerifyReceipt",
+            "mockStoreVerification"
+          ],
+          "properties": [
+            "repo",
+            "economyRepo",
+            "db"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Service",
+          "line": 14,
+          "isDefault": false
+        },
+        {
+          "name": "NewService",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "GetActiveProducts",
+          "line": 28,
+          "isDefault": false
+        },
+        {
+          "name": "VerifyReceipt",
+          "line": 32,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "GetActiveProducts",
+          "callee": "s.repo.GetActiveProducts",
+          "lineNumber": 29
+        },
+        {
+          "caller": "VerifyReceipt",
+          "callee": "errors.New",
+          "lineNumber": 34
+        },
+        {
+          "caller": "VerifyReceipt",
+          "callee": "s.repo.GetProductByID",
+          "lineNumber": 38
+        },
+        {
+          "caller": "VerifyReceipt",
+          "callee": "errors.New",
+          "lineNumber": 43
+        },
+        {
+          "caller": "VerifyReceipt",
+          "callee": "s.mockStoreVerification",
+          "lineNumber": 47
+        },
+        {
+          "caller": "VerifyReceipt",
+          "callee": "fmt.Errorf",
+          "lineNumber": 49
+        },
+        {
+          "caller": "VerifyReceipt",
+          "callee": "s.db.Pool.Begin",
+          "lineNumber": 53
+        },
+        {
+          "caller": "VerifyReceipt",
+          "callee": "tx.Rollback",
+          "lineNumber": 57
+        },
+        {
+          "caller": "VerifyReceipt",
+          "callee": "s.repo.FindTransactionByID",
+          "lineNumber": 60
+        },
+        {
+          "caller": "VerifyReceipt",
+          "callee": "errors.New",
+          "lineNumber": 69
+        },
+        {
+          "caller": "VerifyReceipt",
+          "callee": "s.economyRepo.CreditTx",
+          "lineNumber": 76
+        },
+        {
+          "caller": "VerifyReceipt",
+          "callee": "fmt.Errorf",
+          "lineNumber": 78
+        },
+        {
+          "caller": "VerifyReceipt",
+          "callee": "time.Now",
+          "lineNumber": 82
+        },
+        {
+          "caller": "VerifyReceipt",
+          "callee": "s.repo.CreateTransactionTx",
+          "lineNumber": 95
+        },
+        {
+          "caller": "VerifyReceipt",
+          "callee": "fmt.Errorf",
+          "lineNumber": 97
+        },
+        {
+          "caller": "VerifyReceipt",
+          "callee": "tx.Commit",
+          "lineNumber": 101
+        },
+        {
+          "caller": "VerifyReceipt",
+          "callee": "fmt.Errorf",
+          "lineNumber": 102
+        },
+        {
+          "caller": "mockStoreVerification",
+          "callee": "errors.New",
+          "lineNumber": 112
+        },
+        {
+          "caller": "mockStoreVerification",
+          "callee": "hex.EncodeToString",
+          "lineNumber": 116
+        },
+        {
+          "caller": "mockStoreVerification",
+          "callee": "len",
+          "lineNumber": 117
+        },
+        {
+          "caller": "mockStoreVerification",
+          "callee": "fmt.Sprintf",
+          "lineNumber": 122
+        },
+        {
+          "caller": "mockStoreVerification",
+          "callee": "fmt.Sprintf",
+          "lineNumber": 124
+        },
+        {
+          "caller": "mockStoreVerification",
+          "callee": "errors.New",
+          "lineNumber": 127
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 4,
+        "functionCount": 4,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "internal/api/inventory/handler.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 40,
+      "nonEmptyLines": 32,
+      "functions": [
+        {
+          "name": "NewHandler",
+          "startLine": 15,
+          "endLine": 17,
+          "params": [
+            "service"
+          ]
+        },
+        {
+          "name": "GetInventory",
+          "startLine": 19,
+          "endLine": 40,
+          "params": [
+            "w",
+            "r"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Handler",
+          "startLine": 11,
+          "endLine": 13,
+          "methods": [
+            "GetInventory"
+          ],
+          "properties": [
+            "service"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Handler",
+          "line": 11,
+          "isDefault": false
+        },
+        {
+          "name": "NewHandler",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "GetInventory",
+          "line": 19,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "GetInventory",
+          "callee": "r.Context().Value",
+          "lineNumber": 20
+        },
+        {
+          "caller": "GetInventory",
+          "callee": "r.Context",
+          "lineNumber": 20
+        },
+        {
+          "caller": "GetInventory",
+          "callee": "model.WriteError",
+          "lineNumber": 22
+        },
+        {
+          "caller": "GetInventory",
+          "callee": "h.service.GetAvailableInventory",
+          "lineNumber": 26
+        },
+        {
+          "caller": "GetInventory",
+          "callee": "r.Context",
+          "lineNumber": 26
+        },
+        {
+          "caller": "GetInventory",
+          "callee": "model.WriteError",
+          "lineNumber": 28
+        },
+        {
+          "caller": "GetInventory",
+          "callee": "w.Header().Set",
+          "lineNumber": 37
+        },
+        {
+          "caller": "GetInventory",
+          "callee": "w.Header",
+          "lineNumber": 37
+        },
+        {
+          "caller": "GetInventory",
+          "callee": "w.WriteHeader",
+          "lineNumber": 38
+        },
+        {
+          "caller": "GetInventory",
+          "callee": "json.NewEncoder(w).Encode",
+          "lineNumber": 39
+        },
+        {
+          "caller": "GetInventory",
+          "callee": "json.NewEncoder",
+          "lineNumber": 39
+        }
+      ],
+      "metrics": {
+        "importCount": 4,
+        "exportCount": 3,
+        "functionCount": 2,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "internal/api/inventory/model.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 23,
+      "nonEmptyLines": 20,
+      "classes": [
+        {
+          "name": "InventoryItem",
+          "startLine": 5,
+          "endLine": 12,
+          "methods": [],
+          "properties": [
+            "PlayerID",
+            "ItemID",
+            "Quantity",
+            "Source",
+            "AcquiredAt",
+            "ExpiresAt"
+          ]
+        },
+        {
+          "name": "InventoryReservation",
+          "startLine": 14,
+          "endLine": 23,
+          "methods": [],
+          "properties": [
+            "ReservationID",
+            "PlayerID",
+            "MatchID",
+            "ItemID",
+            "Quantity",
+            "Status",
+            "CreatedAt",
+            "UpdatedAt"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "InventoryItem",
+          "line": 5,
+          "isDefault": false
+        },
+        {
+          "name": "InventoryReservation",
+          "line": 14,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 2,
+        "functionCount": 0,
+        "classCount": 2
+      }
+    },
+    {
+      "path": "internal/api/inventory/repository.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 160,
+      "nonEmptyLines": 142,
+      "functions": [
+        {
+          "name": "NewRepository",
+          "startLine": 19,
+          "endLine": 21,
+          "params": [
+            "db"
+          ]
+        },
+        {
+          "name": "generateID",
+          "startLine": 23,
+          "endLine": 29,
+          "params": []
+        },
+        {
+          "name": "GetAvailableInventory",
+          "startLine": 31,
+          "endLine": 68,
+          "params": [
+            "ctx",
+            "playerID"
+          ]
+        },
+        {
+          "name": "AddItemsTx",
+          "startLine": 70,
+          "endLine": 83,
+          "params": [
+            "ctx",
+            "tx",
+            "playerID",
+            "itemID",
+            "quantity",
+            "source",
+            "expiresAt"
+          ]
+        },
+        {
+          "name": "ReserveItemsTx",
+          "startLine": 85,
+          "endLine": 115,
+          "params": [
+            "ctx",
+            "tx",
+            "playerID",
+            "matchID",
+            "itemID",
+            "quantity"
+          ]
+        },
+        {
+          "name": "ConsumeReservationTx",
+          "startLine": 117,
+          "endLine": 150,
+          "params": [
+            "ctx",
+            "tx",
+            "playerID",
+            "matchID",
+            "itemID"
+          ]
+        },
+        {
+          "name": "ReleaseReservationTx",
+          "startLine": 152,
+          "endLine": 160,
+          "params": [
+            "ctx",
+            "tx",
+            "playerID",
+            "matchID",
+            "itemID"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Repository",
+          "startLine": 15,
+          "endLine": 17,
+          "methods": [
+            "GetAvailableInventory",
+            "AddItemsTx",
+            "ReserveItemsTx",
+            "ConsumeReservationTx",
+            "ReleaseReservationTx"
+          ],
+          "properties": [
+            "db"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Repository",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "NewRepository",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "GetAvailableInventory",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "AddItemsTx",
+          "line": 70,
+          "isDefault": false
+        },
+        {
+          "name": "ReserveItemsTx",
+          "line": 85,
+          "isDefault": false
+        },
+        {
+          "name": "ConsumeReservationTx",
+          "line": 117,
+          "isDefault": false
+        },
+        {
+          "name": "ReleaseReservationTx",
+          "line": 152,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "generateID",
+          "callee": "make",
+          "lineNumber": 24
+        },
+        {
+          "caller": "generateID",
+          "callee": "rand.Read",
+          "lineNumber": 25
+        },
+        {
+          "caller": "generateID",
+          "callee": "hex.EncodeToString",
+          "lineNumber": 28
+        },
+        {
+          "caller": "GetAvailableInventory",
+          "callee": "r.db.Pool.Query",
+          "lineNumber": 39
+        },
+        {
+          "caller": "GetAvailableInventory",
+          "callee": "rows.Close",
+          "lineNumber": 43
+        },
+        {
+          "caller": "GetAvailableInventory",
+          "callee": "rows.Next",
+          "lineNumber": 46
+        },
+        {
+          "caller": "GetAvailableInventory",
+          "callee": "rows.Scan",
+          "lineNumber": 50
+        },
+        {
+          "caller": "GetAvailableInventory",
+          "callee": "append",
+          "lineNumber": 63
+        },
+        {
+          "caller": "AddItemsTx",
+          "callee": "fmt.Errorf",
+          "lineNumber": 72
+        },
+        {
+          "caller": "AddItemsTx",
+          "callee": "tx.Exec",
+          "lineNumber": 81
+        },
+        {
+          "caller": "ReserveItemsTx",
+          "callee": "tx.QueryRow(ctx, queryCheck, playerID, itemID).Scan",
+          "lineNumber": 96
+        },
+        {
+          "caller": "ReserveItemsTx",
+          "callee": "tx.QueryRow",
+          "lineNumber": 96
+        },
+        {
+          "caller": "ReserveItemsTx",
+          "callee": "fmt.Errorf",
+          "lineNumber": 99
+        },
+        {
+          "caller": "ReserveItemsTx",
+          "callee": "fmt.Errorf",
+          "lineNumber": 105
+        },
+        {
+          "caller": "ReserveItemsTx",
+          "callee": "generateID",
+          "lineNumber": 108
+        },
+        {
+          "caller": "ReserveItemsTx",
+          "callee": "tx.Exec",
+          "lineNumber": 113
+        },
+        {
+          "caller": "ConsumeReservationTx",
+          "callee": "tx.QueryRow(ctx, querySelect, playerID, matchID, itemID).Scan",
+          "lineNumber": 126
+        },
+        {
+          "caller": "ConsumeReservationTx",
+          "callee": "tx.QueryRow",
+          "lineNumber": 126
+        },
+        {
+          "caller": "ConsumeReservationTx",
+          "callee": "fmt.Errorf",
+          "lineNumber": 128
+        },
+        {
+          "caller": "ConsumeReservationTx",
+          "callee": "tx.Exec",
+          "lineNumber": 137
+        },
+        {
+          "caller": "ConsumeReservationTx",
+          "callee": "fmt.Errorf",
+          "lineNumber": 139
+        },
+        {
+          "caller": "ConsumeReservationTx",
+          "callee": "tx.Exec",
+          "lineNumber": 148
+        },
+        {
+          "caller": "ReleaseReservationTx",
+          "callee": "tx.Exec",
+          "lineNumber": 158
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 7,
+        "functionCount": 7,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "internal/api/inventory/service.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 15,
+      "nonEmptyLines": 11,
+      "functions": [
+        {
+          "name": "NewService",
+          "startLine": 9,
+          "endLine": 11,
+          "params": [
+            "repo"
+          ]
+        },
+        {
+          "name": "GetAvailableInventory",
+          "startLine": 13,
+          "endLine": 15,
+          "params": [
+            "ctx",
+            "playerID"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Service",
+          "startLine": 5,
+          "endLine": 7,
+          "methods": [
+            "GetAvailableInventory"
+          ],
+          "properties": [
+            "repo"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Service",
+          "line": 5,
+          "isDefault": false
+        },
+        {
+          "name": "NewService",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "GetAvailableInventory",
+          "line": 13,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "GetAvailableInventory",
+          "callee": "s.repo.GetAvailableInventory",
+          "lineNumber": 14
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 3,
+        "functionCount": 2,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "internal/api/matchhistory/model.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 14,
+      "nonEmptyLines": 12,
+      "classes": [
+        {
+          "name": "MatchHistoryEntry",
+          "startLine": 5,
+          "endLine": 14,
+          "methods": [],
+          "properties": [
+            "MatchID",
+            "Mode",
+            "MapID",
+            "Result",
+            "ExpGained",
+            "CoinGained",
+            "RatingChange",
+            "PlayedAt"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "MatchHistoryEntry",
+          "line": 5,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "internal/api/matchhistory/service.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 15,
+      "nonEmptyLines": 11,
+      "functions": [
+        {
+          "name": "NewService",
+          "startLine": 9,
+          "endLine": 11,
+          "params": [
+            "repo"
+          ]
+        },
+        {
+          "name": "GetPlayerHistory",
+          "startLine": 13,
+          "endLine": 15,
+          "params": [
+            "ctx",
+            "playerID",
+            "limit",
+            "offset"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Service",
+          "startLine": 5,
+          "endLine": 7,
+          "methods": [
+            "GetPlayerHistory"
+          ],
+          "properties": [
+            "repo"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Service",
+          "line": 5,
+          "isDefault": false
+        },
+        {
+          "name": "NewService",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "GetPlayerHistory",
+          "line": 13,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "GetPlayerHistory",
+          "callee": "s.repo.GetPlayerHistory",
+          "lineNumber": 14
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 3,
+        "functionCount": 2,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "internal/api/mission/model.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 33,
+      "nonEmptyLines": 28,
+      "classes": [
+        {
+          "name": "Mission",
+          "startLine": 5,
+          "endLine": 14,
+          "methods": [],
+          "properties": [
+            "MissionID",
+            "Type",
+            "Target",
+            "RequiredValue",
+            "RewardCoin",
+            "RewardGem",
+            "RewardItems",
+            "IsActive"
+          ]
+        },
+        {
+          "name": "MissionProgress",
+          "startLine": 16,
+          "endLine": 29,
+          "methods": [],
+          "properties": [
+            "PlayerID",
+            "MissionID",
+            "CurrentValue",
+            "IsClaimed",
+            "UpdatedAt",
+            "Type",
+            "Target",
+            "RequiredValue",
+            "RewardCoin",
+            "RewardGem"
+          ]
+        },
+        {
+          "name": "ClaimRewardRequest",
+          "startLine": 31,
+          "endLine": 33,
+          "methods": [],
+          "properties": [
+            "MissionID"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Mission",
+          "line": 5,
+          "isDefault": false
+        },
+        {
+          "name": "MissionProgress",
+          "line": 16,
+          "isDefault": false
+        },
+        {
+          "name": "ClaimRewardRequest",
+          "line": 31,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 3,
+        "functionCount": 0,
+        "classCount": 3
+      }
+    },
+    {
+      "path": "internal/api/mission/service.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 80,
+      "nonEmptyLines": 68,
+      "functions": [
+        {
+          "name": "NewService",
+          "startLine": 18,
+          "endLine": 24,
+          "params": [
+            "repo",
+            "economyRepo",
+            "db"
+          ]
+        },
+        {
+          "name": "GetMissions",
+          "startLine": 26,
+          "endLine": 28,
+          "params": [
+            "ctx",
+            "playerID",
+            "missionType"
+          ]
+        },
+        {
+          "name": "ClaimReward",
+          "startLine": 30,
+          "endLine": 80,
+          "params": [
+            "ctx",
+            "playerID",
+            "missionID"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Service",
+          "startLine": 12,
+          "endLine": 16,
+          "methods": [
+            "GetMissions",
+            "ClaimReward"
+          ],
+          "properties": [
+            "repo",
+            "economyRepo",
+            "db"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Service",
+          "line": 12,
+          "isDefault": false
+        },
+        {
+          "name": "NewService",
+          "line": 18,
+          "isDefault": false
+        },
+        {
+          "name": "GetMissions",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "ClaimReward",
+          "line": 30,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "GetMissions",
+          "callee": "s.repo.GetPlayerMissions",
+          "lineNumber": 27
+        },
+        {
+          "caller": "ClaimReward",
+          "callee": "s.db.Pool.Begin",
+          "lineNumber": 32
+        },
+        {
+          "caller": "ClaimReward",
+          "callee": "tx.Rollback",
+          "lineNumber": 36
+        },
+        {
+          "caller": "ClaimReward",
+          "callee": "s.repo.GetMissionProgressTx",
+          "lineNumber": 39
+        },
+        {
+          "caller": "ClaimReward",
+          "callee": "errors.New",
+          "lineNumber": 44
+        },
+        {
+          "caller": "ClaimReward",
+          "callee": "errors.New",
+          "lineNumber": 49
+        },
+        {
+          "caller": "ClaimReward",
+          "callee": "errors.New",
+          "lineNumber": 52
+        },
+        {
+          "caller": "ClaimReward",
+          "callee": "s.economyRepo.CreditTx",
+          "lineNumber": 58
+        },
+        {
+          "caller": "ClaimReward",
+          "callee": "fmt.Errorf",
+          "lineNumber": 60
+        },
+        {
+          "caller": "ClaimReward",
+          "callee": "s.economyRepo.CreditTx",
+          "lineNumber": 66
+        },
+        {
+          "caller": "ClaimReward",
+          "callee": "fmt.Errorf",
+          "lineNumber": 68
+        },
+        {
+          "caller": "ClaimReward",
+          "callee": "s.repo.MarkClaimedTx",
+          "lineNumber": 73
+        },
+        {
+          "caller": "ClaimReward",
+          "callee": "fmt.Errorf",
+          "lineNumber": 75
+        },
+        {
+          "caller": "ClaimReward",
+          "callee": "tx.Commit",
+          "lineNumber": 79
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 4,
+        "functionCount": 3,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "internal/api/moderation/model.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 48,
+      "nonEmptyLines": 42,
+      "classes": [
+        {
+          "name": "PlayerReport",
+          "startLine": 5,
+          "endLine": 16,
+          "methods": [],
+          "properties": [
+            "ReportID",
+            "ReporterPlayerID",
+            "TargetPlayerID",
+            "MatchID",
+            "Category",
+            "Description",
+            "Status",
+            "CreatedAt",
+            "ReviewedAt",
+            "ReviewedBy"
+          ]
+        },
+        {
+          "name": "AccountBan",
+          "startLine": 18,
+          "endLine": 30,
+          "methods": [],
+          "properties": [
+            "BanID",
+            "AccountID",
+            "PlayerID",
+            "ReasonCode",
+            "ReasonText",
+            "Source",
+            "StartsAt",
+            "EndsAt",
+            "Status",
+            "EvidenceRefID",
+            "CreatedAt"
+          ]
+        },
+        {
+          "name": "ReportRequest",
+          "startLine": 32,
+          "endLine": 37,
+          "methods": [],
+          "properties": [
+            "TargetPlayerID",
+            "MatchID",
+            "Category",
+            "Description"
+          ]
+        },
+        {
+          "name": "BanRequest",
+          "startLine": 39,
+          "endLine": 44,
+          "methods": [],
+          "properties": [
+            "PlayerID",
+            "ReasonCode",
+            "ReasonText",
+            "DurationHours"
+          ]
+        },
+        {
+          "name": "RevokeBanRequest",
+          "startLine": 46,
+          "endLine": 48,
+          "methods": [],
+          "properties": [
+            "PlayerID"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "PlayerReport",
+          "line": 5,
+          "isDefault": false
+        },
+        {
+          "name": "AccountBan",
+          "line": 18,
+          "isDefault": false
+        },
+        {
+          "name": "ReportRequest",
+          "line": 32,
+          "isDefault": false
+        },
+        {
+          "name": "BanRequest",
+          "line": 39,
+          "isDefault": false
+        },
+        {
+          "name": "RevokeBanRequest",
+          "line": 46,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 5,
+        "functionCount": 0,
+        "classCount": 5
+      }
+    },
+    {
+      "path": "internal/api/player/model.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 24,
+      "nonEmptyLines": 20,
+      "classes": [
+        {
+          "name": "PlayerProfile",
+          "startLine": 5,
+          "endLine": 15,
+          "methods": [],
+          "properties": [
+            "PlayerID",
+            "AccountID",
+            "DisplayName",
+            "Level",
+            "Exp",
+            "Coin",
+            "Gem",
+            "CreatedAt",
+            "LastLoginAt"
+          ]
+        },
+        {
+          "name": "UpdateProfileRequest",
+          "startLine": 17,
+          "endLine": 19,
+          "methods": [],
+          "properties": [
+            "DisplayName"
+          ]
+        },
+        {
+          "name": "AccountDeletionStatusResponse",
+          "startLine": 21,
+          "endLine": 24,
+          "methods": [],
+          "properties": [
+            "Status",
+            "DeletedAt"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "PlayerProfile",
+          "line": 5,
+          "isDefault": false
+        },
+        {
+          "name": "UpdateProfileRequest",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "AccountDeletionStatusResponse",
+          "line": 21,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 3,
+        "functionCount": 0,
+        "classCount": 3
+      }
+    },
+    {
+      "path": "internal/api/player/service.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 49,
+      "nonEmptyLines": 41,
+      "functions": [
+        {
+          "name": "NewService",
+          "startLine": 13,
+          "endLine": 15,
+          "params": [
+            "repo"
+          ]
+        },
+        {
+          "name": "GetProfile",
+          "startLine": 17,
+          "endLine": 26,
+          "params": [
+            "ctx",
+            "playerID"
+          ]
+        },
+        {
+          "name": "UpdateDisplayName",
+          "startLine": 28,
+          "endLine": 36,
+          "params": [
+            "ctx",
+            "playerID",
+            "displayName"
+          ]
+        },
+        {
+          "name": "RequestAccountDeletion",
+          "startLine": 38,
+          "endLine": 41,
+          "params": [
+            "ctx",
+            "accountID"
+          ]
+        },
+        {
+          "name": "CancelAccountDeletion",
+          "startLine": 43,
+          "endLine": 45,
+          "params": [
+            "ctx",
+            "accountID"
+          ]
+        },
+        {
+          "name": "GetAccountDeletionStatus",
+          "startLine": 47,
+          "endLine": 49,
+          "params": [
+            "ctx",
+            "accountID"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Service",
+          "startLine": 9,
+          "endLine": 11,
+          "methods": [
+            "GetProfile",
+            "UpdateDisplayName",
+            "RequestAccountDeletion",
+            "CancelAccountDeletion",
+            "GetAccountDeletionStatus"
+          ],
+          "properties": [
+            "repo"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Service",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "NewService",
+          "line": 13,
+          "isDefault": false
+        },
+        {
+          "name": "GetProfile",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "UpdateDisplayName",
+          "line": 28,
+          "isDefault": false
+        },
+        {
+          "name": "RequestAccountDeletion",
+          "line": 38,
+          "isDefault": false
+        },
+        {
+          "name": "CancelAccountDeletion",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "GetAccountDeletionStatus",
+          "line": 47,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "GetProfile",
+          "callee": "s.repo.GetProfile",
+          "lineNumber": 18
+        },
+        {
+          "caller": "GetProfile",
+          "callee": "errors.New",
+          "lineNumber": 23
+        },
+        {
+          "caller": "UpdateDisplayName",
+          "callee": "errors.New",
+          "lineNumber": 30
+        },
+        {
+          "caller": "UpdateDisplayName",
+          "callee": "len",
+          "lineNumber": 32
+        },
+        {
+          "caller": "UpdateDisplayName",
+          "callee": "errors.New",
+          "lineNumber": 33
+        },
+        {
+          "caller": "UpdateDisplayName",
+          "callee": "s.repo.UpdateDisplayName",
+          "lineNumber": 35
+        },
+        {
+          "caller": "RequestAccountDeletion",
+          "callee": "s.repo.RequestAccountDeletion",
+          "lineNumber": 40
+        },
+        {
+          "caller": "CancelAccountDeletion",
+          "callee": "s.repo.CancelAccountDeletion",
+          "lineNumber": 44
+        },
+        {
+          "caller": "GetAccountDeletionStatus",
+          "callee": "s.repo.GetAccountDeletionStatus",
+          "lineNumber": 48
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 7,
+        "functionCount": 6,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "internal/api/rank/model.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 38,
+      "nonEmptyLines": 33,
+      "classes": [
+        {
+          "name": "Season",
+          "startLine": 5,
+          "endLine": 11,
+          "methods": [],
+          "properties": [
+            "SeasonID",
+            "Name",
+            "StartsAt",
+            "EndsAt",
+            "Status"
+          ]
+        },
+        {
+          "name": "PlayerRank",
+          "startLine": 13,
+          "endLine": 27,
+          "methods": [],
+          "properties": [
+            "PlayerID",
+            "DisplayName",
+            "SeasonID",
+            "Rating",
+            "Tier",
+            "Division",
+            "Wins",
+            "Losses",
+            "Draws",
+            "WinStreak",
+            "HighestTier",
+            "UpdatedAt",
+            "RankPos"
+          ]
+        },
+        {
+          "name": "LeaderboardResponse",
+          "startLine": 29,
+          "endLine": 34,
+          "methods": [],
+          "properties": [
+            "SeasonID",
+            "Leader",
+            "Page",
+            "Limit"
+          ]
+        },
+        {
+          "name": "ClaimSeasonRewardRequest",
+          "startLine": 36,
+          "endLine": 38,
+          "methods": [],
+          "properties": [
+            "SeasonID"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Season",
+          "line": 5,
+          "isDefault": false
+        },
+        {
+          "name": "PlayerRank",
+          "line": 13,
+          "isDefault": false
+        },
+        {
+          "name": "LeaderboardResponse",
+          "line": 29,
+          "isDefault": false
+        },
+        {
+          "name": "ClaimSeasonRewardRequest",
+          "line": 36,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 4,
+        "functionCount": 0,
+        "classCount": 4
+      }
+    },
+    {
+      "path": "internal/api/rank/service.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 210,
+      "nonEmptyLines": 187,
+      "functions": [
+        {
+          "name": "NewService",
+          "startLine": 21,
+          "endLine": 27,
+          "params": [
+            "repo",
+            "economyRepo",
+            "db"
+          ]
+        },
+        {
+          "name": "generateID",
+          "startLine": 29,
+          "endLine": 35,
+          "params": []
+        },
+        {
+          "name": "GetCurrentSeason",
+          "startLine": 37,
+          "endLine": 53,
+          "params": [
+            "ctx"
+          ]
+        },
+        {
+          "name": "GetPlayerRank",
+          "startLine": 55,
+          "endLine": 85,
+          "params": [
+            "ctx",
+            "playerID"
+          ]
+        },
+        {
+          "name": "GetLeaderboard",
+          "startLine": 87,
+          "endLine": 116,
+          "params": [
+            "ctx",
+            "page",
+            "limit"
+          ]
+        },
+        {
+          "name": "ClaimSeasonReward",
+          "startLine": 118,
+          "endLine": 185,
+          "params": [
+            "ctx",
+            "playerID",
+            "seasonID"
+          ]
+        },
+        {
+          "name": "calculateReward",
+          "startLine": 187,
+          "endLine": 210,
+          "params": [
+            "tier"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Service",
+          "startLine": 15,
+          "endLine": 19,
+          "methods": [
+            "GetCurrentSeason",
+            "GetPlayerRank",
+            "GetLeaderboard",
+            "ClaimSeasonReward"
+          ],
+          "properties": [
+            "repo",
+            "economyRepo",
+            "db"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Service",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "NewService",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "GetCurrentSeason",
+          "line": 37,
+          "isDefault": false
+        },
+        {
+          "name": "GetPlayerRank",
+          "line": 55,
+          "isDefault": false
+        },
+        {
+          "name": "GetLeaderboard",
+          "line": 87,
+          "isDefault": false
+        },
+        {
+          "name": "ClaimSeasonReward",
+          "line": 118,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "generateID",
+          "callee": "make",
+          "lineNumber": 30
+        },
+        {
+          "caller": "generateID",
+          "callee": "rand.Read",
+          "lineNumber": 31
+        },
+        {
+          "caller": "generateID",
+          "callee": "hex.EncodeToString",
+          "lineNumber": 34
+        },
+        {
+          "caller": "GetCurrentSeason",
+          "callee": "s.repo.GetActiveSeason",
+          "lineNumber": 38
+        },
+        {
+          "caller": "GetCurrentSeason",
+          "callee": "time.Now().Add",
+          "lineNumber": 47
+        },
+        {
+          "caller": "GetCurrentSeason",
+          "callee": "time.Now",
+          "lineNumber": 47
+        },
+        {
+          "caller": "GetCurrentSeason",
+          "callee": "time.Now().Add",
+          "lineNumber": 48
+        },
+        {
+          "caller": "GetCurrentSeason",
+          "callee": "time.Now",
+          "lineNumber": 48
+        },
+        {
+          "caller": "GetPlayerRank",
+          "callee": "s.GetCurrentSeason",
+          "lineNumber": 56
+        },
+        {
+          "caller": "GetPlayerRank",
+          "callee": "s.repo.GetPlayerRank",
+          "lineNumber": 61
+        },
+        {
+          "caller": "GetPlayerRank",
+          "callee": "s.db.Pool.QueryRow(ctx, query, playerID).Scan",
+          "lineNumber": 69
+        },
+        {
+          "caller": "GetPlayerRank",
+          "callee": "s.db.Pool.QueryRow",
+          "lineNumber": 69
+        },
+        {
+          "caller": "GetPlayerRank",
+          "callee": "time.Now",
+          "lineNumber": 81
+        },
+        {
+          "caller": "GetLeaderboard",
+          "callee": "s.GetCurrentSeason",
+          "lineNumber": 88
+        },
+        {
+          "caller": "GetLeaderboard",
+          "callee": "s.repo.GetLeaderboard",
+          "lineNumber": 101
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "s.repo.HasClaimedReward",
+          "lineNumber": 120
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "errors.New",
+          "lineNumber": 125
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "s.db.Pool.QueryRow(ctx, querySeason, seasonID).Scan",
+          "lineNumber": 131
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "s.db.Pool.QueryRow",
+          "lineNumber": 131
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "errors.New",
+          "lineNumber": 133
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "errors.New",
+          "lineNumber": 137
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "s.repo.GetPlayerRank",
+          "lineNumber": 141
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "errors.New",
+          "lineNumber": 146
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "calculateReward",
+          "lineNumber": 150
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "s.db.Pool.Begin",
+          "lineNumber": 153
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "tx.Rollback",
+          "lineNumber": 157
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "s.economyRepo.CreditTx",
+          "lineNumber": 161
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "fmt.Errorf",
+          "lineNumber": 163
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "s.economyRepo.CreditTx",
+          "lineNumber": 169
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "fmt.Errorf",
+          "lineNumber": 171
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "generateID",
+          "lineNumber": 176
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "s.repo.ClaimRewardTx",
+          "lineNumber": 177
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "fmt.Errorf",
+          "lineNumber": 179
+        },
+        {
+          "caller": "ClaimSeasonReward",
+          "callee": "tx.Commit",
+          "lineNumber": 183
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 6,
+        "functionCount": 7,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "internal/api/rooms/model.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 12,
+      "nonEmptyLines": 11,
+      "classes": [
+        {
+          "name": "RoomSummary",
+          "startLine": 3,
+          "endLine": 12,
+          "methods": [],
+          "properties": [
+            "RoomID",
+            "HostPlayerID",
+            "Mode",
+            "MapID",
+            "MaxPlayers",
+            "PlayerCount",
+            "IsLocked",
+            "Status"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "RoomSummary",
+          "line": 3,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "internal/api/shop/model.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 32,
+      "nonEmptyLines": 28,
+      "classes": [
+        {
+          "name": "ShopOffer",
+          "startLine": 5,
+          "endLine": 16,
+          "methods": [],
+          "properties": [
+            "OfferID",
+            "ItemID",
+            "OfferType",
+            "PriceCurrency",
+            "PriceAmount",
+            "Quantity",
+            "LimitPerPlayer",
+            "StartsAt",
+            "EndsAt",
+            "IsActive"
+          ]
+        },
+        {
+          "name": "ShopPurchase",
+          "startLine": 18,
+          "endLine": 27,
+          "methods": [],
+          "properties": [
+            "PurchaseID",
+            "PlayerID",
+            "OfferID",
+            "PriceCurrency",
+            "PriceAmount",
+            "QuantityGranted",
+            "Status",
+            "CreatedAt"
+          ]
+        },
+        {
+          "name": "PurchaseRequest",
+          "startLine": 29,
+          "endLine": 32,
+          "methods": [],
+          "properties": [
+            "OfferID",
+            "IdempotencyKey"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "ShopOffer",
+          "line": 5,
+          "isDefault": false
+        },
+        {
+          "name": "ShopPurchase",
+          "line": 18,
+          "isDefault": false
+        },
+        {
+          "name": "PurchaseRequest",
+          "line": 29,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 3,
+        "functionCount": 0,
+        "classCount": 3
+      }
+    },
+    {
+      "path": "internal/api/shop/service.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 158,
+      "nonEmptyLines": 141,
+      "functions": [
+        {
+          "name": "NewService",
+          "startLine": 25,
+          "endLine": 39,
+          "params": [
+            "repo",
+            "economyRepo",
+            "inventoryRepo",
+            "db",
+            "idempotency"
+          ]
+        },
+        {
+          "name": "GetActiveOffers",
+          "startLine": 41,
+          "endLine": 43,
+          "params": [
+            "ctx"
+          ]
+        },
+        {
+          "name": "Purchase",
+          "startLine": 45,
+          "endLine": 146,
+          "params": [
+            "ctx",
+            "playerID",
+            "offerID",
+            "idempotencyKey"
+          ]
+        },
+        {
+          "name": "GetPlayerPurchases",
+          "startLine": 148,
+          "endLine": 150,
+          "params": [
+            "ctx",
+            "playerID"
+          ]
+        },
+        {
+          "name": "generateID",
+          "startLine": 152,
+          "endLine": 158,
+          "params": []
+        }
+      ],
+      "classes": [
+        {
+          "name": "Service",
+          "startLine": 17,
+          "endLine": 23,
+          "methods": [
+            "GetActiveOffers",
+            "Purchase",
+            "GetPlayerPurchases"
+          ],
+          "properties": [
+            "repo",
+            "economyRepo",
+            "inventoryRepo",
+            "db",
+            "idempotency"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Service",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "NewService",
+          "line": 25,
+          "isDefault": false
+        },
+        {
+          "name": "GetActiveOffers",
+          "line": 41,
+          "isDefault": false
+        },
+        {
+          "name": "Purchase",
+          "line": 45,
+          "isDefault": false
+        },
+        {
+          "name": "GetPlayerPurchases",
+          "line": 148,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "GetActiveOffers",
+          "callee": "s.repo.GetActiveOffers",
+          "lineNumber": 42
+        },
+        {
+          "caller": "Purchase",
+          "callee": "errors.New",
+          "lineNumber": 47
+        },
+        {
+          "caller": "Purchase",
+          "callee": "fmt.Sprintf",
+          "lineNumber": 52
+        },
+        {
+          "caller": "Purchase",
+          "callee": "s.idempotency.CheckAndSet",
+          "lineNumber": 53
+        },
+        {
+          "caller": "Purchase",
+          "callee": "fmt.Errorf",
+          "lineNumber": 55
+        },
+        {
+          "caller": "Purchase",
+          "callee": "func() {\n\t\t\ts.idempotency.Complete(ctx, key, 24*time.Hour)\n\t\t}",
+          "lineNumber": 60
+        },
+        {
+          "caller": "Purchase",
+          "callee": "s.idempotency.Complete",
+          "lineNumber": 61
+        },
+        {
+          "caller": "Purchase",
+          "callee": "s.db.Pool.Begin",
+          "lineNumber": 66
+        },
+        {
+          "caller": "Purchase",
+          "callee": "tx.Rollback",
+          "lineNumber": 70
+        },
+        {
+          "caller": "Purchase",
+          "callee": "s.repo.GetOfferByID",
+          "lineNumber": 73
+        },
+        {
+          "caller": "Purchase",
+          "callee": "errors.New",
+          "lineNumber": 78
+        },
+        {
+          "caller": "Purchase",
+          "callee": "time.Now",
+          "lineNumber": 82
+        },
+        {
+          "caller": "Purchase",
+          "callee": "now.Before",
+          "lineNumber": 83
+        },
+        {
+          "caller": "Purchase",
+          "callee": "errors.New",
+          "lineNumber": 84
+        },
+        {
+          "caller": "Purchase",
+          "callee": "now.After",
+          "lineNumber": 86
+        },
+        {
+          "caller": "Purchase",
+          "callee": "errors.New",
+          "lineNumber": 87
+        },
+        {
+          "caller": "Purchase",
+          "callee": "s.repo.GetPlayerPurchaseCount",
+          "lineNumber": 92
+        },
+        {
+          "caller": "Purchase",
+          "callee": "errors.New",
+          "lineNumber": 97
+        },
+        {
+          "caller": "Purchase",
+          "callee": "s.economyRepo.DebitTx",
+          "lineNumber": 102
+        },
+        {
+          "caller": "Purchase",
+          "callee": "s.inventoryRepo.AddItemsTx",
+          "lineNumber": 109
+        },
+        {
+          "caller": "Purchase",
+          "callee": "fmt.Errorf",
+          "lineNumber": 111
+        },
+        {
+          "caller": "Purchase",
+          "callee": "tx.Exec",
+          "lineNumber": 120
+        },
+        {
+          "caller": "Purchase",
+          "callee": "fmt.Errorf",
+          "lineNumber": 122
+        },
+        {
+          "caller": "Purchase",
+          "callee": "fmt.Errorf",
+          "lineNumber": 125
+        },
+        {
+          "caller": "Purchase",
+          "callee": "generateID",
+          "lineNumber": 129
+        },
+        {
+          "caller": "Purchase",
+          "callee": "s.repo.CreateShopPurchaseTx",
+          "lineNumber": 139
+        },
+        {
+          "caller": "Purchase",
+          "callee": "fmt.Errorf",
+          "lineNumber": 141
+        },
+        {
+          "caller": "Purchase",
+          "callee": "tx.Commit",
+          "lineNumber": 145
+        },
+        {
+          "caller": "GetPlayerPurchases",
+          "callee": "s.repo.GetPlayerPurchases",
+          "lineNumber": 149
+        },
+        {
+          "caller": "generateID",
+          "callee": "make",
+          "lineNumber": 153
+        },
+        {
+          "caller": "generateID",
+          "callee": "rand.Read",
+          "lineNumber": 154
+        },
+        {
+          "caller": "generateID",
+          "callee": "hex.EncodeToString",
+          "lineNumber": 157
+        }
+      ],
+      "metrics": {
+        "importCount": 10,
+        "exportCount": 5,
+        "functionCount": 5,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "internal/game/match/reward.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 456,
+      "nonEmptyLines": 409,
+      "functions": [
+        {
+          "name": "ProcessMatchRewards",
+          "startLine": 41,
+          "endLine": 286,
+          "params": [
+            "ctx",
+            "db",
+            "economyRepo",
+            "matchID",
+            "mode",
+            "mapID",
+            "stats",
+            "playerItems",
+            "teamRatings",
+            "eloParams"
+          ]
+        },
+        {
+          "name": "updateProfilePostMatch",
+          "startLine": 288,
+          "endLine": 322,
+          "params": [
+            "ctx",
+            "tx",
+            "economyRepo",
+            "playerID",
+            "expGained",
+            "coinGained"
+          ]
+        },
+        {
+          "name": "updatePlayerRank",
+          "startLine": 324,
+          "endLine": 401,
+          "params": [
+            "ctx",
+            "tx",
+            "playerID",
+            "ratingChange",
+            "isWin",
+            "isDraw"
+          ]
+        },
+        {
+          "name": "getTierAndDivision",
+          "startLine": 403,
+          "endLine": 444,
+          "params": [
+            "rating"
+          ]
+        },
+        {
+          "name": "compareTiers",
+          "startLine": 446,
+          "endLine": 456,
+          "params": [
+            "t1",
+            "t2"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "PlayerStats",
+          "startLine": 15,
+          "endLine": 24,
+          "methods": [],
+          "properties": [
+            "PlayerID",
+            "CharacterID",
+            "TeamID",
+            "Damage",
+            "Kills",
+            "Accuracy",
+            "IsWinner",
+            "IsDraw"
+          ]
+        },
+        {
+          "name": "RewardResult",
+          "startLine": 26,
+          "endLine": 39,
+          "methods": [],
+          "properties": [
+            "PlayerID",
+            "ExpGained",
+            "CoinGained",
+            "RatingChange",
+            "NewRating",
+            "NewTier",
+            "NewDivision",
+            "LevelUp",
+            "NewLevel",
+            "CharLevelUp",
+            "CharNewLevel",
+            "CharLevelsGained"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "PlayerStats",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "RewardResult",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "ProcessMatchRewards",
+          "line": 41,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "db.Pool.Begin",
+          "lineNumber": 53
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "tx.Rollback",
+          "lineNumber": 57
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "tx.QueryRow(ctx, querySelect, playerID, matchID, itemID).Scan",
+          "lineNumber": 71
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "tx.QueryRow",
+          "lineNumber": 71
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "tx.Exec",
+          "lineNumber": 78
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "fmt.Errorf",
+          "lineNumber": 83
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "tx.Exec",
+          "lineNumber": 87
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "fmt.Errorf",
+          "lineNumber": 92
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "make",
+          "lineNumber": 97
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "int",
+          "lineNumber": 108
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "math.Round",
+          "lineNumber": 108
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "float64",
+          "lineNumber": 108
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "updateProfilePostMatch",
+          "lineNumber": 119
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "fmt.Errorf",
+          "lineNumber": 121
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "updatePlayerRank",
+          "lineNumber": 138
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "fmt.Errorf",
+          "lineNumber": 140
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "CalculateEloChange",
+          "lineNumber": 157
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "updatePlayerRank",
+          "lineNumber": 159
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "fmt.Errorf",
+          "lineNumber": 161
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "tx.Exec",
+          "lineNumber": 177
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "fmt.Errorf",
+          "lineNumber": 192
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "tx.QueryRow(ctx, `SELECT value FROM game_settings WHERE key = 'character_levels'`).Scan",
+          "lineNumber": 202
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "tx.QueryRow",
+          "lineNumber": 202
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "json.Unmarshal",
+          "lineNumber": 211
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "len",
+          "lineNumber": 211
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "tx.QueryRow(ctx, `SELECT value FROM game_settings WHERE key = 'character_progression'`).Scan",
+          "lineNumber": 214
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "tx.QueryRow",
+          "lineNumber": 214
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "json.Unmarshal",
+          "lineNumber": 219
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "tx.QueryRow(ctx,\n\t\t\t\t\t\t`SELECT exp, level FROM player_characters WHERE player_id = $1 AND character_id = $2 FOR UPDATE`,\n\t\t\t\t\t\tp.PlayerID, p.CharacterID).Scan",
+          "lineNumber": 226
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "tx.QueryRow",
+          "lineNumber": 226
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "tx.Exec",
+          "lineNumber": 231
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "tx.Exec",
+          "lineNumber": 252
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "tx.Commit",
+          "lineNumber": 281
+        },
+        {
+          "caller": "ProcessMatchRewards",
+          "callee": "fmt.Errorf",
+          "lineNumber": 282
+        },
+        {
+          "caller": "updateProfilePostMatch",
+          "callee": "tx.QueryRow(ctx, query, playerID).Scan",
+          "lineNumber": 292
+        },
+        {
+          "caller": "updateProfilePostMatch",
+          "callee": "tx.QueryRow",
+          "lineNumber": 292
+        },
+        {
+          "caller": "updateProfilePostMatch",
+          "callee": "tx.Exec",
+          "lineNumber": 308
+        },
+        {
+          "caller": "updateProfilePostMatch",
+          "callee": "economyRepo.CreditTx",
+          "lineNumber": 315
+        },
+        {
+          "caller": "updatePlayerRank",
+          "callee": "tx.QueryRow(ctx, \"SELECT season_id FROM rank_seasons WHERE status = 'active' LIMIT 1\").Scan",
+          "lineNumber": 327
+        },
+        {
+          "caller": "updatePlayerRank",
+          "callee": "tx.QueryRow",
+          "lineNumber": 327
+        },
+        {
+          "caller": "updatePlayerRank",
+          "callee": "tx.QueryRow(ctx, querySelect, playerID, seasonID).Scan",
+          "lineNumber": 342
+        },
+        {
+          "caller": "updatePlayerRank",
+          "callee": "tx.QueryRow",
+          "lineNumber": 342
+        },
+        {
+          "caller": "updatePlayerRank",
+          "callee": "getTierAndDivision",
+          "lineNumber": 378
+        },
+        {
+          "caller": "updatePlayerRank",
+          "callee": "compareTiers",
+          "lineNumber": 381
+        },
+        {
+          "caller": "updatePlayerRank",
+          "callee": "tx.Exec",
+          "lineNumber": 390
+        },
+        {
+          "caller": "updatePlayerRank",
+          "callee": "tx.Exec",
+          "lineNumber": 397
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 3,
+        "functionCount": 5,
+        "classCount": 2
+      }
+    },
+    {
+      "path": "internal/shared/auth/jwt.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 74,
+      "nonEmptyLines": 62,
+      "functions": [
+        {
+          "name": "NewJWTManager",
+          "startLine": 27,
+          "endLine": 32,
+          "params": [
+            "secretKey",
+            "tokenDuration"
+          ]
+        },
+        {
+          "name": "Generate",
+          "startLine": 34,
+          "endLine": 47,
+          "params": [
+            "accountID",
+            "playerID",
+            "role"
+          ]
+        },
+        {
+          "name": "Verify",
+          "startLine": 49,
+          "endLine": 74,
+          "params": [
+            "tokenStr"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Claims",
+          "startLine": 15,
+          "endLine": 20,
+          "methods": [],
+          "properties": [
+            "AccountID",
+            "PlayerID",
+            "Role"
+          ]
+        },
+        {
+          "name": "JWTManager",
+          "startLine": 22,
+          "endLine": 25,
+          "methods": [
+            "Generate",
+            "Verify"
+          ],
+          "properties": [
+            "secretKey",
+            "tokenDuration"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Claims",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "JWTManager",
+          "line": 22,
+          "isDefault": false
+        },
+        {
+          "name": "NewJWTManager",
+          "line": 27,
+          "isDefault": false
+        },
+        {
+          "name": "Generate",
+          "line": 34,
+          "isDefault": false
+        },
+        {
+          "name": "Verify",
+          "line": 49,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "Generate",
+          "callee": "jwt.NewNumericDate",
+          "lineNumber": 40
+        },
+        {
+          "caller": "Generate",
+          "callee": "time.Now().Add",
+          "lineNumber": 40
+        },
+        {
+          "caller": "Generate",
+          "callee": "time.Now",
+          "lineNumber": 40
+        },
+        {
+          "caller": "Generate",
+          "callee": "jwt.NewNumericDate",
+          "lineNumber": 41
+        },
+        {
+          "caller": "Generate",
+          "callee": "time.Now",
+          "lineNumber": 41
+        },
+        {
+          "caller": "Generate",
+          "callee": "jwt.NewWithClaims",
+          "lineNumber": 45
+        },
+        {
+          "caller": "Generate",
+          "callee": "token.SignedString",
+          "lineNumber": 46
+        },
+        {
+          "caller": "Verify",
+          "callee": "jwt.ParseWithClaims",
+          "lineNumber": 50
+        },
+        {
+          "caller": "Verify",
+          "callee": "errors.Is",
+          "lineNumber": 62
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 5,
+        "functionCount": 3,
+        "classCount": 2
+      }
+    },
+    {
+      "path": "internal/shared/idempotency/idempotency.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 41,
+      "nonEmptyLines": 33,
+      "functions": [
+        {
+          "name": "NewManager",
+          "startLine": 14,
+          "endLine": 16,
+          "params": [
+            "redis"
+          ]
+        },
+        {
+          "name": "CheckAndSet",
+          "startLine": 20,
+          "endLine": 33,
+          "params": [
+            "ctx",
+            "key",
+            "ttl"
+          ]
+        },
+        {
+          "name": "Complete",
+          "startLine": 35,
+          "endLine": 41,
+          "params": [
+            "ctx",
+            "key",
+            "ttl"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "Manager",
+          "startLine": 10,
+          "endLine": 12,
+          "methods": [
+            "CheckAndSet",
+            "Complete"
+          ],
+          "properties": [
+            "redis"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Manager",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "NewManager",
+          "line": 14,
+          "isDefault": false
+        },
+        {
+          "name": "CheckAndSet",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "Complete",
+          "line": 35,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "CheckAndSet",
+          "callee": "m.redis.Client.SetNX(ctx, redisKey, \"processing\", ttl).Result",
+          "lineNumber": 27
+        },
+        {
+          "caller": "CheckAndSet",
+          "callee": "m.redis.Client.SetNX",
+          "lineNumber": 27
+        },
+        {
+          "caller": "Complete",
+          "callee": "m.redis.Client.Set(ctx, redisKey, \"completed\", ttl).Err",
+          "lineNumber": 40
+        },
+        {
+          "caller": "Complete",
+          "callee": "m.redis.Client.Set",
+          "lineNumber": 40
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 4,
+        "functionCount": 3,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "internal/shared/middleware/auth.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 43,
+      "nonEmptyLines": 36,
+      "functions": [
+        {
+          "name": "AuthMiddleware",
+          "startLine": 13,
+          "endLine": 43,
+          "params": [
+            "jwtManager"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "AuthMiddleware",
+          "line": 13,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "AuthMiddleware",
+          "callee": "http.HandlerFunc",
+          "lineNumber": 15
+        },
+        {
+          "caller": "AuthMiddleware",
+          "callee": "r.Header.Get",
+          "lineNumber": 16
+        },
+        {
+          "caller": "AuthMiddleware",
+          "callee": "model.WriteError",
+          "lineNumber": 18
+        },
+        {
+          "caller": "AuthMiddleware",
+          "callee": "strings.Split",
+          "lineNumber": 22
+        },
+        {
+          "caller": "AuthMiddleware",
+          "callee": "len",
+          "lineNumber": 23
+        },
+        {
+          "caller": "AuthMiddleware",
+          "callee": "strings.ToLower",
+          "lineNumber": 23
+        },
+        {
+          "caller": "AuthMiddleware",
+          "callee": "model.WriteError",
+          "lineNumber": 24
+        },
+        {
+          "caller": "AuthMiddleware",
+          "callee": "jwtManager.Verify",
+          "lineNumber": 29
+        },
+        {
+          "caller": "AuthMiddleware",
+          "callee": "model.WriteError",
+          "lineNumber": 31
+        },
+        {
+          "caller": "AuthMiddleware",
+          "callee": "context.WithValue",
+          "lineNumber": 36
+        },
+        {
+          "caller": "AuthMiddleware",
+          "callee": "r.Context",
+          "lineNumber": 36
+        },
+        {
+          "caller": "AuthMiddleware",
+          "callee": "context.WithValue",
+          "lineNumber": 37
+        },
+        {
+          "caller": "AuthMiddleware",
+          "callee": "context.WithValue",
+          "lineNumber": 38
+        },
+        {
+          "caller": "AuthMiddleware",
+          "callee": "next.ServeHTTP",
+          "lineNumber": 40
+        },
+        {
+          "caller": "AuthMiddleware",
+          "callee": "r.WithContext",
+          "lineNumber": 40
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "internal/shared/middleware/ratelimit.go",
+      "language": "go",
+      "fileCategory": "code",
+      "totalLines": 90,
+      "nonEmptyLines": 75,
+      "functions": [
+        {
+          "name": "NewRateLimiter",
+          "startLine": 25,
+          "endLine": 36,
+          "params": [
+            "r",
+            "b"
+          ]
+        },
+        {
+          "name": "Limit",
+          "startLine": 38,
+          "endLine": 58,
+          "params": [
+            "next"
+          ]
+        },
+        {
+          "name": "getLimiter",
+          "startLine": 60,
+          "endLine": 76,
+          "params": [
+            "ip"
+          ]
+        },
+        {
+          "name": "cleanup",
+          "startLine": 78,
+          "endLine": 90,
+          "params": []
+        }
+      ],
+      "classes": [
+        {
+          "name": "client",
+          "startLine": 13,
+          "endLine": 16,
+          "methods": [],
+          "properties": [
+            "limiter",
+            "lastSeen"
+          ]
+        },
+        {
+          "name": "RateLimiter",
+          "startLine": 18,
+          "endLine": 23,
+          "methods": [
+            "Limit",
+            "getLimiter",
+            "cleanup"
+          ],
+          "properties": [
+            "clients",
+            "rate",
+            "burst"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "RateLimiter",
+          "line": 18,
+          "isDefault": false
+        },
+        {
+          "name": "NewRateLimiter",
+          "line": 25,
+          "isDefault": false
+        },
+        {
+          "name": "Limit",
+          "line": 38,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "NewRateLimiter",
+          "callee": "make",
+          "lineNumber": 27
+        },
+        {
+          "caller": "NewRateLimiter",
+          "callee": "rl.cleanup",
+          "lineNumber": 33
+        },
+        {
+          "caller": "Limit",
+          "callee": "http.HandlerFunc",
+          "lineNumber": 39
+        },
+        {
+          "caller": "Limit",
+          "callee": "net.SplitHostPort",
+          "lineNumber": 40
+        },
+        {
+          "caller": "Limit",
+          "callee": "rl.getLimiter",
+          "lineNumber": 45
+        },
+        {
+          "caller": "Limit",
+          "callee": "limiter.Allow",
+          "lineNumber": 46
+        },
+        {
+          "caller": "Limit",
+          "callee": "model.WriteError",
+          "lineNumber": 52
+        },
+        {
+          "caller": "Limit",
+          "callee": "next.ServeHTTP",
+          "lineNumber": 56
+        },
+        {
+          "caller": "getLimiter",
+          "callee": "rl.Lock",
+          "lineNumber": 61
+        },
+        {
+          "caller": "getLimiter",
+          "callee": "rl.Unlock",
+          "lineNumber": 62
+        },
+        {
+          "caller": "getLimiter",
+          "callee": "rate.NewLimiter",
+          "lineNumber": 66
+        },
+        {
+          "caller": "getLimiter",
+          "callee": "time.Now",
+          "lineNumber": 69
+        },
+        {
+          "caller": "getLimiter",
+          "callee": "time.Now",
+          "lineNumber": 74
+        },
+        {
+          "caller": "cleanup",
+          "callee": "time.Sleep",
+          "lineNumber": 80
+        },
+        {
+          "caller": "cleanup",
+          "callee": "rl.Lock",
+          "lineNumber": 82
+        },
+        {
+          "caller": "cleanup",
+          "callee": "time.Since",
+          "lineNumber": 84
+        },
+        {
+          "caller": "cleanup",
+          "callee": "delete",
+          "lineNumber": 85
+        },
+        {
+          "caller": "cleanup",
+          "callee": "rl.Unlock",
+          "lineNumber": 88
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 3,
+        "functionCount": 4,
+        "classCount": 2
+      }
+    }
+  ]
+}

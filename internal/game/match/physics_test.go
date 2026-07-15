@@ -8,6 +8,7 @@ import (
 
 func TestSimulateProjectile(t *testing.T) {
 	ownerID := "p1"
+	ownerTeamID := 1
 	origin := Vector2{X: 100, Y: 500}
 	angleDeg := 45.0
 	power := 50.0
@@ -25,20 +26,26 @@ func TestSimulateProjectile(t *testing.T) {
 
 	wind := WindState{
 		Direction: 1, // wind blows right
-		Power:     2,
+		Power:     2.0,
 	}
 
-	terrain := NewTerrain(1600, 900, "grassland_valley")
+	terrain := NewTerrain(gamedata.MapConfig{
+		MapID:  "grassland_valley",
+		Width:  1600,
+		Height: 900,
+	})
 
 	players := map[string]*BattlePlayerState{
 		"p1": {
 			PlayerID:   "p1",
+			TeamID:     1,
 			Position:   origin,
 			IsAlive:    true,
 			MoveEnergy: 100,
 		},
 		"p2": {
 			PlayerID:   "p2",
+			TeamID:     2,
 			Position:   Vector2{X: 400, Y: 500},
 			IsAlive:    true,
 			MoveEnergy: 100,
@@ -46,7 +53,7 @@ func TestSimulateProjectile(t *testing.T) {
 	}
 
 	// Run simulation
-	result := SimulateProjectile(ownerID, origin, angleDeg, power, weapon, wind, terrain, players, false)
+	result := SimulateProjectile(ownerID, ownerTeamID, origin, angleDeg, power, weapon, wind, terrain, players, false)
 
 	if len(result.Path) == 0 {
 		t.Fatal("Expected projectile path to contain simulated steps, got 0")

@@ -1,0 +1,94 @@
+{
+  "nodes": [
+    {
+      "id": "document:docs/superpowers/specs/2026-07-07-character-progression-design.md",
+      "type": "document",
+      "name": "2026-07-07-character-progression-design.md",
+      "filePath": "docs/superpowers/specs/2026-07-07-character-progression-design.md",
+      "summary": "Thiết kế chi tiết hệ thống tiến triển nhân vật: schema DB với các cột level/exp/stat_points/bonus_*, API endpoints cấp phát stat và reset, công thức tính chỉ số thực tế (base + bonus × multiplier). Bao gồm config game_settings cho progression.",
+      "tags": ["spec", "character", "progression", "exp", "stats", "database", "api"],
+      "complexity": "medium"
+    },
+    {
+      "id": "document:docs/superpowers/specs/2026-07-07-ranked-matchmaking-design.md",
+      "type": "document",
+      "name": "2026-07-07-ranked-matchmaking-design.md",
+      "filePath": "docs/superpowers/specs/2026-07-07-ranked-matchmaking-design.md",
+      "summary": "Thiết kế chi tiết hệ thống matchmaking ranked 2v2: flow người dùng từ lobby đến battle room, Redis queue với Elo rating, cấu trúc dữ liệu QueueEntry/LobbyRoom, WebSocket events, và smart bot thay thế khi hết timeout.",
+      "tags": ["spec", "matchmaking", "ranked", "2v2", "lobby", "elo", "redis", "websocket", "bot"],
+      "complexity": "high"
+    },
+    {
+      "id": "document:docs/superpowers/specs/2026-07-08-battle-fixes-design.md",
+      "type": "document",
+      "name": "2026-07-08-battle-fixes-design.md",
+      "filePath": "docs/superpowers/specs/2026-07-08-battle-fixes-design.md",
+      "summary": "Thiết kế 4 thay đổi cho hệ thống trận đấu: cancel shot icon (chỉ client), fall death khi rơi khỏi bản đồ (server), vật phẩm dùng một lần khi bắn (server), và teleport item qua đạn (server + client animation).",
+      "tags": ["spec", "battle", "cancel-shot", "fall-death", "single-use-item", "teleport", "flutter"],
+      "complexity": "medium"
+    },
+    {
+      "id": "document:docs/superpowers/specs/2026-07-08-map-editor-design.md",
+      "type": "document",
+      "name": "2026-07-08-map-editor-design.md",
+      "filePath": "docs/superpowers/specs/2026-07-08-map-editor-design.md",
+      "summary": "Thiết kế map editor tilemap-based: data model cho config_brick_types với border JSONB polygon, schema config_maps với tiles 2D array, và API endpoints cho CRUD map tiles và export YAML. Định nghĩa format border 4 cạnh (top/right/bottom/left).",
+      "tags": ["spec", "map-editor", "tilemap", "brick-types", "polygon-border", "jsonb", "api"],
+      "complexity": "medium"
+    },
+    {
+      "id": "document:docs/superpowers/specs/2026-07-09-map-rank-restriction-and-editor-unification-design.md",
+      "type": "document",
+      "name": "2026-07-09-map-rank-restriction-and-editor-unification-design.md",
+      "filePath": "docs/superpowers/specs/2026-07-09-map-rank-restriction-and-editor-unification-design.md",
+      "summary": "Thiết kế 3 thay đổi map system: thêm cột min_rank_tier vào config_maps, hợp nhất hai trang map editing thành một canvas editor, và render brick bằng polygon border thực tế. Định nghĩa logic matchmaker lọc map theo rank tier của người chơi cao nhất.",
+      "tags": ["spec", "map-rank", "min-rank-tier", "editor-unification", "polygon-rendering", "matchmaker"],
+      "complexity": "medium"
+    }
+  ],
+  "edges": [
+    {
+      "source": "document:docs/superpowers/specs/2026-07-07-character-progression-design.md",
+      "target": "document:docs/superpowers/plans/2026-07-07-character-progression.md",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/superpowers/specs/2026-07-07-ranked-matchmaking-design.md",
+      "target": "document:docs/superpowers/plans/2026-07-07-ranked-matchmaking.md",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/superpowers/specs/2026-07-08-battle-fixes-design.md",
+      "target": "document:docs/superpowers/plans/2026-07-08-battle-fixes.md",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/superpowers/specs/2026-07-08-map-editor-design.md",
+      "target": "document:docs/superpowers/plans/2026-07-08-map-editor.md",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/superpowers/specs/2026-07-09-map-rank-restriction-and-editor-unification-design.md",
+      "target": "document:docs/superpowers/plans/2026-07-09-map-rank-restriction-and-editor-unification.md",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/superpowers/specs/2026-07-08-map-editor-design.md",
+      "target": "document:docs/superpowers/specs/2026-07-09-map-rank-restriction-and-editor-unification-design.md",
+      "type": "related",
+      "weight": 0.5
+    }
+  ],
+  "batchFiles": [
+    {"path": "docs/superpowers/specs/2026-07-07-character-progression-design.md", "language": "markdown", "sizeLines": 358, "fileCategory": "docs"},
+    {"path": "docs/superpowers/specs/2026-07-07-ranked-matchmaking-design.md", "language": "markdown", "sizeLines": 580, "fileCategory": "docs"},
+    {"path": "docs/superpowers/specs/2026-07-08-battle-fixes-design.md", "language": "markdown", "sizeLines": 114, "fileCategory": "docs"},
+    {"path": "docs/superpowers/specs/2026-07-08-map-editor-design.md", "language": "markdown", "sizeLines": 217, "fileCategory": "docs"},
+    {"path": "docs/superpowers/specs/2026-07-09-map-rank-restriction-and-editor-unification-design.md", "language": "markdown", "sizeLines": 232, "fileCategory": "docs"}
+  ]
+}

@@ -1,4 +1,4 @@
-.PHONY: build-api build-game build-worker build-migrate build-all run-api run-game run-worker test test-cover lint migrate docker-up docker-down clean
+.PHONY: build-api build-game build-worker build-migrate build-all run-api run-game run-worker test test-cover lint migrate docker-up docker-down clean bench bench-integration loadtest
 
 build-api:
 	go build -o bin/api ./cmd/api
@@ -44,3 +44,12 @@ docker-down:
 
 clean:
 	rm -rf bin/ coverage.out coverage.html
+
+bench:
+	go test -bench=. -benchmem -count=3 -run='^$$' ./internal/game/match/...
+
+bench-integration:
+	go test -bench=. -benchmem -count=1 -tags=integration -run='^$$' ./internal/game/match/... ./internal/game/ws/...
+
+loadtest:
+	go run ./cmd/loadtest -players 100 -duration 60s

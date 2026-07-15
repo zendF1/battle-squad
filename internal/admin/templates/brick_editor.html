@@ -1,0 +1,78 @@
+{{define "content"}}
+<style>
+.brick-editor-container { display: flex; gap: 20px; }
+.brick-editor-canvas-wrap { position: relative; }
+.brick-editor-canvas-wrap canvas { border: 1px solid #ccc; cursor: crosshair; image-rendering: pixelated; }
+.brick-editor-props { width: 280px; }
+.brick-preview { margin-top: 16px; }
+.brick-preview canvas { border: 1px solid #ccc; }
+.edge-selector { display: flex; gap: 4px; margin-bottom: 8px; }
+.edge-btn { padding: 4px 10px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; font-size: 12px; }
+.edge-btn.active { background: #4a6cf7; color: #fff; border-color: #4a6cf7; }
+.point-list { max-height: 200px; overflow-y: auto; font-size: 12px; font-family: monospace; }
+.point-item { padding: 2px 4px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; }
+</style>
+
+<div class="top-bar">
+    <h1>{{if .IsNew}}New{{else}}Edit{{end}} Brick Type</h1>
+    <div>
+        <a href="/brick-types" class="btn btn-primary">Back to List</a>
+        <button class="btn btn-success" onclick="brickEditor.save()">Save</button>
+    </div>
+</div>
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+
+<div class="brick-editor-container">
+    <div>
+        <div class="card brick-editor-props">
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="propName" value="{{.BrickType.Name}}">
+            </div>
+            <div class="form-group">
+                <label>Image ID</label>
+                <input type="text" id="propImageId" value="{{.BrickType.ImageID}}">
+                <div class="desc">Sprite reference (loaded by client)</div>
+            </div>
+            <div class="form-group">
+                <label>Color</label>
+                <input type="color" id="propColor" value="{{if .BrickType.Color}}{{.BrickType.Color}}{{else}}#8B4513{{end}}">
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="propDestructible" {{if .BrickType.Destructible}}checked{{end}}>
+                    Destructible
+                </label>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+            <h3 style="font-size:14px;margin-bottom:8px">Edge</h3>
+            <div class="edge-selector">
+                <button class="edge-btn active" onclick="brickEditor.setEdge('top',this)">Top</button>
+                <button class="edge-btn" onclick="brickEditor.setEdge('right',this)">Right</button>
+                <button class="edge-btn" onclick="brickEditor.setEdge('bottom',this)">Bottom</button>
+                <button class="edge-btn" onclick="brickEditor.setEdge('left',this)">Left</button>
+            </div>
+            <div class="point-list" id="pointList"></div>
+            <button class="btn btn-danger btn-sm" style="margin-top:8px" onclick="brickEditor.resetEdge()">Reset Edge</button>
+        </div>
+    </div>
+
+    <div>
+        <div class="brick-editor-canvas-wrap">
+            <canvas id="brickCanvas" width="400" height="400"></canvas>
+        </div>
+        <div class="brick-preview card" style="margin-top:12px">
+            <h3 style="font-size:14px;margin-bottom:8px">Preview (actual size)</h3>
+            <canvas id="previewCanvas" width="48" height="48"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+const BRICK_ID = {{.BrickType.BrickTypeID}};
+const BORDER_DATA = {{.BorderJSON | safeJS}};
+</script>
+<script src="/static/brick_editor.js"></script>
+{{end}}

@@ -21,7 +21,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	db, err := database.NewPostgresDB(ctx, cfg.PostgresDSN)
+	db, err := database.NewPostgresDB(ctx, cfg.PostgresDSN, cfg.DBMaxConns, cfg.DBMinConns)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect to Postgres")
 	}
@@ -34,6 +34,9 @@ func main() {
 		filepath.Join("migrations", "004_admin_config_tables.up.sql"),
 		filepath.Join("migrations", "005_add_loadouts_and_matchmaking.up.sql"),
 		filepath.Join("migrations", "006_character_progression.up.sql"),
+		filepath.Join("migrations", "007_map_editor.up.sql"),
+		filepath.Join("migrations", "008_brick_border_v2.up.sql"),
+		filepath.Join("migrations", "009_map_rank_tier.up.sql"),
 	}
 
 	for _, migrationPath := range migrations {
