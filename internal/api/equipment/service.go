@@ -415,22 +415,7 @@ func (s *Service) UpgradeEquipment(ctx context.Context, playerID string, req Upg
 // DismantleEquipment
 // ---------------------------------------------------------------------------
 
-// Stone powers indexed by stone level (index 0 unused; index 1..12)
-// levels 12→1: [177147, 59049, 19683, 6561, 2187, 729, 243, 81, 27, 9, 3, 1]
-var stonePowers = []int{0, 1, 3, 9, 27, 81, 243, 729, 2187, 6561, 19683, 59049, 177147}
-
-func getSafezoneStart(level int) int {
-	if level >= 14 {
-		return 14
-	}
-	if level >= 10 {
-		return 10
-	}
-	if level >= 6 {
-		return 6
-	}
-	return 0
-}
+// stonePowers and getSafezoneStart are in logic.go
 
 func (s *Service) DismantleEquipment(ctx context.Context, playerID string, req DismantleRequest) error {
 	equip, err := s.repo.GetPlayerEquipmentByID(ctx, playerID, req.EquipmentID)
@@ -477,7 +462,7 @@ func (s *Service) DismantleEquipment(ctx context.Context, playerID string, req D
 		refund := sumPower / 2
 		// Distribute refund as highest-value stones first (level 12 down to 1)
 		for stoneLevel := 12; stoneLevel >= 1 && refund > 0; stoneLevel-- {
-			power := stonePowers[stoneLevel]
+			power := StonePowers[stoneLevel]
 			qty := refund / power
 			if qty > 0 {
 				if err := s.repo.AddStonesTx(ctx, tx, playerID, stoneLevel, qty); err != nil {
@@ -782,26 +767,4 @@ func (s *Service) GetEquipmentStatsForCharacter(ctx context.Context, playerID, c
 	return s.repo.GetEquipmentStatsForCharacter(ctx, playerID, characterID)
 }
 
-// ---------------------------------------------------------------------------
-// CalculateUpgradeMultiplier (exported helper)
-// ---------------------------------------------------------------------------
-
-// CalculateUpgradeMultiplier returns the stat multiplier for a given upgrade level.
-// Formula: 1 + level*0.02 + milestone bonuses
-// Milestones: level>=6 +0.10, level>=10 +0.20, level>=14 +0.40, level>=16 +1.00
-func CalculateUpgradeMultiplier(upgradeLevel int) float64 {
-	m := 1.0 + float64(upgradeLevel)*0.02
-	if upgradeLevel >= 6 {
-		m += 0.10
-	}
-	if upgradeLevel >= 10 {
-		m += 0.20
-	}
-	if upgradeLevel >= 14 {
-		m += 0.40
-	}
-	if upgradeLevel >= 16 {
-		m += 1.00
-	}
-	return m
-}
+// CalculateUpgradeMultiplier is in logic.go
