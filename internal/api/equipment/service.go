@@ -2,6 +2,7 @@ package equipment
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"strconv"
@@ -9,6 +10,8 @@ import (
 	"battle-squad/internal/api/economy"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/model"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type Service struct {
@@ -23,6 +26,11 @@ func NewService(repo *Repository, economyRepo *economy.Repository, db *database.
 		economyRepo: economyRepo,
 		db:          db,
 	}
+}
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 func (s *Service) getMergeRatePerItem(ctx context.Context) float64 {
@@ -267,6 +275,10 @@ func (s *Service) BuyMaterials(ctx context.Context, playerID string, req BuyMate
 // ---------------------------------------------------------------------------
 
 func (s *Service) EquipItem(ctx context.Context, playerID string, req EquipRequest) error {
+	if req.CharacterID == "" {
+		return model.ErrBadRequest
+	}
+
 	equip, err := s.repo.GetPlayerEquipmentByID(ctx, playerID, req.EquipmentID)
 	if err != nil {
 		return err
@@ -278,25 +290,23 @@ func (s *Service) EquipItem(ctx context.Context, playerID string, req EquipReque
 		return model.ErrEquipmentAlreadyEquipped
 	}
 
-	// Check character level requirement
+	// Check character restriction and level requirement
 	itemCfg, err := s.repo.GetEquipmentItemConfig(ctx, equip.ItemID)
 	if err != nil {
 		return err
 	}
-	if itemCfg != nil && itemCfg.RequiredLevel > 0 {
-		charLevel, err := s.repo.GetCharacterLevel(ctx, playerID, req.CharacterID)
-		if err != nil {
-			return err
-		}
-		if charLevel < itemCfg.RequiredLevel {
-			return model.ErrEquipmentLevelRequired
-		}
+	if itemCfg != nil && !CanEquipOnCharacter(itemCfg.CharacterID, req.CharacterID) {
+		return model.ErrEquipmentWrongCharacter
 	}
-
-	// Auto-unequip existing item in same slot (same character+slot)
-	existing, err := s.repo.GetEquippedInSlot(ctx, playerID, req.CharacterID, equip.Slot)
+	charLevel, owned, err := s.repo.GetCharacterLevel(ctx, playerID, req.CharacterID)
 	if err != nil {
 		return err
+	}
+	if !owned {
+		return model.ErrCharacterNotOwned
+	}
+	if itemCfg != nil && charLevel < itemCfg.RequiredLevel {
+		return model.ErrEquipmentLevelRequired
 	}
 
 	tx, err := s.db.Pool.Begin(ctx)
@@ -305,6 +315,26 @@ func (s *Service) EquipItem(ctx context.Context, playerID string, req EquipReque
 	}
 	defer tx.Rollback(ctx)
 
+	// Serialize equips into this character+slot, then re-check state under lock
+	if err := s.repo.LockEquipSlotTx(ctx, tx, playerID, req.CharacterID, equip.Slot); err != nil {
+		return err
+	}
+	equip, err = s.repo.GetPlayerEquipmentForUpdateTx(ctx, tx, playerID, req.EquipmentID)
+	if err != nil {
+		return err
+	}
+	if equip == nil {
+		return model.ErrEquipmentNotOwned
+	}
+	if equip.IsEquipped {
+		return model.ErrEquipmentAlreadyEquipped
+	}
+
+	// Auto-unequip existing item in same slot (same character+slot)
+	existing, err := s.repo.GetEquippedInSlotTx(ctx, tx, playerID, req.CharacterID, equip.Slot)
+	if err != nil {
+		return err
+	}
 	if existing != nil {
 		if err := s.repo.UnequipItemTx(ctx, tx, existing.EquipmentID); err != nil {
 			return err
@@ -312,6 +342,9 @@ func (s *Service) EquipItem(ctx context.Context, playerID string, req EquipReque
 	}
 
 	if err := s.repo.EquipItemTx(ctx, tx, req.EquipmentID, req.CharacterID); err != nil {
+		if isUniqueViolation(err) {
+			return model.ErrEquipmentSlotOccupied
+		}
 		return err
 	}
 
@@ -401,6 +434,19 @@ func (s *Service) UpgradeEquipment(ctx context.Context, playerID string, req Upg
 	}
 	defer tx.Rollback(ctx)
 
+	// Lock the row so concurrent upgrades/dismantles of the same item are
+	// serialized; the rate above is only valid if the level is unchanged.
+	locked, err := s.repo.GetPlayerEquipmentForUpdateTx(ctx, tx, playerID, req.EquipmentID)
+	if err != nil {
+		return nil, err
+	}
+	if locked == nil {
+		return nil, model.ErrEquipmentNotOwned
+	}
+	if locked.UpgradeLevel != equip.UpgradeLevel {
+		return nil, model.ErrEquipmentModified
+	}
+
 	// Deduct all stones
 	for _, si := range req.Stones {
 		if si.Quantity <= 0 {
@@ -448,19 +494,20 @@ func (s *Service) UpgradeEquipment(ctx context.Context, playerID string, req Upg
 // stonePowers and getSafezoneStart are in logic.go
 
 func (s *Service) DismantleEquipment(ctx context.Context, playerID string, req DismantleRequest) error {
-	equip, err := s.repo.GetPlayerEquipmentByID(ctx, playerID, req.EquipmentID)
+	tx, err := s.db.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// Lock the row so a concurrent dismantle/upgrade waits, then sees it gone
+	equip, err := s.repo.GetPlayerEquipmentForUpdateTx(ctx, tx, playerID, req.EquipmentID)
 	if err != nil {
 		return err
 	}
 	if equip == nil {
 		return model.ErrEquipmentNotOwned
 	}
-
-	tx, err := s.db.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
 
 	// Clear gem slots (gems remain in player_gems inventory, just unset the slot references)
 	if equip.GemSlot1 != nil {
@@ -478,7 +525,7 @@ func (s *Service) DismantleEquipment(ctx context.Context, playerID string, req D
 	if equip.UpgradeLevel > 0 {
 		safezoneStart := getSafezoneStart(equip.UpgradeLevel)
 
-		logs, err := s.repo.GetUpgradeLogForDismantle(ctx, req.EquipmentID, safezoneStart)
+		logs, err := s.repo.GetUpgradeLogForDismantleTx(ctx, tx, req.EquipmentID, safezoneStart)
 		if err != nil {
 			return err
 		}
@@ -503,8 +550,12 @@ func (s *Service) DismantleEquipment(ctx context.Context, playerID string, req D
 		}
 	}
 
-	if err := s.repo.DeleteEquipmentTx(ctx, tx, req.EquipmentID); err != nil {
+	deleted, err := s.repo.DeleteEquipmentTx(ctx, tx, req.EquipmentID)
+	if err != nil {
 		return err
+	}
+	if deleted != 1 {
+		return model.ErrEquipmentNotOwned
 	}
 
 	return tx.Commit(ctx)
@@ -540,6 +591,22 @@ func (s *Service) SocketGem(ctx context.Context, playerID string, req SocketGemR
 		return model.ErrGemSlotInvalid
 	}
 
+	tx, err := s.db.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// Lock equipment then gem so concurrent sockets of the same gem or into
+	// the same slot are serialized, then check state under the locks.
+	equip, err = s.repo.GetPlayerEquipmentForUpdateTx(ctx, tx, playerID, req.EquipmentID)
+	if err != nil {
+		return err
+	}
+	if equip == nil {
+		return model.ErrEquipmentNotOwned
+	}
+
 	// Check slot not already occupied
 	switch req.SlotIndex {
 	case 1:
@@ -552,29 +619,23 @@ func (s *Service) SocketGem(ctx context.Context, playerID string, req SocketGemR
 		}
 	}
 
-	// Verify gem ownership
-	gem, err := s.repo.GetPlayerGemByID(ctx, playerID, req.GemID)
+	// Verify gem ownership (and lock it)
+	owned, err := s.repo.LockPlayerGemTx(ctx, tx, playerID, req.GemID)
 	if err != nil {
 		return err
 	}
-	if gem == nil {
+	if !owned {
 		return model.ErrGemNotOwned
 	}
 
 	// Check gem not already socketed elsewhere
-	socketed, err := s.repo.IsGemSocketed(ctx, req.GemID)
+	socketed, err := s.repo.AnyGemSocketedTx(ctx, tx, []string{req.GemID})
 	if err != nil {
 		return err
 	}
 	if socketed {
 		return model.ErrEquipmentSlotOccupied
 	}
-
-	tx, err := s.db.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
 
 	gemID := req.GemID
 	if err := s.repo.SetGemSlotTx(ctx, tx, req.EquipmentID, req.SlotIndex, &gemID); err != nil {
@@ -642,6 +703,8 @@ func (s *Service) MergeStones(ctx context.Context, playerID string, req MergeSto
 		return nil, model.ErrMergeMaxLevel
 	}
 
+	ratePerItem := s.getMergeRatePerItem(ctx)
+
 	tx, err := s.db.Pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -653,7 +716,6 @@ func (s *Service) MergeStones(ctx context.Context, playerID string, req MergeSto
 	}
 
 	// Roll: count * configurable rate per item
-	ratePerItem := s.getMergeRatePerItem(ctx)
 	successRate := float64(req.Count) * ratePerItem
 	success := rand.Float64()*100 < successRate
 
@@ -690,20 +752,7 @@ func (s *Service) MergeGems(ctx context.Context, playerID string, req MergeGemRe
 		return nil, model.ErrMergeMaxLevel
 	}
 
-	// Get unequipped gems of type+level, verify enough available
-	available, err := s.repo.GetPlayerGemsByTypeAndLevel(ctx, playerID, req.GemType, req.GemLevel)
-	if err != nil {
-		return nil, err
-	}
-	if len(available) < req.Count {
-		return nil, model.ErrGemNotOwned
-	}
-
-	// Pick the gems to consume
-	toConsume := make([]string, req.Count)
-	for i := 0; i < req.Count; i++ {
-		toConsume[i] = available[i].GemID
-	}
+	ratePerItem := s.getMergeRatePerItem(ctx)
 
 	tx, err := s.db.Pool.Begin(ctx)
 	if err != nil {
@@ -711,12 +760,33 @@ func (s *Service) MergeGems(ctx context.Context, playerID string, req MergeGemRe
 	}
 	defer tx.Rollback(ctx)
 
-	if err := s.repo.DeleteGemsTx(ctx, tx, toConsume); err != nil {
+	// Lock unsocketed gems of type+level, verify enough available
+	toConsume, err := s.repo.LockUnsocketedGemsTx(ctx, tx, playerID, req.GemType, req.GemLevel, req.Count)
+	if err != nil {
 		return nil, err
+	}
+	if len(toConsume) < req.Count {
+		return nil, model.ErrGemNotOwned
+	}
+
+	// Re-check under lock: a concurrent SocketGem may have committed meanwhile
+	socketed, err := s.repo.AnyGemSocketedTx(ctx, tx, toConsume)
+	if err != nil {
+		return nil, err
+	}
+	if socketed {
+		return nil, model.ErrGemNotOwned
+	}
+
+	deleted, err := s.repo.DeleteGemsTx(ctx, tx, toConsume)
+	if err != nil {
+		return nil, err
+	}
+	if deleted != int64(req.Count) {
+		return nil, model.ErrGemNotOwned
 	}
 
 	// Roll: count * configurable rate per item
-	ratePerItem := s.getMergeRatePerItem(ctx)
 	successRate := float64(req.Count) * ratePerItem
 	success := rand.Float64()*100 < successRate
 

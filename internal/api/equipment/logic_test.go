@@ -649,3 +649,25 @@ func TestDismantleRefund_LargePower(t *testing.T) {
 		t.Errorf("large refund: total power = %d, want %d", totalPower, expected)
 	}
 }
+
+func TestCanEquipOnCharacter(t *testing.T) {
+	str := func(s string) *string { return &s }
+	tests := []struct {
+		name          string
+		itemCharacter *string
+		characterID   string
+		want          bool
+	}{
+		{"universal item (nil)", nil, "gunner", true},
+		{"universal item (empty)", str(""), "gunner", true},
+		{"exclusive item, matching character", str("gunner"), "gunner", true},
+		{"exclusive item, other character", str("gunner"), "sniper", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := CanEquipOnCharacter(tt.itemCharacter, tt.characterID); got != tt.want {
+				t.Errorf("CanEquipOnCharacter(%v, %q) = %v, want %v", tt.itemCharacter, tt.characterID, got, tt.want)
+			}
+		})
+	}
+}

@@ -67,6 +67,36 @@ func (r *Repository) GetPlayerEquipmentByID(ctx context.Context, playerID, equip
 	return &e, nil
 }
 
+// GetPlayerEquipmentForUpdateTx reads an equipment row and locks it until the
+// transaction ends, so concurrent mutations of the same item are serialized.
+func (r *Repository) GetPlayerEquipmentForUpdateTx(ctx context.Context, tx pgx.Tx, playerID, equipmentID string) (*PlayerEquipment, error) {
+	query := `
+		SELECT equipment_id::text, player_id, item_id, slot, category, tier, upgrade_level,
+		       gem_slot_1::text, gem_slot_2::text, is_equipped, equipped_on, is_locked, created_at
+		FROM player_equipment
+		WHERE player_id = $1 AND equipment_id = $2
+		FOR UPDATE
+	`
+	row := tx.QueryRow(ctx, query, playerID, equipmentID)
+	e, err := scanPlayerEquipment(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &e, nil
+}
+
+// LockEquipSlotTx serializes equip operations on one (player, character, slot)
+// until the transaction ends. A row lock cannot cover an empty slot, so this
+// uses a transaction-scoped advisory lock.
+func (r *Repository) LockEquipSlotTx(ctx context.Context, tx pgx.Tx, playerID, characterID, slot string) error {
+	key := fmt.Sprintf("equip_slot:%s:%s:%s", playerID, characterID, slot)
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, key)
+	return err
+}
+
 func (r *Repository) CreateEquipmentTx(ctx context.Context, tx pgx.Tx, playerID, itemID, slot, category string, tier *string, gemSlots int) (string, error) {
 	query := `
 		INSERT INTO player_equipment (player_id, item_id, slot, category, tier)
@@ -98,15 +128,16 @@ func (r *Repository) UnequipItemTx(ctx context.Context, tx pgx.Tx, equipmentID s
 	return err
 }
 
-func (r *Repository) GetEquippedInSlot(ctx context.Context, playerID, characterID, slot string) (*PlayerEquipment, error) {
+func (r *Repository) GetEquippedInSlotTx(ctx context.Context, tx pgx.Tx, playerID, characterID, slot string) (*PlayerEquipment, error) {
 	query := `
 		SELECT equipment_id::text, player_id, item_id, slot, category, tier, upgrade_level,
 		       gem_slot_1::text, gem_slot_2::text, is_equipped, equipped_on, is_locked, created_at
 		FROM player_equipment
 		WHERE player_id = $1 AND equipped_on = $2 AND slot = $3 AND is_equipped = TRUE
 		LIMIT 1
+		FOR UPDATE
 	`
-	row := r.db.Pool.QueryRow(ctx, query, playerID, characterID, slot)
+	row := tx.QueryRow(ctx, query, playerID, characterID, slot)
 	e, err := scanPlayerEquipment(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -123,10 +154,13 @@ func (r *Repository) UpdateUpgradeLevelTx(ctx context.Context, tx pgx.Tx, equipm
 	return err
 }
 
-func (r *Repository) DeleteEquipmentTx(ctx context.Context, tx pgx.Tx, equipmentID string) error {
+func (r *Repository) DeleteEquipmentTx(ctx context.Context, tx pgx.Tx, equipmentID string) (int64, error) {
 	query := `DELETE FROM player_equipment WHERE equipment_id = $1`
-	_, err := tx.Exec(ctx, query, equipmentID)
-	return err
+	tag, err := tx.Exec(ctx, query, equipmentID)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
 }
 
 func (r *Repository) SetGemSlotTx(ctx context.Context, tx pgx.Tx, equipmentID string, slotIndex int, gemID *string) error {
@@ -166,14 +200,14 @@ type upgradeLogRow struct {
 	TotalPower int
 }
 
-func (r *Repository) GetUpgradeLogForDismantle(ctx context.Context, equipmentID string, fromLevel int) ([]upgradeLogRow, error) {
+func (r *Repository) GetUpgradeLogForDismantleTx(ctx context.Context, tx pgx.Tx, equipmentID string, fromLevel int) ([]upgradeLogRow, error) {
 	query := `
 		SELECT stones_used, total_power
 		FROM equipment_upgrade_log
 		WHERE equipment_id = $1 AND from_level >= $2
 		ORDER BY from_level ASC
 	`
-	rows, err := r.db.Pool.Query(ctx, query, equipmentID, fromLevel)
+	rows, err := tx.Query(ctx, query, equipmentID, fromLevel)
 	if err != nil {
 		return nil, err
 	}
@@ -218,34 +252,33 @@ func (r *Repository) GetPlayerGems(ctx context.Context, playerID string) ([]Play
 	return result, nil
 }
 
-func (r *Repository) GetPlayerGemByID(ctx context.Context, playerID, gemID string) (*PlayerGem, error) {
-	query := `
-		SELECT gem_id::text, player_id, gem_type, gem_level, created_at
-		FROM player_gems
-		WHERE player_id = $1 AND gem_id = $2
-	`
-	var g PlayerGem
-	err := r.db.Pool.QueryRow(ctx, query, playerID, gemID).Scan(
-		&g.GemID, &g.PlayerID, &g.GemType, &g.GemLevel, &g.CreatedAt,
-	)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, err
+// LockPlayerGemTx locks a gem row until the transaction ends. Returns false if
+// the gem does not exist or belongs to another player.
+func (r *Repository) LockPlayerGemTx(ctx context.Context, tx pgx.Tx, playerID, gemID string) (bool, error) {
+	var id string
+	err := tx.QueryRow(ctx,
+		`SELECT gem_id::text FROM player_gems WHERE player_id = $1 AND gem_id = $2 FOR UPDATE`,
+		playerID, gemID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
 	}
-	return &g, nil
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
-func (r *Repository) IsGemSocketed(ctx context.Context, gemID string) (bool, error) {
+// AnyGemSocketedTx reports whether any of the given gems is set in an
+// equipment gem slot. Run it after locking the gems so it sees committed sockets.
+func (r *Repository) AnyGemSocketedTx(ctx context.Context, tx pgx.Tx, gemIDs []string) (bool, error) {
 	query := `
 		SELECT EXISTS (
 			SELECT 1 FROM player_equipment
-			WHERE gem_slot_1 = $1 OR gem_slot_2 = $1
+			WHERE gem_slot_1 = ANY($1::uuid[]) OR gem_slot_2 = ANY($1::uuid[])
 		)
 	`
 	var exists bool
-	err := r.db.Pool.QueryRow(ctx, query, gemID).Scan(&exists)
+	err := tx.QueryRow(ctx, query, gemIDs).Scan(&exists)
 	return exists, err
 }
 
@@ -260,15 +293,21 @@ func (r *Repository) CreateGemTx(ctx context.Context, tx pgx.Tx, playerID, gemTy
 	return id, err
 }
 
-func (r *Repository) DeleteGemsTx(ctx context.Context, tx pgx.Tx, gemIDs []string) error {
+func (r *Repository) DeleteGemsTx(ctx context.Context, tx pgx.Tx, gemIDs []string) (int64, error) {
 	query := `DELETE FROM player_gems WHERE gem_id = ANY($1::uuid[])`
-	_, err := tx.Exec(ctx, query, gemIDs)
-	return err
+	tag, err := tx.Exec(ctx, query, gemIDs)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
 }
 
-func (r *Repository) GetPlayerGemsByTypeAndLevel(ctx context.Context, playerID, gemType string, gemLevel int) ([]PlayerGem, error) {
+// LockUnsocketedGemsTx locks up to limit unsocketed gems of a type+level.
+// Gems deleted by a concurrent transaction are skipped once their lock is
+// released, so the result may be shorter than limit.
+func (r *Repository) LockUnsocketedGemsTx(ctx context.Context, tx pgx.Tx, playerID, gemType string, gemLevel, limit int) ([]string, error) {
 	query := `
-		SELECT gem_id::text, player_id, gem_type, gem_level, created_at
+		SELECT g.gem_id::text
 		FROM player_gems g
 		WHERE g.player_id = $1
 		  AND g.gem_type = $2
@@ -278,22 +317,24 @@ func (r *Repository) GetPlayerGemsByTypeAndLevel(ctx context.Context, playerID, 
 		      WHERE pe.gem_slot_1 = g.gem_id OR pe.gem_slot_2 = g.gem_id
 		  )
 		ORDER BY g.created_at ASC
+		LIMIT $4
+		FOR UPDATE OF g
 	`
-	rows, err := r.db.Pool.Query(ctx, query, playerID, gemType, gemLevel)
+	rows, err := tx.Query(ctx, query, playerID, gemType, gemLevel, limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var result []PlayerGem
+	var ids []string
 	for rows.Next() {
-		var g PlayerGem
-		if err := rows.Scan(&g.GemID, &g.PlayerID, &g.GemType, &g.GemLevel, &g.CreatedAt); err != nil {
+		var id string
+		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
-		result = append(result, g)
+		ids = append(ids, id)
 	}
-	return result, nil
+	return ids, rows.Err()
 }
 
 // ---------------------------------------------------------------------------
@@ -606,18 +647,19 @@ func (r *Repository) GetAllGemConfigs(ctx context.Context) ([]GemConfig, error) 
 	return result, nil
 }
 
-func (r *Repository) GetCharacterLevel(ctx context.Context, playerID, characterID string) (int, error) {
+// GetCharacterLevel returns the character's level and whether the player owns it.
+func (r *Repository) GetCharacterLevel(ctx context.Context, playerID, characterID string) (int, bool, error) {
 	var level int
 	err := r.db.Pool.QueryRow(ctx,
 		`SELECT COALESCE(level, 1) FROM player_characters WHERE player_id = $1 AND character_id = $2`,
 		playerID, characterID).Scan(&level)
-	if err == pgx.ErrNoRows {
-		return 1, nil
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, nil
 	}
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
-	return level, nil
+	return level, true, nil
 }
 
 func (r *Repository) GetSetBonuses(ctx context.Context, tier string) ([]SetBonusConfig, error) {

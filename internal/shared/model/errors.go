@@ -65,6 +65,9 @@ var (
 	ErrEquipmentSlotOccupied    = AppError{Code: "EQUIP_SLOT_OCCUPIED", Message: "Equipment slot is already occupied", Status: http.StatusConflict}
 	ErrEquipmentLocked          = AppError{Code: "EQUIP_LOCKED", Message: "Equipment is locked and cannot be sold", Status: http.StatusConflict}
 	ErrEquipmentLevelRequired   = AppError{Code: "EQUIP_LEVEL_REQUIRED", Message: "Character level too low for this equipment", Status: http.StatusBadRequest}
+	ErrEquipmentWrongCharacter  = AppError{Code: "EQUIP_WRONG_CHARACTER", Message: "This equipment is exclusive to another character", Status: http.StatusBadRequest}
+	ErrEquipmentModified        = AppError{Code: "EQUIP_MODIFIED", Message: "Equipment was changed by another request, please retry", Status: http.StatusConflict}
+	ErrCharacterNotOwned        = AppError{Code: "CHARACTER_NOT_FOUND", Message: "Character not found or not owned by this player", Status: http.StatusNotFound}
 	ErrEquipmentMaxUpgrade      = AppError{Code: "EQUIP_MAX_UPGRADE", Message: "Equipment is already at max upgrade level", Status: http.StatusBadRequest}
 	ErrEquipmentNoStones        = AppError{Code: "EQUIP_NO_STONES", Message: "No upgrade stones provided", Status: http.StatusBadRequest}
 	ErrInsufficientStones       = AppError{Code: "EQUIP_INSUFFICIENT_STONES", Message: "Not enough upgrade stones", Status: http.StatusBadRequest}

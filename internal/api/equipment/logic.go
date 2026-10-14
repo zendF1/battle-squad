@@ -154,3 +154,12 @@ func UpgradeFailLevel(currentLevel, failResetTo int) int {
 func UpgradeSuccessLevel(currentLevel int) int {
 	return currentLevel + 1
 }
+
+// CanEquipOnCharacter reports whether an item restricted to itemCharacterID
+// (nil or empty = usable by any character) may be equipped on characterID.
+func CanEquipOnCharacter(itemCharacterID *string, characterID string) bool {
+	if itemCharacterID == nil || *itemCharacterID == "" {
+		return true
+	}
+	return *itemCharacterID == characterID
+}
