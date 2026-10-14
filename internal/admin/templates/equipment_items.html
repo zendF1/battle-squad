@@ -1,0 +1,56 @@
+{{define "content"}}
+<div class="top-bar">
+    <h1>Equipment Items</h1>
+    <a href="/equipment-items/edit" class="btn btn-primary">+ Add New Item</a>
+</div>
+{{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+<div class="card">
+<table>
+<thead>
+<tr>
+    <th>Item ID</th>
+    <th>Name</th>
+    <th>Slot</th>
+    <th>Category</th>
+    <th>Tier</th>
+    <th>Lvl</th>
+    <th>HP</th>
+    <th>DMG</th>
+    <th>DEF</th>
+    <th>Crit</th>
+    <th>Coin</th>
+    <th>Gem</th>
+    <th>Active</th>
+    <th>Actions</th>
+</tr>
+</thead>
+<tbody>
+{{range .Items}}
+<tr>
+    <td>{{index . "ItemID"}}</td>
+    <td>{{index . "Name"}}</td>
+    <td>{{index . "Slot"}}</td>
+    <td>{{index . "Category"}}</td>
+    <td>{{if index . "Tier"}}{{index . "Tier"}}{{else}}-{{end}}</td>
+    <td>{{index . "RequiredLevel"}}</td>
+    <td>{{index . "StatHP"}}</td>
+    <td>{{index . "StatDMG"}}</td>
+    <td>{{index . "StatDEF"}}</td>
+    <td>{{index . "StatCrit"}}</td>
+    <td>{{index . "PriceCoin"}}</td>
+    <td>{{index . "PriceGem"}}</td>
+    <td>{{if index . "IsActive"}}<span class="badge badge-success">Yes</span>{{else}}<span class="badge badge-danger">No</span>{{end}}</td>
+    <td>
+        <a href="/equipment-items/edit?id={{index . "ItemID"}}" class="btn btn-primary btn-sm">Edit</a>
+        <form method="POST" action="/equipment-items/delete" style="display:inline" onsubmit="return confirm('Delete this item?')">
+            <input type="hidden" name="id" value="{{index . "ItemID"}}">
+            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+        </form>
+    </td>
+</tr>
+{{end}}
+</tbody>
+</table>
+</div>
+{{end}}

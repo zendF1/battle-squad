@@ -1,0 +1,100 @@
+{{define "content"}}
+<div class="top-bar">
+    <h1>{{if .IsNew}}New{{else}}Edit{{end}} Equipment Item</h1>
+    <a href="/equipment-items" class="btn btn-primary">Back to List</a>
+</div>
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+<div class="card">
+<form method="POST" action="/equipment-items/save">
+<div class="form-group">
+    <label>Item ID</label>
+    <input type="text" name="item_id" value="{{index .Item "ItemID"}}" {{if not .IsNew}}readonly{{end}}>
+    <div class="desc">Unique identifier (e.g. sword_iron_001). Cannot be changed after creation.</div>
+</div>
+<div class="form-group">
+    <label>Name</label>
+    <input type="text" name="name" value="{{index .Item "Name"}}">
+</div>
+<div class="form-group">
+    <label>Slot</label>
+    <select name="slot">
+        {{$slot := index .Item "Slot"}}
+        <option value="weapon" {{if eq $slot "weapon"}}selected{{end}}>Weapon</option>
+        <option value="armor" {{if eq $slot "armor"}}selected{{end}}>Armor</option>
+        <option value="helmet" {{if eq $slot "helmet"}}selected{{end}}>Helmet</option>
+        <option value="boots" {{if eq $slot "boots"}}selected{{end}}>Boots</option>
+        <option value="accessory" {{if eq $slot "accessory"}}selected{{end}}>Accessory</option>
+    </select>
+</div>
+<div class="form-group">
+    <label>Category</label>
+    <select name="category">
+        {{$cat := index .Item "Category"}}
+        <option value="normal" {{if eq $cat "normal"}}selected{{end}}>Normal</option>
+        <option value="character" {{if eq $cat "character"}}selected{{end}}>Character</option>
+        <option value="set" {{if eq $cat "set"}}selected{{end}}>Set</option>
+    </select>
+</div>
+<div class="form-group">
+    <label>Tier</label>
+    <select name="tier">
+        {{$tier := index .Item "Tier"}}
+        <option value="">— None —</option>
+        <option value="common" {{if eq $tier "common"}}selected{{end}}>Common</option>
+        <option value="rare" {{if eq $tier "rare"}}selected{{end}}>Rare</option>
+        <option value="epic" {{if eq $tier "epic"}}selected{{end}}>Epic</option>
+        <option value="legendary" {{if eq $tier "legendary"}}selected{{end}}>Legendary</option>
+    </select>
+</div>
+<div class="form-group">
+    <label>Required Level</label>
+    <input type="number" name="required_level" value="{{index .Item "RequiredLevel"}}" min="1">
+</div>
+<div class="form-group">
+    <label>Character ID (optional)</label>
+    <input type="text" name="character_id" value="{{if index .Item "CharacterID"}}{{index .Item "CharacterID"}}{{end}}">
+    <div class="desc">Leave empty for universal equipment</div>
+</div>
+<div class="form-group">
+    <label>Gem Slots</label>
+    <input type="number" name="gem_slots" value="{{index .Item "GemSlots"}}" min="0" max="2">
+</div>
+<div class="form-group">
+    <label>Stat: HP</label>
+    <input type="number" name="stat_hp" value="{{index .Item "StatHP"}}" step="1">
+</div>
+<div class="form-group">
+    <label>Stat: Damage</label>
+    <input type="number" name="stat_damage" value="{{index .Item "StatDMG"}}" step="1">
+</div>
+<div class="form-group">
+    <label>Stat: Defense</label>
+    <input type="number" name="stat_defense" value="{{index .Item "StatDEF"}}" step="1">
+</div>
+<div class="form-group">
+    <label>Stat: Crit %</label>
+    <input type="number" name="stat_crit" value="{{index .Item "StatCrit"}}" step="0.01">
+</div>
+<div class="form-group">
+    <label>Stat: Move Energy</label>
+    <input type="number" name="stat_move_energy" value="{{index .Item "StatMoveEnergy"}}" step="1">
+</div>
+<div class="form-group">
+    <label>Price (Coins)</label>
+    <input type="number" name="price_coin" value="{{index .Item "PriceCoin"}}" step="1" min="0">
+</div>
+<div class="form-group">
+    <label>Price (Gems)</label>
+    <input type="number" name="price_gem" value="{{index .Item "PriceGem"}}" step="1" min="0">
+</div>
+<div class="form-group">
+    <label>Active</label>
+    <select name="is_active">
+        <option value="true" {{if index .Item "IsActive"}}selected{{end}}>Yes</option>
+        <option value="false" {{if not (index .Item "IsActive")}}selected{{end}}>No</option>
+    </select>
+</div>
+<button type="submit" class="btn btn-primary">{{if .IsNew}}Create{{else}}Save Changes{{end}}</button>
+</form>
+</div>
+{{end}}

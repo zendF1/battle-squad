@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"strconv"
 	"time"
 
 	"battle-squad/internal/api/economy"
@@ -36,20 +38,48 @@ type Room struct {
 	matchDone chan struct{}
 }
 
-func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense int) (int, int) {
+type milestoneConfig struct {
+	Bonus6  float64
+	Bonus10 float64
+	Bonus14 float64
+	Bonus16 float64
+}
+
+func (r *Room) getMilestoneConfig() milestoneConfig {
+	cfg := milestoneConfig{Bonus6: 0.10, Bonus10: 0.20, Bonus14: 0.40, Bonus16: 1.00}
+	keys := map[string]*float64{
+		"equipment.milestone_6_bonus":  &cfg.Bonus6,
+		"equipment.milestone_10_bonus": &cfg.Bonus10,
+		"equipment.milestone_14_bonus": &cfg.Bonus14,
+		"equipment.milestone_16_bonus": &cfg.Bonus16,
+	}
+	for key, target := range keys {
+		var val string
+		err := r.db.Pool.QueryRow(context.Background(),
+			`SELECT value FROM game_settings WHERE key = $1`, key).Scan(&val)
+		if err == nil {
+			if parsed, err := strconv.ParseFloat(val, 64); err == nil {
+				*target = parsed
+			}
+		}
+	}
+	return cfg
+}
+
+func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense int) (hp, defense, damageBonus, moveEnergyBonus int, critChance float64) {
 	var bonusHP, bonusDefense int
 	err := r.db.Pool.QueryRow(context.Background(),
 		`SELECT COALESCE(bonus_hp, 0), COALESCE(bonus_defense, 0) FROM player_characters WHERE player_id = $1 AND character_id = $2`,
 		playerID, characterID).Scan(&bonusHP, &bonusDefense)
 	if err != nil {
-		return baseHP, baseDefense
+		return baseHP, baseDefense, 0, 0, 0
 	}
 
 	var cfgVal string
 	err = r.db.Pool.QueryRow(context.Background(),
 		`SELECT value FROM game_settings WHERE key = 'character_progression'`).Scan(&cfgVal)
 	if err != nil {
-		return baseHP, baseDefense
+		return baseHP, baseDefense, 0, 0, 0
 	}
 
 	type progConfig struct {
@@ -57,7 +87,7 @@ func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense 
 	}
 	var cfg progConfig
 	if json.Unmarshal([]byte(cfgVal), &cfg) != nil || cfg.StatMultipliers == nil {
-		return baseHP, baseDefense
+		return baseHP, baseDefense, 0, 0, 0
 	}
 
 	hpMul := cfg.StatMultipliers["hp"]
@@ -69,7 +99,125 @@ func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense 
 		defMul = 5
 	}
 
-	return baseHP + bonusHP*hpMul, baseDefense + bonusDefense*defMul
+	var equipHP, equipDMG, equipDEF, equipMoveEnergy int
+	var equipCrit float64
+
+	ms := r.getMilestoneConfig()
+
+	eqRows, eqErr := r.db.Pool.Query(context.Background(),
+		`SELECT cei.stat_hp, cei.stat_damage, cei.stat_defense, cei.stat_crit, cei.stat_move_energy,
+		        pe.upgrade_level, pe.category, pe.tier, pe.gem_slot_1::text, pe.gem_slot_2::text
+		 FROM player_equipment pe
+		 JOIN config_equipment_items cei ON pe.item_id = cei.item_id
+		 WHERE pe.player_id = $1 AND pe.equipped_on = $2 AND pe.is_equipped = TRUE`,
+		playerID, characterID)
+	if eqErr == nil {
+		defer eqRows.Close()
+		craftedTierCount := make(map[string]int)
+		for eqRows.Next() {
+			var statHP, statDMG, statDEF, statMoveEnergy, upgradeLevel int
+			var statCrit float64
+			var category string
+			var tier, gem1, gem2 *string
+			if err := eqRows.Scan(&statHP, &statDMG, &statDEF, &statCrit, &statMoveEnergy,
+				&upgradeLevel, &category, &tier, &gem1, &gem2); err != nil {
+				continue
+			}
+			upgradeBonus := float64(upgradeLevel) * 0.02
+			milestoneBonus := 0.0
+			if upgradeLevel >= 6 {
+				milestoneBonus += ms.Bonus6
+			}
+			if upgradeLevel >= 10 {
+				milestoneBonus += ms.Bonus10
+			}
+			if upgradeLevel >= 14 {
+				milestoneBonus += ms.Bonus14
+			}
+			if upgradeLevel >= 16 {
+				milestoneBonus += ms.Bonus16
+			}
+			mul := 1.0 + upgradeBonus + milestoneBonus
+
+			equipHP += int(math.Round(float64(statHP) * mul))
+			equipDMG += int(math.Round(float64(statDMG) * mul))
+			equipDEF += int(math.Round(float64(statDEF) * mul))
+			equipCrit += statCrit * mul
+			equipMoveEnergy += int(math.Round(float64(statMoveEnergy) * mul))
+
+			if category == "crafted" && tier != nil {
+				craftedTierCount[*tier]++
+			}
+
+			// BUG 2 fix: handle all 4 gem types (hp, damage, defense, critical)
+			for _, gemID := range []*string{gem1, gem2} {
+				if gemID == nil {
+					continue
+				}
+				var gemType string
+				var statVal float64
+				gerr := r.db.Pool.QueryRow(context.Background(),
+					`SELECT g.gem_type, cg.stat_value
+					 FROM player_gems g JOIN config_gems cg ON g.gem_type = cg.gem_type AND g.gem_level = cg.gem_level
+					 WHERE g.gem_id = $1`, *gemID).Scan(&gemType, &statVal)
+				if gerr != nil {
+					continue
+				}
+				switch gemType {
+				case "hp":
+					equipHP += int(statVal)
+				case "damage":
+					equipDMG += int(statVal)
+				case "defense":
+					equipDEF += int(statVal)
+				case "critical":
+					equipCrit += statVal
+				}
+			}
+		}
+
+		// BUG 4+5 fix: additive set bonus (sum all % first, apply once) + include bonus_dmg_pct
+		for t, count := range craftedTierCount {
+			var totalHPPct, totalDMGPct, totalDEFPct, totalCritPct float64
+			bonusRows, berr := r.db.Pool.Query(context.Background(),
+				`SELECT pieces_required, bonus_hp_pct, bonus_dmg_pct, bonus_def_pct, bonus_crit_pct
+				 FROM config_set_bonuses WHERE tier = $1 ORDER BY pieces_required`, t)
+			if berr != nil {
+				continue
+			}
+			for bonusRows.Next() {
+				var pieces int
+				var hpPct, dmgPct, defPct, critPct float64
+				if err := bonusRows.Scan(&pieces, &hpPct, &dmgPct, &defPct, &critPct); err != nil {
+					continue
+				}
+				if count >= pieces {
+					totalHPPct += hpPct
+					totalDMGPct += dmgPct
+					totalDEFPct += defPct
+					totalCritPct += critPct
+				}
+			}
+			bonusRows.Close()
+			// Apply additive bonus once
+			if totalHPPct > 0 {
+				equipHP = int(math.Round(float64(equipHP) * (1 + totalHPPct/100)))
+			}
+			if totalDMGPct > 0 {
+				equipDMG = int(math.Round(float64(equipDMG) * (1 + totalDMGPct/100)))
+			}
+			if totalDEFPct > 0 {
+				equipDEF = int(math.Round(float64(equipDEF) * (1 + totalDEFPct/100)))
+			}
+			equipCrit += totalCritPct
+		}
+	}
+
+	return baseHP + bonusHP*hpMul + equipHP,
+		baseDefense + bonusDefense*defMul + equipDEF,
+		equipDMG,
+		equipMoveEnergy,
+		equipCrit
 }
 
 func NewRoom(roomID string, initialState RoomState, hub *Hub, db *database.PostgresDB) *Room {
@@ -554,22 +702,25 @@ func (r *Room) processStartMatch(client *ws.Client) {
 			hp = charData.HP
 			defense = charData.Defense
 		}
-		hp, defense = r.getActualStats(p.PlayerID, p.CharacterID, hp, defense)
+		hp, defense, dmgBonus, moveEnergyBonus, critChance := r.getActualStats(p.PlayerID, p.CharacterID, hp, defense)
 
 		matchPlayers = append(matchPlayers, &match.BattlePlayerState{
-			PlayerID:      p.PlayerID,
-			DisplayName:   p.DisplayName,
-			TeamID:        p.TeamID,
-			CharacterID:   p.CharacterID,
-			HP:            hp,
-			MaxHP:         hp,
-			Defense:       defense,
-			Position:      spawnPos,
-			MoveEnergy:    100,
-			Items:         p.Items,
-			StatusEffects: []match.StatusEffect{},
-			IsAlive:       true,
-			IsBot:         false,
+			PlayerID:        p.PlayerID,
+			DisplayName:     p.DisplayName,
+			TeamID:          p.TeamID,
+			CharacterID:     p.CharacterID,
+			HP:              hp,
+			MaxHP:           hp,
+			Defense:         defense,
+			DamageBonus:     dmgBonus,
+			Position:        spawnPos,
+			MoveEnergy:      100,
+			MoveEnergyBonus: moveEnergyBonus,
+			CritChance:      critChance,
+			Items:           p.Items,
+			StatusEffects:   []match.StatusEffect{},
+			IsAlive:         true,
+			IsBot:           false,
 		})
 	}
 
@@ -726,24 +877,29 @@ func (r *Room) startRankedMatch(matchID string, botTierConfig matchmaker.BotTier
 		}
 
 		isBot := len(p.PlayerID) >= 4 && p.PlayerID[:4] == "bot_"
+		var dmgBonus, moveEnergyBonus int
+		var critChance float64
 		if !isBot {
-			hp, defense = r.getActualStats(p.PlayerID, p.CharacterID, hp, defense)
+			hp, defense, dmgBonus, moveEnergyBonus, critChance = r.getActualStats(p.PlayerID, p.CharacterID, hp, defense)
 		}
 
 		matchPlayers = append(matchPlayers, &match.BattlePlayerState{
-			PlayerID:      p.PlayerID,
-			DisplayName:   p.DisplayName,
-			TeamID:        p.TeamID,
-			CharacterID:   p.CharacterID,
-			HP:            hp,
-			MaxHP:         hp,
-			Defense:       defense,
-			Position:      spawnPos,
-			MoveEnergy:    100,
-			Items:         p.Items,
-			StatusEffects: []match.StatusEffect{},
-			IsAlive:       true,
-			IsBot:         isBot,
+			PlayerID:        p.PlayerID,
+			DisplayName:     p.DisplayName,
+			TeamID:          p.TeamID,
+			CharacterID:     p.CharacterID,
+			HP:              hp,
+			MaxHP:           hp,
+			Defense:         defense,
+			DamageBonus:     dmgBonus,
+			Position:        spawnPos,
+			MoveEnergy:      100,
+			MoveEnergyBonus: moveEnergyBonus,
+			CritChance:      critChance,
+			Items:           p.Items,
+			StatusEffects:   []match.StatusEffect{},
+			IsAlive:         true,
+			IsBot:           isBot,
 		})
 	}
 

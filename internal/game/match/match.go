@@ -388,7 +388,7 @@ func (m *Match) startTurn(ctx context.Context) {
 	m.State.TurnTimeLeft = 20
 
 	player := m.State.Players[m.State.CurrentPlayerID]
-	player.MoveEnergy = 100 // Reset move energy to full
+	player.MoveEnergy = 100 + player.MoveEnergyBonus // Reset move energy to full
 
 	// Skill energy is incremented at end of turn, not start
 
@@ -745,10 +745,11 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 					damage := CalculateExplosionDamage(
 						p.Position,
 						explosionCenter,
-						float64(weaponConfig.Damage)*damageFactor,
+						float64(weaponConfig.Damage+player.DamageBonus)*damageFactor,
 						r.ExplosionRadius,
 						p.Defense,
 					)
+					damage, _ = ApplyCritical(damage, player.CritChance)
 					if damage > 0 {
 						p.HP -= damage
 						isKilled := false
@@ -1015,10 +1016,11 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 			damage := CalculateExplosionDamage(
 				p.Position,
 				explosionCenter,
-				float64(weaponConfig.Damage)*damageFactor,
+				float64(weaponConfig.Damage+player.DamageBonus)*damageFactor,
 				result.ExplosionRadius,
 				p.Defense,
 			)
+			damage, _ = ApplyCritical(damage, player.CritChance)
 
 			if damage > 0 {
 				p.HP -= damage
