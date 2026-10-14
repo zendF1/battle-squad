@@ -8,9 +8,16 @@ import (
 
 	"battle-squad/internal/api/economy"
 	"battle-squad/internal/shared/database"
+	"battle-squad/internal/shared/observability"
 
 	"github.com/jackc/pgx/v5"
 )
+
+// releaseReservationsSQL returns every still-reserved item of a match to its owner.
+const releaseReservationsSQL = `
+	UPDATE inventory_reservations SET status = 'released', updated_at = CURRENT_TIMESTAMP
+	WHERE match_id = $1 AND status = 'reserved'
+`
 
 type PlayerStats struct {
 	PlayerID    string
@@ -46,7 +53,7 @@ func ProcessMatchRewards(
 	mode string,
 	mapID string,
 	stats map[string]*PlayerStats,
-	playerItems map[string][]string,
+	usedItems map[string][]string, // playerID → items spent during the match
 	teamRatings map[int]int,
 	eloParams EloParams,
 ) (map[string]RewardResult, error) {
@@ -56,8 +63,8 @@ func ProcessMatchRewards(
 	}
 	defer tx.Rollback(ctx)
 
-	// Consume item reservations for all players inside this transaction
-	for playerID, items := range playerItems {
+	// Consume reservations of items spent during the match, one per use
+	for playerID, items := range usedItems {
 		for _, itemID := range items {
 			// Get reservation
 			var reservationID string
@@ -67,6 +74,7 @@ func ProcessMatchRewards(
 				FROM inventory_reservations
 				WHERE player_id = $1 AND match_id = $2 AND item_id = $3 AND status = 'reserved'
 				LIMIT 1
+				FOR UPDATE
 			`
 			err := tx.QueryRow(ctx, querySelect, playerID, matchID, itemID).Scan(&reservationID, &quantity)
 			if err != nil {
@@ -74,13 +82,19 @@ func ProcessMatchRewards(
 				continue
 			}
 
-			// Deduct from inventory
-			_, err = tx.Exec(ctx,
-				`UPDATE inventory_items SET quantity = quantity - $1 WHERE player_id = $2 AND item_id = $3`,
+			// Deduct from inventory; never below zero
+			tag, err := tx.Exec(ctx,
+				`UPDATE inventory_items SET quantity = quantity - $1 WHERE player_id = $2 AND item_id = $3 AND quantity >= $1`,
 				quantity, playerID, itemID,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("failed to deduct item %s for player %s: %w", itemID, playerID, err)
+			}
+			if tag.RowsAffected() == 0 {
+				// Inventory no longer covers the reservation; it is released below instead
+				observability.Log.Error().Str("matchId", matchID).Str("playerId", playerID).Str("itemId", itemID).
+					Msg("insufficient inventory to consume reservation")
+				continue
 			}
 
 			// Mark reservation as consumed
@@ -92,6 +106,11 @@ func ProcessMatchRewards(
 				return nil, fmt.Errorf("failed to mark reservation consumed for item %s player %s: %w", itemID, playerID, err)
 			}
 		}
+	}
+
+	// Items brought but not used go back to the players
+	if _, err := tx.Exec(ctx, releaseReservationsSQL, matchID); err != nil {
+		return nil, fmt.Errorf("failed to release unused reservations: %w", err)
 	}
 
 	results := make(map[string]RewardResult)

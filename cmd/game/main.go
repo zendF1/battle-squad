@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -30,6 +31,12 @@ type CompositeWSHandler struct {
 }
 
 func (c *CompositeWSHandler) HandleMessage(ctx context.Context, client *ws.Client, msg ws.Message) {
+	// "__"-prefixed events are server-internal actor messages; never accept them from clients
+	if strings.HasPrefix(msg.Event, "__") {
+		log := observability.FromContext(ctx)
+		log.Warn().Str("event", msg.Event).Str("playerId", client.PlayerID).Msg("rejected internal event from client")
+		return
+	}
 	// Try lobby handler first
 	if c.lobbyHandler.HandleLobbyMessage(ctx, client, msg) {
 		return

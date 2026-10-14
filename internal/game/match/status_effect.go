@@ -1,5 +1,7 @@
 package match
 
+const netMoveEnergyCap = 50
+
 func ApplyStatusEffect(player *BattlePlayerState, effect StatusEffect) {
 	// Check if player already has this effect. If so, merge or override duration
 	found := false
@@ -25,29 +27,41 @@ func ApplyStatusEffect(player *BattlePlayerState, effect StatusEffect) {
 	case "freeze":
 		player.MoveEnergy = 0
 	case "net":
-		// net slows the target: MoveEnergy capped at 50 on their next turn
-		if player.MoveEnergy > 50 {
-			player.MoveEnergy = 50
+		// net slows the target: MoveEnergy capped on their next turn (see ApplyTurnStartEffects)
+		if player.MoveEnergy > netMoveEnergyCap {
+			player.MoveEnergy = netMoveEnergyCap
 		}
 	}
 }
 
-func UpdatePlayerStatusEffects(player *BattlePlayerState) {
-	// Filter out expired status effects (duration <= 0)
-	activeEffects := []StatusEffect{}
-	for _, e := range player.StatusEffects {
-		if e.DurationTurn > 0 {
-			activeEffects = append(activeEffects, e)
-		}
+// ApplyTurnStartEffects re-applies movement control after the player's move
+// energy has been reset at the start of their turn.
+func ApplyTurnStartEffects(player *BattlePlayerState) {
+	if HasEffect(player, "freeze") {
+		player.MoveEnergy = 0
+	} else if HasEffect(player, "net") && player.MoveEnergy > netMoveEnergyCap {
+		player.MoveEnergy = netMoveEnergyCap
 	}
-	player.StatusEffects = activeEffects
 }
 
+// TickPlayerStatusEffects runs at the end of the player's own turn: each effect
+// loses one turn and expired ones are dropped. An effect with DurationTurn N
+// therefore covers the target's next N turns (counting the current one when
+// applied to the acting player).
 func TickPlayerStatusEffects(player *BattlePlayerState) {
-	// Decr duration at the start of player's turn
-	for idx := range player.StatusEffects {
-		player.StatusEffects[idx].DurationTurn--
+	player.StatusEffects = tickEffects(player.StatusEffects)
+}
+
+// tickEffects decrements every effect's duration and drops the expired ones.
+func tickEffects(effects []StatusEffect) []StatusEffect {
+	active := []StatusEffect{}
+	for _, e := range effects {
+		e.DurationTurn--
+		if e.DurationTurn > 0 {
+			active = append(active, e)
+		}
 	}
+	return active
 }
 
 func HasEffect(player *BattlePlayerState, effectID string) bool {

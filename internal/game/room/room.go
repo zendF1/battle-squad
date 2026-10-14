@@ -16,6 +16,7 @@ import (
 	"battle-squad/internal/game/ws"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -574,6 +575,10 @@ func (r *Room) processSelectItems(client *ws.Client, items []string) {
 	if len(items) > 3 {
 		return // max 3 items
 	}
+	if _, err := itemCounts(items); err != nil {
+		r.sendError(client, err.Error())
+		return
+	}
 
 	// If items are selected, validate ownership against inventory_items
 	if len(items) > 0 {
@@ -992,45 +997,82 @@ func (r *Room) reservePlayerItems(matchID string) error {
 			continue
 		}
 
-		// Re-verify ownership
-		ownershipQuery := `
-			SELECT item_id FROM inventory_items
-			WHERE player_id = $1 AND item_id = ANY($2) AND quantity > 0 AND (expires_at IS NULL OR expires_at > NOW())
-		`
-		rows, err := tx.Query(ctx, ownershipQuery, p.PlayerID, p.Items)
+		counts, err := itemCounts(p.Items)
 		if err != nil {
-			return fmt.Errorf("failed to verify items for player %s: %w", p.PlayerID, err)
-		}
-		ownedSet := make(map[string]bool)
-		for rows.Next() {
-			var itemID string
-			if scanErr := rows.Scan(&itemID); scanErr == nil {
-				ownedSet[itemID] = true
-			}
-		}
-		rows.Close()
-
-		for _, itemID := range p.Items {
-			if !ownedSet[itemID] {
-				return fmt.Errorf("player %s does not own item %s", p.PlayerID, itemID)
-			}
+			return fmt.Errorf("player %s: %w", p.PlayerID, err)
 		}
 
-		// Reserve each item (quantity 1 per selection)
-		for _, itemID := range p.Items {
-			reservationID := generateID()
-			reserveQuery := `
-				INSERT INTO inventory_reservations (reservation_id, player_id, match_id, item_id, quantity, status)
-				VALUES ($1, $2, $3, $4, 1, 'reserved')
-			`
-			_, err := tx.Exec(ctx, reserveQuery, reservationID, p.PlayerID, matchID, itemID)
-			if err != nil {
-				return fmt.Errorf("failed to reserve item %s for player %s: %w", itemID, p.PlayerID, err)
+		for itemID, count := range counts {
+			if err := reserveItemTx(ctx, tx, p.PlayerID, matchID, itemID, count); err != nil {
+				return err
 			}
 		}
 	}
 
 	return tx.Commit(ctx)
+}
+
+// reserveItemTx reserves count copies of an item for a match, failing if the
+// player's unreserved quantity is insufficient.
+func reserveItemTx(ctx context.Context, tx pgx.Tx, playerID, matchID, itemID string, count int) error {
+	// Lock the inventory row first. Reservations must be counted by a later
+	// statement: under READ COMMITTED a statement that waited for this lock still
+	// reads with its starting snapshot and would miss a competing match's
+	// reservation committed while it waited.
+	var quantity int
+	err := tx.QueryRow(ctx, `
+		SELECT quantity FROM inventory_items
+		WHERE player_id = $1 AND item_id = $2 AND (expires_at IS NULL OR expires_at > NOW())
+		FOR UPDATE
+	`, playerID, itemID).Scan(&quantity)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("player %s does not own item %s", playerID, itemID)
+		}
+		return fmt.Errorf("failed to lock item %s for player %s: %w", itemID, playerID, err)
+	}
+
+	var reserved int
+	err = tx.QueryRow(ctx, `
+		SELECT COALESCE(SUM(quantity), 0) FROM inventory_reservations
+		WHERE player_id = $1 AND item_id = $2 AND status = 'reserved'
+	`, playerID, itemID).Scan(&reserved)
+	if err != nil {
+		return fmt.Errorf("failed to count reservations of item %s for player %s: %w", itemID, playerID, err)
+	}
+
+	if available := quantity - reserved; available < count {
+		return fmt.Errorf("player %s has %d of item %s available, needs %d", playerID, available, itemID, count)
+	}
+
+	// One reservation per selected copy (quantity 1 each)
+	for i := 0; i < count; i++ {
+		_, err := tx.Exec(ctx, `
+			INSERT INTO inventory_reservations (reservation_id, player_id, match_id, item_id, quantity, status)
+			VALUES ($1, $2, $3, $4, 1, 'reserved')
+		`, generateID(), playerID, matchID, itemID)
+		if err != nil {
+			return fmt.Errorf("failed to reserve item %s for player %s: %w", itemID, playerID, err)
+		}
+	}
+	return nil
+}
+
+// itemCounts counts each selected item and rejects selections exceeding the
+// item's per-match use limit.
+func itemCounts(items []string) (map[string]int, error) {
+	counts := make(map[string]int, len(items))
+	for _, itemID := range items {
+		counts[itemID]++
+		limit := 1
+		if it, ok := gamedata.Data.Items[itemID]; ok && it.MaxUsePerMatch > 0 {
+			limit = it.MaxUsePerMatch
+		}
+		if counts[itemID] > limit {
+			return nil, fmt.Errorf("item %s can be brought at most %d time(s) per match", itemID, limit)
+		}
+	}
+	return counts, nil
 }
 
 func (r *Room) broadcastRoomUpdated() {

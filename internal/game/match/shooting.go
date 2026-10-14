@@ -35,7 +35,7 @@ func SimulateProjectile(
 	wind WindState,
 	terrain *Terrain,
 	players map[string]*BattlePlayerState,
-	drillMode bool,
+	pierceDistance float64, // terrain (px) the projectile may drill through; 0 = none
 ) *ProjectileResult {
 	timeStep, gravity, windScale, hitRadius, recordStep, maxFlight := getPhysics()
 
@@ -66,7 +66,7 @@ func SimulateProjectile(
 	t := 0.0
 	hitPlayerID := ""
 	var explosionPoint *Vector2
-	terrainPassCount := 0
+	drill := &drillState{remaining: pierceDistance}
 	lastRecordedTime := -recordStep // force first record
 
 	for t < maxFlight {
@@ -91,7 +91,7 @@ func SimulateProjectile(
 
 		// --- Sub-step collision along movement segment ---
 		hit, hitPos, hitPlayer := checkSegmentCollisions(
-			prevPos, position, ownerID, ownerTeamID, t, terrain, players, drillMode, &terrainPassCount, hitRadius,
+			prevPos, position, ownerID, ownerTeamID, t, terrain, players, drill, hitRadius,
 		)
 
 		if hit {
@@ -130,6 +130,12 @@ func SimulateProjectile(
 	return result
 }
 
+// drillState tracks a drilling projectile's pass through the first terrain block it meets.
+type drillState struct {
+	remaining float64 // terrain distance (px) still allowed
+	inside    bool    // currently inside the block being drilled
+}
+
 // checkSegmentCollisions checks for terrain and player hits along the line from prev to curr.
 // Uses sub-sampling with 4-pixel steps for precision.
 func checkSegmentCollisions(
@@ -139,8 +145,7 @@ func checkSegmentCollisions(
 	t float64,
 	terrain *Terrain,
 	players map[string]*BattlePlayerState,
-	drillMode bool,
-	terrainPassCount *int,
+	drill *drillState,
 	hitRadius float64,
 ) (hit bool, hitPos Vector2, hitPlayerID string) {
 	dx := curr.X - prev.X
@@ -151,6 +156,7 @@ func checkSegmentCollisions(
 	if steps < 1 {
 		steps = 1
 	}
+	stepLen := dist / float64(steps)
 
 	for i := 1; i <= steps; i++ {
 		frac := float64(i) / float64(steps)
@@ -175,13 +181,34 @@ func checkSegmentCollisions(
 
 		// Check terrain collision
 		if terrain.IsSolid(px, py) {
-			if drillMode && *terrainPassCount == 0 {
-				*terrainPassCount++
-			} else {
-				return true, Vector2{X: px, Y: py}, ""
+			if drill.remaining > 0 {
+				drill.inside = true
+				drill.remaining -= stepLen
+				continue
 			}
+			return true, Vector2{X: px, Y: py}, ""
+		}
+		if drill.inside {
+			// Exited the drilled block: the next terrain hit explodes
+			drill.inside = false
+			drill.remaining = 0
 		}
 	}
 
 	return false, Vector2{}, ""
+}
+
+const (
+	maxShotPower    = 100.0
+	drillPierceDist = 50.0 // default drill_bomb pierce distance when not configured
+)
+
+// validShotInput reports whether a client-supplied angle/power can be simulated.
+// Power is bounded so a single shot cannot monopolise the match loop.
+func validShotInput(angle, power float64) bool {
+	return isFinite(angle) && isFinite(power) && power >= 0 && power <= maxShotPower
+}
+
+func isFinite(v float64) bool {
+	return !math.IsNaN(v) && !math.IsInf(v, 0)
 }

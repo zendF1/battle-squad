@@ -104,6 +104,6 @@ func BenchmarkSimulateProjectile(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		SimulateProjectile("p1", 1, origin, 45.0, 80.0, weapon, wind, t, players, false)
+		SimulateProjectile("p1", 1, origin, 45.0, 80.0, weapon, wind, t, players, 0)
 	}
 }

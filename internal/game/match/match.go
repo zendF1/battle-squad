@@ -22,6 +22,9 @@ type matchEvent struct {
 	client *ws.Client
 	msg    ws.Message
 	ctx    context.Context
+	// internal runs on the match loop instead of msg. Only server code sets it,
+	// so clients cannot trigger internal transitions.
+	internal func(ctx context.Context)
 }
 
 const (
@@ -47,6 +50,8 @@ type Match struct {
 	TeamRatings  map[int]int // teamID → avg rating for Elo
 	EloParams    EloParams   // Elo configuration
 	lastAction   map[string]time.Time // playerID → last action timestamp (rate limit)
+	turnSeq      int                  // incremented every startTurn; stale callbacks compare against it
+	resolving    bool                 // the current turn's action is animating; no further actions or timer ticks
 }
 
 // Stop cancels the match context, causing the Run loop to exit.
@@ -81,6 +86,7 @@ func NewMatch(
 	indices := r.Perm(len(players))
 	for _, idx := range indices {
 		p := players[idx]
+		p.Items = append([]string(nil), p.Items...) // don't share the room's backing array
 		mPlayers[p.PlayerID] = p
 		turnOrder = append(turnOrder, p.PlayerID)
 	}
@@ -220,7 +226,7 @@ func (m *Match) Run() {
 			m.handleEvent(ev)
 
 		case <-ticker.C:
-			if m.State.Status != "in_progress" {
+			if m.State.Status != "in_progress" || m.resolving {
 				continue
 			}
 
@@ -275,6 +281,11 @@ func (m *Match) ProcessEvent(ctx context.Context, client *ws.Client, msg ws.Mess
 }
 
 func (m *Match) handleEvent(ev matchEvent) {
+	if ev.internal != nil {
+		ev.internal(ev.ctx)
+		return
+	}
+
 	log := observability.FromContext(ev.ctx)
 	client := ev.client
 	msg := ev.msg
@@ -300,6 +311,14 @@ func (m *Match) handleEvent(ev matchEvent) {
 		}
 	}
 
+	// The turn's action already resolved; wait for the scheduled turn end
+	if m.resolving {
+		switch msg.Event {
+		case "Move", "Shoot", "UseItem", "EndTurn":
+			return
+		}
+	}
+
 	switch msg.Event {
 	case "Move":
 		var action MoveAction
@@ -322,61 +341,6 @@ func (m *Match) handleEvent(ev matchEvent) {
 	case "EndTurn":
 		m.el.Log("EndTurn", actorID, nil)
 		m.processEndTurn(ev.ctx, client)
-	case "__delayed_end_turn":
-		if m.State.Status == "in_progress" {
-			m.endTurn(ev.ctx)
-		}
-	case "__teleport_complete":
-		if m.State.Status != "in_progress" {
-			return
-		}
-		var data map[string]interface{}
-		if err := json.Unmarshal(msg.Data, &data); err != nil {
-			return
-		}
-		playerID, _ := data["playerID"].(string)
-		p, ok := m.State.Players[playerID]
-		if !ok || !p.IsAlive {
-			return
-		}
-
-		// Teleport to target position if valid
-		if targetX, hasX := data["targetX"].(float64); hasX {
-			if targetY, hasY := data["targetY"].(float64); hasY {
-				p.Position.X = targetX
-				p.Position.Y = targetY
-
-				posPayload, _ := json.Marshal(map[string]interface{}{
-					"playerId":   p.PlayerID,
-					"position":   p.Position,
-					"moveEnergy": p.MoveEnergy,
-				})
-				m.broadcast(ws.Message{Event: "PlayerMoved", Data: posPayload})
-			}
-		}
-
-		// Consume item
-		itemIdx := -1
-		if idx, ok := data["itemIdx"].(float64); ok {
-			itemIdx = int(idx)
-		}
-		if itemIdx >= 0 && itemIdx < len(p.Items) {
-			p.Items = append(p.Items[:itemIdx], p.Items[itemIdx+1:]...)
-		}
-
-		// Broadcast ItemUsed with updated player state
-		itemPayload, _ := json.Marshal(map[string]interface{}{
-			"playerId": playerID,
-			"itemId":   "teleport",
-			"players":  m.State.Players,
-			"wind":     m.State.Wind,
-		})
-		m.broadcast(ws.Message{Event: "ItemUsed", Data: itemPayload})
-
-		m.checkWinCondition(ev.ctx)
-		if m.State.Status == "in_progress" {
-			m.endTurn(ev.ctx)
-		}
 	case "Reconnect":
 		m.processReconnect(ev.ctx, client)
 	case "Leave":
@@ -386,15 +350,14 @@ func (m *Match) handleEvent(ev matchEvent) {
 
 func (m *Match) startTurn(ctx context.Context) {
 	m.State.TurnTimeLeft = 20
+	m.turnSeq++
+	m.resolving = false
 
 	player := m.State.Players[m.State.CurrentPlayerID]
 	player.MoveEnergy = 100 + player.MoveEnergyBonus // Reset move energy to full
+	ApplyTurnStartEffects(player)                    // net / freeze limit this turn's movement
 
 	// Skill energy is incremented at end of turn, not start
-
-	// Reset shot modifiers
-	UpdatePlayerStatusEffects(player)
-	TickPlayerStatusEffects(player)
 
 	// Lava terrain: deal 5 damage to the current player at the start of their turn
 	terrainType := m.Terrain.GetTerrainTypeAt(player.Position.X, player.Position.Y)
@@ -432,11 +395,16 @@ func (m *Match) startTurn(ctx context.Context) {
 		Int("clientCount", len(m.Clients)).
 		Msg("[RANKED-DEBUG] startTurn: broadcasting TurnStarted")
 
+	skillEnergy := make(map[string]int, len(m.State.Players))
+	for id, p := range m.State.Players {
+		skillEnergy[id] = p.SkillEnergy
+	}
 	payload, _ := json.Marshal(map[string]interface{}{
 		"turnIndex":       m.State.TurnIndex,
 		"currentPlayerId": m.State.CurrentPlayerID,
 		"wind":            m.State.Wind,
 		"moveEnergy":      player.MoveEnergy,
+		"skillEnergy":     skillEnergy,
 	})
 	m.broadcast(ws.Message{
 		Event: "TurnStarted",
@@ -449,13 +417,14 @@ func (m *Match) startTurn(ctx context.Context) {
 			Str("matchId", m.State.MatchID).
 			Str("botId", player.PlayerID).
 			Msg("[RANKED-DEBUG] startTurn: scheduling bot action")
+		frozen := HasEffect(player, "freeze")
 		go func() {
 			// Random delay 2-6s so bots feel natural, not instant
 			botDelay := 2000 + rand.Intn(4000)
 			time.Sleep(time.Duration(botDelay) * time.Millisecond)
 
-			// Idle bots (tutorial) just end their turn
-			if strings.HasPrefix(player.PlayerID, "bot_") && player.DisplayName == "Target Bot" {
+			// Idle bots (tutorial) and frozen bots just end their turn
+			if frozen || (strings.HasPrefix(player.PlayerID, "bot_") && player.DisplayName == "Target Bot") {
 				m.Events <- matchEvent{
 					client: nil,
 					msg:    ws.Message{Event: "EndTurn"},
@@ -495,6 +464,12 @@ func (m *Match) endTurn(ctx context.Context) {
 		}
 	}
 
+	// Effects count down at the end of their target's turn; global ones every turn
+	if currentPlayer != nil {
+		TickPlayerStatusEffects(currentPlayer)
+	}
+	m.State.ActiveEffects = tickEffects(m.State.ActiveEffects)
+
 	// Find next player in order
 	currentIdx := -1
 	for idx, id := range m.State.TurnOrder {
@@ -533,12 +508,30 @@ func (m *Match) scheduleEndTurn(ctx context.Context, flightTime float64) {
 	if delay < 1.5 {
 		delay = 1.5
 	}
+	m.resolveTurnAfter(ctx, delay, m.endTurn)
+}
+
+// resolveTurnAfter locks the current turn and runs fn on the match loop after
+// delaySec seconds, unless the match ended or the turn changed in the meantime.
+func (m *Match) resolveTurnAfter(ctx context.Context, delaySec float64, fn func(ctx context.Context)) {
+	m.resolving = true
+	turn := m.turnSeq
 	go func() {
-		time.Sleep(time.Duration(delay * float64(time.Second)))
-		m.Events <- matchEvent{
-			client: nil,
-			msg:    ws.Message{Event: "__delayed_end_turn"},
-			ctx:    ctx,
+		timer := time.NewTimer(time.Duration(delaySec * float64(time.Second)))
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-m.ctx.Done():
+			return
+		}
+		ev := matchEvent{ctx: ctx, internal: func(ctx context.Context) {
+			if m.State.Status == "in_progress" && m.turnSeq == turn {
+				fn(ctx)
+			}
+		}}
+		select {
+		case m.Events <- ev:
+		case <-m.ctx.Done():
 		}
 	}()
 }
@@ -550,7 +543,7 @@ func (m *Match) processMove(ctx context.Context, client *ws.Client, action MoveA
 	}
 
 	player := m.State.Players[m.State.CurrentPlayerID]
-	if !player.IsAlive {
+	if !player.IsAlive || !isFinite(action.TargetX) || HasEffect(player, "freeze") {
 		return
 	}
 
@@ -574,15 +567,16 @@ func (m *Match) processMove(ctx context.Context, client *ws.Client, action MoveA
 		energyCost = player.MoveEnergy
 	}
 
+	startX := player.Position.X
 	player.MoveEnergy -= energyCost
 	player.Position.X = finalX
 	player.Position.Y = finalY
 
-	// Ice terrain: slide 50px in the movement direction
+	// Ice terrain: slide 50px in the movement direction, only after an actual step
 	iceTerrainType := m.Terrain.GetTerrainTypeAt(player.Position.X, player.Position.Y)
-	if iceTerrainType == "ice" {
+	if actualDist > 0 && iceTerrainType == "ice" {
 		slideDir := 50.0
-		if action.TargetX < player.Position.X {
+		if finalX < startX {
 			slideDir = -50.0
 		}
 		slideX, slideY := m.Terrain.WalkTo(player.Position.X, player.Position.Y, player.Position.X+slideDir)
@@ -605,6 +599,9 @@ func (m *Match) processMove(ctx context.Context, client *ws.Client, action MoveA
 func (m *Match) processShoot(ctx context.Context, client *ws.Client, action ShootAction) {
 	// Validate turn
 	if client != nil && client.PlayerID != m.State.CurrentPlayerID {
+		return
+	}
+	if !validShotInput(action.Angle, action.Power) {
 		return
 	}
 
@@ -658,9 +655,10 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 			player.SkillEnergy = 0
 
 			payload, _ := json.Marshal(map[string]interface{}{
-				"playerId": player.PlayerID,
-				"skillId":  skillID,
-				"hp":       player.HP,
+				"playerId":    player.PlayerID,
+				"skillId":     skillID,
+				"hp":          player.HP,
+				"skillEnergy": player.SkillEnergy,
 			})
 			m.broadcast(ws.Message{Event: "SkillUsed", Data: payload})
 
@@ -699,7 +697,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 			shots = append(shots, shotParams{angle: action.Angle, radius: float64(weaponConfig.ExplosionRadius)})
 		}
 
-		drillMode := HasEffect(player, "drill_bomb")
+		pierce := drillPierce(player)
 
 		var results []*ProjectileResult
 		var damagedPlayers []map[string]interface{}
@@ -715,7 +713,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 				m.State.Wind,
 				m.Terrain,
 				m.State.Players,
-				drillMode,
+				pierce,
 			)
 			r.SkillID = skillID
 			r.ExplosionRadius = shot.radius
@@ -843,6 +841,12 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 
 		// Reset skill energy after use
 		player.SkillEnergy = 0
+		skillPayload, _ := json.Marshal(map[string]interface{}{
+			"playerId":    player.PlayerID,
+			"skillId":     skillID,
+			"skillEnergy": player.SkillEnergy,
+		})
+		m.broadcast(ws.Message{Event: "SkillUsed", Data: skillPayload})
 
 		// Broadcast each projectile result
 		for _, r := range results {
@@ -856,8 +860,6 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 			m.el.Log("PlayerDamaged", "", damagedPlayers)
 		}
 
-		// Prevent turn timer from triggering endTurn while animation plays
-		m.State.TurnTimeLeft = 999
 		m.checkWinCondition(ctx)
 		if m.State.Status == "in_progress" {
 			flightTime := 0.0
@@ -875,77 +877,26 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 	}
 	// ── End skill mode ───────────────────────────────────────────────────────
 
-	// ── Item mode: teleport ─────────────────────────────────────────────────
-	if action.ActionMode == "item" && action.ItemID != nil && *action.ItemID == "teleport" {
-		// Verify player has the item
-		itemIdx := -1
-		for i, it := range player.Items {
-			if it == "teleport" {
-				itemIdx = i
-				break
-			}
-		}
-		if itemIdx == -1 {
+	// ── Item mode ───────────────────────────────────────────────────────────
+	if action.ActionMode == "item" {
+		if action.ItemID == nil {
 			return
 		}
-
-		// Simulate projectile to find landing point
-		result := SimulateProjectile(
-			player.PlayerID,
-			player.TeamID,
-			player.Position,
-			action.Angle,
-			action.Power,
-			weaponConfig,
-			m.State.Wind,
-			m.Terrain,
-			m.State.Players,
-			false, // no drill mode
-		)
-		result.TerrainDestroyed = false
-		result.ExplosionRadius = 0
-
-		player.ShotsFired++
-
-		// Broadcast projectile path (so client can animate the flight)
-		payloadResult, _ := json.Marshal(result)
-		m.broadcast(ws.Message{Event: "ProjectileResult", Data: payloadResult})
-
-		// Calculate flight time for delay
-		flightTime := 0.0
-		if len(result.Path) > 0 {
-			flightTime = result.Path[len(result.Path)-1].Time
+		itemID := *action.ItemID
+		if itemID == "teleport" {
+			m.shootTeleport(ctx, player, action, weaponConfig)
+			return
 		}
-
-		// Prevent turn timer during animation
-		m.State.TurnTimeLeft = 999
-
-		// Schedule teleport + item consume + end turn AFTER projectile animation
-		teleportData := map[string]interface{}{
-			"playerID": player.PlayerID,
-			"itemIdx":  itemIdx,
+		// Immediate items (medkit, wind_stopper) are used via UseItem, not by shooting
+		if !IsShotModifierItem(itemID) {
+			return
 		}
-		if result.ExplosionPoint != nil && result.ExplosionPoint.Y < float64(m.Terrain.Height) {
-			landY := m.Terrain.GetLandingY(result.ExplosionPoint.X, result.ExplosionPoint.Y)
-			if landY < float64(m.Terrain.Height) {
-				teleportData["targetX"] = result.ExplosionPoint.X
-				teleportData["targetY"] = landY
-			}
+		if err := ApplyImmediateItem(ctx, &m.State, player.PlayerID, itemID, nil, m.Terrain); err != nil {
+			log := observability.FromContext(ctx)
+			log.Warn().Err(err).Str("itemId", itemID).Msg("failed to apply shot item")
+			return
 		}
-		go func() {
-			delay := flightTime + 0.3 // small buffer after animation
-			if delay < 0.5 {
-				delay = 0.5
-			}
-			time.Sleep(time.Duration(delay * float64(time.Second)))
-			teleportPayload, _ := json.Marshal(teleportData)
-			m.Events <- matchEvent{
-				client: nil,
-				msg:    ws.Message{Event: "__teleport_complete", Data: teleportPayload},
-				ctx:    context.Background(),
-			}
-		}()
-		return
+		m.broadcastItemUsed(player.PlayerID, itemID)
 	}
 	// ── End item mode ───────────────────────────────────────────────────────
 
@@ -956,13 +907,13 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 
 	// air_strike: fire from top of map straight down at TargetX
 	if HasEffect(player, "air_strike") {
-		shootOrigin = Vector2{X: action.TargetX, Y: 0}
+		shootOrigin = Vector2{X: m.airStrikeX(player, action, weaponConfig), Y: 0}
 		shootAngle = 270.0  // straight down in Y-down coords (270° = negative Y direction conventionally, handled by sin)
 		shootPower = 80.0   // fixed high power for airstrike
 	}
 
-	// drill_bomb: projectile passes through first terrain hit
-	drillMode := HasEffect(player, "drill_bomb")
+	// drill_bomb: projectile drills through the first terrain block it meets
+	pierce := drillPierce(player)
 
 	// 1. Simulate Projectile Trajectory
 	result := SimulateProjectile(
@@ -975,7 +926,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 		m.State.Wind,
 		m.Terrain,
 		m.State.Players,
-		drillMode,
+		pierce,
 	)
 
 	// Track shot fired
@@ -989,6 +940,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 
 	// 2. Resolve hit and damage
 	var damagedPlayers []map[string]interface{}
+	var hitEnemies []*BattlePlayerState // enemies damaged by the explosion itself
 	if result.ExplosionPoint != nil {
 		// Fragile terrain: double the explosion radius
 		if m.Terrain.GetTerrainTypeAt(result.ExplosionPoint.X, result.ExplosionPoint.Y) == "fragile" {
@@ -1032,6 +984,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 					p.IsAlive = false
 					isKilled = true
 				}
+				hitEnemies = append(hitEnemies, p)
 
 				player.DamageDealt += damage
 				player.ShotsHit++
@@ -1102,13 +1055,24 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 		}
 	}
 
-	// spider_net: apply "net" effect (reduces MoveEnergy to 50) to all players hit by the explosion
-	if HasEffect(player, "spider_net") && result.HitPlayerID != "" {
-		if target, ok := m.State.Players[result.HitPlayerID]; ok && target.IsAlive {
+	// spider_net / freeze_bomb: control every enemy hit by the explosion for their next turn
+	for _, target := range hitEnemies {
+		if !target.IsAlive {
+			continue
+		}
+		if HasEffect(player, "spider_net") {
 			ApplyStatusEffect(target, StatusEffect{
 				EffectID:       "net",
 				TargetPlayerID: target.PlayerID,
 				DurationTurn:   1,
+				SourcePlayerID: player.PlayerID,
+			})
+		}
+		if HasEffect(player, "freeze_bomb") {
+			ApplyStatusEffect(target, StatusEffect{
+				EffectID:       "freeze",
+				TargetPlayerID: target.PlayerID,
+				DurationTurn:   int(itemValue("freeze_bomb", 1)),
 				SourcePlayerID: player.PlayerID,
 			})
 		}
@@ -1146,8 +1110,6 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 	}
 
 	// 3. Complete shooting event, check win conditions, schedule delayed end turn
-	// Prevent turn timer from triggering endTurn while animation plays
-	m.State.TurnTimeLeft = 999
 	m.checkWinCondition(ctx)
 	if m.State.Status == "in_progress" {
 		flightTime := 0.0
@@ -1164,23 +1126,138 @@ func (m *Match) processUseItem(ctx context.Context, client *ws.Client, action Us
 	}
 
 	log := observability.FromContext(ctx)
+
+	player := m.State.Players[m.State.CurrentPlayerID]
+	if !player.IsAlive {
+		return
+	}
+	// Teleport is fired as a projectile (Shoot with actionMode "item") so it follows
+	// trajectory rules and ends the turn; it cannot be used directly
+	if action.ItemID == "teleport" {
+		log.Warn().Str("playerId", player.PlayerID).Msg("rejected direct teleport via UseItem")
+		return
+	}
+
 	err := ApplyImmediateItem(ctx, &m.State, m.State.CurrentPlayerID, action.ItemID, action.TargetPosition, m.Terrain)
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to apply item")
 		return
 	}
 
-	// Broadcast ItemUsed
+	m.broadcastItemUsed(m.State.CurrentPlayerID, action.ItemID)
+}
+
+// broadcastItemUsed syncs player state (HP, position, items, effects) and wind after an item is used.
+func (m *Match) broadcastItemUsed(playerID, itemID string) {
 	payload, _ := json.Marshal(map[string]interface{}{
-		"playerId": m.State.CurrentPlayerID,
-		"itemId":   action.ItemID,
-		"players":  m.State.Players, // sync updated HP/Position values
+		"playerId": playerID,
+		"itemId":   itemID,
+		"players":  m.State.Players,
 		"wind":     m.State.Wind,
 	})
 	m.broadcast(ws.Message{
 		Event: "ItemUsed",
 		Data:  payload,
 	})
+}
+
+// shootTeleport fires the teleport projectile and moves the player to its landing
+// point once the flight animation has played, then ends the turn.
+func (m *Match) shootTeleport(ctx context.Context, player *BattlePlayerState, action ShootAction, weaponConfig gamedata.WeaponConfig) {
+	itemIdx := -1
+	for i, it := range player.Items {
+		if it == "teleport" {
+			itemIdx = i
+			break
+		}
+	}
+	if itemIdx == -1 {
+		return
+	}
+
+	// Simulate projectile to find landing point
+	result := SimulateProjectile(
+		player.PlayerID,
+		player.TeamID,
+		player.Position,
+		action.Angle,
+		action.Power,
+		weaponConfig,
+		m.State.Wind,
+		m.Terrain,
+		m.State.Players,
+		0, // no drilling
+	)
+	result.TerrainDestroyed = false
+	result.ExplosionRadius = 0
+
+	player.ShotsFired++
+	consumeItem(player, itemIdx)
+
+	// Broadcast projectile path (so client can animate the flight)
+	payloadResult, _ := json.Marshal(result)
+	m.broadcast(ws.Message{Event: "ProjectileResult", Data: payloadResult})
+
+	var target *Vector2
+	if result.ExplosionPoint != nil && result.ExplosionPoint.Y < float64(m.Terrain.Height) {
+		landY := m.Terrain.GetLandingY(result.ExplosionPoint.X, result.ExplosionPoint.Y)
+		if landY < float64(m.Terrain.Height) {
+			target = &Vector2{X: result.ExplosionPoint.X, Y: landY}
+		}
+	}
+
+	flightTime := 0.0
+	if len(result.Path) > 0 {
+		flightTime = result.Path[len(result.Path)-1].Time
+	}
+	delay := flightTime + 0.3 // small buffer after animation
+	if delay < 0.5 {
+		delay = 0.5
+	}
+
+	m.resolveTurnAfter(ctx, delay, func(ctx context.Context) {
+		if target != nil && player.IsAlive {
+			player.Position = *target
+			posPayload, _ := json.Marshal(map[string]interface{}{
+				"playerId":   player.PlayerID,
+				"position":   player.Position,
+				"moveEnergy": player.MoveEnergy,
+			})
+			m.broadcast(ws.Message{Event: "PlayerMoved", Data: posPayload})
+		}
+		m.broadcastItemUsed(player.PlayerID, "teleport")
+
+		m.checkWinCondition(ctx)
+		if m.State.Status == "in_progress" {
+			m.endTurn(ctx)
+		}
+	})
+}
+
+// airStrikeX picks the air strike column: the client's TargetX when given,
+// otherwise where the aimed shot would land.
+func (m *Match) airStrikeX(player *BattlePlayerState, action ShootAction, weaponConfig gamedata.WeaponConfig) float64 {
+	x := player.Position.X
+	if action.TargetX != nil && isFinite(*action.TargetX) {
+		x = *action.TargetX
+	} else {
+		aimed := SimulateProjectile(player.PlayerID, player.TeamID, player.Position, action.Angle, action.Power,
+			weaponConfig, m.State.Wind, m.Terrain, m.State.Players, 0)
+		if aimed.ExplosionPoint != nil {
+			x = aimed.ExplosionPoint.X
+		} else if len(aimed.Path) > 0 {
+			x = aimed.Path[len(aimed.Path)-1].Position.X
+		}
+	}
+	return math.Max(0, math.Min(x, float64(m.Terrain.Width)))
+}
+
+// drillPierce returns how much terrain the player's shot may drill through this turn.
+func drillPierce(player *BattlePlayerState) float64 {
+	if HasEffect(player, "drill_bomb") {
+		return itemValue("drill_bomb", drillPierceDist)
+	}
+	return 0
 }
 
 func (m *Match) processEndTurn(ctx context.Context, client *ws.Client) {
@@ -1259,15 +1336,15 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 			}
 		}
 
-		// Collect per-player items for reservation consumption
-		playerItems := make(map[string][]string)
+		// Items spent during the match; unused reservations are released
+		usedItems := make(map[string][]string)
 		for _, p := range m.State.Players {
-			if len(p.Items) > 0 {
-				playerItems[p.PlayerID] = p.Items
+			if len(p.UsedItems) > 0 {
+				usedItems[p.PlayerID] = p.UsedItems
 			}
 		}
 
-		rewards, err := ProcessMatchRewards(ctx, m.db, m.economyRepo, m.State.MatchID, m.State.Mode, m.State.MapID, stats, playerItems, m.TeamRatings, m.EloParams)
+		rewards, err := ProcessMatchRewards(ctx, m.db, m.economyRepo, m.State.MatchID, m.State.Mode, m.State.MapID, stats, usedItems, m.TeamRatings, m.EloParams)
 		if err != nil {
 			observability.Log.Error().Err(err).Msg("failed to process match rewards")
 		}
@@ -1339,37 +1416,8 @@ func (m *Match) endAsNoContest() {
 	observability.MatchEndedTotal.WithLabelValues("no_contest").Inc()
 
 	// Release all item reservations so players get their items back
-	ctx := context.Background()
-	tx, err := m.db.Pool.Begin(ctx)
-	if err != nil {
-		observability.Log.Error().Err(err).Str("matchId", m.State.MatchID).Msg("failed to begin tx for reservation release")
-	} else {
-		releaseOk := true
-		for _, p := range m.State.Players {
-			for _, itemID := range p.Items {
-				_, execErr := tx.Exec(ctx,
-					`UPDATE inventory_reservations SET status = 'released', updated_at = CURRENT_TIMESTAMP
-					 WHERE player_id = $1 AND match_id = $2 AND item_id = $3 AND status = 'reserved'`,
-					p.PlayerID, m.State.MatchID, itemID,
-				)
-				if execErr != nil {
-					observability.Log.Error().Err(execErr).
-						Str("matchId", m.State.MatchID).
-						Str("playerId", p.PlayerID).
-						Str("itemId", itemID).
-						Msg("failed to release item reservation")
-					releaseOk = false
-				}
-			}
-		}
-		if releaseOk {
-			if commitErr := tx.Commit(ctx); commitErr != nil {
-				observability.Log.Error().Err(commitErr).Str("matchId", m.State.MatchID).Msg("failed to commit reservation release")
-				tx.Rollback(ctx)
-			}
-		} else {
-			tx.Rollback(ctx)
-		}
+	if _, err := m.db.Pool.Exec(context.Background(), releaseReservationsSQL, m.State.MatchID); err != nil {
+		observability.Log.Error().Err(err).Str("matchId", m.State.MatchID).Msg("failed to release item reservations")
 	}
 
 	payload, _ := json.Marshal(map[string]interface{}{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/shared/observability"
 )
 
@@ -45,22 +46,12 @@ func ApplyImmediateItem(
 		}
 		log.Info().Str("playerId", playerID).Msg("applied Medkit")
 
-	case "teleport":
-		if targetPos == nil {
-			return errors.New("teleport requires target position")
-		}
-		// Landing check on terrain
-		landY := terrain.GetLandingY(targetPos.X, targetPos.Y)
-		player.Position.X = targetPos.X
-		player.Position.Y = landY
-		log.Info().Str("playerId", playerID).Interface("pos", player.Position).Msg("applied Teleport")
-
 	case "wind_stopper":
 		// Active global effect
 		effect := StatusEffect{
 			EffectID:       "wind_stop",
 			TargetPlayerID: "",
-			DurationTurn:   2,
+			DurationTurn:   int(itemValue("wind_stopper", 2)),
 			SourcePlayerID: playerID,
 		}
 		match.ActiveEffects = append(match.ActiveEffects, effect)
@@ -89,8 +80,38 @@ func ApplyImmediateItem(
 		log.Info().Str("playerId", playerID).Str("itemId", itemID).Msg("applied shot modifier item")
 	}
 
-	// Consume item from player inventory
-	player.Items = append(player.Items[:itemIdx], player.Items[itemIdx+1:]...)
+	consumeItem(player, itemIdx)
 
 	return nil
+}
+
+// shotModifierItems arm the player's next shot instead of acting immediately.
+var shotModifierItems = map[string]bool{
+	"power_shot":  true,
+	"drill_bomb":  true,
+	"spider_net":  true,
+	"freeze_bomb": true,
+	"air_strike":  true,
+}
+
+// IsShotModifierItem reports whether itemID modifies a shot rather than acting on use.
+func IsShotModifierItem(itemID string) bool {
+	return shotModifierItems[itemID]
+}
+
+// consumeItem removes the item at idx from the player's hand and records it as
+// spent so its reservation is consumed when the match ends.
+func consumeItem(player *BattlePlayerState, idx int) {
+	player.UsedItems = append(player.UsedItems, player.Items[idx])
+	player.Items = append(player.Items[:idx], player.Items[idx+1:]...)
+}
+
+// itemValue returns the configured value of an item, or fallback if it isn't configured.
+func itemValue(itemID string, fallback float64) float64 {
+	if gamedata.Data != nil {
+		if it, ok := gamedata.Data.Items[itemID]; ok && it.Value > 0 {
+			return it.Value
+		}
+	}
+	return fallback
 }

@@ -26,6 +26,7 @@ type BattlePlayerState struct {
 	Position      Vector2        `json:"position"`
 	MoveEnergy    int            `json:"moveEnergy"`
 	Items         []string       `json:"items"` // Consumables remaining
+	UsedItems     []string       `json:"-"`     // Consumables spent this match (reservations to consume)
 	StatusEffects []StatusEffect `json:"statusEffects"`
 	IsAlive         bool           `json:"isAlive"`
 	IsBot           bool           `json:"isBot"`
@@ -64,7 +65,7 @@ type ShootAction struct {
 	Power           float64  `json:"power"`
 	ActionMode      string   `json:"actionMode"` // weapon, skill, item
 	ItemID          *string  `json:"itemId,omitempty"`
-	TargetX         float64  `json:"targetX,omitempty"` // used by air_strike to specify drop column
+	TargetX         *float64 `json:"targetX,omitempty"` // used by air_strike to specify drop column
 	ClientTimestamp int64    `json:"clientTimestamp"`
 }
 
