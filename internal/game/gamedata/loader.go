@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"battle-squad/internal/shared/database"
+	"battle-squad/internal/shared/observability"
 
 	"gopkg.in/yaml.v3"
 )
@@ -504,6 +505,14 @@ func (gd *GameData) validate() error {
 		}
 		if _, exists := gd.Skills[char.SkillID]; !exists {
 			return fmt.Errorf("character %s refers to non-existent skill: %s", char.CharacterID, char.SkillID)
+		}
+	}
+	// An invalid map is dropped rather than failing the whole load, which would discard every
+	// other DB config. Brick IDs are not checked here: NewTerrain fills unknown bricks as squares.
+	for id, m := range gd.Maps {
+		if err := ValidateMap(m, nil); err != nil {
+			observability.Log.Error().Err(err).Str("mapId", id).Msg("skipping invalid map config")
+			delete(gd.Maps, id)
 		}
 	}
 	return nil

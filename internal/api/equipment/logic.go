@@ -1,10 +1,13 @@
 package equipment
 
+import "sort"
+
 // logic.go contains all pure gameplay calculation functions.
 // These are extracted from service.go for testability without DB dependencies.
 
-// StonePowers maps stone level (1-12) to its power value.
-// Power follows geometric progression ×3.
+// StonePowers maps stone level (1-12) to its seeded power value.
+// Power follows geometric progression ×3. Runtime code must read config_stones
+// instead, since admins can edit power.
 var StonePowers = [13]int{0, 1, 3, 9, 27, 81, 243, 729, 2187, 6561, 19683, 59049, 177147}
 
 // CalculateUpgradePercent computes the success probability for an upgrade attempt.
@@ -62,13 +65,32 @@ func getSafezoneStart(level int) int {
 }
 
 // CalculateDismantleRefund computes stones returned when dismantling.
+// powers maps stoneLevel → power and must come from config_stones, the same
+// source UpgradeEquipment uses to value consumed stones.
 // Returns a map of stoneLevel → quantity.
 // Refund = 50% of totalPower used in current safezone, distributed as highest-value stones.
-func CalculateDismantleRefund(totalPowerUsed int) map[int]int {
+func CalculateDismantleRefund(totalPowerUsed int, powers map[int]int) map[int]int {
+	levels := make([]int, 0, len(powers))
+	for level, power := range powers {
+		if power > 0 {
+			levels = append(levels, level)
+		}
+	}
+	sort.Slice(levels, func(i, j int) bool {
+		pi, pj := powers[levels[i]], powers[levels[j]]
+		if pi != pj {
+			return pi > pj
+		}
+		return levels[i] > levels[j]
+	})
+
 	result := make(map[int]int)
 	refund := totalPowerUsed / 2
-	for stoneLevel := 12; stoneLevel >= 1 && refund > 0; stoneLevel-- {
-		power := StonePowers[stoneLevel]
+	for _, stoneLevel := range levels {
+		if refund <= 0 {
+			break
+		}
+		power := powers[stoneLevel]
 		qty := refund / power
 		if qty > 0 {
 			result[stoneLevel] = qty

@@ -2,10 +2,13 @@ package admin
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"battle-squad/internal/game/gamedata"
+	"battle-squad/internal/game/match"
 	"battle-squad/internal/shared/observability"
 	"gopkg.in/yaml.v3"
 )
@@ -268,6 +271,61 @@ func (s *Server) handleMapSave(w http.ResponseWriter, r *http.Request) {
 		MinRankTier:           minRankTier,
 	}
 
+	cfg := gamedata.MapConfig{MapID: mapID, GridWidth: gridWidth, GridHeight: gridHeight, CellSize: cellSize}
+	if err := json.Unmarshal(tiles, &cfg.Tiles); err != nil {
+		writeMapSaveError(w, "tiles must be a matrix of brick ids")
+		return
+	}
+	if err := json.Unmarshal(spawnPoints, &cfg.SpawnPoints); err != nil {
+		writeMapSaveError(w, "invalid spawn points")
+		return
+	}
+	if err := json.Unmarshal(windRange, &cfg.DefaultWindPowerRange); err != nil {
+		writeMapSaveError(w, "invalid wind power range")
+		return
+	}
+
+	// The editor turns a legacy map's empty tiles into an all-air grid. Saving that grid would
+	// switch the map to tile mode with no terrain, so keep the legacy terrain instead.
+	if existing, err := s.repo.GetMap(r.Context(), mapID); err == nil && isLegacyTiles(existing.Tiles) && allAir(cfg.Tiles) {
+		m.Tiles = json.RawMessage(`[]`)
+		m.TerrainLayers = existing.TerrainLayers
+		m.Width, m.Height = existing.Width, existing.Height
+		cfg.Tiles = nil
+	}
+	cfg.Width, cfg.Height = m.Width, m.Height
+
+	brickTypes := make(map[int]gamedata.BrickTypeConfig)
+	if items, err := s.repo.GetBrickTypes(r.Context()); err == nil {
+		for _, item := range items {
+			bt := gamedata.BrickTypeConfig{BrickTypeID: item.BrickTypeID, Destructible: item.Destructible}
+			if len(item.Border) > 0 {
+				json.Unmarshal(item.Border, &bt.Border)
+			}
+			brickTypes[item.BrickTypeID] = bt
+		}
+	} else {
+		observability.Log.Error().Err(err).Msg("failed to load brick types for map validation")
+		brickTypes = nil
+	}
+	if err := gamedata.ValidateMap(cfg, brickTypes); err != nil {
+		writeMapSaveError(w, err.Error())
+		return
+	}
+	if len(cfg.SpawnPoints) < gamedata.MinSpawnPoints {
+		writeMapSaveError(w, fmt.Sprintf("map needs at least %d spawn points (one per team)", gamedata.MinSpawnPoints))
+		return
+	}
+
+	// Every spawn must land on ground inside the map with room for the player.
+	terrain := match.NewTerrainWithBricks(cfg, brickTypes)
+	for i, sp := range cfg.SpawnPoints {
+		if !terrain.CanStandAt(sp.X, sp.Y) {
+			writeMapSaveError(w, fmt.Sprintf("spawn point %d (%v,%v) has no ground below it or less than %dpx of headroom", i, sp.X, sp.Y, match.PlayerHeight))
+			return
+		}
+	}
+
 	if err := s.repo.UpsertMap(r.Context(), m); err != nil {
 		observability.Log.Error().Err(err).Str("mapId", mapID).Msg("failed to save map")
 		http.Error(w, `{"error":"save failed"}`, http.StatusInternalServerError)
@@ -276,6 +334,33 @@ func (s *Server) handleMapSave(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "mapId": mapID})
+}
+
+func writeMapSaveError(w http.ResponseWriter, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
+	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+// isLegacyTiles reports whether stored tiles are empty, meaning the map uses legacy terrain
+// (same rule as gamedata.MapConfig.HasTiles).
+func isLegacyTiles(raw json.RawMessage) bool {
+	var tiles [][]int
+	if err := json.Unmarshal(raw, &tiles); err != nil {
+		return len(raw) == 0 || string(raw) == "null"
+	}
+	return len(tiles) == 0
+}
+
+func allAir(tiles [][]int) bool {
+	for _, row := range tiles {
+		for _, id := range row {
+			if id != 0 {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // MapExportYAML is the YAML output structure for a single map.

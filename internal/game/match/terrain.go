@@ -6,6 +6,10 @@ import (
 	"battle-squad/internal/game/gamedata"
 )
 
+// PlayerHeight is the clearance in pixels a player needs above the surface they stand on.
+// Matches the character body drawn by the client (~40px above the feet).
+const PlayerHeight = 40
+
 type TerrainZone struct {
 	Type string // "lava", "ice", "fragile"
 	MinX float64
@@ -20,6 +24,7 @@ type Terrain struct {
 	Mask             []uint64
 	DestructibleMask []uint64
 	Zones            []TerrainZone
+	Version          uint64 // incremented by every DestroyCircle; clients use it to skip operations already in a snapshot
 }
 
 func maskSize(width, height int) int {
@@ -47,21 +52,17 @@ func clearBit(mask []uint64, x, y, width int) {
 }
 
 func NewTerrain(mapCfg gamedata.MapConfig) *Terrain {
-	var width, height int
-	hasTiles := len(mapCfg.Tiles) > 0 && len(mapCfg.Tiles[0]) > 0
+	return NewTerrainWithBricks(mapCfg, gamedata.BrickTypes)
+}
 
-	if hasTiles {
-		width = mapCfg.GridWidth * mapCfg.CellSize
-		height = mapCfg.GridHeight * mapCfg.CellSize
-	} else {
-		width = mapCfg.Width
-		height = mapCfg.Height
-		if width == 0 {
-			width = mapCfg.GridWidth * mapCfg.CellSize
-		}
-		if height == 0 {
-			height = mapCfg.GridHeight * mapCfg.CellSize
-		}
+// NewTerrainWithBricks builds terrain using the given brick types instead of the globally
+// loaded ones. Unknown brick IDs fill their whole cell and are destructible.
+func NewTerrainWithBricks(mapCfg gamedata.MapConfig, bricks map[int]gamedata.BrickTypeConfig) *Terrain {
+	hasTiles := mapCfg.HasTiles()
+	width, height := mapCfg.PixelSize()
+
+	if width <= 0 || height <= 0 {
+		width, height = gamedata.DefaultMapWidth, gamedata.DefaultMapHeight
 	}
 
 	t := &Terrain{
@@ -73,8 +74,9 @@ func NewTerrain(mapCfg gamedata.MapConfig) *Terrain {
 
 	if hasTiles {
 		cs := mapCfg.CellSize
-		for row := 0; row < len(mapCfg.Tiles); row++ {
-			for col := 0; col < len(mapCfg.Tiles[row]); col++ {
+		// Tiles beyond GridWidth/GridHeight lie outside the mask and are ignored.
+		for row := 0; row < len(mapCfg.Tiles) && row < mapCfg.GridHeight; row++ {
+			for col := 0; col < len(mapCfg.Tiles[row]) && col < mapCfg.GridWidth; col++ {
 				brickID := mapCfg.Tiles[row][col]
 				if brickID == 0 {
 					continue
@@ -82,12 +84,10 @@ func NewTerrain(mapCfg gamedata.MapConfig) *Terrain {
 				destructible := true
 				var border gamedata.BrickBorder
 				hasBorder := false
-				if gamedata.BrickTypes != nil {
-					if bt, ok := gamedata.BrickTypes[brickID]; ok {
-						destructible = bt.Destructible
-						border = bt.Border
-						hasBorder = len(border.Top) > 0
-					}
+				if bt, ok := bricks[brickID]; ok {
+					destructible = bt.Destructible
+					border = bt.Border
+					hasBorder = len(border.Top) > 0
 				}
 
 				offsetX := col * cs
@@ -95,7 +95,7 @@ func NewTerrain(mapCfg gamedata.MapConfig) *Terrain {
 
 				if hasBorder {
 					poly := polygonFromBorder(border, cs)
-					scanlineFillPolygon(t.Mask, t.DestructibleMask, width, poly, offsetX, offsetY, cs, destructible)
+					scanlineFillPolygon(t.Mask, t.DestructibleMask, width, height, poly, offsetX, offsetY, cs, destructible)
 				} else {
 					// Fallback: fill full square
 					for py := offsetY; py < offsetY+cs && py < height; py++ {
@@ -193,6 +193,8 @@ func (t *Terrain) IsSolid(x, y float64) bool {
 }
 
 func (t *Terrain) DestroyCircle(cx, cy float64, radius float64) bool {
+	t.Version++
+
 	icx := int(math.Round(cx))
 	icy := int(math.Round(cy))
 	ir := int(math.Round(radius))
@@ -241,9 +243,36 @@ func (t *Terrain) GetLandingY(x, startY float64) float64 {
 	return float64(t.Height)
 }
 
+// SpawnY returns the surface Y for a spawn point at (x, y). Unlike GetLandingY(x, 0) it keeps
+// the configured floor: a spawn in open air drops to the first surface below it, and a spawn
+// embedded in solid ground is lifted to the top of that ground.
+func (t *Terrain) SpawnY(x, y float64) float64 {
+	ix := int(math.Round(x))
+	if ix < 0 || ix >= t.Width {
+		return float64(t.Height)
+	}
+
+	iy := int(math.Round(y))
+	if iy < 0 {
+		iy = 0
+	}
+	if iy >= t.Height {
+		return float64(t.Height)
+	}
+
+	if !getBit(t.Mask, ix, iy, t.Width) {
+		return t.GetLandingY(x, float64(iy))
+	}
+	for iy > 0 && getBit(t.Mask, ix, iy-1, t.Width) {
+		iy--
+	}
+	return float64(iy)
+}
+
 // WalkTo simulates pixel-by-pixel horizontal movement with terrain physics.
 // The player follows the terrain surface but is blocked by steep upward slopes
-// (walls, crater edges). Going downward is always allowed.
+// (walls, crater edges). Going downward is always allowed. The surface is searched
+// locally around the current height, so roofs and platforms above the player are ignored.
 func (t *Terrain) WalkTo(startX, startY, targetX float64) (float64, float64) {
 	const maxClimbPerStep = 3 // max pixels the player can climb up per 1px horizontal step (~72°)
 
@@ -266,17 +295,8 @@ func (t *Terrain) WalkTo(startX, startY, targetX float64) (float64, float64) {
 			break
 		}
 
-		// Find terrain surface at nextX (first solid pixel from top)
-		nextY := t.Height
-		for y := 0; y < t.Height; y++ {
-			if getBit(t.Mask, nextX, y, t.Width) {
-				nextY = y
-				break
-			}
-		}
-
-		// Going UP: curY > nextY (lower Y = higher position). Block if too steep.
-		if curY-nextY > maxClimbPerStep {
+		nextY, ok := t.stepSurface(nextX, curY, maxClimbPerStep)
+		if !ok {
 			break
 		}
 
@@ -285,4 +305,60 @@ func (t *Terrain) WalkTo(startX, startY, targetX float64) (float64, float64) {
 	}
 
 	return float64(curX), float64(curY)
+}
+
+// CanStandAt reports whether a player spawned at (x, y) lands on solid ground inside the map
+// with enough headroom.
+func (t *Terrain) CanStandAt(x, y float64) bool {
+	sy := int(t.SpawnY(x, y))
+	if sy >= t.Height {
+		return false
+	}
+	return t.hasHeadroom(int(math.Round(x)), sy)
+}
+
+// hasHeadroom reports whether the PlayerHeight pixels above surfaceY in column x are free.
+// Pixels above the top of the map count as free.
+func (t *Terrain) hasHeadroom(x, surfaceY int) bool {
+	top := surfaceY - PlayerHeight
+	if top < 0 {
+		top = 0
+	}
+	for y := top; y < surfaceY && y < t.Height; y++ {
+		if getBit(t.Mask, x, y, t.Width) {
+			return false
+		}
+	}
+	return true
+}
+
+// stepSurface finds the surface the player stands on after stepping into column x from
+// height curY (Y of the solid pixel under the feet). ok is false when the step is a wall
+// taller than maxClimb, or the column has no room for the player's body.
+func (t *Terrain) stepSurface(x, curY, maxClimb int) (int, bool) {
+	feet := curY - 1 // lowest pixel occupied by the player's body
+	if feet >= t.Height {
+		return t.Height, true
+	}
+	if feet < 0 || !getBit(t.Mask, x, feet, t.Width) {
+		// Flat or downhill: the body moves across at the current height, then drops to the
+		// first solid pixel below.
+		if !t.hasHeadroom(x, curY) {
+			return 0, false
+		}
+		return int(t.GetLandingY(float64(x), float64(feet))), true
+	}
+
+	// Uphill: climb to the top of the solid run, up to maxClimb pixels.
+	y := feet
+	for y > 0 && getBit(t.Mask, x, y-1, t.Width) {
+		y--
+		if curY-y > maxClimb {
+			return 0, false
+		}
+	}
+	if curY-y > maxClimb || !t.hasHeadroom(x, y) {
+		return 0, false
+	}
+	return y, true
 }

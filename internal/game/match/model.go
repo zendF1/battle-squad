@@ -95,6 +95,7 @@ type ProjectileResult struct {
 	ExplosionPoint  *Vector2         `json:"explosionPoint,omitempty"`
 	ExplosionRadius float64          `json:"explosionRadius"`
 	TerrainDestroyed bool            `json:"terrainDestroyed"`
+	TerrainVersion   uint64          `json:"terrainVersion,omitempty"` // terrain version after this explosion
 }
 
 type MatchHistoryRecord struct {

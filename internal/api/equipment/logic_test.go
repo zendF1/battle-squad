@@ -253,7 +253,7 @@ func TestCalculateDismantleRefund(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := CalculateDismantleRefund(tt.totalPower)
+			got := CalculateDismantleRefund(tt.totalPower, defaultStonePowers())
 
 			// Verify total refund power
 			totalRefundPower := 0
@@ -592,7 +592,7 @@ func TestDismantleRefund_Greedy(t *testing.T) {
 	// 7 = 3 (lv2×1) + 3 (lv2×1) = lv2×2, remaining 1
 	// 1 = lv1×1
 	// Total: lv6×1, lv2×2, lv1×1 = 243 + 6 + 1 = 250
-	refund := CalculateDismantleRefund(500)
+	refund := CalculateDismantleRefund(500, defaultStonePowers())
 
 	totalPower := 0
 	for level, qty := range refund {
@@ -611,7 +611,7 @@ func TestDismantleRefund_Greedy(t *testing.T) {
 func TestDismantleRefund_ExactHalf(t *testing.T) {
 	// 2 × lv7 stones = 2 × 729 = 1458 power
 	// Refund = 729 = exactly 1 lv7 stone
-	refund := CalculateDismantleRefund(1458)
+	refund := CalculateDismantleRefund(1458, defaultStonePowers())
 	if refund[7] != 1 {
 		t.Errorf("expected 1 lv7 stone, got %d", refund[7])
 	}
@@ -638,7 +638,7 @@ func TestDismantleRefund_LargePower(t *testing.T) {
 	// 11 / 9 (lv3) = 1, remainder 2
 	// 2 / 3 (lv2) = 0
 	// 2 / 1 (lv1) = 2
-	refund := CalculateDismantleRefund(400000)
+	refund := CalculateDismantleRefund(400000, defaultStonePowers())
 	totalPower := 0
 	for level, qty := range refund {
 		totalPower += StonePowers[level] * qty
@@ -669,5 +669,40 @@ func TestCanEquipOnCharacter(t *testing.T) {
 				t.Errorf("CanEquipOnCharacter(%v, %q) = %v, want %v", tt.itemCharacter, tt.characterID, got, tt.want)
 			}
 		})
+	}
+}
+
+func defaultStonePowers() map[int]int {
+	powers := make(map[int]int, 12)
+	for level := 1; level <= 12; level++ {
+		powers[level] = StonePowers[level]
+	}
+	return powers
+}
+
+func TestDismantleRefund_UsesConfiguredPowers(t *testing.T) {
+	// Admin raised lv2 power from 3 to 300. One lv2 stone spent on an upgrade
+	// logs 300 power; refund must be valued with the same table, so 150 power
+	// comes back without exceeding 50%.
+	powers := defaultStonePowers()
+	powers[2] = 300
+
+	refund := CalculateDismantleRefund(300, powers)
+	totalPower := 0
+	for level, qty := range refund {
+		totalPower += powers[level] * qty
+	}
+	if totalPower != 150 {
+		t.Errorf("refund total power = %d, want 150", totalPower)
+	}
+	if refund[2] != 0 {
+		t.Errorf("expected no lv2 stones (worth 300 each), got %d", refund[2])
+	}
+}
+
+func TestDismantleRefund_SkipsNonPositivePower(t *testing.T) {
+	refund := CalculateDismantleRefund(10, map[int]int{1: 0, 2: -3, 3: 2})
+	if len(refund) != 1 || refund[3] != 2 {
+		t.Errorf("refund = %v, want map[3:2]", refund)
 	}
 }

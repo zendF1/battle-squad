@@ -30,6 +30,8 @@ func NewService(repo *Repository, economyRepo *economy.Repository, db *database.
 }
 
 // GetPlayerCharacters returns all characters for a player with level/exp metadata resolved.
+// The stored level is authoritative (it is what equip requirements check); the
+// level curve only supplies next-level progress.
 func (s *Service) GetPlayerCharacters(ctx context.Context, playerID string) ([]PlayerCharacter, error) {
 	chars, err := s.repo.GetPlayerCharacters(ctx, playerID)
 	if err != nil {
@@ -37,17 +39,14 @@ func (s *Service) GetPlayerCharacters(ctx context.Context, playerID string) ([]P
 	}
 
 	// Load the level curve from game_settings to compute level metadata.
-	levelsRaw, err := s.repo.GetConfigValue(ctx, "character_levels_config")
+	levelsRaw, err := s.repo.GetConfigValue(ctx, SettingsKeyLevels)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("load levels config: %w", err)
 	}
 	levelsCfg := LoadLevelsConfig(levelsRaw)
 
 	for i := range chars {
-		lvl, nextExp, isMax := CalcLevelFromExp(chars[i].Exp, levelsCfg.Levels)
-		chars[i].Level = lvl
-		chars[i].NextLevelExp = nextExp
-		chars[i].IsMaxLevel = isMax
+		chars[i].NextLevelExp, chars[i].IsMaxLevel = NextLevelExp(chars[i].Level, levelsCfg.Levels)
 	}
 
 	return chars, nil
@@ -103,7 +102,7 @@ func (s *Service) ResetStats(ctx context.Context, playerID, characterID string) 
 	}
 
 	// Load progression config to get reset cost.
-	cfgRaw, err := s.repo.GetConfigValue(ctx, "character_progression_config")
+	cfgRaw, err := s.repo.GetConfigValue(ctx, SettingsKeyProgression)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("load progression config: %w", err)
 	}

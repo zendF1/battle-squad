@@ -5,17 +5,21 @@ import (
 	"sort"
 )
 
+// brickBorderUnits is the side length of the coordinate space BrickBorder points are authored in.
+const brickBorderUnits = 16.0
+
 // polygonFromBorder builds a closed polygon from a BrickBorder's 4 edges.
-// Points are in brick-local coords (origin bottom-left, y-up).
-// Returns points converted to pixel coords relative to cell top-left (y-down).
+// Points are in brick-local coords (origin bottom-left, y-up, 0..16).
+// Returns points scaled to cellSize, in pixel coords relative to cell top-left (y-down).
 func polygonFromBorder(border gamedata.BrickBorder, cellSize int) []gamedata.BorderPoint {
+	scale := float64(cellSize) / brickBorderUnits
 	var poly []gamedata.BorderPoint
 	edges := [][]gamedata.BorderPoint{border.Bottom, border.Right, border.Top, border.Left}
 	for _, edge := range edges {
 		for _, p := range edge {
 			poly = append(poly, gamedata.BorderPoint{
-				X: p.X,
-				Y: float64(cellSize) - p.Y,
+				X: p.X * scale,
+				Y: (brickBorderUnits - p.Y) * scale,
 			})
 		}
 	}
@@ -26,7 +30,7 @@ func polygonFromBorder(border gamedata.BrickBorder, cellSize int) []gamedata.Bor
 func scanlineFillPolygon(
 	mask []uint64,
 	destructibleMask []uint64,
-	width int,
+	width, height int,
 	poly []gamedata.BorderPoint,
 	offsetX, offsetY int,
 	cellSize int,
@@ -69,7 +73,7 @@ func scanlineFillPolygon(
 			for x := xStart; x < xEnd; x++ {
 				px := offsetX + x
 				py := offsetY + y
-				if px >= 0 && px < width && py >= 0 {
+				if px >= 0 && px < width && py >= 0 && py < height {
 					setBit(mask, px, py, width)
 					if destructible {
 						setBit(destructibleMask, px, py, width)

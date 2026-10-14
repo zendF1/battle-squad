@@ -80,7 +80,7 @@ func (s *Service) GetShopGems(ctx context.Context) ([]GemConfig, error) {
 }
 
 func (s *Service) GetShopMaterials(ctx context.Context) ([]MaterialConfig, error) {
-	return s.repo.GetAllMaterials(ctx)
+	return s.repo.GetActiveMaterials(ctx)
 }
 
 func (s *Service) GetCraftingRecipes(ctx context.Context) ([]CraftingRecipe, error) {
@@ -195,6 +195,14 @@ func (s *Service) BuyGems(ctx context.Context, playerID string, req BuyGemReques
 		return model.ErrBadRequest
 	}
 
+	gemCfg, err := s.repo.GetGemConfig(ctx, req.GemType, req.GemLevel)
+	if err != nil {
+		return err
+	}
+	if gemCfg == nil {
+		return model.ErrNotFound
+	}
+
 	tx, err := s.db.Pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -246,6 +254,9 @@ func (s *Service) BuyMaterials(ctx context.Context, playerID string, req BuyMate
 	}
 	if cfg == nil {
 		return model.ErrNotFound
+	}
+	if !cfg.IsActive {
+		return model.ErrBadRequest
 	}
 	if cfg.PriceGem <= 0 {
 		return model.ErrBadRequest
@@ -491,9 +502,20 @@ func (s *Service) UpgradeEquipment(ctx context.Context, playerID string, req Upg
 // DismantleEquipment
 // ---------------------------------------------------------------------------
 
-// stonePowers and getSafezoneStart are in logic.go
+// getSafezoneStart and CalculateDismantleRefund are in logic.go
 
 func (s *Service) DismantleEquipment(ctx context.Context, playerID string, req DismantleRequest) error {
+	// Refund uses the same power table as UpgradeEquipment. Loaded before the
+	// tx so we never hit the pool while holding a tx connection.
+	stoneCfgs, err := s.repo.GetAllStoneConfigs(ctx)
+	if err != nil {
+		return err
+	}
+	stonePowers := make(map[int]int, len(stoneCfgs))
+	for _, c := range stoneCfgs {
+		stonePowers[c.StoneLevel] = c.Power
+	}
+
 	tx, err := s.db.Pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -535,17 +557,16 @@ func (s *Service) DismantleEquipment(ctx context.Context, playerID string, req D
 			sumPower += log.TotalPower
 		}
 
-		// Refund 50% of totalPower as highest-value stones possible
-		refund := sumPower / 2
-		// Distribute refund as highest-value stones first (level 12 down to 1)
-		for stoneLevel := 12; stoneLevel >= 1 && refund > 0; stoneLevel-- {
-			power := StonePowers[stoneLevel]
-			qty := refund / power
-			if qty > 0 {
-				if err := s.repo.AddStonesTx(ctx, tx, playerID, stoneLevel, qty); err != nil {
-					return err
-				}
-				refund -= qty * power
+		// Refund 50% of totalPower as highest-value stones possible.
+		// Add in ascending level order so concurrent txs lock stone rows consistently.
+		refund := CalculateDismantleRefund(sumPower, stonePowers)
+		for _, c := range stoneCfgs {
+			qty := refund[c.StoneLevel]
+			if qty == 0 {
+				continue
+			}
+			if err := s.repo.AddStonesTx(ctx, tx, playerID, c.StoneLevel, qty); err != nil {
+				return err
 			}
 		}
 	}

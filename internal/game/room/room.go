@@ -67,8 +67,11 @@ func (r *Room) getMilestoneConfig() milestoneConfig {
 }
 
 func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense int) (hp, defense, damageBonus, moveEnergyBonus int, critChance float64) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	var bonusHP, bonusDefense int
-	err := r.db.Pool.QueryRow(context.Background(),
+	err := r.db.Pool.QueryRow(ctx,
 		`SELECT COALESCE(bonus_hp, 0), COALESCE(bonus_defense, 0) FROM player_characters WHERE player_id = $1 AND character_id = $2`,
 		playerID, characterID).Scan(&bonusHP, &bonusDefense)
 	if err != nil {
@@ -76,7 +79,7 @@ func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense 
 	}
 
 	var cfgVal string
-	err = r.db.Pool.QueryRow(context.Background(),
+	err = r.db.Pool.QueryRow(ctx,
 		`SELECT value FROM game_settings WHERE key = 'character_progression'`).Scan(&cfgVal)
 	if err != nil {
 		return baseHP, baseDefense, 0, 0, 0
@@ -104,23 +107,30 @@ func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense 
 
 	ms := r.getMilestoneConfig()
 
-	eqRows, eqErr := r.db.Pool.Query(context.Background(),
+	// Gems are joined in so the loop never needs a second pool connection
+	// while eqRows still holds one.
+	eqRows, eqErr := r.db.Pool.Query(ctx,
 		`SELECT cei.stat_hp, cei.stat_damage, cei.stat_defense, cei.stat_crit, cei.stat_move_energy,
-		        pe.upgrade_level, pe.category, pe.tier, pe.gem_slot_1::text, pe.gem_slot_2::text
+		        pe.upgrade_level, pe.category, pe.tier,
+		        g1.gem_type, cg1.stat_value, g2.gem_type, cg2.stat_value
 		 FROM player_equipment pe
 		 JOIN config_equipment_items cei ON pe.item_id = cei.item_id
+		 LEFT JOIN player_gems g1 ON g1.gem_id = pe.gem_slot_1
+		 LEFT JOIN config_gems cg1 ON cg1.gem_type = g1.gem_type AND cg1.gem_level = g1.gem_level
+		 LEFT JOIN player_gems g2 ON g2.gem_id = pe.gem_slot_2
+		 LEFT JOIN config_gems cg2 ON cg2.gem_type = g2.gem_type AND cg2.gem_level = g2.gem_level
 		 WHERE pe.player_id = $1 AND pe.equipped_on = $2 AND pe.is_equipped = TRUE`,
 		playerID, characterID)
 	if eqErr == nil {
-		defer eqRows.Close()
 		craftedTierCount := make(map[string]int)
 		for eqRows.Next() {
 			var statHP, statDMG, statDEF, statMoveEnergy, upgradeLevel int
 			var statCrit float64
 			var category string
-			var tier, gem1, gem2 *string
+			var tier, gemType1, gemType2 *string
+			var gemVal1, gemVal2 *float64
 			if err := eqRows.Scan(&statHP, &statDMG, &statDEF, &statCrit, &statMoveEnergy,
-				&upgradeLevel, &category, &tier, &gem1, &gem2); err != nil {
+				&upgradeLevel, &category, &tier, &gemType1, &gemVal1, &gemType2, &gemVal2); err != nil {
 				continue
 			}
 			upgradeBonus := float64(upgradeLevel) * 0.02
@@ -150,36 +160,32 @@ func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense 
 			}
 
 			// BUG 2 fix: handle all 4 gem types (hp, damage, defense, critical)
-			for _, gemID := range []*string{gem1, gem2} {
-				if gemID == nil {
+			gems := [2]struct {
+				gemType *string
+				statVal *float64
+			}{{gemType1, gemVal1}, {gemType2, gemVal2}}
+			for _, g := range gems {
+				if g.gemType == nil || g.statVal == nil {
 					continue
 				}
-				var gemType string
-				var statVal float64
-				gerr := r.db.Pool.QueryRow(context.Background(),
-					`SELECT g.gem_type, cg.stat_value
-					 FROM player_gems g JOIN config_gems cg ON g.gem_type = cg.gem_type AND g.gem_level = cg.gem_level
-					 WHERE g.gem_id = $1`, *gemID).Scan(&gemType, &statVal)
-				if gerr != nil {
-					continue
-				}
-				switch gemType {
+				switch *g.gemType {
 				case "hp":
-					equipHP += int(statVal)
+					equipHP += int(*g.statVal)
 				case "damage":
-					equipDMG += int(statVal)
+					equipDMG += int(*g.statVal)
 				case "defense":
-					equipDEF += int(statVal)
+					equipDEF += int(*g.statVal)
 				case "critical":
-					equipCrit += statVal
+					equipCrit += *g.statVal
 				}
 			}
 		}
+		eqRows.Close()
 
 		// BUG 4+5 fix: additive set bonus (sum all % first, apply once) + include bonus_dmg_pct
 		for t, count := range craftedTierCount {
 			var totalHPPct, totalDMGPct, totalDEFPct, totalCritPct float64
-			bonusRows, berr := r.db.Pool.Query(context.Background(),
+			bonusRows, berr := r.db.Pool.Query(ctx,
 				`SELECT pieces_required, bonus_hp_pct, bonus_dmg_pct, bonus_def_pct, bonus_crit_pct
 				 FROM config_set_bonuses WHERE tier = $1 ORDER BY pieces_required`, t)
 			if berr != nil {
@@ -659,25 +665,7 @@ func (r *Room) processStartMatch(client *ws.Client) {
 	observability.Log.Info().Str("roomId", r.ID).Msg("trigger start match - launch match engine")
 
 	// Build team spawn point queues from map config
-	team1Spawns := []gamedata.SpawnPoint{}
-	team2Spawns := []gamedata.SpawnPoint{}
-	if mapCfg, ok := gamedata.Data.Maps[r.State.MapID]; ok {
-		mid := len(mapCfg.SpawnPoints) / 2
-		for i, sp := range mapCfg.SpawnPoints {
-			if i < mid {
-				team1Spawns = append(team1Spawns, sp)
-			} else {
-				team2Spawns = append(team2Spawns, sp)
-			}
-		}
-	}
-	// Fallback defaults if map not found or no spawn points
-	if len(team1Spawns) == 0 {
-		team1Spawns = append(team1Spawns, gamedata.SpawnPoint{X: 200, Y: 0})
-	}
-	if len(team2Spawns) == 0 {
-		team2Spawns = append(team2Spawns, gamedata.SpawnPoint{X: 1400, Y: 0})
-	}
+	team1Spawns, team2Spawns := r.teamSpawns()
 	team1Idx := 0
 	team2Idx := 0
 
@@ -833,24 +821,7 @@ func (r *Room) startRankedMatch(matchID string, botTierConfig matchmaker.BotTier
 		Int("playerCount", len(r.State.Players)).
 		Msg("[RANKED-DEBUG] startRankedMatch called")
 	// Build team spawn point queues from map config
-	team1Spawns := []gamedata.SpawnPoint{}
-	team2Spawns := []gamedata.SpawnPoint{}
-	if mapCfg, ok := gamedata.Data.Maps[r.State.MapID]; ok {
-		mid := len(mapCfg.SpawnPoints) / 2
-		for i, sp := range mapCfg.SpawnPoints {
-			if i < mid {
-				team1Spawns = append(team1Spawns, sp)
-			} else {
-				team2Spawns = append(team2Spawns, sp)
-			}
-		}
-	}
-	if len(team1Spawns) == 0 {
-		team1Spawns = append(team1Spawns, gamedata.SpawnPoint{X: 200, Y: 0})
-	}
-	if len(team2Spawns) == 0 {
-		team2Spawns = append(team2Spawns, gamedata.SpawnPoint{X: 1400, Y: 0})
-	}
+	team1Spawns, team2Spawns := r.teamSpawns()
 	team1Idx := 0
 	team2Idx := 0
 
@@ -1082,4 +1053,14 @@ func (r *Room) broadcastRoomUpdated() {
 
 	// Sync to Redis registry
 	r.hub.SyncRoomState(context.Background(), &r.State)
+}
+
+// teamSpawns returns the spawn queues for the room's map, with fallbacks sized to the map.
+// A missing map uses the same default size as the match's fallback terrain.
+func (r *Room) teamSpawns() (team1, team2 []gamedata.SpawnPoint) {
+	mapCfg, ok := gamedata.Data.Maps[r.State.MapID]
+	if !ok {
+		mapCfg = gamedata.MapConfig{MapID: r.State.MapID, Width: gamedata.DefaultMapWidth, Height: gamedata.DefaultMapHeight}
+	}
+	return mapCfg.TeamSpawns()
 }

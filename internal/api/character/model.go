@@ -39,6 +39,12 @@ type ResetStatsPayload struct {
 	CharacterID string `json:"characterId"`
 }
 
+// game_settings keys; must match migrations/006 and the admin config routes.
+const (
+	SettingsKeyProgression = "character_progression"
+	SettingsKeyLevels      = "character_levels"
+)
+
 // ProgressionConfig holds server-side rules for character progression.
 type ProgressionConfig struct {
 	PointsPerLevel     int            `json:"pointsPerLevel"`
@@ -94,16 +100,17 @@ func CalcLevelFromExp(exp int, levels []LevelEntry) (level int, nextLevelExp *in
 			level = entry.Level
 		}
 	}
+	nextLevelExp, isMaxLevel = NextLevelExp(level, levels)
+	return level, nextLevelExp, isMaxLevel
+}
 
-	// Determine nextLevelExp
-	isMaxLevel = true
+// NextLevelExp returns the EXP required to reach level+1 (nil if level is max).
+func NextLevelExp(level int, levels []LevelEntry) (nextLevelExp *int, isMaxLevel bool) {
 	for _, entry := range levels {
 		if entry.Level == level+1 {
 			next := entry.ExpRequired
-			nextLevelExp = &next
-			isMaxLevel = false
-			break
+			return &next, false
 		}
 	}
-	return level, nextLevelExp, isMaxLevel
+	return nil, true
 }

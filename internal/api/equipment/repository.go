@@ -749,10 +749,11 @@ func (r *Repository) GetAllCraftingRecipes(ctx context.Context) ([]CraftingRecip
 	return result, nil
 }
 
-func (r *Repository) GetAllMaterials(ctx context.Context) ([]MaterialConfig, error) {
+func (r *Repository) GetActiveMaterials(ctx context.Context) ([]MaterialConfig, error) {
 	query := `
 		SELECT material_id, name, description, source, price_gem, COALESCE(tier, ''), is_active
 		FROM config_materials
+		WHERE is_active = TRUE
 		ORDER BY material_id ASC
 	`
 	return r.queryMaterials(ctx, query)

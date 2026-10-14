@@ -88,8 +88,8 @@ func NewMatch(
 	// Build terrain from map config, with legacy fallback
 	mapCfgForTerrain := gamedata.MapConfig{
 		MapID:  mapID,
-		Width:  1600,
-		Height: 900,
+		Width:  gamedata.DefaultMapWidth,
+		Height: gamedata.DefaultMapHeight,
 	}
 	if gamedata.Data != nil {
 		if mc, ok := gamedata.Data.Maps[mapID]; ok {
@@ -98,9 +98,9 @@ func NewMatch(
 	}
 	terrain := NewTerrain(mapCfgForTerrain)
 
-	// Land players safely on terrain initially
+	// Land players on the surface nearest their configured spawn height
 	for _, p := range mPlayers {
-		p.Position.Y = terrain.GetLandingY(p.Position.X, 0)
+		p.Position.Y = terrain.SpawnY(p.Position.X, p.Position.Y)
 	}
 
 	mState := MatchState{
@@ -726,6 +726,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 			if r.ExplosionPoint != nil {
 				m.Terrain.DestroyCircle(r.ExplosionPoint.X, r.ExplosionPoint.Y, r.ExplosionRadius)
 				r.TerrainDestroyed = true
+				r.TerrainVersion = m.Terrain.Version
 
 				for _, p := range m.State.Players {
 					if !p.IsAlive {
@@ -997,6 +998,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 		// Destroy terrain
 		m.Terrain.DestroyCircle(result.ExplosionPoint.X, result.ExplosionPoint.Y, result.ExplosionRadius)
 		result.TerrainDestroyed = true
+		result.TerrainVersion = m.Terrain.Version
 
 		// Check player splash damage (no friendly fire — skip teammates)
 		for _, p := range m.State.Players {
@@ -1193,11 +1195,15 @@ func (m *Match) processReconnect(ctx context.Context, client *ws.Client) {
 	m.Clients[client.PlayerID] = client
 	client.RoomID = m.State.RoomID
 
-	// Send full match state sync
-	payload, _ := json.Marshal(m.State)
-	client.Send <- ws.Message{
-		Event: "MatchStateSync",
-		Data:  payload,
+	// Send full match state sync, including current terrain so missed explosions are recovered.
+	// Non-blocking like broadcast: a stalled client must not stall the match loop.
+	select {
+	case client.Send <- ws.Message{Event: "MatchStateSync", Data: m.snapshotPayload()}:
+	default:
+		observability.Log.Warn().
+			Str("matchId", m.State.MatchID).
+			Str("playerId", client.PlayerID).
+			Msg("reconnect: Send channel FULL, MatchStateSync dropped")
 	}
 }
 
@@ -1433,10 +1439,9 @@ func (m *Match) broadcastMatchStarted() {
 			Msg("[RANKED-DEBUG] broadcastMatchStarted: will send to")
 	}
 
-	payload, _ := json.Marshal(m.State)
 	m.broadcast(ws.Message{
 		Event: "MatchStarted",
-		Data:  payload,
+		Data:  m.snapshotPayload(),
 	})
 	m.el.Log("MatchStarted", "", m.State)
 
