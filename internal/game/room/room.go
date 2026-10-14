@@ -956,6 +956,11 @@ func (r *Room) startRankedMatch(matchID string, botTierConfig matchmaker.BotTier
 		2: avgTeam2,
 	}
 	r.match.EloParams = eloParams
+	// Zero config means the tier is missing from bot_difficulty: keep the default
+	// rather than a bot with no aim error
+	if botTierConfig != (matchmaker.BotTierConfig{}) {
+		r.match.BotTier = botTierConfig
+	}
 
 	// Track match completion
 	r.matchDone = r.match.MatchDone

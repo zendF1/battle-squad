@@ -7,12 +7,12 @@ import (
 	"math"
 	"math/rand"
 	"runtime/debug"
-	"strings"
 	"sync"
 	"time"
 
 	"battle-squad/internal/api/economy"
 	"battle-squad/internal/game/gamedata"
+	"battle-squad/internal/game/matchmaker"
 	"battle-squad/internal/game/ws"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
@@ -49,6 +49,7 @@ type Match struct {
 	doneOnce     sync.Once
 	TeamRatings  map[int]int // teamID → avg rating for Elo
 	EloParams    EloParams   // Elo configuration
+	BotTier      matchmaker.BotTierConfig
 	lastAction   map[string]time.Time // playerID → last action timestamp (rate limit)
 	turnSeq      int                  // incremented every startTurn; stale callbacks compare against it
 	resolving    bool                 // the current turn's action is animating; no further actions or timer ticks
@@ -143,6 +144,7 @@ func NewMatch(
 		MatchDone:    make(chan struct{}),
 		TeamRatings:  map[int]int{},
 		EloParams:    EloParams{},
+		BotTier:      DefaultBotTier,
 		lastAction:   make(map[string]time.Time),
 	}
 }
@@ -411,46 +413,16 @@ func (m *Match) startTurn(ctx context.Context) {
 		Data:  payload,
 	})
 
-	// If it is a bot's turn, trigger bot decision block after a short delay
 	if player.IsBot {
 		observability.Log.Info().
 			Str("matchId", m.State.MatchID).
 			Str("botId", player.PlayerID).
 			Msg("[RANKED-DEBUG] startTurn: scheduling bot action")
-		frozen := HasEffect(player, "freeze")
-		go func() {
-			// Random delay 2-6s so bots feel natural, not instant
-			botDelay := 2000 + rand.Intn(4000)
-			time.Sleep(time.Duration(botDelay) * time.Millisecond)
-
-			// Idle bots (tutorial) and frozen bots just end their turn
-			if frozen || (strings.HasPrefix(player.PlayerID, "bot_") && player.DisplayName == "Target Bot") {
-				m.Events <- matchEvent{
-					client: nil,
-					msg:    ws.Message{Event: "EndTurn"},
-					ctx:    context.Background(),
-				}
-				return
-			}
-
-			brain := NewBotBrain("normal")
-			action := brain.DecideAction(player, &m.State)
-			if act, ok := action.(ShootAction); ok {
-				payload, _ := json.Marshal(act)
-				m.Events <- matchEvent{
-					client: nil,
-					msg:    ws.Message{Event: "Shoot", Data: payload},
-					ctx:    context.Background(),
-				}
-			} else if act, ok := action.(UseItemAction); ok {
-				payload, _ := json.Marshal(act)
-				m.Events <- matchEvent{
-					client: nil,
-					msg:    ws.Message{Event: "UseItem", Data: payload},
-					ctx:    context.Background(),
-				}
-			}
-		}()
+		// Random delay 2-6s so bots feel natural, not instant
+		botDelay := time.Duration(2000+rand.Intn(4000)) * time.Millisecond
+		m.runOnTurnAfter(ctx, botDelay, func(ctx context.Context) {
+			m.botStep(ctx, botTurnState{}, 0)
+		})
 	}
 }
 
@@ -511,13 +483,19 @@ func (m *Match) scheduleEndTurn(ctx context.Context, flightTime float64) {
 	m.resolveTurnAfter(ctx, delay, m.endTurn)
 }
 
-// resolveTurnAfter locks the current turn and runs fn on the match loop after
-// delaySec seconds, unless the match ended or the turn changed in the meantime.
+// resolveTurnAfter locks the current turn and runs fn after delaySec seconds
+// (see runOnTurnAfter).
 func (m *Match) resolveTurnAfter(ctx context.Context, delaySec float64, fn func(ctx context.Context)) {
 	m.resolving = true
+	m.runOnTurnAfter(ctx, time.Duration(delaySec*float64(time.Second)), fn)
+}
+
+// runOnTurnAfter runs fn on the match loop after delay, unless the match ended
+// or the turn changed in the meantime.
+func (m *Match) runOnTurnAfter(ctx context.Context, delay time.Duration, fn func(ctx context.Context)) {
 	turn := m.turnSeq
 	go func() {
-		timer := time.NewTimer(time.Duration(delaySec * float64(time.Second)))
+		timer := time.NewTimer(delay)
 		defer timer.Stop()
 		select {
 		case <-timer.C:
