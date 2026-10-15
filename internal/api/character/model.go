@@ -25,13 +25,13 @@ type PlayerCharacter struct {
 
 // AllocateStatsPayload is the request body for allocating stat points.
 type AllocateStatsPayload struct {
-	CharacterID  string `json:"characterId"`
-	HP           int    `json:"hp"`
-	Damage       int    `json:"damage"`
-	Mobility     int    `json:"mobility"`
-	Defense      int    `json:"defense"`
-	SkillPower   int    `json:"skillPower"`
-	TerrainDamage int   `json:"terrainDamage"`
+	CharacterID   string `json:"characterId"`
+	HP            int    `json:"hp"`
+	Damage        int    `json:"damage"`
+	Mobility      int    `json:"mobility"`
+	Defense       int    `json:"defense"`
+	SkillPower    int    `json:"skillPower"`
+	TerrainDamage int    `json:"terrainDamage"`
 }
 
 // ResetStatsPayload is the request body for resetting stat points.
@@ -45,12 +45,41 @@ const (
 	SettingsKeyLevels      = "character_levels"
 )
 
+// statMultipliers keys: how much one allocated point adds in battle.
+const (
+	StatHP            = "hp"             // +N max HP
+	StatDamage        = "damage"         // +N weapon damage
+	StatMobility      = "mobility"       // +N max move energy
+	StatDefense       = "defense"        // +N defense
+	StatSkillPower    = "skill_power"    // +N% skill damage and healing
+	StatTerrainDamage = "terrain_damage" // +N% crater radius
+)
+
+// DefaultStatMultipliers fill keys missing from (or zero in) the configured
+// statMultipliers; they match the migrations/006 seed.
+var DefaultStatMultipliers = map[string]int{
+	StatHP:            50,
+	StatDamage:        5,
+	StatMobility:      3,
+	StatDefense:       5,
+	StatSkillPower:    5,
+	StatTerrainDamage: 3,
+}
+
+// StatMultiplier returns the configured per-point value for stat, or its default.
+func (c ProgressionConfig) StatMultiplier(stat string) int {
+	if v := c.StatMultipliers[stat]; v > 0 {
+		return v
+	}
+	return DefaultStatMultipliers[stat]
+}
+
 // ProgressionConfig holds server-side rules for character progression.
 type ProgressionConfig struct {
-	PointsPerLevel     int            `json:"pointsPerLevel"`
-	ResetCostCurrency  string         `json:"resetCostCurrency"`
-	ResetCostAmount    int            `json:"resetCostAmount"`
-	StatMultipliers    map[string]int `json:"statMultipliers"`
+	PointsPerLevel    int            `json:"pointsPerLevel"`
+	ResetCostCurrency string         `json:"resetCostCurrency"`
+	ResetCostAmount   int            `json:"resetCostAmount"`
+	StatMultipliers   map[string]int `json:"statMultipliers"`
 }
 
 // LevelEntry maps an XP threshold to a level.

@@ -34,11 +34,15 @@ type BattlePlayerState struct {
 	DamageBonus     int            `json:"damageBonus"`
 	CritChance      float64        `json:"critChance"`
 	MoveEnergyBonus int            `json:"moveEnergyBonus"`
-	SkillEnergy     int            `json:"skillEnergy"` // 0-100, skill usable at 100
-	DamageDealt     int            `json:"damageDealt"`
-	KillCount       int            `json:"killCount"`
-	ShotsFired      int            `json:"shotsFired"`
-	ShotsHit        int            `json:"shotsHit"`
+	// SkillPowerBonus is a percent added to skill damage and healing.
+	SkillPowerBonus int `json:"skillPowerBonus"`
+	// TerrainDamageBonus is a percent added to the crater radius of this player's explosions.
+	TerrainDamageBonus int `json:"terrainDamageBonus"`
+	SkillEnergy        int `json:"skillEnergy"` // 0-100, skill usable at 100
+	DamageDealt        int `json:"damageDealt"`
+	KillCount          int `json:"killCount"`
+	ShotsFired         int `json:"shotsFired"`
+	ShotsHit           int `json:"shotsHit"`
 }
 
 type WindState struct {

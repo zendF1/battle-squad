@@ -34,6 +34,8 @@ const (
 	// reservationReleaseTimeout bounds releasing a match's reservations; it runs on a fresh
 	// context because the match context is usually already cancelled by then.
 	reservationReleaseTimeout = 5 * time.Second
+
+	skillHealAmount = 30.0 // healing_bloom heal before the skill power bonus
 )
 
 type Match struct {
@@ -806,7 +808,7 @@ func (m *Match) shootSkill(ctx context.Context, player *BattlePlayerState, actio
 	// healing_bloom: no projectile — just heal self and end turn
 	if skillConfig.EffectType == "heal" {
 		before := player.HP
-		player.HP += 30
+		player.HP += int(math.Round(skillHealAmount * skillPowerFactor(player)))
 		if player.HP > player.MaxHP {
 			player.HP = player.MaxHP
 		}
@@ -829,7 +831,7 @@ func (m *Match) shootSkill(ctx context.Context, player *BattlePlayerState, actio
 	if HasEffect(player, "power_shot") {
 		damageFactor = 1.5
 	}
-	damageFactor *= skillConfig.DamageMultiplier
+	damageFactor *= skillConfig.DamageMultiplier * skillPowerFactor(player)
 	baseDamage := float64(weaponConfig.Damage+player.DamageBonus) * damageFactor
 
 	// Build list of (angle, explosionRadius) pairs per projectile

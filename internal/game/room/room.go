@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"battle-squad/internal/api/character"
 	"battle-squad/internal/api/economy"
 	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/game/match"
@@ -68,41 +69,38 @@ func (r *Room) getMilestoneConfig() milestoneConfig {
 	return cfg
 }
 
-func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense int) (hp, defense, damageBonus, moveEnergyBonus int, critChance float64) {
+// baseStats are a character's config HP and defense with no bonuses.
+func baseStats(characterID string) battleStats {
+	s := battleStats{HP: 100, Defense: 50}
+	if c, ok := gamedata.Data.Characters[characterID]; ok {
+		s.HP, s.Defense = c.HP, c.Defense
+	}
+	return s
+}
+
+// getActualStats adds the player's allocated stat points and equipment to the
+// character's base stats. A character the player does not own gets base stats.
+func (r *Room) getActualStats(playerID, characterID string) battleStats {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var bonusHP, bonusDefense int
+	stats := baseStats(characterID)
+
+	var pts statPoints
 	err := r.db.Pool.QueryRow(ctx,
-		`SELECT COALESCE(bonus_hp, 0), COALESCE(bonus_defense, 0) FROM player_characters WHERE player_id = $1 AND character_id = $2`,
-		playerID, characterID).Scan(&bonusHP, &bonusDefense)
+		`SELECT bonus_hp, bonus_damage, bonus_mobility, bonus_defense, bonus_skill_power, bonus_terrain_damage
+		 FROM player_characters WHERE player_id = $1 AND character_id = $2`,
+		playerID, characterID).Scan(&pts.HP, &pts.Damage, &pts.Mobility, &pts.Defense, &pts.SkillPower, &pts.TerrainDamage)
 	if err != nil {
-		return baseHP, baseDefense, 0, 0, 0
+		return stats
 	}
 
 	var cfgVal string
-	err = r.db.Pool.QueryRow(ctx,
-		`SELECT value FROM game_settings WHERE key = 'character_progression'`).Scan(&cfgVal)
-	if err != nil {
-		return baseHP, baseDefense, 0, 0, 0
+	if err := r.db.Pool.QueryRow(ctx,
+		`SELECT value FROM game_settings WHERE key = $1`, character.SettingsKeyProgression).Scan(&cfgVal); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		observability.Log.Warn().Err(err).Msg("failed to load character_progression; using default stat multipliers")
 	}
-
-	type progConfig struct {
-		StatMultipliers map[string]int `json:"statMultipliers"`
-	}
-	var cfg progConfig
-	if json.Unmarshal([]byte(cfgVal), &cfg) != nil || cfg.StatMultipliers == nil {
-		return baseHP, baseDefense, 0, 0, 0
-	}
-
-	hpMul := cfg.StatMultipliers["hp"]
-	defMul := cfg.StatMultipliers["defense"]
-	if hpMul == 0 {
-		hpMul = 50
-	}
-	if defMul == 0 {
-		defMul = 5
-	}
+	stats = addStatPoints(stats, pts, character.LoadProgressionConfig(cfgVal))
 
 	var equipHP, equipDMG, equipDEF, equipMoveEnergy int
 	var equipCrit float64
@@ -221,11 +219,12 @@ func (r *Room) getActualStats(playerID, characterID string, baseHP, baseDefense 
 		}
 	}
 
-	return baseHP + bonusHP*hpMul + equipHP,
-		baseDefense + bonusDefense*defMul + equipDEF,
-		equipDMG,
-		equipMoveEnergy,
-		equipCrit
+	stats.HP += equipHP
+	stats.Defense += equipDEF
+	stats.DamageBonus += equipDMG
+	stats.MoveEnergyBonus += equipMoveEnergy
+	stats.CritChance += equipCrit
+	return stats
 }
 
 func NewRoom(roomID string, initialState RoomState, hub *Hub, db *database.PostgresDB) *Room {
@@ -669,33 +668,7 @@ func (r *Room) processStartMatch(client *ws.Client) {
 			team1Idx++
 		}
 
-		charData, ok := gamedata.Data.Characters[p.CharacterID]
-		hp := 100
-		defense := 50
-		if ok {
-			hp = charData.HP
-			defense = charData.Defense
-		}
-		hp, defense, dmgBonus, moveEnergyBonus, critChance := r.getActualStats(p.PlayerID, p.CharacterID, hp, defense)
-
-		matchPlayers = append(matchPlayers, &match.BattlePlayerState{
-			PlayerID:        p.PlayerID,
-			DisplayName:     p.DisplayName,
-			TeamID:          p.TeamID,
-			CharacterID:     p.CharacterID,
-			HP:              hp,
-			MaxHP:           hp,
-			Defense:         defense,
-			DamageBonus:     dmgBonus,
-			Position:        spawnPos,
-			MoveEnergy:      100,
-			MoveEnergyBonus: moveEnergyBonus,
-			CritChance:      critChance,
-			Items:           p.Items,
-			StatusEffects:   []match.StatusEffect{},
-			IsAlive:         true,
-			IsBot:           false,
-		})
+		matchPlayers = append(matchPlayers, newBattlePlayer(p, spawnPos, r.getActualStats(p.PlayerID, p.CharacterID), false))
 	}
 
 	// Instantiate match engine
@@ -774,40 +747,14 @@ func (r *Room) processStartTutorial(client *ws.Client, payload QuickPlayPayload)
 			spawnPos = match.Vector2{X: 400, Y: 0}
 		}
 
-		charData, ok := gamedata.Data.Characters[p.CharacterID]
-		hp := 100
-		defense := 50
-		if ok {
-			hp = charData.HP
-			defense = charData.Defense
-		}
-
 		isBot := p.PlayerID[:4] == "bot_"
-		var dmgBonus, moveEnergyBonus int
-		var critChance float64
+		stats := baseStats(p.CharacterID)
 		if !isBot {
-			hp, defense, dmgBonus, moveEnergyBonus, critChance = r.getActualStats(p.PlayerID, p.CharacterID, hp, defense)
+			stats = r.getActualStats(p.PlayerID, p.CharacterID)
 		}
-
-		matchPlayers = append(matchPlayers, &match.BattlePlayerState{
-			PlayerID:        p.PlayerID,
-			DisplayName:     p.DisplayName,
-			TeamID:          p.TeamID,
-			CharacterID:     p.CharacterID,
-			HP:              hp,
-			MaxHP:           hp,
-			Defense:         defense,
-			DamageBonus:     dmgBonus,
-			Position:        spawnPos,
-			MoveEnergy:      100,
-			MoveEnergyBonus: moveEnergyBonus,
-			CritChance:      critChance,
-			Items:           p.Items,
-			StatusEffects:   []match.StatusEffect{},
-			IsAlive:         true,
-			IsBot:           isBot,
-			IsIdle:          isBot && !aiBot,
-		})
+		bp := newBattlePlayer(p, spawnPos, stats, isBot)
+		bp.IsIdle = isBot && !aiBot
+		matchPlayers = append(matchPlayers, bp)
 	}
 
 	r.match = match.NewMatch(
@@ -880,39 +827,12 @@ func (r *Room) startRankedMatch(matchID string, botTierConfig matchmaker.BotTier
 			team1Idx++
 		}
 
-		charData, ok := gamedata.Data.Characters[p.CharacterID]
-		hp := 100
-		defense := 50
-		if ok {
-			hp = charData.HP
-			defense = charData.Defense
-		}
-
 		isBot := len(p.PlayerID) >= 4 && p.PlayerID[:4] == "bot_"
-		var dmgBonus, moveEnergyBonus int
-		var critChance float64
+		stats := baseStats(p.CharacterID)
 		if !isBot {
-			hp, defense, dmgBonus, moveEnergyBonus, critChance = r.getActualStats(p.PlayerID, p.CharacterID, hp, defense)
+			stats = r.getActualStats(p.PlayerID, p.CharacterID)
 		}
-
-		matchPlayers = append(matchPlayers, &match.BattlePlayerState{
-			PlayerID:        p.PlayerID,
-			DisplayName:     p.DisplayName,
-			TeamID:          p.TeamID,
-			CharacterID:     p.CharacterID,
-			HP:              hp,
-			MaxHP:           hp,
-			Defense:         defense,
-			DamageBonus:     dmgBonus,
-			Position:        spawnPos,
-			MoveEnergy:      100,
-			MoveEnergyBonus: moveEnergyBonus,
-			CritChance:      critChance,
-			Items:           p.Items,
-			StatusEffects:   []match.StatusEffect{},
-			IsAlive:         true,
-			IsBot:           isBot,
-		})
+		matchPlayers = append(matchPlayers, newBattlePlayer(p, spawnPos, stats, isBot))
 	}
 
 	// Collect per-team ratings for Elo calculation

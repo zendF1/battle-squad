@@ -10,6 +10,17 @@ const (
 	fallDamageMultiplier = 0.25  // 1 HP per 4 pixels of fall beyond threshold
 )
 
+// craterRadius is the terrain an explosion carves: the blast radius grown by the
+// shooter's terrain damage bonus. Damage falloff keeps the blast radius.
+func craterRadius(shooter *BattlePlayerState, blastRadius float64) float64 {
+	return blastRadius * (1 + float64(shooter.TerrainDamageBonus)/100)
+}
+
+// skillPowerFactor scales the shooter's skill damage and healing.
+func skillPowerFactor(shooter *BattlePlayerState) float64 {
+	return 1 + float64(shooter.SkillPowerBonus)/100
+}
+
 func CalculateExplosionDamage(playerPos Vector2, explosionCenter Vector2, baseDamage float64, explosionRadius float64, defense int) int {
 	// 1. Calculate distance from center
 	dx := playerPos.X - explosionCenter.X
