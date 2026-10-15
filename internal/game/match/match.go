@@ -562,12 +562,16 @@ func (m *Match) processMove(ctx context.Context, client *ws.Client, action MoveA
 		player.Position.Y = slideY
 	}
 
-	// Broadcast PlayerMoved
-	payload, _ := json.Marshal(map[string]interface{}{
+	// Broadcast PlayerMoved; seq tells the mover which of its commands this answers
+	moved := map[string]interface{}{
 		"playerId":   player.PlayerID,
 		"position":   player.Position,
 		"moveEnergy": player.MoveEnergy,
-	})
+	}
+	if action.Seq > 0 {
+		moved["seq"] = action.Seq
+	}
+	payload, _ := json.Marshal(moved)
 	m.broadcast(ws.Message{
 		Event: "PlayerMoved",
 		Data:  payload,

@@ -319,7 +319,7 @@ Client message → CompositeWSHandler
 
 | Event | Payload | Mô tả |
 |-------|---------|-------|
-| `Move` | `{direction, targetX}` | Di chuyển trái/phải |
+| `Move` | `{direction, targetX, seq?}` | Di chuyển trái/phải; `seq` (tuỳ chọn) được trả lại trong `PlayerMoved` |
 | `Shoot` | `{angle, power, actionMode, itemId?}` | Bắn (weapon hoặc skill) |
 | `UseItem` | `{itemId, targetPosition?}` | Dùng item |
 | `EndTurn` | `{}` | Kết thúc lượt |
@@ -333,7 +333,7 @@ Client message → CompositeWSHandler
 | `MatchStarted` | `{matchId, players, turnOrder, wind, mapId}` | Trận bắt đầu |
 | `TurnStarted` | `{currentPlayerId, turnIndex, wind, timeLeft}` | Lượt mới |
 | `TurnTimerTick` | `{timeLeft}` | Đếm ngược (mỗi 1s) |
-| `PlayerMoved` | `{playerId, position, moveEnergy}` | Player tự di chuyển |
+| `PlayerMoved` | `{playerId, position, moveEnergy, seq?}` | Player di chuyển; có `seq` khi trả lời `Move` có `seq` |
 | `ShotResolved` | `{shooterId, actionMode, skillId?, itemId?, skillEnergy, projectiles[], events[], duration}` | Toàn bộ kết quả một lượt bắn (weapon, skill, teleport) |
 | `ItemUsed` | `{playerId, itemId, players, wind}` | Item bị tiêu hao |
 | `PlayerDamaged` | `[{playerId, damage, hp, isAlive, type}]` | Damage ngoài phát bắn (lava đầu lượt) |

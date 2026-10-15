@@ -72,6 +72,7 @@ type ShootAction struct {
 type MoveAction struct {
 	Direction       string  `json:"direction"` // left, right
 	TargetX         float64 `json:"targetX"`
+	Seq             int     `json:"seq,omitempty"` // client command number, echoed in PlayerMoved
 	ClientTimestamp int64   `json:"clientTimestamp"`
 }
 
