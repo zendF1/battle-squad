@@ -225,6 +225,74 @@ Mọi response REST (trừ `/healthz`, `/readyz`, `/livez`, `/metrics`) đều c
 | `gems_550` | `com.battlesquad.gems_550` | 500 | 50 | $4.99 |
 | `gems_1200` | `com.battlesquad.gems_1200` | 1000 | 200 | $9.99 |
 
+**Equipment (trang bị):**
+
+Slot: `weapon`, `armor`, `helmet`, `pants`, `boots`, `gloves`. Mỗi món sở hữu (`player_equipment`) có `upgradeLevel` 0–16, tối đa 2 ô ngọc, và được mặc cho **một** nhân vật (`equippedOn`); mỗi (nhân vật, slot) chỉ một món. Chỉ số equipment vào `stats.fromEquipment` của `GET /player/characters` và vào trận (xem [Chỉ số hiển thị](#chỉ-số-hiển-thị-get-playercharacters)).
+
+| Method | Path | Handler | Mô tả |
+|--------|------|---------|-------|
+| GET | `/equipment/catalog` | GetCatalog | Toàn bộ catalog đang active: `{items, upgradeRates, setBonuses, stones}` (items gồm cả `normal` và `crafted`). Client cache được, chỉ đổi khi admin sửa config |
+| GET | `/player/equipment` | GetEquipment | Trang bị đang có (mới nhất trước). Tên/chỉ số lấy từ catalog theo `itemId` |
+| POST | `/player/equipment/equip` | EquipItem | `{equipmentId, characterId}` → `{"success":true}`. Slot của nhân vật đã có món khác thì món cũ tự tháo. Món đang mặc (cho bất kỳ nhân vật nào) → 409 `EQUIP_ALREADY_EQUIPPED`: tháo trước rồi mặc lại |
+| POST | `/player/equipment/unequip` | UnequipItem | `{equipmentId}` → `{"success":true}`; món không đang mặc → 409 `EQUIP_NOT_EQUIPPED` |
+| POST | `/player/equipment/upgrade` | Upgrade | `{equipmentId, stones: [{stoneLevel, quantity}]}` → `{success, newLevel, percent, equipmentId}` |
+| POST | `/player/equipment/dismantle` | Dismantle | `{equipmentId}` → `{"success":true}`; hoàn 50% power đá đã dùng từ safe zone gần nhất. Món đang mặc → 409 `EQUIP_EQUIPPED` |
+| POST | `/player/equipment/socket` | SocketGem | `{equipmentId, slotIndex (1\|2), gemId}` |
+| POST | `/player/equipment/unsocket` | UnsocketGem | `{equipmentId, slotIndex}` |
+| GET | `/player/stones` · `/player/gems` · `/player/materials` | GetStones · GetGems · GetMaterials | `[{stoneLevel, quantity}]` · `[{gemId, gemType, gemLevel}]` · `[{materialId, quantity}]` (kèm `playerId`) |
+| GET | `/shop/equipment?characterId=` | GetShopEquipment | Item `normal` active dùng được cho nhân vật đó (`characterId` null = mọi nhân vật) |
+| POST | `/shop/equipment/buy` | BuyEquipment | `{itemId, idempotencyKey}` → `{equipmentId}`. Trả `priceCoin` (hoặc `priceGem` nếu coin = 0). Key ≤ 64, tuỳ chọn: cùng key + item trả lại `equipmentId` của lần mua đầu, không trừ tiền lần nữa; key đã dùng cho item khác → 409 `IDEMPOTENCY_KEY_REUSED`; lần mua lỗi không lưu key nên retry chạy lại từ đầu. Không gửi key → mỗi request mua một món (như cũ). Không đủ tiền → 400 `SHOP_INSUFFICIENT_BALANCE`; item không có/đã tắt → 404 `EQUIP_NOT_FOUND`; item crafted, thiếu `itemId` hoặc key > 64 → 400 `BAD_REQUEST`. Khoá profile `FOR UPDATE` nên các lần mua của một người chạy tuần tự |
+| GET/POST | `/shop/stones`, `/shop/stones/buy` | GetShopStones, BuyStones | `{stoneLevel, quantity}`; đá `merge_only` không bán |
+| GET/POST | `/shop/gems`, `/shop/gems/buy` | GetShopGems, BuyGems | `{gemType, gemLevel (1–6), quantity}`; lv1–3 = level×200 coin, lv4–6 = (level−3)×30 gem |
+| GET/POST | `/shop/materials`, `/shop/materials/buy` | GetShopMaterials, BuyMaterials | `{materialId, quantity}`, giá `priceGem` |
+| POST | `/merge/stone` · `/merge/gem` | MergeStones · MergeGems | `{stoneLevel, count}` · `{gemType, gemLevel, count}`, count 2–4 → `{success, message}` |
+| GET | `/crafting/recipes` | GetRecipes | `[{recipeId, resultItemId, materials: [{materialId, quantity}], isActive}]` |
+| POST | `/crafting/craft` | Craft | `{recipeId}` → `{equipmentId}` |
+
+`GET /equipment/catalog` (`tier`, `characterId` bị bỏ khi null):
+
+```json
+{
+  "items": [
+    {"itemId": "normal_weapon_lv10", "name": "Iron Sword", "slot": "weapon", "category": "normal", "requiredLevel": 1,
+     "gemSlots": 1, "statHp": 0, "statDamage": 8, "statDefense": 0, "statCrit": 0, "statMoveEnergy": 0,
+     "priceCoin": 500, "priceGem": 0, "isActive": true},
+    {"itemId": "crafted_weapon_silver", "name": "Silver Sword", "slot": "weapon", "category": "crafted", "tier": "silver",
+     "requiredLevel": 2, "gemSlots": 2, "statHp": 0, "statDamage": 10, "statDefense": 0, "statCrit": 0, "statMoveEnergy": 0,
+     "priceCoin": 0, "priceGem": 0, "isActive": true}
+  ],
+  "upgradeRates": [{"fromLevel": 0, "toLevel": 1, "upgradeCost": 1, "maxPercent": 80, "failResetTo": 0}],
+  "setBonuses": [{"tier": "silver", "piecesRequired": 2, "bonusHpPct": 3, "bonusDmgPct": 0, "bonusDefPct": 0, "bonusCritPct": 0}],
+  "stones": [{"stoneLevel": 1, "power": 1, "priceCoin": 100, "priceGem": 0, "source": "coin_shop"}]
+}
+```
+
+`GET /player/equipment` (`tier`, `gemSlot1`, `gemSlot2`, `equippedOn` bị bỏ khi null):
+
+```json
+[{"equipmentId": "6f1c…", "playerId": "p1", "itemId": "normal_weapon_lv10", "slot": "weapon", "category": "normal",
+  "upgradeLevel": 0, "isEquipped": true, "equippedOn": "tanko", "isLocked": true, "createdAt": "2026-10-15T10:00:00Z"}]
+```
+
+Điều kiện mặc: sở hữu nhân vật (`CHARACTER_NOT_FOUND`), `characterId` của item null hoặc trùng (`EQUIP_WRONG_CHARACTER`), level nhân vật ≥ `requiredLevel` (`EQUIP_LEVEL_REQUIRED`). Level nhân vật tối đa 10.
+
+**Default equipment catalog** (`migrations/016_default_equipment_catalog.up.sql`, cùng dữ liệu với `cmd/admin` `SeedEquipmentConfig`; `ON CONFLICT DO NOTHING` nên chạy lại không ghi đè chỉnh sửa từ admin):
+
+| Tier | Item id (× 6 slot) | Lv yêu cầu | Nguồn | Ô ngọc |
+|------|--------------------|-----------|-------|--------|
+| Iron | `normal_<slot>_lv10` | 1 | Shop (coin) | 1 |
+| Steel | `normal_<slot>_lv20` | 4 | Shop (coin) | 1 |
+| Mithril | `normal_<slot>_lv30` | 7 | Shop (coin) | 1 |
+| Dragon | `normal_<slot>_lv40` | 10 | Shop (coin) | 1 |
+| Silver | `crafted_<slot>_silver` | 2 | Chế tạo `recipe_<slot>_silver` | 2 |
+| Gold | `crafted_<slot>_gold` | 5 | Chế tạo | 2 |
+| Titan | `crafted_<slot>_titan` | 8 | Chế tạo | 2 |
+| Diamond | `crafted_<slot>_diamond` | 10 | Chế tạo | 2 |
+
+Hậu tố `lvN` của item normal là id cũ (giữ nguyên để không vỡ dữ liệu), không phải level yêu cầu. Level yêu cầu cũ 10/20/30/40 (crafted 15/35/55/75) lớn hơn level tối đa của nhân vật nên migration 016 đổi sang bảng trên; row nào còn giữ đúng giá trị cũ (DB đã seed bằng admin) được cập nhật, giá trị admin đã sửa thì giữ.
+
+Giá normal (coin) — weapon 500/1500/4000/10000, armor 400/1200/3500/8000, helmet 300/900/2500/6000, pants 350/1000/3000/7000, boots 300/800/2200/5500, gloves 250/750/2000/5000. Ngoài ra: 16 mức cường hoá (`config_upgrade_rates`), 12 cấp đá (1–6 coin, 7–10 gem, 11–12 chỉ ghép), ngọc `hp`/`damage`/`defense`/`critical` lv1–10, set bonus 2/4/6 món cho mỗi tier crafted, 20 nguyên liệu (5 mỗi tier) và 24 công thức (5 nguyên liệu của tier × 10/20/30/40, weapon × 15/30/45/60). JSON nguyên liệu của công thức dùng key `materialId`; công thức cũ của admin dùng `material_id` vẫn đọc được và được migration đổi key.
+
 **Game Systems:**
 
 | Method | Path | Handler | Mô tả |
@@ -674,6 +742,18 @@ State-based decision making, difficulty theo rank tier:
 | `inventory_reservations` | `reservation_id` | Items reserved cho trận đấu |
 | `economy_transactions` | `transaction_id` | Ledger coin/gem |
 
+### Equipment
+
+| Table | PK | Mô tả |
+|-------|-----|-------|
+| `config_equipment_items` | `item_id` | Catalog trang bị (normal/crafted, level yêu cầu, chỉ số, giá) |
+| `config_upgrade_rates` / `config_stones` / `config_gems` / `config_set_bonuses` | | Cường hoá, đá, ngọc, set bonus |
+| `config_materials` / `config_crafting_recipes` | `material_id` / `recipe_id` | Nguyên liệu và công thức chế tạo |
+| `player_equipment` | `equipment_id` | Trang bị sở hữu; unique (player, `equipped_on`, slot) khi đang mặc |
+| `player_stones` / `player_gems` / `player_materials` | | Đá, ngọc, nguyên liệu của người chơi |
+| `equipment_upgrade_log` | `log_id` | Lịch sử cường hoá (dùng để hoàn đá khi tách) |
+| `equipment_purchases` | `(player_id, idempotency_key)` | Lần mua trang bị có idempotency key → `equipment_id` để replay |
+
 ### Ranking
 
 | Table | PK | Mô tả |
@@ -743,6 +823,23 @@ State-based decision making, difficulty theo rank tier:
 | `CHARACTER_INSUFFICIENT_STAT_POINTS` | 400 | Không đủ `statPoints` |
 | `CHARACTER_NO_STATS_TO_RESET` | 400 | Chưa cộng điểm nào để tẩy |
 | `CHARACTER_INSUFFICIENT_BALANCE` | 400 | Không đủ tiền tẩy điểm |
+| `EQUIP_NOT_FOUND` | 404 | Item không tồn tại hoặc đã tắt (mua) |
+| `EQUIP_NOT_OWNED` | 403 | Không sở hữu trang bị |
+| `EQUIP_ALREADY_EQUIPPED` | 409 | Trang bị đang được mặc (tháo trước khi mặc cho nhân vật khác) |
+| `EQUIP_NOT_EQUIPPED` | 409 | Tháo món không đang mặc |
+| `EQUIP_EQUIPPED` | 409 | Tách món đang mặc — tháo trước |
+| `EQUIP_SLOT_OCCUPIED` | 409 | Slot/ô ngọc đã có |
+| `EQUIP_LEVEL_REQUIRED` | 400 | Level nhân vật thấp hơn `requiredLevel` |
+| `EQUIP_WRONG_CHARACTER` | 400 | Item dành riêng cho nhân vật khác |
+| `EQUIP_MODIFIED` | 409 | Trang bị vừa bị request khác thay đổi, thử lại |
+| `EQUIP_MAX_UPGRADE` | 400 | Đã +16 |
+| `EQUIP_NO_STONES` | 400 | Cường hoá không có đá |
+| `EQUIP_INSUFFICIENT_STONES` | 400 | Không đủ đá |
+| `EQUIP_INSUFFICIENT_MATERIALS` | 400 | Không đủ nguyên liệu chế tạo |
+| `EQUIP_GEM_SLOT_INVALID` | 400 | `slotIndex` sai hoặc vượt `gemSlots` |
+| `EQUIP_GEM_NOT_OWNED` | 403 | Không sở hữu ngọc (hoặc ngọc đang khảm) |
+| `MERGE_MIN_COUNT` / `MERGE_MAX_COUNT` / `MERGE_MAX_LEVEL` | 400 | Ghép cần 2–4 viên, chưa tới cấp tối đa |
+| `CRAFT_RECIPE_NOT_FOUND` | 404 | Công thức không tồn tại hoặc đã tắt |
 | `METHOD_NOT_ALLOWED` | 405 | Sai HTTP method |
 | `MATCH_NOT_YOUR_TURN` | 403 | Chưa đến lượt |
 | `MATCH_ALREADY_SHOT` | 409 | Đã bắn rồi |
