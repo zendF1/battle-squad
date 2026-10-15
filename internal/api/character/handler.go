@@ -19,7 +19,8 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
-// GetCharacters handles GET /characters — returns all owned characters for the caller.
+// GetCharacters handles GET /characters — returns all owned characters for the caller and the
+// stat reset fee ({characters, resetStatsCost: {currency, amount}}).
 func (h *Handler) GetCharacters(w http.ResponseWriter, r *http.Request) {
 	playerID, _ := r.Context().Value(observability.PlayerIDKey).(string)
 	if playerID == "" {
@@ -27,7 +28,7 @@ func (h *Handler) GetCharacters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chars, err := h.service.GetPlayerCharacters(r.Context(), playerID)
+	resp, err := h.service.GetCharacters(r.Context(), playerID)
 	if err != nil {
 		var appErr model.AppError
 		if errors.As(err, &appErr) {
@@ -38,13 +39,7 @@ func (h *Handler) GetCharacters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if chars == nil {
-		chars = []PlayerCharacter{}
-	}
-
-	model.WriteOK(w, map[string]interface{}{
-		"characters": chars,
-	})
+	model.WriteOK(w, resp)
 }
 
 // AllocateStats handles POST /characters/allocate-stats — spends stat points into bonuses.

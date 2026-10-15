@@ -34,6 +34,19 @@ type AllocateStatsPayload struct {
 	TerrainDamage int    `json:"terrainDamage"`
 }
 
+// ResetStatsCost is what POST /player/character/reset-stats charges (the
+// character_progression resetCostCurrency / resetCostAmount).
+type ResetStatsCost struct {
+	Currency string `json:"currency"`
+	Amount   int    `json:"amount"`
+}
+
+// CharactersResponse is the GET /player/characters data.
+type CharactersResponse struct {
+	Characters     []PlayerCharacter `json:"characters"`
+	ResetStatsCost ResetStatsCost    `json:"resetStatsCost"`
+}
+
 // ResetStatsPayload is the request body for resetting stat points.
 type ResetStatsPayload struct {
 	CharacterID string `json:"characterId"`
@@ -80,6 +93,11 @@ type ProgressionConfig struct {
 	ResetCostCurrency string         `json:"resetCostCurrency"`
 	ResetCostAmount   int            `json:"resetCostAmount"`
 	StatMultipliers   map[string]int `json:"statMultipliers"`
+}
+
+// ResetStatsCost returns the configured reset fee.
+func (c ProgressionConfig) ResetStatsCost() ResetStatsCost {
+	return ResetStatsCost{Currency: c.ResetCostCurrency, Amount: c.ResetCostAmount}
 }
 
 // LevelEntry maps an XP threshold to a level.

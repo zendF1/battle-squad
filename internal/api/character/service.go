@@ -52,6 +52,32 @@ func (s *Service) GetPlayerCharacters(ctx context.Context, playerID string) ([]P
 	return chars, nil
 }
 
+// GetCharacters returns the player's characters and the stat reset fee, read from
+// the same character_progression config ResetStats charges.
+func (s *Service) GetCharacters(ctx context.Context, playerID string) (CharactersResponse, error) {
+	chars, err := s.GetPlayerCharacters(ctx, playerID)
+	if err != nil {
+		return CharactersResponse{}, err
+	}
+	if chars == nil {
+		chars = []PlayerCharacter{}
+	}
+	cfg, err := s.progressionConfig(ctx)
+	if err != nil {
+		return CharactersResponse{}, err
+	}
+	return CharactersResponse{Characters: chars, ResetStatsCost: cfg.ResetStatsCost()}, nil
+}
+
+// progressionConfig loads character_progression from game_settings (defaults when absent).
+func (s *Service) progressionConfig(ctx context.Context) (ProgressionConfig, error) {
+	raw, err := s.repo.GetConfigValue(ctx, SettingsKeyProgression)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return ProgressionConfig{}, fmt.Errorf("load progression config: %w", err)
+	}
+	return LoadProgressionConfig(raw), nil
+}
+
 // AllocateStats validates the payload and applies stat point allocation.
 func (s *Service) AllocateStats(ctx context.Context, playerID string, payload AllocateStatsPayload) error {
 	if payload.CharacterID == "" {
@@ -101,12 +127,10 @@ func (s *Service) ResetStats(ctx context.Context, playerID, characterID string) 
 		return model.ErrBadRequest
 	}
 
-	// Load progression config to get reset cost.
-	cfgRaw, err := s.repo.GetConfigValue(ctx, SettingsKeyProgression)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return fmt.Errorf("load progression config: %w", err)
+	cfg, err := s.progressionConfig(ctx)
+	if err != nil {
+		return err
 	}
-	cfg := LoadProgressionConfig(cfgRaw)
 
 	// The checks, debit and reset share one transaction: the locked rows stop a
 	// concurrent reset from charging twice for one refund.

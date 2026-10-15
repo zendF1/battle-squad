@@ -196,7 +196,7 @@ Mọi response REST (trừ `/healthz`, `/readyz`, `/livez`, `/metrics`) đều c
 
 | Method | Path | Handler | Mô tả |
 |--------|------|---------|-------|
-| GET | `/player/characters` | GetCharacters | Nhân vật đã sở hữu: level, exp, `statPoints`, 6 chỉ số `bonus*` |
+| GET | `/player/characters` | GetCharacters | `{characters, resetStatsCost: {currency, amount}}`: nhân vật đã sở hữu (level, exp, `statPoints`, 6 chỉ số `bonus*`) và phí tẩy điểm, đọc từ cùng config `character_progression` mà reset-stats trừ |
 | POST | `/player/character/allocate-stats` | AllocateStats | Cộng điểm `{characterId, hp, damage, mobility, defense, skillPower, terrainDamage}` |
 | POST | `/player/character/reset-stats` | ResetStats | Tẩy điểm `{characterId}`: trả mọi điểm đã cộng về `statPoints`, phí `resetCostAmount` `resetCostCurrency` (seed: 500 coin). Khoá profile rồi row nhân vật `FOR UPDATE`, kiểm tra, trừ tiền và reset trong một transaction — reset đồng thời chỉ bị trừ tiền một lần |
 
