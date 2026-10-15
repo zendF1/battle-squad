@@ -65,12 +65,12 @@ var (
 	ErrAdminRequired  = AppError{Code: "AUTH_ADMIN_REQUIRED", Message: "Admin role required", Status: http.StatusForbidden}
 	ErrBadRequest     = AppError{Code: "BAD_REQUEST", Message: "Invalid parameters", Status: http.StatusBadRequest}
 	ErrNotFound       = AppError{Code: "NOT_FOUND", Message: "Resource not found", Status: http.StatusNotFound}
-	
-	ErrBanned         = AppError{Code: "AUTH_ACCOUNT_BANNED", Message: "Your account has been banned", Status: http.StatusForbidden}
-	ErrForceUpdate    = AppError{Code: "APP_FORCE_UPDATE", Message: "A newer version of the app is required to play", Status: http.StatusUpgradeRequired}
-	
-	ErrInsufficientBalance = AppError{Code: "SHOP_INSUFFICIENT_BALANCE", Message: "Insufficient balance for this purchase", Status: http.StatusBadRequest}
-	ErrItemOutOfStock      = AppError{Code: "SHOP_ITEM_OUT_OF_STOCK", Message: "Item offer is out of stock", Status: http.StatusConflict}
+
+	ErrBanned      = AppError{Code: "AUTH_ACCOUNT_BANNED", Message: "Your account has been banned", Status: http.StatusForbidden}
+	ErrForceUpdate = AppError{Code: "APP_FORCE_UPDATE", Message: "A newer version of the app is required to play", Status: http.StatusUpgradeRequired}
+
+	ErrInsufficientBalance  = AppError{Code: "SHOP_INSUFFICIENT_BALANCE", Message: "Insufficient balance for this purchase", Status: http.StatusBadRequest}
+	ErrItemOutOfStock       = AppError{Code: "SHOP_ITEM_OUT_OF_STOCK", Message: "Item offer is out of stock", Status: http.StatusConflict}
 	ErrShopAlreadyOwned     = AppError{Code: "SHOP_ALREADY_OWNED", Message: "You already own this character", Status: http.StatusConflict}
 	ErrIdempotencyKeyReused = AppError{Code: "IDEMPOTENCY_KEY_REUSED", Message: "Idempotency key was already used for a different request", Status: http.StatusConflict}
 
@@ -79,9 +79,11 @@ var (
 	ErrIAPReceiptInvalid      = AppError{Code: "IAP_VERIFICATION_FAILED", Message: "The store rejected this receipt", Status: http.StatusBadRequest}
 	ErrIAPTransactionConflict = AppError{Code: "IAP_TRANSACTION_CONFLICT", Message: "This receipt was already used for a different purchase", Status: http.StatusConflict}
 	ErrMethodNotAllowed       = AppError{Code: "METHOD_NOT_ALLOWED", Message: "Method not allowed", Status: http.StatusMethodNotAllowed}
-	
-	ErrMatchNotYourTurn    = AppError{Code: "MATCH_NOT_YOUR_TURN", Message: "It is not your turn to play", Status: http.StatusForbidden}
-	ErrMatchAlreadyShot    = AppError{Code: "MATCH_ALREADY_SHOT", Message: "You have already fired a shot during this turn", Status: http.StatusConflict}
+
+	ErrMatchNotYourTurn = AppError{Code: "MATCH_NOT_YOUR_TURN", Message: "It is not your turn to play", Status: http.StatusForbidden}
+	ErrMatchAlreadyShot = AppError{Code: "MATCH_ALREADY_SHOT", Message: "You have already fired a shot during this turn", Status: http.StatusConflict}
+	ErrLoadoutInvalid   = AppError{Code: "LOADOUT_INVALID", Message: "This character or item selection is not allowed", Status: http.StatusBadRequest}
+	ErrMatchStartFailed = AppError{Code: "MATCH_START_FAILED", Message: "Failed to start match", Status: http.StatusInternalServerError}
 
 	ErrEquipmentNotFound        = AppError{Code: "EQUIP_NOT_FOUND", Message: "Equipment not found", Status: http.StatusNotFound}
 	ErrEquipmentNotOwned        = AppError{Code: "EQUIP_NOT_OWNED", Message: "You do not own this equipment", Status: http.StatusForbidden}

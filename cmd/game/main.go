@@ -96,6 +96,10 @@ func main() {
 
 	// Room hub
 	roomHub := room.NewHub(redisClient, db, nodeID)
+	roomHub.SetDevUnlockAll(cfg.DevUnlockAll)
+	if cfg.DevUnlockAll {
+		log.Warn().Msg("DEV_UNLOCK_ALL enabled: QuickPlay skips character/item ownership and item consumption")
+	}
 	roomWSHandler := room.NewWSHandler(roomHub)
 
 	// Lobby hub

@@ -15,6 +15,7 @@ import (
 	"battle-squad/internal/game/matchmaker"
 	"battle-squad/internal/game/ws"
 	"battle-squad/internal/shared/database"
+	"battle-squad/internal/shared/model"
 	"battle-squad/internal/shared/observability"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -388,7 +389,7 @@ func (r *Room) handleEvent(ev roomEvent) {
 	case "StartMatch":
 		r.processStartMatch(client)
 	case "__start_tutorial":
-		r.processStartTutorial(client, parseQuickPlayPayload(msg.Data).AIBot())
+		r.processStartTutorial(client, parseQuickPlayPayload(msg.Data))
 	}
 }
 
@@ -545,20 +546,12 @@ func (r *Room) processChangeTeam(client *ws.Client, teamID int) {
 }
 
 func (r *Room) processSelectCharacter(client *ws.Client, characterID string) {
-	// Verify character is rookie, tanko, spark, flora
-	if characterID != "rookie" && characterID != "tanko" && characterID != "spark" && characterID != "flora" {
+	// Unknown or locked characters are ignored
+	if !validCharacterID(characterID) {
 		return
 	}
-
-	// Rookie is the default character — always available
-	if characterID != "rookie" {
-		// Verify player has unlocked character
-		var exists bool
-		query := "SELECT EXISTS(SELECT 1 FROM player_characters WHERE player_id = $1 AND character_id = $2)"
-		err := r.db.Pool.QueryRow(context.Background(), query, client.PlayerID, characterID).Scan(&exists)
-		if err != nil || !exists {
-			return // Not unlocked
-		}
+	if err := checkCharacterOwned(context.Background(), r.ownership(), client.PlayerID, characterID); err != nil {
+		return
 	}
 
 	for idx, p := range r.State.Players {
@@ -572,44 +565,24 @@ func (r *Room) processSelectCharacter(client *ws.Client, characterID string) {
 }
 
 func (r *Room) processSelectItems(client *ws.Client, items []string) {
-	if len(items) > 3 {
-		return // max 3 items
+	if len(items) > maxLoadoutItems {
+		return
 	}
-	if _, err := itemCounts(items); err != nil {
+	if err := checkItemSelection(items); err != nil {
 		r.sendError(client, err.Error())
 		return
 	}
 
-	// If items are selected, validate ownership against inventory_items
-	if len(items) > 0 {
-		query := `
-			SELECT item_id FROM inventory_items
-			WHERE player_id = $1 AND item_id = ANY($2) AND quantity > 0 AND (expires_at IS NULL OR expires_at > NOW())
-		`
-		rows, err := r.db.Pool.Query(context.Background(), query, client.PlayerID, items)
-		if err != nil {
-			observability.Log.Error().Err(err).Str("playerId", client.PlayerID).Msg("failed to query inventory for item validation")
-			r.sendError(client, "Failed to validate items")
+	// Validate ownership against inventory_items
+	if err := checkItemsOwned(context.Background(), r.ownership(), client.PlayerID, items); err != nil {
+		var loadoutErr *LoadoutError
+		if errors.As(err, &loadoutErr) {
+			r.sendError(client, loadoutErr.Reason)
 			return
 		}
-		defer rows.Close()
-
-		ownedSet := make(map[string]bool)
-		for rows.Next() {
-			var itemID string
-			if err := rows.Scan(&itemID); err != nil {
-				continue
-			}
-			ownedSet[itemID] = true
-		}
-		rows.Close()
-
-		for _, itemID := range items {
-			if !ownedSet[itemID] {
-				r.sendError(client, fmt.Sprintf("You do not own item: %s", itemID))
-				return
-			}
-		}
+		observability.Log.Error().Err(err).Str("playerId", client.PlayerID).Msg("failed to query inventory for item validation")
+		r.sendError(client, "Failed to validate items")
+		return
 	}
 
 	for idx, p := range r.State.Players {
@@ -620,6 +593,10 @@ func (r *Room) processSelectItems(client *ws.Client, items []string) {
 	}
 
 	r.broadcastRoomUpdated()
+}
+
+func (r *Room) ownership() loadoutOwnership {
+	return poolOwnership{pool: r.db.Pool}
 }
 
 func (r *Room) processReady(client *ws.Client) {
@@ -742,11 +719,28 @@ func (r *Room) processStartMatch(client *ws.Client) {
 	r.hub.SyncRoomState(context.Background(), &r.State)
 }
 
-// processStartTutorial adds a bot and starts the quick-play match. aiBot makes
-// the bot move and shoot with the bot AI; otherwise it is an idle target.
-func (r *Room) processStartTutorial(client *ws.Client, aiBot bool) {
+// processStartTutorial applies the validated quick-play loadout, reserves its
+// items, adds a bot and starts the match. An AI bot moves and shoots with the
+// bot AI; otherwise it is an idle target. With dev unlock nothing is reserved.
+func (r *Room) processStartTutorial(client *ws.Client, payload QuickPlayPayload) {
+	aiBot := payload.AIBot()
 	r.State.IsTutorial = true
 	matchID := generateID()
+
+	for idx, p := range r.State.Players {
+		if p.PlayerID == client.PlayerID {
+			r.State.Players[idx].CharacterID = payload.CharacterID
+			r.State.Players[idx].Items = payload.Items
+			break
+		}
+	}
+
+	if !r.hub.devUnlockAll {
+		if err := r.reservePlayerItems(matchID); err != nil {
+			r.abortTutorial(client, err)
+			return
+		}
+	}
 
 	botName := "Target Bot"
 	if aiBot {
@@ -786,22 +780,30 @@ func (r *Room) processStartTutorial(client *ws.Client, aiBot bool) {
 		}
 
 		isBot := p.PlayerID[:4] == "bot_"
+		var dmgBonus, moveEnergyBonus int
+		var critChance float64
+		if !isBot {
+			hp, defense, dmgBonus, moveEnergyBonus, critChance = r.getActualStats(p.PlayerID, p.CharacterID, hp, defense)
+		}
 
 		matchPlayers = append(matchPlayers, &match.BattlePlayerState{
-			PlayerID:      p.PlayerID,
-			DisplayName:   p.DisplayName,
-			TeamID:        p.TeamID,
-			CharacterID:   p.CharacterID,
-			HP:            hp,
-			MaxHP:         hp,
-			Defense:       defense,
-			Position:      spawnPos,
-			MoveEnergy:    100,
-			Items:         p.Items,
-			StatusEffects: []match.StatusEffect{},
-			IsAlive:       true,
-			IsBot:         isBot,
-			IsIdle:        isBot && !aiBot,
+			PlayerID:        p.PlayerID,
+			DisplayName:     p.DisplayName,
+			TeamID:          p.TeamID,
+			CharacterID:     p.CharacterID,
+			HP:              hp,
+			MaxHP:           hp,
+			Defense:         defense,
+			DamageBonus:     dmgBonus,
+			Position:        spawnPos,
+			MoveEnergy:      100,
+			MoveEnergyBonus: moveEnergyBonus,
+			CritChance:      critChance,
+			Items:           p.Items,
+			StatusEffects:   []match.StatusEffect{},
+			IsAlive:         true,
+			IsBot:           isBot,
+			IsIdle:          isBot && !aiBot,
 		})
 	}
 
@@ -823,6 +825,30 @@ func (r *Room) processStartTutorial(client *ws.Client, aiBot bool) {
 
 	go r.match.Run()
 	r.hub.SyncRoomState(context.Background(), &r.State)
+}
+
+// abortTutorial reports a failed quick-play start to the player and destroys
+// the room. Reservation failures caused by the loadout are LOADOUT_INVALID.
+func (r *Room) abortTutorial(client *ws.Client, err error) {
+	appErr := model.ErrMatchStartFailed
+	var loadoutErr *LoadoutError
+	if errors.As(err, &loadoutErr) {
+		appErr = model.ErrLoadoutInvalid
+		appErr.Message = loadoutErr.Reason
+		observability.Log.Info().Str("roomId", r.ID).Str("reason", loadoutErr.Reason).Msg("quick play loadout rejected at reservation")
+	} else {
+		observability.Log.Error().Err(err).Str("roomId", r.ID).Msg("failed to reserve quick play items")
+	}
+
+	delete(r.Clients, client.PlayerID)
+	client.RoomID = ""
+	if msg, ok := roomErrorMessage(appErr); ok {
+		select {
+		case client.Send <- msg:
+		default:
+		}
+	}
+	r.cancel()
 }
 
 func (r *Room) startRankedMatch(matchID string, botTierConfig matchmaker.BotTierConfig, eloConfig matchmaker.EloConfig, matchResult matchmaker.MatchResult) {
@@ -1011,7 +1037,7 @@ func (r *Room) reservePlayerItems(matchID string) error {
 
 		counts, err := itemCounts(p.Items)
 		if err != nil {
-			return fmt.Errorf("player %s: %w", p.PlayerID, err)
+			return &LoadoutError{PlayerID: p.PlayerID, Reason: err.Error()}
 		}
 
 		for itemID, count := range counts {
@@ -1039,7 +1065,7 @@ func reserveItemTx(ctx context.Context, tx pgx.Tx, playerID, matchID, itemID str
 	`, playerID, itemID).Scan(&quantity)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("player %s does not own item %s", playerID, itemID)
+			return &LoadoutError{PlayerID: playerID, Reason: fmt.Sprintf("You do not own item: %s", itemID)}
 		}
 		return fmt.Errorf("failed to lock item %s for player %s: %w", itemID, playerID, err)
 	}
@@ -1054,7 +1080,7 @@ func reserveItemTx(ctx context.Context, tx pgx.Tx, playerID, matchID, itemID str
 	}
 
 	if available := quantity - reserved; available < count {
-		return fmt.Errorf("player %s has %d of item %s available, needs %d", playerID, available, itemID, count)
+		return &LoadoutError{PlayerID: playerID, Reason: fmt.Sprintf("Only %d of item %s available, %d needed", max(available, 0), itemID, count)}
 	}
 
 	// One reservation per selected copy (quantity 1 each)

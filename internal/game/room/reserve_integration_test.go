@@ -2,6 +2,7 @@ package room
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -113,5 +114,32 @@ func TestReserveItemTxConcurrentMatches(t *testing.T) {
 		var reserved int
 		pool.QueryRow(ctx, `SELECT COUNT(*) FROM inventory_reservations WHERE status = 'reserved'`).Scan(&reserved)
 		t.Fatalf("second match reserved the same medkit (%d reservations for 1 item)", reserved)
+	}
+}
+
+func TestReserveItemTxShortageIsLoadoutError(t *testing.T) {
+	pool := newReservePool(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `INSERT INTO inventory_items (player_id, item_id, quantity) VALUES ('p1', 'power_shot', 1)`); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		itemID string
+		count  int
+	}{
+		{"medkit", 1},     // not owned
+		{"power_shot", 2}, // owned, not enough
+	} {
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = reserveItemTx(ctx, tx, "p1", "m1", tc.itemID, tc.count)
+		tx.Rollback(ctx)
+		var loadoutErr *LoadoutError
+		if !errors.As(err, &loadoutErr) || loadoutErr.PlayerID != "p1" {
+			t.Fatalf("%s x%d: err = %v, want LoadoutError for p1", tc.itemID, tc.count, err)
+		}
 	}
 }

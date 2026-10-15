@@ -22,6 +22,14 @@ type Hub struct {
 	db            *database.PostgresDB
 	nodeID        string
 	lobbyNotifier func(lobbyID string, event string, data interface{}, battleRoom *Room)
+	// devUnlockAll lets QuickPlay use any character and item without owning or
+	// consuming them (config DEV_UNLOCK_ALL, never in production).
+	devUnlockAll bool
+}
+
+// SetDevUnlockAll toggles the QuickPlay dev unlock; call before serving clients.
+func (h *Hub) SetDevUnlockAll(enabled bool) {
+	h.devUnlockAll = enabled
 }
 
 func (h *Hub) SetLobbyNotifier(fn func(lobbyID string, event string, data interface{}, battleRoom *Room)) {
@@ -358,4 +366,3 @@ func generateID() string {
 	}
 	return hex.EncodeToString(bytes)
 }
-

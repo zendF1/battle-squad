@@ -13,23 +13,26 @@ func init() {
 }
 
 type Config struct {
-	Env            string
-	APIPort        string
-	GamePort       string
-	PostgresDSN    string
-	RedisAddr      string
-	RedisPassword  string
-	RedisDB        int
-	DBMaxConns    int
-	DBMinConns    int
-	RedisPoolSize int
-	RedisMinIdle  int
-	JWTSecret      string
-	AppVersion     string
+	Env             string
+	APIPort         string
+	GamePort        string
+	PostgresDSN     string
+	RedisAddr       string
+	RedisPassword   string
+	RedisDB         int
+	DBMaxConns      int
+	DBMinConns      int
+	RedisPoolSize   int
+	RedisMinIdle    int
+	JWTSecret       string
+	AppVersion      string
 	ProtocolVersion int
 	// IAPMockEnabled accepts any purchase token without asking the store.
 	// Opt-in only, and never honoured when APP_ENV=production.
 	IAPMockEnabled bool
+	// DevUnlockAll lets QuickPlay use every character and item without owning
+	// or consuming them. Opt-in only, and never honoured when APP_ENV=production.
+	DevUnlockAll bool
 }
 
 func LoadConfig() *Config {
@@ -39,7 +42,7 @@ func LoadConfig() *Config {
 	postgresDSN := getEnv("POSTGRES_DSN", "postgres://postgres:postgres@localhost:5432/battlesquad?sslmode=disable")
 	redisAddr := getEnv("REDIS_ADDR", "localhost:6379")
 	redisPassword := getEnv("REDIS_PASSWORD", "")
-	
+
 	redisDBStr := getEnv("REDIS_DB", "0")
 	redisDB, err := strconv.Atoi(redisDBStr)
 	if err != nil {
@@ -53,7 +56,7 @@ func LoadConfig() *Config {
 
 	jwtSecret := getEnv("JWT_SECRET", "super-secret-battle-squad-key-2026")
 	appVersion := getEnv("APP_VERSION", "1.0.0")
-	
+
 	protocolVersionStr := getEnv("PROTOCOL_VERSION", "1")
 	protocolVersion, err := strconv.Atoi(protocolVersionStr)
 	if err != nil {
@@ -62,6 +65,9 @@ func LoadConfig() *Config {
 
 	iapMockEnabled, _ := strconv.ParseBool(getEnv("IAP_MOCK_ENABLED", "false"))
 	iapMockEnabled = iapMockEnabled && env != "production"
+
+	devUnlockAll, _ := strconv.ParseBool(getEnv("DEV_UNLOCK_ALL", "false"))
+	devUnlockAll = devUnlockAll && env != "production"
 
 	return &Config{
 		Env:             env,
@@ -79,6 +85,7 @@ func LoadConfig() *Config {
 		AppVersion:      appVersion,
 		ProtocolVersion: protocolVersion,
 		IAPMockEnabled:  iapMockEnabled,
+		DevUnlockAll:    devUnlockAll,
 	}
 }
 

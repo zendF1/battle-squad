@@ -33,10 +33,13 @@ type CreateRoomPayload struct {
 	Password *string `json:"password,omitempty"`
 }
 
-// QuickPlayPayload selects the tutorial opponent: "ai" plays with the bot AI;
-// absent, empty, "idle" or any other value gets the idle target bot.
+// QuickPlayPayload selects the tutorial opponent and the player's loadout.
+// Bot "ai" plays with the bot AI; absent, empty, "idle" or any other value gets
+// the idle target bot. CharacterID defaults to "rookie" and Items to none.
 type QuickPlayPayload struct {
-	Bot string `json:"bot,omitempty"`
+	Bot         string   `json:"bot,omitempty"`
+	CharacterID string   `json:"characterId,omitempty"`
+	Items       []string `json:"items"`
 }
 
 // AIBot reports whether the quick-play bot should play with the AI.
@@ -45,7 +48,7 @@ func (p QuickPlayPayload) AIBot() bool {
 }
 
 // parseQuickPlayPayload reads an optional QuickPlay payload; missing or
-// malformed data falls back to the idle bot.
+// malformed fields fall back to the idle bot, rookie and no items.
 func parseQuickPlayPayload(data []byte) QuickPlayPayload {
 	var p QuickPlayPayload
 	if len(data) > 0 {
@@ -54,7 +57,27 @@ func parseQuickPlayPayload(data []byte) QuickPlayPayload {
 	if !p.AIBot() {
 		p.Bot = "idle"
 	}
+	if p.CharacterID == "" {
+		p.CharacterID = "rookie"
+	}
+	if p.Items == nil {
+		p.Items = []string{}
+	}
 	return p
+}
+
+// LoadoutError is a character or item selection the player is not allowed to
+// bring. Other errors from loadout checks are infrastructure failures.
+type LoadoutError struct {
+	PlayerID string // set when the check covers several players
+	Reason   string
+}
+
+func (e *LoadoutError) Error() string {
+	if e.PlayerID != "" {
+		return "player " + e.PlayerID + ": " + e.Reason
+	}
+	return e.Reason
 }
 
 type JoinRoomPayload struct {

@@ -3,6 +3,7 @@ package room
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -55,6 +56,21 @@ func (h *WSHandler) HandleMessage(ctx context.Context, client *ws.Client, msg ws
 	case "QuickPlay":
 		// Create a tutorial room with a bot (idle or AI) and start match immediately
 		payload := parseQuickPlayPayload(msg.Data)
+
+		// Validate the loadout before any room exists
+		ownership := poolOwnership{pool: h.hub.db.Pool}
+		if err := validateQuickPlayLoadout(ctx, ownership, client.PlayerID, payload, h.hub.devUnlockAll); err != nil {
+			var loadoutErr *LoadoutError
+			if errors.As(err, &loadoutErr) {
+				appErr := model.ErrLoadoutInvalid
+				appErr.Message = loadoutErr.Reason
+				h.sendError(client, appErr)
+				return
+			}
+			log.Error().Err(err).Str("playerId", client.PlayerID).Msg("failed to validate quick play loadout")
+			h.sendError(client, model.ErrInternalServer)
+			return
+		}
 
 		var displayName string
 		query := "SELECT display_name FROM player_profiles WHERE player_id = $1"
@@ -144,6 +160,13 @@ func (h *WSHandler) Unregister(client *ws.Client) {
 }
 
 func (h *WSHandler) sendError(client *ws.Client, appErr model.AppError) {
+	if msg, ok := roomErrorMessage(appErr); ok {
+		client.Send <- msg
+	}
+}
+
+// roomErrorMessage builds the RoomError event for appErr.
+func roomErrorMessage(appErr model.AppError) (ws.Message, bool) {
 	errResp := model.ErrorResponse{}
 	errResp.Error.Code = appErr.Code
 	errResp.Error.Message = appErr.Message
@@ -151,14 +174,13 @@ func (h *WSHandler) sendError(client *ws.Client, appErr model.AppError) {
 
 	payload, err := json.Marshal(errResp)
 	if err != nil {
-		return
+		return ws.Message{}, false
 	}
-
-	client.Send <- ws.Message{
+	return ws.Message{
 		Event:     "RoomError",
 		Data:      payload,
 		Timestamp: time.Now().Unix(),
-	}
+	}, true
 }
 
 // isInternalEvent reports whether an event name is reserved for server-side room events.
