@@ -2,6 +2,7 @@ package equipment
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -26,8 +27,11 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	model.WriteJSON(w, status, v)
 }
 
+// handleServiceError writes AppErrors as-is and maps the economy balance
+// errors; anything else is logged and answered with INTERNAL_SERVER_ERROR.
 func handleServiceError(w http.ResponseWriter, r *http.Request, err error) {
-	if appErr, ok := err.(model.AppError); ok {
+	var appErr model.AppError
+	if errors.As(err, &appErr) {
 		model.WriteError(w, r, appErr)
 		return
 	}
@@ -36,6 +40,8 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error) {
 		model.WriteError(w, r, model.ErrInsufficientBalance)
 		return
 	}
+	logger := observability.FromContext(r.Context())
+	logger.Error().Err(err).Str("path", r.URL.Path).Msg("equipment request failed")
 	model.WriteError(w, r, model.ErrInternalServer)
 }
 
@@ -291,7 +297,22 @@ func (h *Handler) BuyEquipment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"equipmentId": equipmentID})
+	writeJSON(w, http.StatusOK, BuyEquipmentResult{EquipmentID: equipmentID})
+}
+
+// ---------------------------------------------------------------------------
+// Catalog
+// ---------------------------------------------------------------------------
+
+// GetCatalog serves every active item (normal and crafted), upgrade rates,
+// set bonuses and stones.
+func (h *Handler) GetCatalog(w http.ResponseWriter, r *http.Request) {
+	catalog, err := h.service.GetCatalog(r.Context())
+	if err != nil {
+		handleServiceError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, catalog)
 }
 
 // ---------------------------------------------------------------------------

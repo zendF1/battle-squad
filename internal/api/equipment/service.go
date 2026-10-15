@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"strconv"
 
 	"battle-squad/internal/api/economy"
@@ -12,6 +13,14 @@ import (
 	"battle-squad/internal/shared/model"
 
 	"github.com/jackc/pgx/v5/pgconn"
+)
+
+const maxIdempotencyKeyLen = 64
+
+var (
+	errItemIDRequired        = model.AppError{Code: model.ErrBadRequest.Code, Message: "itemId is required", Status: http.StatusBadRequest}
+	errIdempotencyKeyTooLong = model.AppError{Code: model.ErrBadRequest.Code, Message: "idempotency key is too long", Status: http.StatusBadRequest}
+	errNotForSale            = model.AppError{Code: model.ErrBadRequest.Code, Message: "only normal equipment is sold in the shop", Status: http.StatusBadRequest}
 )
 
 type Service struct {
@@ -87,23 +96,56 @@ func (s *Service) GetCraftingRecipes(ctx context.Context) ([]CraftingRecipe, err
 	return s.repo.GetAllCraftingRecipes(ctx)
 }
 
+// GetCatalog returns every active item (normal and crafted), the upgrade
+// rates, set bonuses and stones. Lists are never nil.
+func (s *Service) GetCatalog(ctx context.Context) (*Catalog, error) {
+	items, err := s.repo.GetActiveEquipmentItemConfigs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rates, err := s.repo.GetAllUpgradeRates(ctx)
+	if err != nil {
+		return nil, err
+	}
+	bonuses, err := s.repo.GetAllSetBonuses(ctx)
+	if err != nil {
+		return nil, err
+	}
+	stones, err := s.repo.GetAllStoneConfigs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	c := &Catalog{Items: items, UpgradeRates: rates, SetBonuses: bonuses, Stones: stones}
+	if c.Items == nil {
+		c.Items = []EquipmentItemConfig{}
+	}
+	if c.UpgradeRates == nil {
+		c.UpgradeRates = []UpgradeRateConfig{}
+	}
+	if c.SetBonuses == nil {
+		c.SetBonuses = []SetBonusConfig{}
+	}
+	if c.Stones == nil {
+		c.Stones = []StoneConfig{}
+	}
+	return c, nil
+}
+
 // ---------------------------------------------------------------------------
 // BuyEquipment
 // ---------------------------------------------------------------------------
 
+// BuyEquipment debits the item's price and creates the equipment in one
+// transaction. With an idempotencyKey a retry returns the first buy's
+// equipment without charging again, and the key used for another item is
+// ErrIdempotencyKeyReused; a failed attempt records nothing. Without a key
+// every call buys again.
 func (s *Service) BuyEquipment(ctx context.Context, playerID string, req BuyEquipmentRequest) (string, error) {
-	cfg, err := s.repo.GetEquipmentItemConfig(ctx, req.ItemID)
-	if err != nil {
-		return "", err
+	if req.ItemID == "" {
+		return "", errItemIDRequired
 	}
-	if cfg == nil {
-		return "", model.ErrEquipmentNotFound
-	}
-	if !cfg.IsActive {
-		return "", model.ErrBadRequest
-	}
-	if cfg.Category != "normal" {
-		return "", model.ErrBadRequest
+	if len(req.IdempotencyKey) > maxIdempotencyKeyLen {
+		return "", errIdempotencyKeyTooLong
 	}
 
 	tx, err := s.db.Pool.Begin(ctx)
@@ -112,14 +154,47 @@ func (s *Service) BuyEquipment(ctx context.Context, playerID string, req BuyEqui
 	}
 	defer tx.Rollback(ctx)
 
-	if cfg.PriceCoin > 0 {
-		_, err = s.economyRepo.DebitTx(ctx, tx, playerID, "coin", cfg.PriceCoin, "buy_equipment", req.ItemID, false)
+	// Lock the player first so concurrent buys (same key or not) run one at a time
+	found, err := s.repo.LockPlayerTx(ctx, tx, playerID)
+	if err != nil {
+		return "", err
+	}
+	if !found {
+		return "", model.ErrNotFound
+	}
+
+	if req.IdempotencyKey != "" {
+		existing, err := s.repo.FindEquipmentPurchaseTx(ctx, tx, playerID, req.IdempotencyKey)
 		if err != nil {
 			return "", err
 		}
+		if existing != nil {
+			if existing.ItemID != req.ItemID {
+				return "", model.ErrIdempotencyKeyReused
+			}
+			return existing.EquipmentID, nil
+		}
+	}
+
+	cfg, err := s.repo.GetEquipmentItemConfigTx(ctx, tx, req.ItemID)
+	if err != nil {
+		return "", err
+	}
+	if cfg == nil || !cfg.IsActive {
+		return "", model.ErrEquipmentNotFound
+	}
+	if cfg.Category != "normal" {
+		return "", errNotForSale
+	}
+
+	currency, amount := "", 0
+	if cfg.PriceCoin > 0 {
+		currency, amount = "coin", cfg.PriceCoin
 	} else if cfg.PriceGem > 0 {
-		_, err = s.economyRepo.DebitTx(ctx, tx, playerID, "gem", cfg.PriceGem, "buy_equipment", req.ItemID, false)
-		if err != nil {
+		currency, amount = "gem", cfg.PriceGem
+	}
+	if amount > 0 {
+		if _, err := s.economyRepo.DebitTx(ctx, tx, playerID, currency, amount, "buy_equipment", req.ItemID, false); err != nil {
 			return "", err
 		}
 	}
@@ -127,6 +202,12 @@ func (s *Service) BuyEquipment(ctx context.Context, playerID string, req BuyEqui
 	equipmentID, err := s.repo.CreateEquipmentTx(ctx, tx, playerID, cfg.ItemID, cfg.Slot, cfg.Category, cfg.Tier, cfg.GemSlots)
 	if err != nil {
 		return "", err
+	}
+
+	if req.IdempotencyKey != "" {
+		if err := s.repo.CreateEquipmentPurchaseTx(ctx, tx, playerID, req.IdempotencyKey, cfg.ItemID, equipmentID, currency, amount); err != nil {
+			return "", err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -347,16 +428,20 @@ func (s *Service) EquipItem(ctx context.Context, playerID string, req EquipReque
 		return err
 	}
 	if existing != nil {
-		if err := s.repo.UnequipItemTx(ctx, tx, existing.EquipmentID); err != nil {
+		if _, err := s.repo.UnequipItemTx(ctx, tx, existing.EquipmentID); err != nil {
 			return err
 		}
 	}
 
-	if err := s.repo.EquipItemTx(ctx, tx, req.EquipmentID, req.CharacterID); err != nil {
+	n, err := s.repo.EquipItemTx(ctx, tx, req.EquipmentID, req.CharacterID)
+	if err != nil {
 		if isUniqueViolation(err) {
 			return model.ErrEquipmentSlotOccupied
 		}
 		return err
+	}
+	if n != 1 {
+		return model.ErrEquipmentModified
 	}
 
 	return tx.Commit(ctx)
@@ -367,7 +452,13 @@ func (s *Service) EquipItem(ctx context.Context, playerID string, req EquipReque
 // ---------------------------------------------------------------------------
 
 func (s *Service) UnequipItem(ctx context.Context, playerID string, req UnequipRequest) error {
-	equip, err := s.repo.GetPlayerEquipmentByID(ctx, playerID, req.EquipmentID)
+	tx, err := s.db.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	equip, err := s.repo.GetPlayerEquipmentForUpdateTx(ctx, tx, playerID, req.EquipmentID)
 	if err != nil {
 		return err
 	}
@@ -375,17 +466,15 @@ func (s *Service) UnequipItem(ctx context.Context, playerID string, req UnequipR
 		return model.ErrEquipmentNotOwned
 	}
 	if !equip.IsEquipped {
-		return model.ErrBadRequest
+		return model.ErrEquipmentNotEquipped
 	}
 
-	tx, err := s.db.Pool.Begin(ctx)
+	n, err := s.repo.UnequipItemTx(ctx, tx, req.EquipmentID)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
-
-	if err := s.repo.UnequipItemTx(ctx, tx, req.EquipmentID); err != nil {
-		return err
+	if n != 1 {
+		return model.ErrEquipmentModified
 	}
 
 	return tx.Commit(ctx)
@@ -529,6 +618,9 @@ func (s *Service) DismantleEquipment(ctx context.Context, playerID string, req D
 	}
 	if equip == nil {
 		return model.ErrEquipmentNotOwned
+	}
+	if equip.IsEquipped {
+		return model.ErrEquipmentEquipped
 	}
 
 	// Clear gem slots (gems remain in player_gems inventory, just unset the slot references)

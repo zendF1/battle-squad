@@ -92,6 +92,8 @@ var (
 	ErrEquipmentNotOwned        = AppError{Code: "EQUIP_NOT_OWNED", Message: "You do not own this equipment", Status: http.StatusForbidden}
 	ErrEquipmentAlreadyEquipped = AppError{Code: "EQUIP_ALREADY_EQUIPPED", Message: "Equipment is already equipped", Status: http.StatusConflict}
 	ErrEquipmentSlotOccupied    = AppError{Code: "EQUIP_SLOT_OCCUPIED", Message: "Equipment slot is already occupied", Status: http.StatusConflict}
+	ErrEquipmentEquipped        = AppError{Code: "EQUIP_EQUIPPED", Message: "Equipment is equipped, unequip it first", Status: http.StatusConflict}
+	ErrEquipmentNotEquipped     = AppError{Code: "EQUIP_NOT_EQUIPPED", Message: "Equipment is not equipped", Status: http.StatusConflict}
 	ErrEquipmentLocked          = AppError{Code: "EQUIP_LOCKED", Message: "Equipment is locked and cannot be sold", Status: http.StatusConflict}
 	ErrEquipmentLevelRequired   = AppError{Code: "EQUIP_LEVEL_REQUIRED", Message: "Character level too low for this equipment", Status: http.StatusBadRequest}
 	ErrEquipmentWrongCharacter  = AppError{Code: "EQUIP_WRONG_CHARACTER", Message: "This equipment is exclusive to another character", Status: http.StatusBadRequest}

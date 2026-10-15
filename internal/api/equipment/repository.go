@@ -46,7 +46,7 @@ func (r *Repository) GetPlayerEquipment(ctx context.Context, playerID string) ([
 		}
 		result = append(result, e)
 	}
-	return result, nil
+	return result, rows.Err()
 }
 
 func (r *Repository) GetPlayerEquipmentByID(ctx context.Context, playerID, equipmentID string) (*PlayerEquipment, error) {
@@ -108,24 +108,65 @@ func (r *Repository) CreateEquipmentTx(ctx context.Context, tx pgx.Tx, playerID,
 	return id, err
 }
 
-func (r *Repository) EquipItemTx(ctx context.Context, tx pgx.Tx, equipmentID, characterID string) error {
+func (r *Repository) EquipItemTx(ctx context.Context, tx pgx.Tx, equipmentID, characterID string) (int64, error) {
 	query := `
 		UPDATE player_equipment
 		SET is_equipped = TRUE, equipped_on = $2, is_locked = TRUE
-		WHERE equipment_id = $1
+		WHERE equipment_id = $1 AND is_equipped = FALSE
 	`
-	_, err := tx.Exec(ctx, query, equipmentID, characterID)
+	tag, err := tx.Exec(ctx, query, equipmentID, characterID)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+// LockPlayerTx locks the player's profile until the transaction ends, so
+// equipment buys (and their idempotency lookups) run one at a time per player.
+// Returns false when the profile does not exist.
+func (r *Repository) LockPlayerTx(ctx context.Context, tx pgx.Tx, playerID string) (bool, error) {
+	var one int
+	err := tx.QueryRow(ctx, `SELECT 1 FROM player_profiles WHERE player_id = $1 FOR UPDATE`, playerID).Scan(&one)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// FindEquipmentPurchaseTx returns the buy committed under this key, or nil.
+func (r *Repository) FindEquipmentPurchaseTx(ctx context.Context, tx pgx.Tx, playerID, idempotencyKey string) (*equipmentPurchase, error) {
+	var p equipmentPurchase
+	err := tx.QueryRow(ctx,
+		`SELECT item_id, equipment_id::text FROM equipment_purchases WHERE player_id = $1 AND idempotency_key = $2`,
+		playerID, idempotencyKey).Scan(&p.ItemID, &p.EquipmentID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (r *Repository) CreateEquipmentPurchaseTx(ctx context.Context, tx pgx.Tx, playerID, idempotencyKey, itemID, equipmentID, currency string, amount int) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO equipment_purchases (player_id, idempotency_key, item_id, equipment_id, price_currency, price_amount)
+		VALUES ($1, $2, $3, $4, $5, $6)`,
+		playerID, idempotencyKey, itemID, equipmentID, currency, amount)
 	return err
 }
 
-func (r *Repository) UnequipItemTx(ctx context.Context, tx pgx.Tx, equipmentID string) error {
+func (r *Repository) UnequipItemTx(ctx context.Context, tx pgx.Tx, equipmentID string) (int64, error) {
 	query := `
 		UPDATE player_equipment
 		SET is_equipped = FALSE, equipped_on = NULL
-		WHERE equipment_id = $1
+		WHERE equipment_id = $1 AND is_equipped = TRUE
 	`
-	_, err := tx.Exec(ctx, query, equipmentID)
-	return err
+	tag, err := tx.Exec(ctx, query, equipmentID)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
 }
 
 func (r *Repository) GetEquippedInSlotTx(ctx context.Context, tx pgx.Tx, playerID, characterID, slot string) (*PlayerEquipment, error) {
@@ -221,7 +262,7 @@ func (r *Repository) GetUpgradeLogForDismantleTx(ctx context.Context, tx pgx.Tx,
 		}
 		result = append(result, row)
 	}
-	return result, nil
+	return result, rows.Err()
 }
 
 // ---------------------------------------------------------------------------
@@ -249,7 +290,7 @@ func (r *Repository) GetPlayerGems(ctx context.Context, playerID string) ([]Play
 		}
 		result = append(result, g)
 	}
-	return result, nil
+	return result, rows.Err()
 }
 
 // LockPlayerGemTx locks a gem row until the transaction ends. Returns false if
@@ -362,7 +403,7 @@ func (r *Repository) GetPlayerStones(ctx context.Context, playerID string) ([]Pl
 		}
 		result = append(result, s)
 	}
-	return result, nil
+	return result, rows.Err()
 }
 
 func (r *Repository) AddStonesTx(ctx context.Context, tx pgx.Tx, playerID string, stoneLevel, quantity int) error {
@@ -417,7 +458,7 @@ func (r *Repository) GetPlayerMaterials(ctx context.Context, playerID string) ([
 		}
 		result = append(result, m)
 	}
-	return result, nil
+	return result, rows.Err()
 }
 
 func (r *Repository) AddMaterialsTx(ctx context.Context, tx pgx.Tx, playerID, materialID string, quantity int) error {
@@ -452,6 +493,15 @@ func (r *Repository) DeductMaterialsTx(ctx context.Context, tx pgx.Tx, playerID,
 // ---------------------------------------------------------------------------
 
 func (r *Repository) GetEquipmentItemConfig(ctx context.Context, itemID string) (*EquipmentItemConfig, error) {
+	return r.getEquipmentItemConfig(ctx, r.db.Pool, itemID)
+}
+
+// GetEquipmentItemConfigTx reads an item config through the transaction.
+func (r *Repository) GetEquipmentItemConfigTx(ctx context.Context, tx pgx.Tx, itemID string) (*EquipmentItemConfig, error) {
+	return r.getEquipmentItemConfig(ctx, tx, itemID)
+}
+
+func (r *Repository) getEquipmentItemConfig(ctx context.Context, q rowQuerier, itemID string) (*EquipmentItemConfig, error) {
 	query := `
 		SELECT item_id, name, slot, category, tier, required_level, character_id,
 		       gem_slots, stat_hp, stat_damage, stat_defense, stat_crit, stat_move_energy,
@@ -460,7 +510,7 @@ func (r *Repository) GetEquipmentItemConfig(ctx context.Context, itemID string) 
 		WHERE item_id = $1
 	`
 	var c EquipmentItemConfig
-	err := r.db.Pool.QueryRow(ctx, query, itemID).Scan(
+	err := q.QueryRow(ctx, query, itemID).Scan(
 		&c.ItemID, &c.Name, &c.Slot, &c.Category, &c.Tier, &c.RequiredLevel, &c.CharacterID,
 		&c.GemSlots, &c.StatHP, &c.StatDamage, &c.StatDefense, &c.StatCrit, &c.StatMoveEnergy,
 		&c.PriceCoin, &c.PriceGem, &c.IsActive,
@@ -481,6 +531,19 @@ func (r *Repository) GetAllEquipmentItemConfigs(ctx context.Context) ([]Equipmen
 		       price_coin, price_gem, is_active
 		FROM config_equipment_items
 		ORDER BY item_id ASC
+	`
+	return r.queryEquipmentItemConfigs(ctx, query)
+}
+
+// GetActiveEquipmentItemConfigs returns every active item, normal and crafted.
+func (r *Repository) GetActiveEquipmentItemConfigs(ctx context.Context) ([]EquipmentItemConfig, error) {
+	query := `
+		SELECT item_id, name, slot, category, tier, required_level, character_id,
+		       gem_slots, stat_hp, stat_damage, stat_defense, stat_crit, stat_move_energy,
+		       price_coin, price_gem, is_active
+		FROM config_equipment_items
+		WHERE is_active = TRUE
+		ORDER BY category ASC, slot ASC, required_level ASC, item_id ASC
 	`
 	return r.queryEquipmentItemConfigs(ctx, query)
 }
@@ -518,7 +581,7 @@ func (r *Repository) queryEquipmentItemConfigs(ctx context.Context, query string
 		}
 		result = append(result, c)
 	}
-	return result, nil
+	return result, rows.Err()
 }
 
 func (r *Repository) GetUpgradeRate(ctx context.Context, fromLevel int) (*UpgradeRateConfig, error) {
@@ -560,7 +623,7 @@ func (r *Repository) GetAllUpgradeRates(ctx context.Context) ([]UpgradeRateConfi
 		}
 		result = append(result, c)
 	}
-	return result, nil
+	return result, rows.Err()
 }
 
 func (r *Repository) GetStoneConfig(ctx context.Context, stoneLevel int) (*StoneConfig, error) {
@@ -602,7 +665,7 @@ func (r *Repository) GetAllStoneConfigs(ctx context.Context) ([]StoneConfig, err
 		}
 		result = append(result, c)
 	}
-	return result, nil
+	return result, rows.Err()
 }
 
 func (r *Repository) GetGemConfig(ctx context.Context, gemType string, gemLevel int) (*GemConfig, error) {
@@ -644,7 +707,7 @@ func (r *Repository) GetAllGemConfigs(ctx context.Context) ([]GemConfig, error) 
 		}
 		result = append(result, c)
 	}
-	return result, nil
+	return result, rows.Err()
 }
 
 // GetCharacterLevel returns the character's level and whether the player owns it.
@@ -696,7 +759,7 @@ func (r *Repository) querySetBonuses(ctx context.Context, query string, args ...
 		}
 		result = append(result, c)
 	}
-	return result, nil
+	return result, rows.Err()
 }
 
 func (r *Repository) GetCraftingRecipe(ctx context.Context, recipeID string) (*CraftingRecipe, error) {
@@ -746,7 +809,7 @@ func (r *Repository) GetAllCraftingRecipes(ctx context.Context) ([]CraftingRecip
 		}
 		result = append(result, c)
 	}
-	return result, nil
+	return result, rows.Err()
 }
 
 func (r *Repository) GetActiveMaterials(ctx context.Context) ([]MaterialConfig, error) {
@@ -795,7 +858,7 @@ func (r *Repository) queryMaterials(ctx context.Context, query string, args ...i
 		}
 		result = append(result, c)
 	}
-	return result, nil
+	return result, rows.Err()
 }
 
 // ---------------------------------------------------------------------------
@@ -872,7 +935,10 @@ func (r *Repository) GetEquipmentStatsForCharacter(ctx context.Context, playerID
 	if err != nil {
 		return nil, err
 	}
-	type gemKey struct{ gemType string; gemLevel int }
+	type gemKey struct {
+		gemType  string
+		gemLevel int
+	}
 	gemMap := map[gemKey]GemConfig{}
 	for _, g := range gemConfigs {
 		gemMap[gemKey{g.GemType, g.GemLevel}] = g
@@ -992,6 +1058,11 @@ func applyGemStat(stats *EquipmentStats, gemType string, value float64) {
 // ---------------------------------------------------------------------------
 // Internal scan helpers
 // ---------------------------------------------------------------------------
+
+// rowQuerier is a pool or a transaction.
+type rowQuerier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
 
 type scannable interface {
 	Scan(dest ...interface{}) error

@@ -222,6 +222,7 @@ func main() {
 		r.Get("/rooms", roomsHandler.GetRooms)
 
 		// Equipment
+		r.Get("/equipment/catalog", equipmentHandler.GetCatalog)
 		r.Get("/player/equipment", equipmentHandler.GetEquipment)
 		r.Post("/player/equipment/equip", equipmentHandler.EquipItem)
 		r.Post("/player/equipment/unequip", equipmentHandler.UnequipItem)

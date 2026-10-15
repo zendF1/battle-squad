@@ -1,23 +1,26 @@
 package equipment
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // --- Database models ---
 
 type PlayerEquipment struct {
-	EquipmentID  string     `json:"equipmentId"`
-	PlayerID     string     `json:"playerId"`
-	ItemID       string     `json:"itemId"`
-	Slot         string     `json:"slot"`
-	Category     string     `json:"category"`
-	Tier         *string    `json:"tier,omitempty"`
-	UpgradeLevel int        `json:"upgradeLevel"`
-	GemSlot1     *string    `json:"gemSlot1,omitempty"`
-	GemSlot2     *string    `json:"gemSlot2,omitempty"`
-	IsEquipped   bool       `json:"isEquipped"`
-	EquippedOn   *string    `json:"equippedOn,omitempty"`
-	IsLocked     bool       `json:"isLocked"`
-	CreatedAt    time.Time  `json:"createdAt"`
+	EquipmentID  string    `json:"equipmentId"`
+	PlayerID     string    `json:"playerId"`
+	ItemID       string    `json:"itemId"`
+	Slot         string    `json:"slot"`
+	Category     string    `json:"category"`
+	Tier         *string   `json:"tier,omitempty"`
+	UpgradeLevel int       `json:"upgradeLevel"`
+	GemSlot1     *string   `json:"gemSlot1,omitempty"`
+	GemSlot2     *string   `json:"gemSlot2,omitempty"`
+	IsEquipped   bool      `json:"isEquipped"`
+	EquippedOn   *string   `json:"equippedOn,omitempty"`
+	IsLocked     bool      `json:"isLocked"`
+	CreatedAt    time.Time `json:"createdAt"`
 }
 
 type PlayerGem struct {
@@ -114,6 +117,25 @@ type RecipeMaterial struct {
 	Quantity   int    `json:"quantity"`
 }
 
+// UnmarshalJSON reads materialId, or material_id as written by recipes seeded
+// before migrations/016.
+func (m *RecipeMaterial) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		MaterialID       string `json:"materialId"`
+		LegacyMaterialID string `json:"material_id"`
+		Quantity         int    `json:"quantity"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	m.MaterialID = raw.MaterialID
+	if m.MaterialID == "" {
+		m.MaterialID = raw.LegacyMaterialID
+	}
+	m.Quantity = raw.Quantity
+	return nil
+}
+
 // --- Request types ---
 
 type EquipRequest struct {
@@ -152,6 +174,9 @@ type UnsocketGemRequest struct {
 
 type BuyEquipmentRequest struct {
 	ItemID string `json:"itemId"`
+	// IdempotencyKey (optional, ≤ 64): a retry with the same key and item
+	// returns the first purchase's equipment without charging again.
+	IdempotencyKey string `json:"idempotencyKey"`
 }
 
 type BuyStoneRequest struct {
@@ -186,6 +211,26 @@ type CraftRequest struct {
 }
 
 // --- Response types ---
+
+// Catalog is the GET /equipment/catalog data: every active item (normal and
+// crafted), the upgrade rates, set bonuses and stones.
+type Catalog struct {
+	Items        []EquipmentItemConfig `json:"items"`
+	UpgradeRates []UpgradeRateConfig   `json:"upgradeRates"`
+	SetBonuses   []SetBonusConfig      `json:"setBonuses"`
+	Stones       []StoneConfig         `json:"stones"`
+}
+
+// BuyEquipmentResult is the POST /shop/equipment/buy data.
+type BuyEquipmentResult struct {
+	EquipmentID string `json:"equipmentId"`
+}
+
+// equipmentPurchase is a committed buy recorded under its idempotency key.
+type equipmentPurchase struct {
+	ItemID      string
+	EquipmentID string
+}
 
 type UpgradeResult struct {
 	Success     bool    `json:"success"`
