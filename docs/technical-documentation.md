@@ -65,6 +65,7 @@ Tất cả config qua environment variables, có default cho local dev.
 | `POSTGRES_DSN` | `postgres://postgres:postgres@localhost:5432/battlesquad?sslmode=disable` | PostgreSQL connection |
 | `REDIS_ADDR` | `localhost:6379` | Redis address |
 | `IAP_MOCK_ENABLED` | `false` | Accept fake IAP purchase tokens (testing only; ignored when `APP_ENV=production`) |
+| `DEV_UNLOCK_ALL` | `false` | Game server: QuickPlay may use every character and item without owning them, and items are not reserved or consumed (testing only; ignored when `APP_ENV=production`) |
 | `REDIS_PASSWORD` | _(empty)_ | Redis password |
 | `REDIS_DB` | `0` | Redis database index |
 | `JWT_SECRET` | `super-secret-battle-squad-key-2026` | JWT signing secret |
@@ -298,7 +299,7 @@ Client message → CompositeWSHandler
 |-------|---------|-------|
 | `CreateRoom` | `{mode, mapId, password?}` | Tạo phòng (pvp_1v1, pvp_2v2) |
 | `JoinRoom` | `{roomId, password?}` | Vào phòng |
-| `QuickPlay` | `{bot?: "ai"}` | Chơi tutorial: mặc định bot idle (đứng yên), `bot: "ai"` cho bot AI di chuyển và bắn |
+| `QuickPlay` | `{bot?: "ai", characterId?: string, items?: string[]}` | Chơi tutorial: mặc định bot idle (đứng yên), `bot: "ai"` cho bot AI di chuyển và bắn. `characterId` mặc định `rookie`, `items` mặc định `[]`. Loadout được kiểm tra như `SelectCharacter`/`SelectItems` (nhân vật hợp lệ và đã sở hữu, tối đa 3 item, item có trong game data, mỗi item ≤ `maxUsePerMatch`, có trong `inventory_items`) trước khi tạo phòng; item được reserve như `StartMatch` của phòng custom và bị trừ khi dùng trong trận. Sai loadout → `RoomError` code `LOADOUT_INVALID` và không tạo phòng; nếu reserve thất bại (thiếu số lượng, item bị trận khác giữ) cũng trả `LOADOUT_INVALID`, lỗi reserve khác trả `MATCH_START_FAILED`, và phòng đã tạo bị huỷ. `DEV_UNLOCK_ALL` bỏ qua kiểm tra sở hữu và không reserve |
 | `ChangeTeam` | `{teamId}` | Đổi team (1 hoặc 2) |
 | `SelectCharacter` | `{characterId}` | Chọn nhân vật |
 | `SelectItems` | `{items[]}` | Chọn items (max 3) |

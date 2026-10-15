@@ -117,6 +117,7 @@ docker build -f Dockerfile.worker -t battlesquad-worker .
 | `PROTOCOL_VERSION` | Phiên bản protocol tối thiểu | `1` |
 | `NODE_ID` | ID node cho Game Server (multi-node) | `node-game-1` |
 | `IAP_MOCK_ENABLED` | Chấp nhận purchase token giả cho `/iap/verify` (chỉ để test; bị bỏ qua khi `APP_ENV=production`). Chưa có xác minh store thật, nên khi tắt thì `/iap/verify` trả `IAP_STORE_NOT_CONFIGURED` | `false` |
+| `DEV_UNLOCK_ALL` | Game Server: QuickPlay dùng được mọi nhân vật và item mà không cần sở hữu, item không bị reserve/trừ (chỉ để test; bị bỏ qua khi `APP_ENV=production`) | `false` |
 
 **Quan trọng:** Luôn đặt `JWT_SECRET` riêng và `APP_ENV=production` khi deploy thật.
 
