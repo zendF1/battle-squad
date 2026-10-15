@@ -118,10 +118,29 @@ func (r *Repository) AllocateStats(ctx context.Context, playerID, characterID st
 	return nil
 }
 
-// ResetStats moves all allocated bonus points back into stat_points and zeroes all bonuses.
-// Returns the new stat_points value.
-func (r *Repository) ResetStats(ctx context.Context, playerID, characterID string) (int, error) {
-	query := `
+// LockPlayerTx locks the player's profile row so a reset serialises with other
+// balance changes; profile before character matches the match reward order.
+func (r *Repository) LockPlayerTx(ctx context.Context, tx pgx.Tx, playerID string) error {
+	var id string
+	return tx.QueryRow(ctx, `SELECT player_id FROM player_profiles WHERE player_id = $1 FOR UPDATE`, playerID).Scan(&id)
+}
+
+// LockAllocatedPointsTx locks the character row and returns the total bonus
+// points allocated to it. pgx.ErrNoRows means the player does not own it.
+func (r *Repository) LockAllocatedPointsTx(ctx context.Context, tx pgx.Tx, playerID, characterID string) (int, error) {
+	var total int
+	err := tx.QueryRow(ctx, `
+		SELECT bonus_hp + bonus_damage + bonus_mobility + bonus_defense + bonus_skill_power + bonus_terrain_damage
+		FROM player_characters
+		WHERE player_id = $1 AND character_id = $2
+		FOR UPDATE
+	`, playerID, characterID).Scan(&total)
+	return total, err
+}
+
+// ResetStatsTx moves all allocated bonus points back into stat_points and zeroes all bonuses.
+func (r *Repository) ResetStatsTx(ctx context.Context, tx pgx.Tx, playerID, characterID string) error {
+	tag, err := tx.Exec(ctx, `
 		UPDATE player_characters
 		SET
 			stat_points          = stat_points + bonus_hp + bonus_damage + bonus_mobility
@@ -133,14 +152,14 @@ func (r *Repository) ResetStats(ctx context.Context, playerID, characterID strin
 			bonus_skill_power    = 0,
 			bonus_terrain_damage = 0
 		WHERE player_id = $1 AND character_id = $2
-		RETURNING stat_points
-	`
-	var newStatPoints int
-	err := r.db.Pool.QueryRow(ctx, query, playerID, characterID).Scan(&newStatPoints)
+	`, playerID, characterID)
 	if err != nil {
-		return 0, err
+		return err
 	}
-	return newStatPoints, nil
+	if tag.RowsAffected() != 1 {
+		return fmt.Errorf("reset stats: %d rows affected, want 1", tag.RowsAffected())
+	}
+	return nil
 }
 
 // GetConfigValue fetches a single value from the game_settings table by key.

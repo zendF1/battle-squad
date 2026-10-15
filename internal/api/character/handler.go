@@ -99,14 +99,8 @@ func (h *Handler) ResetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.service.ResetStats(r.Context(), playerID, payload.CharacterID)
-	if err != nil {
-		var appErr model.AppError
-		if errors.As(err, &appErr) {
-			model.WriteError(w, r, appErr)
-			return
-		}
-		model.WriteError(w, r, model.ErrInternalServer)
+	if err := h.service.ResetStats(r.Context(), playerID, payload.CharacterID); err != nil {
+		model.WriteServiceError(w, r, err)
 		return
 	}
 

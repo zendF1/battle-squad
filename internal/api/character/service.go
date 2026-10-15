@@ -108,21 +108,28 @@ func (s *Service) ResetStats(ctx context.Context, playerID, characterID string) 
 	}
 	cfg := LoadProgressionConfig(cfgRaw)
 
-	// Fetch the character to confirm it exists and has allocated bonuses.
-	pc, err := s.repo.GetPlayerCharacter(ctx, playerID, characterID)
+	// The checks, debit and reset share one transaction: the locked rows stop a
+	// concurrent reset from charging twice for one refund.
+	tx, err := s.db.Pool.Begin(ctx)
 	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	if err := s.repo.LockPlayerTx(ctx, tx, playerID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return model.AppError{
-				Code:    "CHARACTER_NOT_FOUND",
-				Message: "Character not found or not owned by this player",
-				Status:  http.StatusNotFound,
-			}
+			return model.ErrCharacterNotOwned
 		}
-		return err
+		return fmt.Errorf("lock player: %w", err)
 	}
 
-	totalAllocated := pc.BonusHP + pc.BonusDamage + pc.BonusMobility +
-		pc.BonusDefense + pc.BonusSkillPower + pc.BonusTerrainDmg
+	totalAllocated, err := s.repo.LockAllocatedPointsTx(ctx, tx, playerID, characterID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return model.ErrCharacterNotOwned
+		}
+		return fmt.Errorf("lock character: %w", err)
+	}
 	if totalAllocated == 0 {
 		return model.AppError{
 			Code:    "CHARACTER_NO_STATS_TO_RESET",
@@ -130,13 +137,6 @@ func (s *Service) ResetStats(ctx context.Context, playerID, characterID string) 
 			Status:  http.StatusBadRequest,
 		}
 	}
-
-	// Begin transaction: debit currency then reset stats.
-	tx, err := s.db.Pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
 
 	// Debit the reset cost. allowNegative = false so it fails on insufficient funds.
 	_, err = s.economyRepo.DebitTx(ctx, tx, playerID,
@@ -155,8 +155,7 @@ func (s *Service) ResetStats(ctx context.Context, playerID, characterID string) 
 		return fmt.Errorf("debit reset cost: %w", err)
 	}
 
-	_, err = s.repo.ResetStats(ctx, playerID, characterID)
-	if err != nil {
+	if err := s.repo.ResetStatsTx(ctx, tx, playerID, characterID); err != nil {
 		return fmt.Errorf("reset stats: %w", err)
 	}
 
