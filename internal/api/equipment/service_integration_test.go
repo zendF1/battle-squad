@@ -116,9 +116,17 @@ func TestCatalogMigrationSeedsAndIsIdempotent(t *testing.T) {
 		INSERT INTO config_equipment_items (item_id, name, slot, category, tier, required_level, gem_slots, stat_damage, price_coin) VALUES
 			('normal_weapon_lv20', 'Steel Sword', 'weapon', 'normal', NULL, 20, 1, 15, 1500),
 			('normal_armor_lv30', 'Mithril Vest', 'armor', 'normal', NULL, 3, 1, 0, 3500),
-			('crafted_boots_titan', 'Titan Boots', 'boots', 'crafted', 'titan', 55, 2, 0, 0);
+			('crafted_boots_titan', 'Titan Boots', 'boots', 'crafted', 'titan', 55, 2, 0, 0),
+			('normal_helmet_lv10', 'Iron Cap', 'helmet', 'normal', NULL, 10, 1, 0, 300),
+			('normal_helmet_lv20', 'Steel Cap', 'helmet', 'normal', NULL, 20, 1, 0, 900),
+			('normal_helmet_lv30', 'Mithril Cap', 'helmet', 'normal', NULL, 30, 1, 0, 2500),
+			('normal_helmet_lv40', 'Dragon Cap', 'helmet', 'normal', NULL, 40, 1, 0, 6000),
+			('normal_boots_lv10', 'Iron Boots', 'boots', 'normal', NULL, 10, 1, 0, 300),
+			('normal_boots_lv20', 'Steel Boots', 'boots', 'normal', NULL, 5, 1, 0, 800);
 		INSERT INTO config_crafting_recipes (recipe_id, result_item_id, materials) VALUES
-			('recipe_boots_titan', 'crafted_boots_titan', '[{"material_id": "titan_ore", "quantity": 30}]')`); err != nil {
+			('recipe_boots_titan', 'crafted_boots_titan', '[{"material_id": "titan_ore", "quantity": 30}]'),
+			('odd_recipe', 'crafted_boots_titan', '[{"material_id": "a", "quantity": "2.6", "note": "x"}, {"material_id": "b", "quantity": "lots"}, "junk", {"materialId": "c", "material_id": "d", "quantity": 1}]'),
+			('scalar_recipe', 'crafted_boots_titan', '"material_id"')`); err != nil {
 		t.Fatal(err)
 	}
 
@@ -129,7 +137,9 @@ func TestCatalogMigrationSeedsAndIsIdempotent(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, string(sql)); err != nil {
 		t.Fatalf("first run: %v", err)
 	}
-	if _, err := db.Pool.Exec(ctx, `UPDATE config_equipment_items SET price_coin = 999 WHERE item_id = 'normal_weapon_lv10'`); err != nil {
+	// Admin edits after the first run: price, and lv10 back to 10 (a valid level)
+	if _, err := db.Pool.Exec(ctx, `UPDATE config_equipment_items SET price_coin = 999 WHERE item_id = 'normal_weapon_lv10';
+		UPDATE config_equipment_items SET required_level = 10 WHERE item_id IN ('normal_armor_lv10', 'normal_helmet_lv10')`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(ctx, string(sql)); err != nil {
@@ -144,7 +154,7 @@ func TestCatalogMigrationSeedsAndIsIdempotent(t *testing.T) {
 		"config_gems":                                       40,
 		"config_set_bonuses":                                12,
 		"config_materials":                                  20,
-		"config_crafting_recipes":                           24,
+		"config_crafting_recipes":                           26, // 24 + the two test rows
 	}
 	for table, want := range counts {
 		if got := countRows(t, db, "SELECT COUNT(*) FROM "+table); got != want {
@@ -157,7 +167,13 @@ func TestCatalogMigrationSeedsAndIsIdempotent(t *testing.T) {
 		"normal_weapon_lv20":     4, // remapped from the old default 20
 		"normal_helmet_lv30":     7,
 		"normal_gloves_lv40":     10,
-		"normal_armor_lv30":      3, // admin-edited level kept
+		"normal_armor_lv30":      3,  // admin-edited level kept
+		"normal_armor_lv10":      10, // set by admin after the first run: not remapped again
+		"normal_helmet_lv10":     10, // remapped to 1 on the first run, set back to 10 by admin
+		"normal_helmet_lv20":     4,
+		"normal_helmet_lv40":     10,
+		"normal_boots_lv10":      10, // slot's lv20 was edited, so lv10 is not treated as the old default
+		"normal_boots_lv20":      5,
 		"crafted_weapon_silver":  2,
 		"crafted_armor_gold":     5,
 		"crafted_boots_titan":    8, // remapped from 55
@@ -171,8 +187,21 @@ func TestCatalogMigrationSeedsAndIsIdempotent(t *testing.T) {
 	if got := countRows(t, db, `SELECT price_coin FROM config_equipment_items WHERE item_id = 'normal_weapon_lv10'`); got != 999 {
 		t.Errorf("rerun overwrote the edited price: %d", got)
 	}
-	if got := countRows(t, db, `SELECT COUNT(*) FROM config_crafting_recipes, jsonb_array_elements(materials) e WHERE NOT e ? 'materialId' OR e ? 'material_id'`); got != 0 {
+	if got := countRows(t, db, `SELECT COUNT(*) FROM config_crafting_recipes, jsonb_array_elements(materials) e
+		WHERE recipe_id LIKE 'recipe_%' AND (NOT e ? 'materialId' OR e ? 'material_id')`); got != 0 {
 		t.Errorf("%d recipe materials without the materialId key", got)
+	}
+	var odd, scalar string
+	if err := db.Pool.QueryRow(ctx, `SELECT
+		(SELECT materials::text FROM config_crafting_recipes WHERE recipe_id = 'odd_recipe'),
+		(SELECT materials::text FROM config_crafting_recipes WHERE recipe_id = 'scalar_recipe')`).Scan(&odd, &scalar); err != nil {
+		t.Fatal(err)
+	}
+	if want := `[{"note": "x", "quantity": 3, "materialId": "a"}, {"quantity": "lots", "materialId": "b"}, "junk", {"quantity": 1, "materialId": "c"}]`; odd != want {
+		t.Errorf("odd recipe %s, want %s", odd, want)
+	}
+	if scalar != `"material_id"` {
+		t.Errorf("scalar recipe changed: %s", scalar)
 	}
 	if got := countRows(t, db, `SELECT (materials->0->>'quantity')::int FROM config_crafting_recipes WHERE recipe_id = 'recipe_weapon_gold'`); got != 30 {
 		t.Errorf("gold weapon recipe quantity %d, want 30", got)
@@ -509,12 +538,18 @@ func TestCraftReadsBothRecipeKeys(t *testing.T) {
 	}
 }
 
-// The down migration removes the default catalog but keeps what players own.
+// The down migration removes only unedited default rows, keeps what players
+// own, and leaves the rate/stone/gem/set bonus tables alone.
 func TestCatalogDownMigrationKeepsOwnedRows(t *testing.T) {
 	svc, db := newEquipmentService(t, 0)
 	ctx := context.Background()
 	dbtest.CreatePlayer(t, db, "p1", 1_000, 0)
 	if _, err := svc.BuyEquipment(ctx, "p1", BuyEquipmentRequest{ItemID: "normal_weapon_lv10"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, `UPDATE config_equipment_items SET price_coin = 1 WHERE item_id = 'normal_armor_lv40';
+		UPDATE config_crafting_recipes SET is_active = FALSE WHERE recipe_id = 'recipe_gloves_gold';
+		UPDATE config_materials SET price_gem = 1 WHERE material_id = 'silver_ore'`); err != nil {
 		t.Fatal(err)
 	}
 	sql, err := os.ReadFile(filepath.Join("..", "..", "..", "migrations", "016_default_equipment_catalog.down.sql"))
@@ -524,10 +559,21 @@ func TestCatalogDownMigrationKeepsOwnedRows(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, string(sql)); err != nil {
 		t.Fatalf("down: %v", err)
 	}
-	if got := countRows(t, db, `SELECT COUNT(*) FROM config_equipment_items`); got != 1 {
-		t.Fatalf("items left %d, want the owned one", got)
+	// owned, edited, and the result of the kept (edited) recipe
+	if got := countRows(t, db, `SELECT COUNT(*) FROM config_equipment_items`); got != 3 {
+		t.Fatalf("items left %d, want 3", got)
 	}
-	if got := countRows(t, db, `SELECT COUNT(*) FROM config_crafting_recipes`) + countRows(t, db, `SELECT COUNT(*) FROM config_upgrade_rates`); got != 0 {
-		t.Fatalf("recipes + rates left %d", got)
+	if got := countRows(t, db, `SELECT COUNT(*) FROM config_equipment_items WHERE item_id IN ('normal_weapon_lv10', 'normal_armor_lv40', 'crafted_gloves_gold')`); got != 3 {
+		t.Fatal("owned, edited or recipe-referenced item deleted")
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM config_crafting_recipes`); got != 1 {
+		t.Fatalf("recipes left %d, want only the edited one", got)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM config_materials`); got != 1 {
+		t.Fatalf("materials left %d, want only the edited one", got)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM config_upgrade_rates`) + countRows(t, db, `SELECT COUNT(*) FROM config_stones`) +
+		countRows(t, db, `SELECT COUNT(*) FROM config_gems`) + countRows(t, db, `SELECT COUNT(*) FROM config_set_bonuses`); got != 16+12+40+12 {
+		t.Fatalf("rates/stones/gems/set bonuses changed: %d rows", got)
 	}
 }

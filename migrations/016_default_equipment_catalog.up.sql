@@ -126,20 +126,32 @@ INSERT INTO config_equipment_items
 ON CONFLICT (item_id) DO NOTHING;
 
 -- Rows seeded earlier by cmd/admin carry the old required levels
--- (10/20/30/40, crafted 15/35/55/75). Remap only rows still holding those
--- defaults, so a level an admin changed is kept and a rerun changes nothing.
+-- (normal 10/20/30/40, crafted 15/35/55/75). The remap is one-shot:
+-- - lv20/lv30/lv40 and crafted rows are remapped only while they hold their
+--   old value, which is above the level cap (10), so no valid level an admin
+--   sets later is ever touched again;
+-- - lv10's old value 10 is a valid new level, so a slot's lv10 row is
+--   remapped only while that slot's lv20, lv30 and lv40 rows all still hold
+--   20/30/40 (the subquery sees the rows as they were before this UPDATE).
 UPDATE config_equipment_items c
 SET required_level = m.new_level, updated_at = CURRENT_TIMESTAMP
 FROM (
-    SELECT 'normal_' || s.slot || '_lv' || t.old_level AS item_id, t.old_level, t.new_level
+    SELECT s.slot, 'normal_' || s.slot || '_lv' || t.old_level AS item_id, t.old_level, t.new_level
     FROM unnest(ARRAY['weapon', 'armor', 'helmet', 'pants', 'boots', 'gloves']) AS s(slot)
     CROSS JOIN (VALUES (10, 1), (20, 4), (30, 7), (40, 10)) AS t(old_level, new_level)
     UNION ALL
-    SELECT 'crafted_' || s.slot || '_' || t.tier, t.old_level, t.new_level
+    SELECT s.slot, 'crafted_' || s.slot || '_' || t.tier, t.old_level, t.new_level
     FROM unnest(ARRAY['weapon', 'armor', 'helmet', 'pants', 'boots', 'gloves']) AS s(slot)
     CROSS JOIN (VALUES ('silver', 15, 2), ('gold', 35, 5), ('titan', 55, 8), ('diamond', 75, 10)) AS t(tier, old_level, new_level)
 ) m
-WHERE c.item_id = m.item_id AND c.required_level = m.old_level;
+WHERE c.item_id = m.item_id
+  AND c.required_level = m.old_level
+  AND (m.item_id <> 'normal_' || m.slot || '_lv10'
+       OR (SELECT COUNT(*) FROM config_equipment_items o
+           WHERE (o.item_id, o.required_level) IN (
+               ('normal_' || m.slot || '_lv20', 20),
+               ('normal_' || m.slot || '_lv30', 30),
+               ('normal_' || m.slot || '_lv40', 40))) = 3);
 
 INSERT INTO config_materials (material_id, name, source, tier, price_gem) VALUES
     ('silver_ore',         'Silver Ore',         'drop',     'silver',  5),
@@ -183,15 +195,28 @@ CROSS JOIN (VALUES
 ) AS t(tier, base_qty, weapon_qty, materials)
 ON CONFLICT (recipe_id) DO NOTHING;
 
--- Recipes seeded earlier by cmd/admin used the key material_id; rewrite them
--- to materialId (the reader accepts both).
+-- Recipes seeded earlier by cmd/admin used the key material_id; rename it to
+-- materialId (the reader accepts both) and keep every other key. A numeric
+-- quantity ("3", 2.5) becomes an integer; anything else is left as it is, so
+-- an odd row never aborts the migration. Rewritten rows no longer match.
 UPDATE config_crafting_recipes r
 SET materials = (
-        SELECT jsonb_agg(jsonb_build_object(
-                   'materialId', COALESCE(e->>'materialId', e->>'material_id'),
-                   'quantity', (e->>'quantity')::int)
-               ORDER BY e_ord)
+        SELECT jsonb_agg(
+                   CASE WHEN jsonb_typeof(x.e) <> 'object' OR NOT x.e ? 'material_id' THEN x.e
+                   ELSE
+                       CASE WHEN x.e ? 'materialId' THEN x.e - 'material_id'
+                            ELSE (x.e - 'material_id') || jsonb_build_object('materialId', x.e->'material_id')
+                       END
+                       || CASE WHEN COALESCE(x.e->>'quantity', '') ~ '^\s*-?[0-9]{1,9}(\.[0-9]+)?\s*$'
+                               THEN jsonb_build_object('quantity', round((x.e->>'quantity')::numeric)::int)
+                               ELSE '{}'::jsonb
+                          END
+                   END
+               ORDER BY x.e_ord)
         FROM jsonb_array_elements(r.materials) WITH ORDINALITY AS x(e, e_ord)),
     updated_at = CURRENT_TIMESTAMP
-WHERE jsonb_typeof(r.materials) = 'array'
-  AND EXISTS (SELECT 1 FROM jsonb_array_elements(r.materials) e WHERE e ? 'material_id');
+WHERE CASE WHEN jsonb_typeof(r.materials) = 'array'
+           THEN EXISTS (SELECT 1 FROM jsonb_array_elements(r.materials) AS y(e)
+                        WHERE jsonb_typeof(y.e) = 'object' AND y.e ? 'material_id')
+           ELSE FALSE
+      END;

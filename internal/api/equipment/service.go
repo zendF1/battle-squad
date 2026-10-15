@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"net/http"
 	"strconv"
 
 	"battle-squad/internal/api/economy"
@@ -16,12 +15,6 @@ import (
 )
 
 const maxIdempotencyKeyLen = 64
-
-var (
-	errItemIDRequired        = model.AppError{Code: model.ErrBadRequest.Code, Message: "itemId is required", Status: http.StatusBadRequest}
-	errIdempotencyKeyTooLong = model.AppError{Code: model.ErrBadRequest.Code, Message: "idempotency key is too long", Status: http.StatusBadRequest}
-	errNotForSale            = model.AppError{Code: model.ErrBadRequest.Code, Message: "only normal equipment is sold in the shop", Status: http.StatusBadRequest}
-)
 
 type Service struct {
 	repo        *Repository
@@ -142,10 +135,10 @@ func (s *Service) GetCatalog(ctx context.Context) (*Catalog, error) {
 // every call buys again.
 func (s *Service) BuyEquipment(ctx context.Context, playerID string, req BuyEquipmentRequest) (string, error) {
 	if req.ItemID == "" {
-		return "", errItemIDRequired
+		return "", model.ErrEquipmentItemIDRequired
 	}
 	if len(req.IdempotencyKey) > maxIdempotencyKeyLen {
-		return "", errIdempotencyKeyTooLong
+		return "", model.ErrIdempotencyKeyTooLong
 	}
 
 	tx, err := s.db.Pool.Begin(ctx)
@@ -184,7 +177,7 @@ func (s *Service) BuyEquipment(ctx context.Context, playerID string, req BuyEqui
 		return "", model.ErrEquipmentNotFound
 	}
 	if cfg.Category != "normal" {
-		return "", errNotForSale
+		return "", model.ErrEquipmentNotForSale
 	}
 
 	currency, amount := "", 0
