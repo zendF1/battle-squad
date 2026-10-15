@@ -345,21 +345,62 @@ func (b *BotBrain) evalShot(m *Match, bot *BattlePlayerState, origin Vector2, an
 	return s
 }
 
-// bestMove tries walking to a few spots in range and returns the one whose
-// best shot beats current, if any.
+// bestMove tries walking to a few spots in range and returns the walk target
+// whose best shot beats current, if any. Walks that drop off the map are skipped.
 func (b *BotBrain) bestMove(m *Match, bot *BattlePlayerState, weapon gamedata.WeaponConfig, current shotPlan) (float64, bool) {
 	reach := float64(bot.MoveEnergy * 2) // processMove: 1 energy per 2px
 	bestX, best, moved := 0.0, current, false
 	for _, frac := range []float64{-1, -0.5, 0.5, 1} {
-		x, y := m.Terrain.WalkTo(bot.Position.X, bot.Position.Y, bot.Position.X+frac*reach)
-		if math.Abs(x-bot.Position.X) < 10 {
-			continue // blocked by a wall
+		targetX := bot.Position.X + frac*reach
+		pos, ok := predictMove(m.Terrain, bot.Position, targetX)
+		if !ok || math.Abs(pos.X-bot.Position.X) < 10 {
+			continue // falls off the map, or blocked by a wall
 		}
-		if s := b.bestShot(m, bot, Vector2{X: x, Y: y}, weapon); s.betterThan(best) {
-			bestX, best, moved = x, s, true
+		if s := b.bestShot(m, bot, pos, weapon); s.betterThan(best) {
+			bestX, best, moved = targetX, s, true
 		}
 	}
 	return bestX, moved
+}
+
+// predictMove mirrors processMove (WalkTo, then the ice slide) and returns where
+// the player ends up. ok is false when any step of the walk drops to the bottom
+// of the map, which WalkTo reports as y = Terrain.Height.
+func predictMove(t *Terrain, from Vector2, targetX float64) (Vector2, bool) {
+	pos, ok := walkChecked(t, from, targetX)
+	if !ok || pos.X == from.X || t.GetTerrainTypeAt(pos.X, pos.Y) != "ice" {
+		return pos, ok
+	}
+	slide := 50.0
+	if pos.X < from.X {
+		slide = -50.0
+	}
+	return walkChecked(t, pos, pos.X+slide)
+}
+
+// walkChecked walks one pixel at a time with WalkTo, which takes the same steps
+// as a single WalkTo call, and stops at the first step that leaves the map.
+func walkChecked(t *Terrain, from Vector2, targetX float64) (Vector2, bool) {
+	endX := math.Round(targetX)
+	if math.Round(from.X) == endX {
+		return from, true // WalkTo leaves the position untouched
+	}
+	dir := 1.0
+	if endX < from.X {
+		dir = -1.0
+	}
+	pos := from
+	for math.Round(pos.X) != endX {
+		x, y := t.WalkTo(pos.X, pos.Y, math.Round(pos.X)+dir)
+		if x == math.Round(pos.X) {
+			break // blocked
+		}
+		pos = Vector2{X: x, Y: y}
+		if y >= float64(t.Height) {
+			return pos, false
+		}
+	}
+	return pos, true
 }
 
 func (b *BotBrain) nearestEnemyX(m *Match, bot *BattlePlayerState) float64 {

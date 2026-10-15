@@ -244,3 +244,85 @@ func BenchmarkBotDecideShot(b *testing.B) {
 		brain.DecideAction(m, bot, botTurnState{})
 	}
 }
+
+// carve clears terrain in [x0, x1) × [y0, y1).
+func carve(tr *Terrain, x0, x1, y0, y1 int) {
+	for x := x0; x < x1; x++ {
+		for y := y0; y < y1; y++ {
+			clearBit(tr.Mask, x, y, tr.Width)
+		}
+	}
+}
+
+func TestBotNeverWalksOffTheMap(t *testing.T) {
+	// Bot in a cave closed toward the enemy; left of the cave is a bottomless void
+	m, bot, _ := newBotMatch(t, 600, 1200, nil)
+	for x := 500; x < 720; x++ {
+		for y := 380; y < 400; y++ {
+			setBit(m.Terrain.Mask, x, y, m.Terrain.Width) // roof
+		}
+	}
+	for x := 700; x < 720; x++ {
+		for y := 400; y < 496; y++ {
+			setBit(m.Terrain.Mask, x, y, m.Terrain.Width) // right wall
+		}
+	}
+	carve(m.Terrain, 0, 470, 0, m.Terrain.Height)
+	bot.MoveEnergy = 300
+
+	for i := 0; i < 20; i++ {
+		action := NewBotBrain(m.BotTier).DecideAction(m, bot, botTurnState{})
+		mv, ok := action.(MoveAction)
+		if !ok {
+			continue
+		}
+		x, y := m.Terrain.WalkTo(bot.Position.X, bot.Position.Y, mv.TargetX)
+		if y >= float64(m.Terrain.Height) || mv.TargetX < 470 {
+			t.Fatalf("bot walked off the map: targetX=%.0f ends at (%.0f, %.0f)", mv.TargetX, x, y)
+		}
+	}
+}
+
+func TestPredictMoveRejectsFallingOffTheMap(t *testing.T) {
+	m, bot, _ := newBotMatch(t, 600, 1200, nil)
+	carve(m.Terrain, 400, 480, 0, m.Terrain.Height) // bottomless pit, ground continues past it
+
+	if _, ok := predictMove(m.Terrain, bot.Position, 350); ok {
+		t.Fatal("walk across a bottomless pit accepted")
+	}
+	if pos, ok := predictMove(m.Terrain, bot.Position, 500); !ok || pos.Y >= float64(m.Terrain.Height) {
+		t.Fatalf("walk short of the pit rejected: %+v ok=%v", pos, ok)
+	}
+}
+
+func TestPredictMoveMatchesProcessMoveOnIce(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		targetX float64
+		ok      bool
+	}{
+		{"slide on ground", 700, true},
+		{"slide into pit", 840, false}, // ends 10px short of the pit, slides 50px into it
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, bot, _ := newBotMatch(t, 600, 1300, nil)
+			m.Terrain.Zones = append(m.Terrain.Zones, TerrainZone{Type: "ice", MinX: 0, MaxX: float64(m.Terrain.Width), MinY: 0, MaxY: float64(m.Terrain.Height)})
+			carve(m.Terrain, 850, 950, 0, m.Terrain.Height)
+
+			pos, ok := predictMove(m.Terrain, bot.Position, tc.targetX)
+			m.processMove(context.Background(), nil, MoveAction{TargetX: tc.targetX})
+			if ok != tc.ok {
+				t.Fatalf("predictMove ok=%v, want %v (bot ended at %+v)", ok, tc.ok, bot.Position)
+			}
+			if !ok {
+				if bot.Position.Y < float64(m.Terrain.Height) {
+					t.Fatalf("predictMove rejected a move processMove survived: %+v", bot.Position)
+				}
+				return
+			}
+			if pos != bot.Position {
+				t.Fatalf("predictMove=%+v, processMove ended at %+v", pos, bot.Position)
+			}
+		})
+	}
+}
