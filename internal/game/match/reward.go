@@ -202,8 +202,8 @@ func ProcessMatchRewards(
 		}
 
 		historyQuery := `
-			INSERT INTO match_histories (match_id, player_id, mode, map_id, result, damage, kills, accuracy, exp_gained, coin_gained)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			INSERT INTO match_histories (match_id, player_id, mode, map_id, result, damage, kills, accuracy, exp_gained, coin_gained, rating_change)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		`
 		_, err = tx.Exec(
 			ctx,
@@ -218,6 +218,7 @@ func ProcessMatchRewards(
 			p.Accuracy,
 			expGained,
 			coinGained,
+			ratingChange,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write match history: %w", err)
