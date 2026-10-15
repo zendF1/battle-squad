@@ -336,24 +336,26 @@ Match Goroutine (single thread):
 startTurn() detects bot's turn
     │
     ▼
-go func() {                          ◄── Spawn goroutine
-    sleep(2-6s random)               ◄── Feel natural
+runOnTurnAfter(2-6s random)          ◄── Feel natural; dropped if the turn changed
     │
     ▼
-    BotBrain.DecideAction(state)     ◄── AI logic
+botStep() on the match goroutine     ◄── No shared-state races
     │
-    ├── SmartBotBrain (ranked):
-    │   ├── Evaluate all targets (distance, HP)
-    │   ├── Calculate optimal angle
-    │   ├── Add error margin (based on tier)
-    │   └── Return ShootAction
-    │
-    └── BotBrain (tutorial):
-        └── Return EndTurn (idle bot)
+    ├── Tutorial "Target Bot" / frozen → EndTurn
     │
     ▼
-    m.Events <- matchEvent{Shoot}    ◄── Inject into event channel
-}()                                      (processed by match goroutine)
+BotBrain.DecideAction(m, bot, turn)  ◄── Tier from Match.BotTier
+    │
+    ├── HP < 50% + medkit (UseItemChance) → UseItem, schedule next botStep
+    │
+    ├── Search angle/power with SimulateProjectile()
+    │   (same terrain, wind, weapon as the real shot; coarse grid + refine)
+    │
+    ├── No shot deals damage (MovementSmart) → Move, schedule next botStep
+    │
+    └── Shoot:
+        ├── crypto/rand roll 0-999 < HitChance×10 → best shot (hits)
+        └── otherwise → near miss: lands just outside the blast radius
 ```
 
 ---

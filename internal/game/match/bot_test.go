@@ -11,7 +11,7 @@ import (
 	"battle-squad/internal/game/ws"
 )
 
-var perfectAim = matchmaker.BotTierConfig{UseItemChance: 1, MovementSmart: 1}
+var perfectAim = matchmaker.BotTierConfig{HitChance: 100, UseItemChance: 1, MovementSmart: 1}
 
 const botTestCell = 16
 
@@ -117,15 +117,74 @@ func TestBotShootsOverWall(t *testing.T) {
 	assertShotLands(t, m, bot, enemy, decideShot(t, m, bot))
 }
 
-func TestBotAimErrorKeepsAngleUpward(t *testing.T) {
-	m, bot, _ := newBotMatch(t, 400, 1000, nil)
-	m.BotTier = matchmaker.BotTierConfig{AccuracyError: 90, PowerError: 200}
-	brain := NewBotBrain(m.BotTier)
-	for i := 0; i < 50; i++ {
+func TestBotMissRollFiresHarmlessNearbyShot(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		botX, enemyX float64
+	}{
+		{"600px", 400, 1000},
+		{"150px", 700, 850},
+		{"1100px", 200, 1300},
+		{"600px left", 1000, 400},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, bot, enemy := newBotMatch(t, tc.botX, tc.enemyX, nil)
+			m.BotTier.HitChance = 0
+			brain := NewBotBrain(m.BotTier)
+			weapon := gamedata.Data.Weapons["w1"]
+			for i := 0; i < 20; i++ {
+				act := brain.DecideAction(m, bot, botTurnState{}).(ShootAction)
+				if act.Angle < botMinAngle || act.Angle > botMaxAngle || act.Power < botMinPower || act.Power > maxShotPower {
+					t.Fatalf("shot out of range: %.1f°/%.1f", act.Angle, act.Power)
+				}
+				s := brain.evalShot(m, bot, bot.Position, act.Angle, act.Power, weapon)
+				if s.damage > 0 || s.allyRisk > 0 {
+					t.Fatalf("miss roll fired %.0f°/%.0f: damage=%.0f allyRisk=%d", act.Angle, act.Power, s.damage, s.allyRisk)
+				}
+				if s.miss > float64(weapon.ExplosionRadius)+botNearMissSlack {
+					t.Fatalf("miss landed %.0fpx from target %+v, want a near miss", s.miss, enemy.Position)
+				}
+			}
+		})
+	}
+}
+
+func TestBotHitRollThreshold(t *testing.T) {
+	m, bot, enemy := newBotMatch(t, 400, 1000, nil)
+	weapon := gamedata.Data.Weapons["w1"]
+	for _, tc := range []struct {
+		chance  float64
+		roll    int
+		wantHit bool
+	}{
+		{60, 599, true},
+		{60, 600, false},
+		{99, 989, true},
+		{99, 990, false},
+		{100, 999, true},
+		{0, 0, false},
+	} {
+		brain := NewBotBrain(matchmaker.BotTierConfig{HitChance: tc.chance})
+		brain.roll = func() int { return tc.roll }
 		act := brain.DecideAction(m, bot, botTurnState{}).(ShootAction)
-		if act.Angle < botMinAngle || act.Angle > botMaxAngle || act.Power < botMinPower || act.Power > maxShotPower {
-			t.Fatalf("shot out of range: %.1f°/%.1f", act.Angle, act.Power)
+		hit := brain.evalShot(m, bot, bot.Position, act.Angle, act.Power, weapon).damage > 0
+		if hit != tc.wantHit {
+			t.Errorf("hitChance=%v roll=%d: hit=%v, want %v (target %+v)", tc.chance, tc.roll, hit, tc.wantHit, enemy.Position)
 		}
+	}
+}
+
+func TestCryptoRollRange(t *testing.T) {
+	seen := map[bool]bool{}
+	for i := 0; i < 5000; i++ {
+		n := cryptoRoll()
+		if n < 0 || n > 999 {
+			t.Fatalf("roll %d outside [0, 999]", n)
+		}
+		seen[n < 500] = true
+	}
+	if !seen[true] || !seen[false] {
+		t.Fatal("rolls never covered both halves of the range")
 	}
 }
 

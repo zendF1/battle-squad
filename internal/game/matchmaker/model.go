@@ -31,14 +31,11 @@ type EloConfig struct {
 	DefaultRating int `json:"defaultRating"`
 }
 
-// BotTierConfig holds the per-difficulty AI error tolerances for a single
-// rank tier.
+// BotTierConfig holds the bot behaviour for a single rank tier.
 type BotTierConfig struct {
-	AccuracyError  float64 `json:"accuracyError"`
-	PowerError     float64 `json:"powerError"`
-	DecisionNoise  int     `json:"decisionNoise"`
-	UseItemChance  float64 `json:"useItemChance"`
-	MovementSmart  float64 `json:"movementSmart"`
+	HitChance     float64 `json:"hitChance"` // % of shots aimed to hit (0–100)
+	UseItemChance float64 `json:"useItemChance"`
+	MovementSmart float64 `json:"movementSmart"`
 }
 
 // BotDifficultyConfig is the top-level struct loaded from the game_settings
@@ -96,49 +93,38 @@ func DefaultEloConfig() EloConfig {
 
 // DefaultBotDifficultyConfig returns the canonical bot difficulty defaults
 // that match the seed values in
-// migrations/005_add_loadouts_and_matchmaking.up.sql.
+// migrations/005_add_loadouts_and_matchmaking.up.sql and
+// migrations/012_bot_hit_chance.up.sql.
 func DefaultBotDifficultyConfig() BotDifficultyConfig {
 	return BotDifficultyConfig{
 		Tiers: map[string]BotTierConfig{
 			"bronze": {
-				AccuracyError: 15,
-				PowerError:    12,
-				DecisionNoise: 30,
+				HitChance:     60,
 				UseItemChance: 0.3,
 				MovementSmart: 0.3,
 			},
 			"silver": {
-				AccuracyError: 12,
-				PowerError:    10,
-				DecisionNoise: 25,
+				HitChance:     70,
 				UseItemChance: 0.4,
 				MovementSmart: 0.4,
 			},
 			"gold": {
-				AccuracyError: 9,
-				PowerError:    8,
-				DecisionNoise: 20,
+				HitChance:     80,
 				UseItemChance: 0.55,
 				MovementSmart: 0.55,
 			},
 			"platinum": {
-				AccuracyError: 6,
-				PowerError:    5,
-				DecisionNoise: 15,
+				HitChance:     90,
 				UseItemChance: 0.7,
 				MovementSmart: 0.7,
 			},
 			"diamond": {
-				AccuracyError: 4,
-				PowerError:    3,
-				DecisionNoise: 8,
+				HitChance:     95,
 				UseItemChance: 0.85,
 				MovementSmart: 0.85,
 			},
 			"master": {
-				AccuracyError: 2,
-				PowerError:    2,
-				DecisionNoise: 5,
+				HitChance:     99,
 				UseItemChance: 0.9,
 				MovementSmart: 0.95,
 			},

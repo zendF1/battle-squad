@@ -99,9 +99,7 @@
 <thead>
 <tr>
     <th>Tier</th>
-    <th>accuracyError</th>
-    <th>powerError</th>
-    <th>decisionNoise</th>
+    <th>hitChance (%)</th>
     <th>useItemChance</th>
     <th>movementSmart</th>
 </tr>
@@ -111,9 +109,7 @@
 </table>
 </div>
 <p style="font-size:12px;color:#888;margin-top:8px;">
-    <strong>accuracyError</strong>: sai số góc bắn (°) — càng thấp bot bắn càng chính xác &nbsp;|&nbsp;
-    <strong>powerError</strong>: sai số lực bắn — càng thấp đạn rơi đúng tầm hơn &nbsp;|&nbsp;
-    <strong>decisionNoise</strong>: nhiễu khi ra quyết định — càng thấp bot chọn hành động hợp lý hơn<br>
+    <strong>hitChance</strong>: tỉ lệ bắn trúng mỗi phát (0-100%) — mỗi lượt bot quay số 0-999, trúng khi số &lt; hitChance × 10; trượt thì bắn sát cạnh địch<br>
     <strong>useItemChance</strong>: xác suất dùng item đúng lúc (0-1) &nbsp;|&nbsp;
     <strong>movementSmart</strong>: xác suất di chuyển thông minh (0-1) — né đạn, giữ khoảng cách
 </p>
@@ -128,6 +124,7 @@
 <script>
 const TIERS = ['bronze','silver','gold','platinum','diamond','master'];
 const TIER_LABELS = {bronze:'Bronze',silver:'Silver',gold:'Gold',platinum:'Platinum',diamond:'Diamond',master:'Master'};
+const DEFAULT_HIT_CHANCE = {bronze:60,silver:70,gold:80,platinum:90,diamond:95,master:99};
 const TIER_COLORS = {bronze:'#cd7f32',silver:'#c0c0c0',gold:'#ffd700',platinum:'#40e0d0',diamond:'#b9f2ff',master:'#ff6b6b'};
 
 function showFlash(msg, isError) {
@@ -202,9 +199,7 @@ async function loadBot() {
             const color = TIER_COLORS[tier];
             tbody.innerHTML += `<tr>
                 <td><span class="badge" style="background:${color};color:#000;font-weight:700;">${TIER_LABELS[tier]}</span></td>
-                <td><input type="number" name="${tier}_accuracyError" value="${cfg.accuracyError||0}" step="0.5" min="0" max="30" style="width:80px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;"></td>
-                <td><input type="number" name="${tier}_powerError" value="${cfg.powerError||0}" step="0.5" min="0" max="30" style="width:80px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;"></td>
-                <td><input type="number" name="${tier}_decisionNoise" value="${cfg.decisionNoise||0}" step="1" min="0" max="50" style="width:80px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;"></td>
+                <td><input type="number" name="${tier}_hitChance" value="${cfg.hitChance ?? DEFAULT_HIT_CHANCE[tier]}" step="0.1" min="0" max="100" required style="width:80px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;"></td>
                 <td><input type="number" name="${tier}_useItemChance" value="${cfg.useItemChance||0}" step="0.05" min="0" max="1" style="width:80px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;"></td>
                 <td><input type="number" name="${tier}_movementSmart" value="${cfg.movementSmart||0}" step="0.05" min="0" max="1" style="width:80px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;"></td>
             </tr>`;
@@ -218,9 +213,7 @@ document.getElementById('form-bot').addEventListener('submit', async (e) => {
     const tiers = {};
     TIERS.forEach(tier => {
         tiers[tier] = {
-            accuracyError: Number(fd.get(`${tier}_accuracyError`)),
-            powerError:    Number(fd.get(`${tier}_powerError`)),
-            decisionNoise: Number(fd.get(`${tier}_decisionNoise`)),
+            hitChance:     Number(fd.get(`${tier}_hitChance`)),
             useItemChance: Number(fd.get(`${tier}_useItemChance`)),
             movementSmart: Number(fd.get(`${tier}_movementSmart`)),
         };

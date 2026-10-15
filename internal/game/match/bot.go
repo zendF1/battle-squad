@@ -2,7 +2,9 @@ package match
 
 import (
 	"context"
+	crand "crypto/rand"
 	"math"
+	"math/big"
 	"math/rand"
 	"time"
 
@@ -12,8 +14,7 @@ import (
 
 // DefaultBotTier is used for matches that do not set a rank tier (casual rooms).
 var DefaultBotTier = matchmaker.BotTierConfig{
-	AccuracyError: 8,
-	PowerError:    5,
+	HitChance:     80,
 	UseItemChance: 0.6,
 	MovementSmart: 0.5,
 }
@@ -78,15 +79,33 @@ func (m *Match) botStep(ctx context.Context, turn botTurnState, step int) {
 }
 
 // BotBrain picks bot actions. Shots are aimed by simulating candidate
-// trajectories against the live terrain, wind and weapon, then perturbed by the
-// tier's AccuracyError/PowerError so lower tiers miss more.
+// trajectories against the live terrain, wind and weapon. Each shot then rolls
+// against the tier's HitChance: a hit fires the best trajectory, a miss fires a
+// nearby one that deals no damage.
 type BotBrain struct {
 	tier matchmaker.BotTierConfig
 	rng  *rand.Rand
+	roll func() int // hit roll in [0, 999]
 }
 
 func NewBotBrain(tier matchmaker.BotTierConfig) *BotBrain {
-	return &BotBrain{tier: tier, rng: rand.New(rand.NewSource(time.Now().UnixNano()))}
+	return &BotBrain{tier: tier, rng: rand.New(rand.NewSource(time.Now().UnixNano())), roll: cryptoRoll}
+}
+
+// cryptoRoll draws a uniform number in [0, 999] from crypto/rand, so players
+// cannot predict bot hits from the seed.
+func cryptoRoll() int {
+	n, err := crand.Int(crand.Reader, big.NewInt(1000))
+	if err != nil {
+		return 999 // crypto/rand.Reader does not fail since Go 1.24; count it as a miss
+	}
+	return int(n.Int64())
+}
+
+// rollHit reports whether this shot should hit: roll < HitChance×10, so 60%
+// hits on 0–599 and 100% always hits.
+func (b *BotBrain) rollHit() bool {
+	return float64(b.roll()) < b.tier.HitChance*10
 }
 
 // botTurnState records what the bot already did this turn.
@@ -109,7 +128,7 @@ func (s shotPlan) quality() float64 {
 }
 
 // betterThan ranks by quality, then by how close a miss lands, then prefers arcs
-// near 45°/135°, whose range is least sensitive to angle error.
+// near 45°/135°.
 func (s shotPlan) betterThan(o shotPlan) bool {
 	if !o.found {
 		return s.found
@@ -164,14 +183,51 @@ func (b *BotBrain) DecideAction(m *Match, bot *BattlePlayerState, turn botTurnSt
 		}
 	}
 
-	angle := best.angle + (b.rng.Float64()*2-1)*b.tier.AccuracyError
-	power := best.power + (b.rng.Float64()*2-1)*b.tier.PowerError
-	return ShootAction{
-		Angle:           math.Max(botMinAngle, math.Min(botMaxAngle, angle)),
-		Power:           math.Max(botMinPower, math.Min(maxShotPower, power)),
-		ActionMode:      "weapon",
-		ClientTimestamp: now,
+	shot := best
+	if best.damage > 0 && !b.rollHit() {
+		// Without a safe miss nearby (e.g. a huge blast radius) the best shot is fired
+		if miss, ok := b.nearMiss(m, bot, best, weapon); ok {
+			shot = miss
+		}
 	}
+	return ShootAction{Angle: shot.angle, Power: shot.power, ActionMode: "weapon", ClientTimestamp: now}
+}
+
+// botMissOffsets are the angle/power nudges tried around the best shot to find
+// a believable miss.
+var botMissOffsets = [][2]float64{
+	{0, -2}, {0, 2}, {0, -3}, {0, 3}, {0, -5}, {0, 5}, {-4, 0}, {4, 0},
+	{0, -8}, {0, 8}, {-8, 0}, {8, 0}, {0, -12}, {0, 12}, {-15, 0}, {15, 0},
+}
+
+// botNearMissSlack is how far past the blast edge a deliberate miss may land.
+const botNearMissSlack = 100.0
+
+// nearMiss returns a shot close to best that lands just outside the enemy's
+// blast radius, so the miss still looks aimed at them. It never damages an
+// enemy or endangers an ally; among misses within botNearMissSlack it picks at
+// random, otherwise the closest one.
+func (b *BotBrain) nearMiss(m *Match, bot *BattlePlayerState, best shotPlan, weapon gamedata.WeaponConfig) (shotPlan, bool) {
+	var near []shotPlan
+	closest := shotPlan{}
+	for _, off := range botMissOffsets {
+		angle := math.Max(botMinAngle, math.Min(botMaxAngle, best.angle+off[0]))
+		power := math.Max(botMinPower, math.Min(maxShotPower, best.power+off[1]))
+		s := b.evalShot(m, bot, bot.Position, angle, power, weapon)
+		if !s.found || s.damage > 0 || s.allyRisk > 0 {
+			continue
+		}
+		if s.miss <= float64(weapon.ExplosionRadius)+botNearMissSlack {
+			near = append(near, s)
+		}
+		if !closest.found || s.miss < closest.miss {
+			closest = s
+		}
+	}
+	if len(near) > 0 {
+		return near[b.rng.Intn(len(near))], true
+	}
+	return closest, closest.found
 }
 
 func (b *BotBrain) wantsMedkit(bot *BattlePlayerState) bool {
