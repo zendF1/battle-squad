@@ -105,7 +105,7 @@ func (el *EventLogger) Log(eventType, playerID string, data interface{}) {
 }
 
 func (el *EventLogger) insertBatch(entries []eventLogEntry) {
-	if len(entries) == 0 {
+	if len(entries) == 0 || el.db == nil { // no database in unit tests
 		return
 	}
 

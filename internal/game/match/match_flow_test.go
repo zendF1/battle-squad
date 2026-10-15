@@ -14,17 +14,7 @@ import (
 // client per player, and starts the first turn.
 func newFlowMatch(t *testing.T) (*Match, map[string]*ws.Client) {
 	t.Helper()
-	gamedata.Data = &gamedata.GameData{
-		Maps: map[string]gamedata.MapConfig{},
-		Characters: map[string]gamedata.CharacterConfig{
-			"c1": {CharacterID: "c1", WeaponID: "w1"},
-		},
-		Weapons: map[string]gamedata.WeaponConfig{
-			"w1": {WeaponID: "w1", Damage: 30, ExplosionRadius: 30, ProjectileWeight: 1, WindInfluence: 1},
-		},
-		Skills: map[string]gamedata.SkillConfig{},
-		Items:  map[string]gamedata.ItemConfig{},
-	}
+	setFlowGameData()
 
 	players := []*BattlePlayerState{
 		{PlayerID: "p1", TeamID: 1, CharacterID: "c1", HP: 100, MaxHP: 100, Position: Vector2{X: 200, Y: 300}, IsAlive: true},
@@ -38,6 +28,21 @@ func newFlowMatch(t *testing.T) (*Match, map[string]*ws.Client) {
 	t.Cleanup(m.Stop)
 	m.startTurn(context.Background())
 	return m, clients
+}
+
+// setFlowGameData installs the minimal game data the flow matches use.
+func setFlowGameData() {
+	gamedata.Data = &gamedata.GameData{
+		Maps: map[string]gamedata.MapConfig{},
+		Characters: map[string]gamedata.CharacterConfig{
+			"c1": {CharacterID: "c1", WeaponID: "w1"},
+		},
+		Weapons: map[string]gamedata.WeaponConfig{
+			"w1": {WeaponID: "w1", Damage: 30, ExplosionRadius: 30, ProjectileWeight: 1, WindInfluence: 1},
+		},
+		Skills: map[string]gamedata.SkillConfig{},
+		Items:  map[string]gamedata.ItemConfig{},
+	}
 }
 
 func (m *Match) other(playerID string) string {

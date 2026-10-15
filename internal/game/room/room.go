@@ -466,15 +466,18 @@ func (r *Room) processLeave(client *ws.Client) {
 		// Match goroutine owns the Clients map during in_match — let it
 		// handle the delete via its own event loop to avoid a concurrent
 		// map write between the room and match goroutines.
-		r.match.ProcessEvent(context.Background(), client, ws.Message{Event: "Leave"})
 		client.RoomID = ""
 
-		// Tutorial room: destroy as soon as the user leaves (only bots remain)
+		// Tutorial room: destroy as soon as the user leaves (only bots remain).
+		// The match stops itself once it has handled the Leave, so the match end
+		// it causes still settles the reserved items.
 		if r.State.IsTutorial {
 			observability.Log.Info().Str("roomId", r.ID).Msg("tutorial room user left, destroying room")
-			r.match.Stop()
+			r.match.LeaveAndStop(context.Background(), client)
 			r.cancel()
+			return
 		}
+		r.match.ProcessEvent(context.Background(), client, ws.Message{Event: "Leave"})
 		return
 	}
 

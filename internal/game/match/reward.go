@@ -19,6 +19,13 @@ const releaseReservationsSQL = `
 	WHERE match_id = $1 AND status = 'reserved'
 `
 
+// ReleaseMatchReservations returns every still-reserved item of a match to its
+// owner. Consumed and released rows are left alone, so repeating it is a no-op.
+func ReleaseMatchReservations(ctx context.Context, db *database.PostgresDB, matchID string) error {
+	_, err := db.Pool.Exec(ctx, releaseReservationsSQL, matchID)
+	return err
+}
+
 type PlayerStats struct {
 	PlayerID    string
 	CharacterID string
@@ -367,7 +374,7 @@ func updatePlayerRank(ctx context.Context, tx pgx.Tx, playerID string, ratingCha
 		FOR UPDATE
 	`
 	err = tx.QueryRow(ctx, querySelect, playerID, seasonID).Scan(&rating, &wins, &losses, &draws, &winStreak, &highestTier)
-	
+
 	isNewRank := false
 	if err != nil {
 		if err == pgx.ErrNoRows {

@@ -30,6 +30,10 @@ type matchEvent struct {
 const (
 	actionRateLimit = 150 * time.Millisecond // min interval between player actions
 	maxDroppedMsgs  = 10                     // kick client after N consecutive dropped broadcasts
+
+	// reservationReleaseTimeout bounds releasing a match's reservations; it runs on a fresh
+	// context because the match context is usually already cancelled by then.
+	reservationReleaseTimeout = 5 * time.Second
 )
 
 type Match struct {
@@ -54,6 +58,15 @@ type Match struct {
 	turnSeq      int                  // incremented every startTurn; stale callbacks compare against it
 	resolving    bool                 // the current turn's action is animating; no further actions or timer ticks
 	lastMoveSeq  map[string]int       // playerID → seq of the last Move the loop took from them this turn (see noteMoveSeq)
+
+	// processRewards settles a normally ended match: rewards, consuming spent items and
+	// releasing the rest. releaseReservations returns every still-reserved item of the
+	// match; nil without a database. Fields so tests can fake them.
+	processRewards      func(ctx context.Context, stats map[string]*PlayerStats, usedItems map[string][]string) (map[string]RewardResult, error)
+	releaseReservations func(ctx context.Context) error
+	// reservationsSettled: rewards or a no-contest release already settled the
+	// reservations, so Run's exit has nothing to release.
+	reservationsSettled bool
 }
 
 // Stop cancels the match context, causing the Run loop to exit.
@@ -129,7 +142,7 @@ func NewMatch(
 		ActiveEffects: []StatusEffect{},
 	}
 
-	return &Match{
+	m := &Match{
 		State:        mState,
 		Terrain:      terrain,
 		Clients:      clients,
@@ -149,6 +162,15 @@ func NewMatch(
 		lastAction:   make(map[string]time.Time),
 		lastMoveSeq:  make(map[string]int),
 	}
+	m.processRewards = func(ctx context.Context, stats map[string]*PlayerStats, usedItems map[string][]string) (map[string]RewardResult, error) {
+		return ProcessMatchRewards(ctx, m.db, m.economyRepo, m.State.MatchID, m.State.Mode, m.State.MapID, stats, usedItems, m.TeamRatings, m.EloParams)
+	}
+	if db != nil {
+		m.releaseReservations = func(ctx context.Context) error {
+			return ReleaseMatchReservations(ctx, db, matchID)
+		}
+	}
+	return m
 }
 
 func (m *Match) signalDone() {
@@ -158,6 +180,10 @@ func (m *Match) signalDone() {
 }
 
 func (m *Match) Run() {
+	// Runs last, after any panic recovery: a match that stops without ending
+	// (Stop, ctx cancel) must not keep its players' items reserved forever.
+	defer m.releaseUnsettledReservations()
+
 	// Pattern 1: Panic Recovery per Match
 	defer func() {
 		if r := recover(); r != nil {
@@ -274,6 +300,33 @@ func (m *Match) Run() {
 			return
 		}
 	}
+}
+
+// releaseUnsettledReservations releases the match's remaining reservations unless the
+// match end already settled them. Only status 'reserved' rows of this match change, so
+// it is safe to repeat.
+func (m *Match) releaseUnsettledReservations() {
+	if m.reservationsSettled || m.releaseReservations == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), reservationReleaseTimeout)
+	defer cancel()
+	if err := m.releaseReservations(ctx); err != nil {
+		observability.Log.Error().Err(err).Str("matchId", m.State.MatchID).Msg("failed to release item reservations")
+		return
+	}
+	m.reservationsSettled = true
+	observability.Log.Info().Str("matchId", m.State.MatchID).Str("status", m.State.Status).Msg("released item reservations")
+}
+
+// LeaveAndStop processes the player's Leave on the match loop, then stops the match.
+// Stopping only after the Leave was handled keeps the match end it causes (rewards,
+// consuming spent items) from losing a race against the stop.
+func (m *Match) LeaveAndStop(ctx context.Context, client *ws.Client) {
+	m.Events <- matchEvent{ctx: ctx, internal: func(ctx context.Context) {
+		m.processLeave(ctx, client)
+		m.Stop()
+	}}
 }
 
 func (m *Match) ProcessEvent(ctx context.Context, client *ws.Client, msg ws.Message) {
@@ -1008,6 +1061,11 @@ func (m *Match) processLeave(ctx context.Context, client *ws.Client) {
 }
 
 func (m *Match) checkWinCondition(ctx context.Context) {
+	// Events queued before the end (another Leave) must not pay out a second time
+	if m.State.Status == "ended" {
+		return
+	}
+
 	team1Alive := false
 	team2Alive := false
 
@@ -1057,9 +1115,12 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 			}
 		}
 
-		rewards, err := ProcessMatchRewards(ctx, m.db, m.economyRepo, m.State.MatchID, m.State.Mode, m.State.MapID, stats, usedItems, m.TeamRatings, m.EloParams)
+		rewards, err := m.processRewards(ctx, stats, usedItems)
 		if err != nil {
+			// Rolled back: Run's exit releases the reservations instead
 			observability.Log.Error().Err(err).Msg("failed to process match rewards")
+		} else {
+			m.reservationsSettled = true
 		}
 
 		// Broadcast MatchEnded
@@ -1129,9 +1190,7 @@ func (m *Match) endAsNoContest() {
 	observability.MatchEndedTotal.WithLabelValues("no_contest").Inc()
 
 	// Release all item reservations so players get their items back
-	if _, err := m.db.Pool.Exec(context.Background(), releaseReservationsSQL, m.State.MatchID); err != nil {
-		observability.Log.Error().Err(err).Str("matchId", m.State.MatchID).Msg("failed to release item reservations")
-	}
+	m.releaseUnsettledReservations()
 
 	payload, _ := json.Marshal(map[string]interface{}{
 		"winningTeam": 0,
