@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"time"
 
@@ -32,11 +34,18 @@ func NewJWTManager(secretKey string, tokenDuration time.Duration) *JWTManager {
 }
 
 func (m *JWTManager) Generate(accountID, playerID, role string) (string, error) {
+	// A random ID keeps tokens with the same claims signed in the same second distinct, so a
+	// refresh can store the new session before revoking the old one.
+	id := make([]byte, 16)
+	if _, err := rand.Read(id); err != nil {
+		return "", err
+	}
 	claims := Claims{
 		AccountID: accountID,
 		PlayerID:  playerID,
 		Role:      role,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        hex.EncodeToString(id),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(m.tokenDuration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},

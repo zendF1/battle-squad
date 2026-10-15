@@ -1,7 +1,9 @@
 package auth
 
 import (
+	"battle-squad/internal/shared/observability"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"battle-squad/internal/shared/model"
@@ -96,8 +98,17 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp, err := h.service.RefreshToken(r.Context(), req.RefreshToken)
-	if err != nil {
+	switch {
+	case errors.Is(err, ErrInvalidRefreshToken):
 		model.WriteError(w, r, model.ErrUnauthorized)
+		return
+	case errors.Is(err, ErrAccountBanned):
+		model.WriteError(w, r, model.ErrBanned)
+		return
+	case err != nil:
+		log := observability.FromContext(r.Context())
+		log.Error().Err(err).Msg("refresh token failed")
+		model.WriteError(w, r, model.ErrInternalServer)
 		return
 	}
 

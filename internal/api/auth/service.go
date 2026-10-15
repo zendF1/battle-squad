@@ -1,26 +1,36 @@
 package auth
 
 import (
+	"battle-squad/internal/shared/observability"
 	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/redis/go-redis/v9"
 	"time"
 
-	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/auth"
+	"battle-squad/internal/shared/database"
 )
 
+// accountLookup is the part of Repository that RefreshToken needs (faked in tests).
+type accountLookup interface {
+	FindAccountByID(ctx context.Context, accountID string) (*Account, error)
+	GetPlayerProfileByAccountID(ctx context.Context, accountID string) (string, string, int, error)
+}
+
 type Service struct {
-	repo         *Repository
-	redis        *database.RedisClient
-	jwtAccess    *auth.JWTManager
-	jwtRefresh   *auth.JWTManager
+	repo       *Repository
+	accounts   accountLookup
+	redis      *database.RedisClient
+	jwtAccess  *auth.JWTManager
+	jwtRefresh *auth.JWTManager
 }
 
 func NewService(repo *Repository, redis *database.RedisClient, jwtAccess, jwtRefresh *auth.JWTManager) *Service {
 	return &Service{
 		repo:       repo,
+		accounts:   repo,
 		redis:      redis,
 		jwtAccess:  jwtAccess,
 		jwtRefresh: jwtRefresh,
@@ -53,7 +63,7 @@ func (s *Service) GuestLogin(ctx context.Context, deviceInstallID string) (*Logi
 		playerID = pID
 		displayName = dName
 		level = lvl
-		
+
 		// Update login time
 		s.repo.UpdateLastLogin(ctx, accountID)
 	} else {
@@ -153,42 +163,60 @@ func (s *Service) LinkProvider(ctx context.Context, accountID, provider, idToken
 	return s.repo.LinkIdentity(ctx, accountID, provider, providerUserID, email)
 }
 
+// ErrInvalidRefreshToken means the refresh token is malformed, expired, revoked or names no
+// account: the client must log in again. Any other RefreshToken error is a server failure.
+var ErrInvalidRefreshToken = errors.New("invalid refresh token")
+
+// ErrAccountBanned means the token is valid but the account may not get new tokens.
+var ErrAccountBanned = errors.New("account banned")
+
 func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*LoginResponse, error) {
 	// Verify refresh token structure
 	claims, err := s.jwtRefresh.Verify(refreshToken)
 	if err != nil {
-		return nil, err
+		return nil, ErrInvalidRefreshToken
 	}
 
 	// Check if refresh token is in Redis (revocation check)
 	redisKey := "session:" + refreshToken
 	_, err = s.redis.Client.Get(ctx, redisKey).Result()
+	if errors.Is(err, redis.Nil) {
+		return nil, ErrInvalidRefreshToken
+	}
 	if err != nil {
-		return nil, errors.New("invalid or expired session")
+		return nil, fmt.Errorf("check refresh session: %w", err)
 	}
 
 	// Get account details (for role)
-	acc, err := s.repo.FindAccountByID(ctx, claims.AccountID)
+	acc, err := s.accounts.FindAccountByID(ctx, claims.AccountID)
 	if err != nil {
 		return nil, err
 	}
 	if acc == nil {
-		return nil, errors.New("account not found")
+		return nil, ErrInvalidRefreshToken
 	}
 	if acc.Status == "banned" {
-		return nil, fmt.Errorf("account banned")
+		return nil, ErrAccountBanned
 	}
 
 	// Get player details
-	playerID, displayName, level, err := s.repo.GetPlayerProfileByAccountID(ctx, claims.AccountID)
+	playerID, displayName, level, err := s.accounts.GetPlayerProfileByAccountID(ctx, claims.AccountID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Revoke old session and generate new tokens
-	s.redis.Client.Del(ctx, redisKey)
-
-	return s.generateLoginTokens(ctx, claims.AccountID, playerID, acc.Role, displayName, level)
+	// Save the new session before revoking the old one: if saving fails, the old refresh token
+	// still works and the client can retry.
+	resp, err := s.generateLoginTokens(ctx, claims.AccountID, playerID, acc.Role, displayName, level)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.redis.Client.Del(ctx, redisKey).Err(); err != nil {
+		// The old token stays valid until its TTL; better than failing a refresh that succeeded.
+		log := observability.FromContext(ctx)
+		log.Warn().Err(err).Str("accountId", claims.AccountID).Msg("refresh: old session not revoked")
+	}
+	return resp, nil
 }
 
 func (s *Service) Logout(ctx context.Context, refreshToken string) error {
