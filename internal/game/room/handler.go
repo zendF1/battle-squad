@@ -52,7 +52,9 @@ func (h *WSHandler) HandleMessage(ctx context.Context, client *ws.Client, msg ws
 		}
 
 	case "QuickPlay":
-		// Create a tutorial room with an idle bot and start match immediately
+		// Create a tutorial room with a bot (idle or AI) and start match immediately
+		payload := parseQuickPlayPayload(msg.Data)
+
 		var displayName string
 		query := "SELECT display_name FROM player_profiles WHERE player_id = $1"
 		err := h.hub.db.Pool.QueryRow(ctx, query, client.PlayerID).Scan(&displayName)
@@ -77,10 +79,11 @@ func (h *WSHandler) HandleMessage(ctx context.Context, client *ws.Client, msg ws
 			return
 		}
 
-		// Add idle bot and start match via room event
+		// Add the bot and start match via room event
+		data, _ := json.Marshal(payload)
 		room.Events <- roomEvent{
 			client: client,
-			msg:    ws.Message{Event: "__start_tutorial"},
+			msg:    ws.Message{Event: "__start_tutorial", Data: data},
 			ctx:    ctx,
 		}
 

@@ -388,7 +388,7 @@ func (r *Room) handleEvent(ev roomEvent) {
 	case "StartMatch":
 		r.processStartMatch(client)
 	case "__start_tutorial":
-		r.processStartTutorial(client)
+		r.processStartTutorial(client, parseQuickPlayPayload(msg.Data).AIBot())
 	}
 }
 
@@ -619,7 +619,8 @@ func (r *Room) processSelectItems(client *ws.Client, items []string) {
 		}
 	}
 
-	r.broadcastRoomUpdated()}
+	r.broadcastRoomUpdated()
+}
 
 func (r *Room) processReady(client *ws.Client) {
 	for idx, p := range r.State.Players {
@@ -741,14 +742,19 @@ func (r *Room) processStartMatch(client *ws.Client) {
 	r.hub.SyncRoomState(context.Background(), &r.State)
 }
 
-func (r *Room) processStartTutorial(client *ws.Client) {
+// processStartTutorial adds a bot and starts the quick-play match. aiBot makes
+// the bot move and shoot with the bot AI; otherwise it is an idle target.
+func (r *Room) processStartTutorial(client *ws.Client, aiBot bool) {
 	r.State.IsTutorial = true
 	matchID := generateID()
 
-	// Add idle bot to room state
+	botName := "Target Bot"
+	if aiBot {
+		botName = "Máy"
+	}
 	r.State.Players = append(r.State.Players, RoomPlayer{
 		PlayerID:    "bot_" + matchID[:8],
-		DisplayName: "Target Bot",
+		DisplayName: botName,
 		TeamID:      2,
 		CharacterID: "rookie",
 		Items:       []string{},
@@ -759,7 +765,7 @@ func (r *Room) processStartTutorial(client *ws.Client) {
 	r.State.Status = "in_match"
 	r.broadcastRoomUpdated()
 
-	observability.Log.Info().Str("roomId", r.ID).Msg("starting tutorial match with idle bot")
+	observability.Log.Info().Str("roomId", r.ID).Bool("aiBot", aiBot).Msg("starting tutorial match with bot")
 
 	// Build players for match
 	matchPlayers := []*match.BattlePlayerState{}
@@ -795,6 +801,7 @@ func (r *Room) processStartTutorial(client *ws.Client) {
 			StatusEffects: []match.StatusEffect{},
 			IsAlive:       true,
 			IsBot:         isBot,
+			IsIdle:        isBot && !aiBot,
 		})
 	}
 

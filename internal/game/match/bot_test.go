@@ -326,3 +326,57 @@ func TestPredictMoveMatchesProcessMoveOnIce(t *testing.T) {
 		})
 	}
 }
+
+// botTurnEvents runs one bot step with a client watching the match and
+// returns the events it was sent.
+func botTurnEvents(t *testing.T, m *Match, bot *BattlePlayerState) []string {
+	t.Helper()
+	c := &ws.Client{PlayerID: "p2", Send: make(chan ws.Message, 256)}
+	m.Clients["p2"] = c
+	m.botStep(context.Background(), botTurnState{}, 0)
+	var events []string
+	for {
+		select {
+		case msg := <-c.Send:
+			events = append(events, msg.Event)
+		default:
+			return events
+		}
+	}
+}
+
+func TestIdleBotEndsTurnWithoutShooting(t *testing.T) {
+	m, bot, enemy := newBotMatch(t, 400, 1000, nil)
+	bot.IsIdle = true
+
+	events := botTurnEvents(t, m, bot)
+	if bot.ShotsFired != 0 || m.resolving {
+		t.Fatalf("idle bot shot: shots=%d resolving=%v", bot.ShotsFired, m.resolving)
+	}
+	if m.State.CurrentPlayerID != enemy.PlayerID {
+		t.Fatalf("idle bot did not end its turn, current=%s", m.State.CurrentPlayerID)
+	}
+	for _, ev := range events {
+		if ev == "ShotResolved" || ev == "PlayerMoved" {
+			t.Fatalf("idle bot sent %s", ev)
+		}
+	}
+}
+
+func TestAIBotShootsOnItsTurn(t *testing.T) {
+	m, bot, _ := newBotMatch(t, 400, 1000, nil)
+	m.BotTier = DefaultBotTier
+	bot.DisplayName = "Target Bot" // the name no longer makes a bot idle
+
+	events := botTurnEvents(t, m, bot)
+	if bot.ShotsFired != 1 || !m.resolving {
+		t.Fatalf("AI bot did not shoot: shots=%d resolving=%v", bot.ShotsFired, m.resolving)
+	}
+	shot := false
+	for _, ev := range events {
+		shot = shot || ev == "ShotResolved"
+	}
+	if !shot {
+		t.Fatalf("no ShotResolved broadcast, got %v", events)
+	}
+}

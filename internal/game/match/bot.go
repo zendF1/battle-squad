@@ -43,8 +43,8 @@ func (m *Match) botStep(ctx context.Context, turn botTurnState, step int) {
 		return
 	}
 
-	// Idle bots (tutorial) and frozen bots just end their turn
-	if step >= botMaxSteps || HasEffect(bot, "freeze") || bot.DisplayName == "Target Bot" {
+	// Idle bots (tutorial target) and frozen bots just end their turn
+	if step >= botMaxSteps || HasEffect(bot, "freeze") || bot.IsIdle {
 		m.el.Log("EndTurn", bot.PlayerID, nil)
 		m.endTurn(ctx)
 		return

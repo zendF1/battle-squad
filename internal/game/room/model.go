@@ -1,5 +1,7 @@
 package room
 
+import "encoding/json"
+
 type RoomPlayer struct {
 	PlayerID    string   `json:"playerId"`
 	DisplayName string   `json:"displayName"`
@@ -11,17 +13,17 @@ type RoomPlayer struct {
 }
 
 type RoomState struct {
-	RoomID       string       `json:"roomId"`
-	HostPlayerID string       `json:"hostPlayerId"`
-	Mode         string       `json:"mode"` // pvp_1v1, pvp_2v2
-	MapID        string       `json:"mapId"`
-	MaxPlayers   int          `json:"maxPlayers"`
-	Players      []RoomPlayer `json:"players"`
+	RoomID       string            `json:"roomId"`
+	HostPlayerID string            `json:"hostPlayerId"`
+	Mode         string            `json:"mode"` // pvp_1v1, pvp_2v2
+	MapID        string            `json:"mapId"`
+	MaxPlayers   int               `json:"maxPlayers"`
+	Players      []RoomPlayer      `json:"players"`
 	IsLocked     bool              `json:"isLocked"`
 	PasswordHash string            `json:"-"`
 	Status       string            `json:"status"` // waiting, in_match
 	IsTutorial   bool              `json:"isTutorial"`
-	LobbyMapping map[string]string `json:"-"`  // playerID → lobbyID for return-to-lobby
+	LobbyMapping map[string]string `json:"-"` // playerID → lobbyID for return-to-lobby
 	HasBot       bool              `json:"hasBot"`
 }
 
@@ -29,6 +31,30 @@ type CreateRoomPayload struct {
 	Mode     string  `json:"mode"`
 	MapID    string  `json:"mapId"`
 	Password *string `json:"password,omitempty"`
+}
+
+// QuickPlayPayload selects the tutorial opponent: "ai" plays with the bot AI;
+// absent, empty, "idle" or any other value gets the idle target bot.
+type QuickPlayPayload struct {
+	Bot string `json:"bot,omitempty"`
+}
+
+// AIBot reports whether the quick-play bot should play with the AI.
+func (p QuickPlayPayload) AIBot() bool {
+	return p.Bot == "ai"
+}
+
+// parseQuickPlayPayload reads an optional QuickPlay payload; missing or
+// malformed data falls back to the idle bot.
+func parseQuickPlayPayload(data []byte) QuickPlayPayload {
+	var p QuickPlayPayload
+	if len(data) > 0 {
+		_ = json.Unmarshal(data, &p)
+	}
+	if !p.AIBot() {
+		p.Bot = "idle"
+	}
+	return p
 }
 
 type JoinRoomPayload struct {

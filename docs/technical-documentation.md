@@ -298,7 +298,7 @@ Client message → CompositeWSHandler
 |-------|---------|-------|
 | `CreateRoom` | `{mode, mapId, password?}` | Tạo phòng (pvp_1v1, pvp_2v2) |
 | `JoinRoom` | `{roomId, password?}` | Vào phòng |
-| `QuickPlay` | `{}` | Chơi tutorial với bot idle |
+| `QuickPlay` | `{bot?: "ai"}` | Chơi tutorial: mặc định bot idle (đứng yên), `bot: "ai"` cho bot AI di chuyển và bắn |
 | `ChangeTeam` | `{teamId}` | Đổi team (1 hoặc 2) |
 | `SelectCharacter` | `{characterId}` | Chọn nhân vật |
 | `SelectItems` | `{items[]}` | Chọn items (max 3) |

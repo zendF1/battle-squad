@@ -8,56 +8,57 @@ type Vector2 struct {
 }
 
 type StatusEffect struct {
-	EffectID       string `json:"effectId"` // freeze, net, heal, wind_stop
-	TargetPlayerID string `json:"targetPlayerId"`
-	DurationTurn   int    `json:"durationTurn"`
+	EffectID       string  `json:"effectId"` // freeze, net, heal, wind_stop
+	TargetPlayerID string  `json:"targetPlayerId"`
+	DurationTurn   int     `json:"durationTurn"`
 	Value          float64 `json:"value"`
-	SourcePlayerID string `json:"sourcePlayerId"`
+	SourcePlayerID string  `json:"sourcePlayerId"`
 }
 
 type BattlePlayerState struct {
-	PlayerID      string         `json:"playerId"`
-	DisplayName   string         `json:"displayName"`
-	TeamID        int            `json:"teamId"`
-	CharacterID   string         `json:"characterId"`
-	HP            int            `json:"hp"`
-	MaxHP         int            `json:"maxHp"`
-	Defense       int            `json:"defense"`
-	Position      Vector2        `json:"position"`
-	MoveEnergy    int            `json:"moveEnergy"`
-	Items         []string       `json:"items"` // Consumables remaining
-	UsedItems     []string       `json:"-"`     // Consumables spent this match (reservations to consume)
-	StatusEffects []StatusEffect `json:"statusEffects"`
+	PlayerID        string         `json:"playerId"`
+	DisplayName     string         `json:"displayName"`
+	TeamID          int            `json:"teamId"`
+	CharacterID     string         `json:"characterId"`
+	HP              int            `json:"hp"`
+	MaxHP           int            `json:"maxHp"`
+	Defense         int            `json:"defense"`
+	Position        Vector2        `json:"position"`
+	MoveEnergy      int            `json:"moveEnergy"`
+	Items           []string       `json:"items"` // Consumables remaining
+	UsedItems       []string       `json:"-"`     // Consumables spent this match (reservations to consume)
+	StatusEffects   []StatusEffect `json:"statusEffects"`
 	IsAlive         bool           `json:"isAlive"`
 	IsBot           bool           `json:"isBot"`
+	IsIdle          bool           `json:"-"` // bot that only ends its turn (tutorial target)
 	DamageBonus     int            `json:"damageBonus"`
 	CritChance      float64        `json:"critChance"`
 	MoveEnergyBonus int            `json:"moveEnergyBonus"`
 	SkillEnergy     int            `json:"skillEnergy"` // 0-100, skill usable at 100
-	DamageDealt   int            `json:"damageDealt"`
-	KillCount     int            `json:"killCount"`
-	ShotsFired    int            `json:"shotsFired"`
-	ShotsHit      int            `json:"shotsHit"`
+	DamageDealt     int            `json:"damageDealt"`
+	KillCount       int            `json:"killCount"`
+	ShotsFired      int            `json:"shotsFired"`
+	ShotsHit        int            `json:"shotsHit"`
 }
 
 type WindState struct {
-	Direction int `json:"direction"` // -1: left, 0: no wind, 1: right
-	Power     float64 `json:"power"` // 0.0 to 4.0
+	Direction int     `json:"direction"` // -1: left, 0: no wind, 1: right
+	Power     float64 `json:"power"`     // 0.0 to 4.0
 }
 
 type MatchState struct {
-	MatchID         string                       `json:"matchId"`
-	RoomID          string                       `json:"roomId"`
-	Mode            string                       `json:"mode"`
-	MapID           string                       `json:"mapId"`
-	TurnIndex       int                          `json:"turnIndex"`
-	CurrentPlayerID string                       `json:"currentPlayerId"`
-	Wind            WindState                    `json:"wind"`
+	MatchID         string                        `json:"matchId"`
+	RoomID          string                        `json:"roomId"`
+	Mode            string                        `json:"mode"`
+	MapID           string                        `json:"mapId"`
+	TurnIndex       int                           `json:"turnIndex"`
+	CurrentPlayerID string                        `json:"currentPlayerId"`
+	Wind            WindState                     `json:"wind"`
 	Players         map[string]*BattlePlayerState `json:"players"`
-	Status          string                       `json:"status"` // in_progress, ended, recovering
-	TurnOrder       []string                     `json:"turnOrder"`
-	TurnTimeLeft    int                          `json:"turnTimeLeft"` // in seconds
-	ActiveEffects   []StatusEffect               `json:"activeEffects"` // global active effects (like WindStop)
+	Status          string                        `json:"status"` // in_progress, ended, recovering
+	TurnOrder       []string                      `json:"turnOrder"`
+	TurnTimeLeft    int                           `json:"turnTimeLeft"`  // in seconds
+	ActiveEffects   []StatusEffect                `json:"activeEffects"` // global active effects (like WindStop)
 }
 
 type ShootAction struct {
@@ -133,15 +134,15 @@ type ShotResolved struct {
 }
 
 type MatchHistoryRecord struct {
-	MatchID     string    `json:"matchId"`
-	PlayerID    string    `json:"playerId"`
-	Mode        string    `json:"mode"`
-	MapID       string    `json:"mapId"`
-	Result      string    `json:"result"` // win, loss, draw, no_contest
-	Damage      int       `json:"damage"`
-	Kills       int       `json:"kills"`
-	Accuracy    float64   `json:"accuracy"`
-	EXPGained   int       `json:"expGained"`
-	CoinGained  int       `json:"coinGained"`
-	PlayedAt    time.Time `json:"playedAt"`
+	MatchID    string    `json:"matchId"`
+	PlayerID   string    `json:"playerId"`
+	Mode       string    `json:"mode"`
+	MapID      string    `json:"mapId"`
+	Result     string    `json:"result"` // win, loss, draw, no_contest
+	Damage     int       `json:"damage"`
+	Kills      int       `json:"kills"`
+	Accuracy   float64   `json:"accuracy"`
+	EXPGained  int       `json:"expGained"`
+	CoinGained int       `json:"coinGained"`
+	PlayedAt   time.Time `json:"playedAt"`
 }
