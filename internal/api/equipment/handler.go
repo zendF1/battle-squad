@@ -23,9 +23,7 @@ func getPlayerID(r *http.Request) string {
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	model.WriteJSON(w, status, v)
 }
 
 func handleServiceError(w http.ResponseWriter, r *http.Request, err error) {
@@ -139,8 +137,7 @@ func (h *Handler) EquipItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"success"}`))
+	model.WriteOK(w, nil)
 }
 
 func (h *Handler) UnequipItem(w http.ResponseWriter, r *http.Request) {
@@ -161,8 +158,7 @@ func (h *Handler) UnequipItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"success"}`))
+	model.WriteOK(w, nil)
 }
 
 // ---------------------------------------------------------------------------
@@ -209,8 +205,7 @@ func (h *Handler) Dismantle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"success"}`))
+	model.WriteOK(w, nil)
 }
 
 // ---------------------------------------------------------------------------
@@ -235,8 +230,7 @@ func (h *Handler) SocketGem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"success"}`))
+	model.WriteOK(w, nil)
 }
 
 func (h *Handler) UnsocketGem(w http.ResponseWriter, r *http.Request) {
@@ -257,8 +251,7 @@ func (h *Handler) UnsocketGem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"success"}`))
+	model.WriteOK(w, nil)
 }
 
 // ---------------------------------------------------------------------------
@@ -335,8 +328,7 @@ func (h *Handler) BuyStones(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"success"}`))
+	model.WriteOK(w, nil)
 }
 
 // ---------------------------------------------------------------------------
@@ -373,8 +365,7 @@ func (h *Handler) BuyGems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"success"}`))
+	model.WriteOK(w, nil)
 }
 
 // ---------------------------------------------------------------------------
@@ -411,8 +402,7 @@ func (h *Handler) BuyMaterials(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"success"}`))
+	model.WriteOK(w, nil)
 }
 
 // ---------------------------------------------------------------------------

@@ -30,9 +30,7 @@ func (h *Handler) GetRankMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(pr)
+	model.WriteOK(w, pr)
 }
 
 func (h *Handler) GetLeaderboard(w http.ResponseWriter, r *http.Request) {
@@ -59,9 +57,7 @@ func (h *Handler) GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
+	model.WriteOK(w, resp)
 }
 
 func (h *Handler) GetCurrentSeason(w http.ResponseWriter, r *http.Request) {
@@ -71,9 +67,7 @@ func (h *Handler) GetCurrentSeason(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(season)
+	model.WriteOK(w, season)
 }
 
 func (h *Handler) ClaimReward(w http.ResponseWriter, r *http.Request) {
@@ -100,9 +94,7 @@ func (h *Handler) ClaimReward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	model.WriteOK(w, map[string]interface{}{
 		"status": "success",
 		"rewards": map[string]interface{}{
 			"coin": coin,

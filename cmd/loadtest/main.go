@@ -94,17 +94,19 @@ func guestLogin(apiBase string, playerID int) (string, error) {
 		}
 
 		var result struct {
-			Token string `json:"accessToken"`
+			Data struct {
+				Token string `json:"accessToken"`
+			} `json:"data"`
 		}
 		err = json.NewDecoder(resp.Body).Decode(&result)
 		resp.Body.Close()
 		if err != nil {
 			continue
 		}
-		if result.Token == "" {
+		if result.Data.Token == "" {
 			continue
 		}
-		return result.Token, nil
+		return result.Data.Token, nil
 	}
 	return "", fmt.Errorf("login failed after 3 retries")
 }

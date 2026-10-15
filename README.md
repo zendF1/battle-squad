@@ -116,6 +116,7 @@ docker build -f Dockerfile.worker -t battlesquad-worker .
 | `APP_VERSION` | Phiên bản ứng dụng | `1.0.0` |
 | `PROTOCOL_VERSION` | Phiên bản protocol tối thiểu | `1` |
 | `NODE_ID` | ID node cho Game Server (multi-node) | `node-game-1` |
+| `IAP_MOCK_ENABLED` | Chấp nhận purchase token giả cho `/iap/verify` (chỉ để test; bị bỏ qua khi `APP_ENV=production`). Chưa có xác minh store thật, nên khi tắt thì `/iap/verify` trả `IAP_STORE_NOT_CONFIGURED` | `false` |
 
 **Quan trọng:** Luôn đặt `JWT_SECRET` riêng và `APP_ENV=production` khi deploy thật.
 

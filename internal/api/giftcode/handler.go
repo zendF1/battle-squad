@@ -40,6 +40,5 @@ func (h *Handler) Redeem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"success"}`))
+	model.WriteOK(w, nil)
 }

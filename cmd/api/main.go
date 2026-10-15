@@ -24,11 +24,11 @@ import (
 	"battle-squad/internal/api/matchhistory"
 	"battle-squad/internal/api/rooms"
 	"battle-squad/internal/api/dev"
-	"battle-squad/internal/shared/idempotency"
 	"battle-squad/internal/shared/config"
 	"battle-squad/internal/shared/database"
 	sharedAuth "battle-squad/internal/shared/auth"
 	"battle-squad/internal/shared/middleware"
+	"battle-squad/internal/shared/model"
 	"battle-squad/internal/shared/observability"
 
 	"github.com/go-chi/chi/v5"
@@ -78,14 +78,12 @@ func main() {
 	characterService := character.NewService(characterRepo, economyRepo, db)
 	characterHandler := character.NewHandler(characterService)
 
-	idempotencyManager := idempotency.NewManager(redisClient)
-
 	shopRepo := shop.NewRepository(db)
-	shopService := shop.NewService(shopRepo, economyRepo, inventoryRepo, db, idempotencyManager)
+	shopService := shop.NewService(shopRepo, economyRepo, inventoryRepo, db)
 	shopHandler := shop.NewHandler(shopService)
 
 	iapRepo := iap.NewRepository(db)
-	iapService := iap.NewService(iapRepo, economyRepo, db)
+	iapService := iap.NewService(iapRepo, economyRepo, db, cfg.IAPMockEnabled)
 	iapHandler := iap.NewHandler(iapService)
 
 	giftcodeRepo := giftcode.NewRepository(db)
@@ -150,6 +148,14 @@ func main() {
 	// Rate limiter: 10 req/sec rate, burst of 20
 	limiter := middleware.NewRateLimiter(rate.Limit(10), 20)
 	r.Use(limiter.Limit)
+
+	// Unknown routes answer with the same JSON error envelope as handlers
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		model.WriteError(w, r, model.ErrNotFound)
+	})
+	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		model.WriteError(w, r, model.ErrMethodNotAllowed)
+	})
 
 	// 8. Public Endpoints
 	r.Handle("/metrics", promhttp.Handler())

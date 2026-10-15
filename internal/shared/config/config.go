@@ -27,6 +27,9 @@ type Config struct {
 	JWTSecret      string
 	AppVersion     string
 	ProtocolVersion int
+	// IAPMockEnabled accepts any purchase token without asking the store.
+	// Opt-in only, and never honoured when APP_ENV=production.
+	IAPMockEnabled bool
 }
 
 func LoadConfig() *Config {
@@ -57,6 +60,9 @@ func LoadConfig() *Config {
 		protocolVersion = 1
 	}
 
+	iapMockEnabled, _ := strconv.ParseBool(getEnv("IAP_MOCK_ENABLED", "false"))
+	iapMockEnabled = iapMockEnabled && env != "production"
+
 	return &Config{
 		Env:             env,
 		APIPort:         apiPort,
@@ -72,6 +78,7 @@ func LoadConfig() *Config {
 		JWTSecret:       jwtSecret,
 		AppVersion:      appVersion,
 		ProtocolVersion: protocolVersion,
+		IAPMockEnabled:  iapMockEnabled,
 	}
 }
 

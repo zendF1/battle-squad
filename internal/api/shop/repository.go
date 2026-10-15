@@ -68,7 +68,18 @@ func (r *Repository) GetActiveOffers(ctx context.Context) ([]ShopOffer, error) {
 	return offers, nil
 }
 
-func (r *Repository) GetOfferByID(ctx context.Context, offerID string) (*ShopOffer, error) {
+// LockPlayerTx serialises purchases per player: limit checks and idempotency
+// lookups after this lock see every previously committed purchase.
+func (r *Repository) LockPlayerTx(ctx context.Context, tx pgx.Tx, playerID string) error {
+	var one int
+	err := tx.QueryRow(ctx, `SELECT 1 FROM player_profiles WHERE player_id = $1 FOR UPDATE`, playerID).Scan(&one)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return errors.New("player profile not found")
+	}
+	return err
+}
+
+func (r *Repository) GetOfferByIDTx(ctx context.Context, tx pgx.Tx, offerID string) (*ShopOffer, error) {
 	query := `
 		SELECT offer_id, item_id, offer_type, price_currency, price_amount, quantity, limit_per_player, starts_at, ends_at, is_active
 		FROM shop_offers
@@ -77,7 +88,7 @@ func (r *Repository) GetOfferByID(ctx context.Context, offerID string) (*ShopOff
 	var o ShopOffer
 	var limit sql.NullInt32
 	var startsAt, endsAt sql.NullTime
-	err := r.db.Pool.QueryRow(ctx, query, offerID).Scan(
+	err := tx.QueryRow(ctx, query, offerID).Scan(
 		&o.OfferID,
 		&o.ItemID,
 		&o.OfferType,
@@ -108,23 +119,50 @@ func (r *Repository) GetOfferByID(ctx context.Context, offerID string) (*ShopOff
 	return &o, nil
 }
 
-func (r *Repository) GetPlayerPurchaseCount(ctx context.Context, playerID, offerID string) (int, error) {
+func (r *Repository) GetPlayerPurchaseCountTx(ctx context.Context, tx pgx.Tx, playerID, offerID string) (int, error) {
 	query := `
-		SELECT COALESCE(SUM(quantity_granted), 0)
+		SELECT COUNT(*)
 		FROM shop_purchases
 		WHERE player_id = $1 AND offer_id = $2 AND status = 'completed'
 	`
 	var count int
-	err := r.db.Pool.QueryRow(ctx, query, playerID, offerID).Scan(&count)
+	err := tx.QueryRow(ctx, query, playerID, offerID).Scan(&count)
 	return count, err
 }
 
-func (r *Repository) CreateShopPurchaseTx(ctx context.Context, tx pgx.Tx, purchase *ShopPurchase) error {
+func (r *Repository) FindPurchaseByIdempotencyKeyTx(ctx context.Context, tx pgx.Tx, playerID, idempotencyKey string) (*ShopPurchase, error) {
 	query := `
-		INSERT INTO shop_purchases (purchase_id, player_id, offer_id, price_currency, price_amount, quantity_granted, status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		SELECT purchase_id, player_id, offer_id, price_currency, price_amount, quantity_granted, status, created_at
+		FROM shop_purchases
+		WHERE player_id = $1 AND idempotency_key = $2
 	`
-	_, err := tx.Exec(
+	var p ShopPurchase
+	err := tx.QueryRow(ctx, query, playerID, idempotencyKey).Scan(
+		&p.PurchaseID,
+		&p.PlayerID,
+		&p.OfferID,
+		&p.PriceCurrency,
+		&p.PriceAmount,
+		&p.QuantityGranted,
+		&p.Status,
+		&p.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (r *Repository) CreateShopPurchaseTx(ctx context.Context, tx pgx.Tx, purchase *ShopPurchase, idempotencyKey string) error {
+	query := `
+		INSERT INTO shop_purchases (purchase_id, player_id, offer_id, price_currency, price_amount, quantity_granted, status, idempotency_key)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''))
+		RETURNING created_at
+	`
+	return tx.QueryRow(
 		ctx,
 		query,
 		purchase.PurchaseID,
@@ -134,8 +172,8 @@ func (r *Repository) CreateShopPurchaseTx(ctx context.Context, tx pgx.Tx, purcha
 		purchase.PriceAmount,
 		purchase.QuantityGranted,
 		purchase.Status,
-	)
-	return err
+		idempotencyKey,
+	).Scan(&purchase.CreatedAt)
 }
 
 func (r *Repository) GetPlayerPurchases(ctx context.Context, playerID string) ([]ShopPurchase, error) {
@@ -171,4 +209,17 @@ func (r *Repository) GetPlayerPurchases(ctx context.Context, playerID string) ([
 	}
 
 	return purchases, nil
+}
+
+// UnlockCharacterTx returns false when the player already owns the character.
+func (r *Repository) UnlockCharacterTx(ctx context.Context, tx pgx.Tx, playerID, characterID string) (bool, error) {
+	tag, err := tx.Exec(ctx, `
+		INSERT INTO player_characters (player_id, character_id)
+		VALUES ($1, $2)
+		ON CONFLICT DO NOTHING
+	`, playerID, characterID)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
 }

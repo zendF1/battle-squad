@@ -11,15 +11,24 @@ import (
 	"battle-squad/internal/api/economy"
 	"battle-squad/internal/api/inventory"
 	"battle-squad/internal/shared/database"
-	"battle-squad/internal/shared/idempotency"
+)
+
+var (
+	ErrOfferRequired          = errors.New("offer ID is required")
+	ErrOfferInactive          = errors.New("offer is not active or does not exist")
+	ErrOfferNotStarted        = errors.New("offer has not started yet")
+	ErrOfferExpired           = errors.New("offer has expired")
+	ErrLimitExceeded          = errors.New("purchase limit exceeded for this offer")
+	ErrCharacterAlreadyOwned  = errors.New("character already owned")
+	ErrIdempotencyKeyMismatch = errors.New("idempotency key was already used for a different offer")
+	ErrIdempotencyKeyTooLong  = errors.New("idempotency key is too long")
 )
 
 type Service struct {
-	repo         *Repository
-	economyRepo  *economy.Repository
+	repo          *Repository
+	economyRepo   *economy.Repository
 	inventoryRepo *inventory.Repository
-	db           *database.PostgresDB
-	idempotency  *idempotency.Manager
+	db            *database.PostgresDB
 }
 
 func NewService(
@@ -27,14 +36,12 @@ func NewService(
 	economyRepo *economy.Repository,
 	inventoryRepo *inventory.Repository,
 	db *database.PostgresDB,
-	idempotency *idempotency.Manager,
 ) *Service {
 	return &Service{
 		repo:          repo,
 		economyRepo:   economyRepo,
 		inventoryRepo: inventoryRepo,
 		db:            db,
-		idempotency:   idempotency,
 	}
 }
 
@@ -42,93 +49,98 @@ func (s *Service) GetActiveOffers(ctx context.Context) ([]ShopOffer, error) {
 	return s.repo.GetActiveOffers(ctx)
 }
 
-func (s *Service) Purchase(ctx context.Context, playerID, offerID, idempotencyKey string) error {
+// Purchase debits the player and grants the offer in one transaction. A retry
+// with the same idempotencyKey returns the original purchase without charging
+// again; a failed attempt leaves no record, so retrying it runs it afresh.
+func (s *Service) Purchase(ctx context.Context, playerID, offerID, idempotencyKey string) (*ShopPurchase, error) {
 	if offerID == "" {
-		return errors.New("offer ID is required")
+		return nil, ErrOfferRequired
+	}
+	if len(idempotencyKey) > 64 {
+		return nil, ErrIdempotencyKeyTooLong
 	}
 
-	// 1. Handle idempotency check
-	if idempotencyKey != "" {
-		key := fmt.Sprintf("shop_purchase:%s:%s", playerID, idempotencyKey)
-		duplicate, err := s.idempotency.CheckAndSet(ctx, key, 24*time.Hour)
-		if err != nil {
-			return fmt.Errorf("idempotency check error: %w", err)
-		}
-		if duplicate {
-			return nil // Duplicate request - return success (idempotent)
-		}
-		defer func() {
-			s.idempotency.Complete(ctx, key, 24*time.Hour)
-		}()
-	}
-
-	// 2. Start PostgreSQL transaction
 	tx, err := s.db.Pool.Begin(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
+	// 1. Lock the player first so concurrent purchases (same key or not) run one at a time
+	if err := s.repo.LockPlayerTx(ctx, tx, playerID); err != nil {
+		return nil, err
+	}
+
+	// 2. Idempotency: a committed purchase with this key is the answer
+	if idempotencyKey != "" {
+		existing, err := s.repo.FindPurchaseByIdempotencyKeyTx(ctx, tx, playerID, idempotencyKey)
+		if err != nil {
+			return nil, err
+		}
+		if existing != nil {
+			if existing.OfferID != offerID {
+				return nil, ErrIdempotencyKeyMismatch
+			}
+			return existing, nil
+		}
+	}
+
 	// 3. Fetch offer details
-	offer, err := s.repo.GetOfferByID(ctx, offerID)
+	offer, err := s.repo.GetOfferByIDTx(ctx, tx, offerID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if offer == nil || !offer.IsActive {
-		return errors.New("offer is not active or does not exist")
+		return nil, ErrOfferInactive
 	}
 
-	// Check offer date validation
 	now := time.Now()
 	if offer.StartsAt != nil && now.Before(*offer.StartsAt) {
-		return errors.New("offer has not started yet")
+		return nil, ErrOfferNotStarted
 	}
 	if offer.EndsAt != nil && now.After(*offer.EndsAt) {
-		return errors.New("offer has expired")
+		return nil, ErrOfferExpired
 	}
 
-	// 4. Check player purchase limit
+	// 4. Check player purchase limit (under the player lock)
 	if offer.LimitPerPlayer != nil {
-		purchasedCount, err := s.repo.GetPlayerPurchaseCount(ctx, playerID, offerID)
+		purchasedCount, err := s.repo.GetPlayerPurchaseCountTx(ctx, tx, playerID, offerID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if purchasedCount >= *offer.LimitPerPlayer {
-			return errors.New("purchase limit exceeded for this offer")
+			return nil, ErrLimitExceeded
 		}
 	}
 
 	// 5. Debit currency balance
 	_, err = s.economyRepo.DebitTx(ctx, tx, playerID, offer.PriceCurrency, offer.PriceAmount, "shop_purchase", offerID, false)
 	if err != nil {
-		return err // Balance check failure (e.g. Insufficient Balance)
+		return nil, err // Balance check failure (e.g. Insufficient Balance)
 	}
 
 	// 6. Grant item/character depending on offerType
-	if offer.OfferType == "item" || offer.OfferType == "bundle" {
+	switch offer.OfferType {
+	case "item", "bundle":
 		err = s.inventoryRepo.AddItemsTx(ctx, tx, playerID, offer.ItemID, offer.Quantity, "shop_purchase", nil)
 		if err != nil {
-			return fmt.Errorf("failed to grant item: %w", err)
+			return nil, fmt.Errorf("failed to grant item: %w", err)
 		}
-	} else if offer.OfferType == "character_unlock" {
-		// Insert character unlock
-		queryUnlock := `
-			INSERT INTO player_characters (player_id, character_id)
-			VALUES ($1, $2)
-			ON CONFLICT DO NOTHING
-		`
-		_, err = tx.Exec(ctx, queryUnlock, playerID, offer.ItemID)
+	case "character_unlock":
+		unlocked, err := s.repo.UnlockCharacterTx(ctx, tx, playerID, offer.ItemID)
 		if err != nil {
-			return fmt.Errorf("failed to unlock character: %w", err)
+			return nil, fmt.Errorf("failed to unlock character: %w", err)
 		}
-	} else {
-		return fmt.Errorf("unsupported offer type: %s", offer.OfferType)
+		if !unlocked {
+			return nil, ErrCharacterAlreadyOwned // rollback undoes the debit
+		}
+	default:
+		return nil, fmt.Errorf("unsupported offer type: %s", offer.OfferType)
 	}
 
 	// 7. Write purchase record
-	purchaseID := generateID()
-	purchaseRecord := &ShopPurchase{
-		PurchaseID:      purchaseID,
+	purchase := &ShopPurchase{
+		PurchaseID:      generateID(),
 		PlayerID:        playerID,
 		OfferID:         offerID,
 		PriceCurrency:   offer.PriceCurrency,
@@ -136,13 +148,15 @@ func (s *Service) Purchase(ctx context.Context, playerID, offerID, idempotencyKe
 		QuantityGranted: offer.Quantity,
 		Status:          "completed",
 	}
-	err = s.repo.CreateShopPurchaseTx(ctx, tx, purchaseRecord)
-	if err != nil {
-		return fmt.Errorf("failed to record purchase: %w", err)
+	if err := s.repo.CreateShopPurchaseTx(ctx, tx, purchase, idempotencyKey); err != nil {
+		return nil, fmt.Errorf("failed to record purchase: %w", err)
 	}
 
 	// 8. Commit transaction
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return purchase, nil
 }
 
 func (s *Service) GetPlayerPurchases(ctx context.Context, playerID string) ([]ShopPurchase, error) {

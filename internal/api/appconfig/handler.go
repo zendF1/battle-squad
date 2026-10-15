@@ -1,7 +1,6 @@
 package appconfig
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"battle-squad/internal/shared/model"
@@ -27,9 +26,7 @@ func (h *Handler) GetVersionPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(policy)
+	model.WriteOK(w, policy)
 }
 
 func (h *Handler) GetRemoteConfig(w http.ResponseWriter, r *http.Request) {
@@ -39,7 +36,5 @@ func (h *Handler) GetRemoteConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(config)
+	model.WriteOK(w, config)
 }

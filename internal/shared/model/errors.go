@@ -1,7 +1,7 @@
 package model
 
 import (
-	"encoding/json"
+	"errors"
 	"net/http"
 
 	"battle-squad/internal/shared/observability"
@@ -18,27 +18,43 @@ func (e AppError) Error() string {
 	return e.Message
 }
 
-type ErrorResponse struct {
-	Error struct {
-		Code          string                 `json:"code"`
-		Message       string                 `json:"message"`
-		Details       map[string]interface{} `json:"details,omitempty"`
-		CorrelationID string                 `json:"correlationId"`
-	} `json:"error"`
+type ErrorBody struct {
+	Code          string                 `json:"code"`
+	Message       string                 `json:"message"`
+	Details       map[string]interface{} `json:"details,omitempty"`
+	CorrelationID string                 `json:"correlationId"`
 }
 
+// ErrorResponse is the error payload of WebSocket error events.
+type ErrorResponse struct {
+	Error ErrorBody `json:"error"`
+}
+
+// WriteError writes appErr as a {"success":false,"error":{...}} envelope.
 func WriteError(w http.ResponseWriter, r *http.Request, appErr AppError) {
 	corrID, _ := r.Context().Value(observability.CorrelationIDKey).(string)
-	
-	resp := ErrorResponse{}
-	resp.Error.Code = appErr.Code
-	resp.Error.Message = appErr.Message
-	resp.Error.Details = appErr.Details
-	resp.Error.CorrelationID = corrID
+	writeEnvelope(w, appErr.Status, Envelope{
+		Success: false,
+		Error: &ErrorBody{
+			Code:          appErr.Code,
+			Message:       appErr.Message,
+			Details:       appErr.Details,
+			CorrelationID: corrID,
+		},
+	})
+}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(appErr.Status)
-	json.NewEncoder(w).Encode(resp)
+// WriteServiceError writes err as-is when it is an AppError; anything else is
+// unexpected, so it is logged and hidden behind ErrInternalServer.
+func WriteServiceError(w http.ResponseWriter, r *http.Request, err error) {
+	var appErr AppError
+	if errors.As(err, &appErr) {
+		WriteError(w, r, appErr)
+		return
+	}
+	logger := observability.FromContext(r.Context())
+	logger.Error().Err(err).Str("path", r.URL.Path).Msg("unexpected service error")
+	WriteError(w, r, ErrInternalServer)
 }
 
 // Error codes registry
@@ -55,6 +71,14 @@ var (
 	
 	ErrInsufficientBalance = AppError{Code: "SHOP_INSUFFICIENT_BALANCE", Message: "Insufficient balance for this purchase", Status: http.StatusBadRequest}
 	ErrItemOutOfStock      = AppError{Code: "SHOP_ITEM_OUT_OF_STOCK", Message: "Item offer is out of stock", Status: http.StatusConflict}
+	ErrShopAlreadyOwned     = AppError{Code: "SHOP_ALREADY_OWNED", Message: "You already own this character", Status: http.StatusConflict}
+	ErrIdempotencyKeyReused = AppError{Code: "IDEMPOTENCY_KEY_REUSED", Message: "Idempotency key was already used for a different request", Status: http.StatusConflict}
+
+	ErrIAPStoreNotConfigured  = AppError{Code: "IAP_STORE_NOT_CONFIGURED", Message: "Store receipt verification is not available", Status: http.StatusServiceUnavailable}
+	ErrIAPProductInactive     = AppError{Code: "IAP_PRODUCT_INACTIVE", Message: "Product is not active or does not exist", Status: http.StatusNotFound}
+	ErrIAPReceiptInvalid      = AppError{Code: "IAP_VERIFICATION_FAILED", Message: "The store rejected this receipt", Status: http.StatusBadRequest}
+	ErrIAPTransactionConflict = AppError{Code: "IAP_TRANSACTION_CONFLICT", Message: "This receipt was already used for a different purchase", Status: http.StatusConflict}
+	ErrMethodNotAllowed       = AppError{Code: "METHOD_NOT_ALLOWED", Message: "Method not allowed", Status: http.StatusMethodNotAllowed}
 	
 	ErrMatchNotYourTurn    = AppError{Code: "MATCH_NOT_YOUR_TURN", Message: "It is not your turn to play", Status: http.StatusForbidden}
 	ErrMatchAlreadyShot    = AppError{Code: "MATCH_ALREADY_SHOT", Message: "You have already fired a shot during this turn", Status: http.StatusConflict}

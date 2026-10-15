@@ -2,6 +2,7 @@ package iap
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"battle-squad/internal/shared/model"
@@ -27,9 +28,7 @@ func (h *Handler) GetProducts(w http.ResponseWriter, r *http.Request) {
 		products = []IAPProduct{}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(products)
+	model.WriteOK(w, products)
 }
 
 func (h *Handler) VerifyReceipt(w http.ResponseWriter, r *http.Request) {
@@ -47,16 +46,28 @@ func (h *Handler) VerifyReceipt(w http.ResponseWriter, r *http.Request) {
 
 	trans, err := h.service.VerifyReceipt(r.Context(), playerID, req.ProductID, req.Platform, req.PurchaseToken)
 	if err != nil {
-		errResponse := model.AppError{
-			Code:    "IAP_VERIFICATION_FAILED",
-			Message: err.Error(),
-			Status:  http.StatusBadRequest,
-		}
-		model.WriteError(w, r, errResponse)
+		model.WriteServiceError(w, r, verifyError(err))
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(trans)
+	model.WriteOK(w, trans)
+}
+
+// verifyError maps known service errors to API errors; anything else is
+// returned unchanged so WriteServiceError logs it and answers 500.
+func verifyError(err error) error {
+	switch {
+	case errors.Is(err, ErrMissingParams):
+		return model.AppError{Code: model.ErrBadRequest.Code, Message: err.Error(), Status: http.StatusBadRequest}
+	case errors.Is(err, ErrProductInactive):
+		return model.ErrIAPProductInactive
+	case errors.Is(err, ErrStoreNotConfigured):
+		return model.ErrIAPStoreNotConfigured
+	case errors.Is(err, ErrReceiptInvalid):
+		return model.ErrIAPReceiptInvalid
+	case errors.Is(err, ErrTransactionNotOwned), errors.Is(err, ErrTransactionConflict):
+		return model.ErrIAPTransactionConflict
+	default:
+		return err
+	}
 }

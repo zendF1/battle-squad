@@ -1,10 +1,10 @@
 package dev
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"battle-squad/internal/shared/database"
+	"battle-squad/internal/shared/model"
 	"battle-squad/internal/shared/observability"
 )
 
@@ -28,8 +28,7 @@ func (h *Handler) ClearRooms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	model.WriteOK(w, map[string]interface{}{
 		"message":     "rooms cleared",
 		"keysDeleted": deleted,
 	})
@@ -73,8 +72,7 @@ func (h *Handler) ResetData(w http.ResponseWriter, r *http.Request) {
 	h.redis.Client.Del(ctx, "rooms:active")
 	h.redis.Client.Del(ctx, "leaderboard:current")
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	model.WriteOK(w, map[string]interface{}{
 		"message": "all data cleared",
 	})
 }

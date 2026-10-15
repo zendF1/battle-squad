@@ -64,6 +64,7 @@ Tất cả config qua environment variables, có default cho local dev.
 | `ADMIN_PORT` | `9000` | Admin dashboard port |
 | `POSTGRES_DSN` | `postgres://postgres:postgres@localhost:5432/battlesquad?sslmode=disable` | PostgreSQL connection |
 | `REDIS_ADDR` | `localhost:6379` | Redis address |
+| `IAP_MOCK_ENABLED` | `false` | Accept fake IAP purchase tokens (testing only; ignored when `APP_ENV=production`) |
 | `REDIS_PASSWORD` | _(empty)_ | Redis password |
 | `REDIS_DB` | `0` | Redis database index |
 | `JWT_SECRET` | `super-secret-battle-squad-key-2026` | JWT signing secret |
@@ -137,6 +138,18 @@ migrations/               SQL migration files (001-005)
 ---
 
 ## 5. API Server — REST Endpoints
+
+### Response Envelope
+
+Mọi response REST (trừ `/healthz`, `/readyz`, `/livez`, `/metrics`) đều cùng một dạng, ghi qua `model.WriteOK` / `model.WriteJSON` / `model.WriteError` / `model.WriteServiceError`:
+
+```json
+{ "success": true, "data": { ... } }
+{ "success": false, "error": { "code": "SHOP_ITEM_OUT_OF_STOCK", "message": "...", "details": {}, "correlationId": "abc123" } }
+```
+
+- `data` bị bỏ khi endpoint không có gì để trả (ví dụ logout).
+- Lỗi không nằm trong registry được log và trả `INTERNAL_SERVER_ERROR`, không lộ message nội bộ.
 
 ### Public (không cần auth)
 
@@ -623,6 +636,14 @@ State-based decision making, difficulty theo rank tier:
 | `APP_FORCE_UPDATE` | 426 | Client cần update |
 | `SHOP_INSUFFICIENT_BALANCE` | 400 | Không đủ tiền |
 | `SHOP_ITEM_OUT_OF_STOCK` | 409 | Hết hàng |
+| `SHOP_OFFER_INACTIVE` | 404 | Offer không tồn tại, chưa bắt đầu hoặc đã hết hạn |
+| `SHOP_ALREADY_OWNED` | 409 | Đã sở hữu nhân vật |
+| `IDEMPOTENCY_KEY_REUSED` | 409 | Idempotency key đã dùng cho request khác |
+| `IAP_PRODUCT_INACTIVE` | 404 | Gói nạp không tồn tại hoặc đã tắt |
+| `IAP_VERIFICATION_FAILED` | 400 | Store từ chối receipt |
+| `IAP_TRANSACTION_CONFLICT` | 409 | Receipt đã dùng cho người chơi/gói khác |
+| `IAP_STORE_NOT_CONFIGURED` | 503 | Chưa cấu hình xác minh store |
+| `METHOD_NOT_ALLOWED` | 405 | Sai HTTP method |
 | `MATCH_NOT_YOUR_TURN` | 403 | Chưa đến lượt |
 | `MATCH_ALREADY_SHOT` | 409 | Đã bắn rồi |
 | `RATE_LIMIT_EXCEEDED` | 429 | Quá nhiều request (10/s) |

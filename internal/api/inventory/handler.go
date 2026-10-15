@@ -1,7 +1,6 @@
 package inventory
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"battle-squad/internal/shared/model"
@@ -34,7 +33,5 @@ func (h *Handler) GetInventory(w http.ResponseWriter, r *http.Request) {
 		items = []InventoryItem{}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(items)
+	model.WriteOK(w, items)
 }

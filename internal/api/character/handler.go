@@ -42,9 +42,7 @@ func (h *Handler) GetCharacters(w http.ResponseWriter, r *http.Request) {
 		chars = []PlayerCharacter{}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	model.WriteOK(w, map[string]interface{}{
 		"characters": chars,
 	})
 }
@@ -79,9 +77,7 @@ func (h *Handler) AllocateStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	model.WriteOK(w, nil)
 }
 
 // ResetStats handles POST /characters/reset-stats — charges the reset fee and refunds bonus points.
@@ -114,7 +110,5 @@ func (h *Handler) ResetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	model.WriteOK(w, nil)
 }

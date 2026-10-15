@@ -40,8 +40,7 @@ func (h *Handler) CreateReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"success"}`))
+	model.WriteOK(w, nil)
 }
 
 func (h *Handler) BanPlayer(w http.ResponseWriter, r *http.Request) {
@@ -71,8 +70,7 @@ func (h *Handler) BanPlayer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"success"}`))
+	model.WriteOK(w, nil)
 }
 
 func (h *Handler) RevokeBan(w http.ResponseWriter, r *http.Request) {
@@ -102,6 +100,5 @@ func (h *Handler) RevokeBan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"success"}`))
+	model.WriteOK(w, nil)
 }

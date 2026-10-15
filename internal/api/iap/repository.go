@@ -83,7 +83,7 @@ func (r *Repository) GetProductByID(ctx context.Context, productID string) (*IAP
 	return &p, nil
 }
 
-func (r *Repository) FindTransactionByID(ctx context.Context, transactionID string) (*PaymentTransaction, error) {
+func (r *Repository) FindTransactionByIDTx(ctx context.Context, tx pgx.Tx, transactionID string) (*PaymentTransaction, error) {
 	query := `
 		SELECT transaction_id, player_id, product_id, platform, purchase_token, amount_usd, gem_granted, status, created_at, verified_at, refunded_at
 		FROM payment_transactions
@@ -91,7 +91,7 @@ func (r *Repository) FindTransactionByID(ctx context.Context, transactionID stri
 	`
 	var t PaymentTransaction
 	var verifiedAt, refundedAt sql.NullTime
-	err := r.db.Pool.QueryRow(ctx, query, transactionID).Scan(
+	err := tx.QueryRow(ctx, query, transactionID).Scan(
 		&t.TransactionID,
 		&t.PlayerID,
 		&t.ProductID,
@@ -119,12 +119,16 @@ func (r *Repository) FindTransactionByID(ctx context.Context, transactionID stri
 	return &t, nil
 }
 
-func (r *Repository) CreateTransactionTx(ctx context.Context, tx pgx.Tx, t *PaymentTransaction) error {
+// CreateTransactionTx returns false when the store transaction ID is already
+// recorded. A concurrent insert of the same ID waits for the other tx to finish.
+func (r *Repository) CreateTransactionTx(ctx context.Context, tx pgx.Tx, t *PaymentTransaction) (bool, error) {
 	query := `
 		INSERT INTO payment_transactions (transaction_id, player_id, product_id, platform, purchase_token, amount_usd, gem_granted, status, verified_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (transaction_id) DO NOTHING
+		RETURNING created_at
 	`
-	_, err := tx.Exec(
+	err := tx.QueryRow(
 		ctx,
 		query,
 		t.TransactionID,
@@ -136,6 +140,12 @@ func (r *Repository) CreateTransactionTx(ctx context.Context, tx pgx.Tx, t *Paym
 		t.GemGranted,
 		t.Status,
 		t.VerifiedAt,
-	)
-	return err
+	).Scan(&t.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }

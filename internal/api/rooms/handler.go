@@ -75,9 +75,7 @@ func (h *Handler) GetRooms(w http.ResponseWriter, r *http.Request) {
 		rooms = rooms[start:end]
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	model.WriteOK(w, map[string]interface{}{
 		"rooms":      rooms,
 		"page":       page,
 		"limit":      limit,

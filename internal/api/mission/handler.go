@@ -33,9 +33,7 @@ func (h *Handler) GetDailyMissions(w http.ResponseWriter, r *http.Request) {
 		progresses = []MissionProgress{}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(progresses)
+	model.WriteOK(w, progresses)
 }
 
 func (h *Handler) GetAchievements(w http.ResponseWriter, r *http.Request) {
@@ -55,9 +53,7 @@ func (h *Handler) GetAchievements(w http.ResponseWriter, r *http.Request) {
 		progresses = []MissionProgress{}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(progresses)
+	model.WriteOK(w, progresses)
 }
 
 func (h *Handler) ClaimReward(w http.ResponseWriter, r *http.Request) {
@@ -84,6 +80,5 @@ func (h *Handler) ClaimReward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"success"}`))
+	model.WriteOK(w, nil)
 }

@@ -29,9 +29,7 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(profile)
+	model.WriteOK(w, profile)
 }
 
 func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
@@ -58,8 +56,7 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"success"}`))
+	model.WriteOK(w, nil)
 }
 
 func (h *Handler) RequestAccountDeletion(w http.ResponseWriter, r *http.Request) {
@@ -75,9 +72,7 @@ func (h *Handler) RequestAccountDeletion(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	model.WriteOK(w, map[string]interface{}{
 		"status":    "pending_deletion",
 		"deletedAt": deletedAt,
 	})
@@ -96,8 +91,7 @@ func (h *Handler) CancelAccountDeletion(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"active"}`))
+	model.WriteOK(w, map[string]string{"status": "active"})
 }
 
 func (h *Handler) GetAccountDeletionStatus(w http.ResponseWriter, r *http.Request) {
@@ -118,7 +112,5 @@ func (h *Handler) GetAccountDeletionStatus(w http.ResponseWriter, r *http.Reques
 		DeletedAt: deletedAt,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
+	model.WriteOK(w, resp)
 }

@@ -32,9 +32,7 @@ func (h *Handler) GuestLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
+	model.WriteOK(w, resp)
 }
 
 func (h *Handler) ProviderLogin(w http.ResponseWriter, r *http.Request) {
@@ -59,9 +57,7 @@ func (h *Handler) ProviderLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
+	model.WriteOK(w, resp)
 }
 
 func (h *Handler) LinkProvider(w http.ResponseWriter, r *http.Request) {
@@ -89,8 +85,7 @@ func (h *Handler) LinkProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"success"}`))
+	model.WriteOK(w, nil)
 }
 
 func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
@@ -106,9 +101,7 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
+	model.WriteOK(w, resp)
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
@@ -124,6 +117,5 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"success"}`))
+	model.WriteOK(w, nil)
 }
