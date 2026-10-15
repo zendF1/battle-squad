@@ -53,6 +53,7 @@ type Match struct {
 	lastAction   map[string]time.Time // playerID → last action timestamp (rate limit)
 	turnSeq      int                  // incremented every startTurn; stale callbacks compare against it
 	resolving    bool                 // the current turn's action is animating; no further actions or timer ticks
+	lastMoveSeq  map[string]int       // playerID → seq of the last Move the loop took from them this turn (see noteMoveSeq)
 }
 
 // Stop cancels the match context, causing the Run loop to exit.
@@ -80,7 +81,7 @@ func NewMatch(
 
 	mPlayers := make(map[string]*BattlePlayerState)
 	var turnOrder []string
-	
+
 	// Set turn order (1v1 alternating, or alternating teams for 2v2)
 	// For simplicity, we randomize order
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -146,6 +147,7 @@ func NewMatch(
 		EloParams:    EloParams{},
 		BotTier:      DefaultBotTier,
 		lastAction:   make(map[string]time.Time),
+		lastMoveSeq:  make(map[string]int),
 	}
 }
 
@@ -300,6 +302,11 @@ func (m *Match) handleEvent(ev matchEvent) {
 		actorID = client.PlayerID
 	}
 
+	// Before anything below can drop the Move
+	if client != nil && msg.Event == "Move" {
+		m.noteMoveSeq(client.PlayerID, msg.Data)
+	}
+
 	// Rate limit player actions (bots bypass)
 	if client != nil {
 		switch msg.Event {
@@ -354,6 +361,7 @@ func (m *Match) startTurn(ctx context.Context) {
 	m.State.TurnTimeLeft = 20
 	m.turnSeq++
 	m.resolving = false
+	clear(m.lastMoveSeq) // a new turn starts a new replay on the mover's client
 
 	player := m.State.Players[m.State.CurrentPlayerID]
 	player.MoveEnergy = 100 + player.MoveEnergyBonus // Reset move energy to full
@@ -514,6 +522,24 @@ func (m *Match) runOnTurnAfter(ctx context.Context, delay time.Duration, fn func
 	}()
 }
 
+// noteMoveSeq records the seq of a Move from the current player as soon as the match loop takes
+// it, before the rate limit, the resolving check or processMove can drop it. MatchStateSync
+// reports it as lastMoveSeq, and the mover's client drops every command up to it from its
+// replay: the snapshot already shows what each of them did, applied or not. A dropped Move must
+// count too, or it would stay in that replay forever. Moves from another player are not recorded:
+// they are dropped, and that player's client starts a new replay at its own TurnStarted, when
+// startTurn clears the record. A Move without seq leaves the record as it is.
+func (m *Match) noteMoveSeq(playerID string, data json.RawMessage) {
+	if playerID != m.State.CurrentPlayerID {
+		return
+	}
+	var action MoveAction
+	if err := json.Unmarshal(data, &action); err != nil || action.Seq <= 0 {
+		return
+	}
+	m.lastMoveSeq[playerID] = action.Seq
+}
+
 func (m *Match) processMove(ctx context.Context, client *ws.Client, action MoveAction) {
 	// Validate current player
 	if client != nil && client.PlayerID != m.State.CurrentPlayerID {
@@ -647,8 +673,8 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 	// air_strike: fire from top of map straight down at TargetX
 	if HasEffect(player, "air_strike") {
 		shootOrigin = Vector2{X: m.airStrikeX(player, action, weaponConfig), Y: 0}
-		shootAngle = 270.0  // straight down in Y-down coords (270° = negative Y direction conventionally, handled by sin)
-		shootPower = 80.0   // fixed high power for airstrike
+		shootAngle = 270.0 // straight down in Y-down coords (270° = negative Y direction conventionally, handled by sin)
+		shootPower = 80.0  // fixed high power for airstrike
 	}
 
 	// drill_bomb: projectile drills through the first terrain block it meets
@@ -962,7 +988,7 @@ func (m *Match) processReconnect(ctx context.Context, client *ws.Client) {
 	// Send full match state sync, including current terrain so missed explosions are recovered.
 	// Non-blocking like broadcast: a stalled client must not stall the match loop.
 	select {
-	case client.Send <- ws.Message{Event: "MatchStateSync", Data: m.snapshotPayload()}:
+	case client.Send <- ws.Message{Event: "MatchStateSync", Data: m.syncPayload(client.PlayerID)}:
 	default:
 		observability.Log.Warn().
 			Str("matchId", m.State.MatchID).
@@ -999,7 +1025,7 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 		// Match is over!
 		m.State.Status = "ended"
 		observability.MatchEndedTotal.WithLabelValues("normal").Inc()
-		
+
 		winningTeam := 0
 		if team1Alive {
 			winningTeam = 1

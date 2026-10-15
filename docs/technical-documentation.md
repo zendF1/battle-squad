@@ -338,7 +338,7 @@ Client message → CompositeWSHandler
 | `ItemUsed` | `{playerId, itemId, players, wind}` | Item bị tiêu hao |
 | `PlayerDamaged` | `[{playerId, damage, hp, isAlive, type}]` | Damage ngoài phát bắn (lava đầu lượt) |
 | `MatchEnded` | `{winningTeam, rewards}` | Trận kết thúc |
-| `MatchStateSync` | `MatchState` | Full sync khi reconnect |
+| `MatchStateSync` | `MatchState` + `terrain` + `lastMoveSeq` | Full sync trả lời `Reconnect`. `lastMoveSeq`: `seq` của `Move` cuối cùng của người gửi `Reconnect` mà match loop đã nhận trong lượt hiện tại, kể cả `Move` bị bỏ (rate limit, đang resolve, không hợp lệ); `0` nếu chưa có hoặc không phải lượt của họ; reset khi lượt mới bắt đầu. Snapshot đã phản ánh mọi `Move` có `seq <= lastMoveSeq` |
 
 **`ShotResolved`:** server tính xong toàn bộ phát bắn và state đã cập nhật trước khi gửi; client chỉ phát lại. `projectiles[]` là đường bay (`path[]` với `time`) của từng viên đạn. `events[]` sắp theo `t` (giây kể từ lúc bắn):
 

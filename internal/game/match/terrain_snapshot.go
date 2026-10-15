@@ -57,3 +57,18 @@ func (m *Match) snapshotPayload() []byte {
 	payload, _ := json.Marshal(matchSnapshot{MatchState: m.State, Terrain: m.Terrain.Snapshot()})
 	return payload
 }
+
+// matchStateSync is the MatchStateSync payload: the snapshot plus, for the requesting player,
+// the seq of the last Move the match loop took from them this turn (0 if none; see noteMoveSeq).
+type matchStateSync struct {
+	matchSnapshot
+	LastMoveSeq int `json:"lastMoveSeq"`
+}
+
+func (m *Match) syncPayload(playerID string) []byte {
+	payload, _ := json.Marshal(matchStateSync{
+		matchSnapshot: matchSnapshot{MatchState: m.State, Terrain: m.Terrain.Snapshot()},
+		LastMoveSeq:   m.lastMoveSeq[playerID],
+	})
+	return payload
+}
