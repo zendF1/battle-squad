@@ -475,8 +475,8 @@ func (m *Match) endTurn(ctx context.Context) {
 // scheduleEndTurn delays the turn transition to let clients animate projectile
 // flight, explosion, and damage display before the next turn starts.
 // delay = flight time + 0.5s explosion + 0.2s damage popup + 0.5s buffer
-func (m *Match) scheduleEndTurn(ctx context.Context, flightTime float64) {
-	delay := flightTime + 1.2 // explosion + damage popup + buffer
+func (m *Match) scheduleEndTurn(ctx context.Context, shotDuration float64) {
+	delay := shotDuration + 1.2 // damage popup + buffer after the replay ends
 	if delay < 1.5 {
 		delay = 1.5
 	}
@@ -603,257 +603,12 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 		return
 	}
 
-	// ── Skill mode ──────────────────────────────────────────────────────────
 	if action.ActionMode == "skill" {
-		skillID := charConfig.SkillID
-		skillConfig, skillExists := gamedata.Data.Skills[skillID]
-		if !skillExists {
-			return
-		}
-
-		// Reject if not enough skill energy
-		if player.SkillEnergy < 100 {
-			return
-		}
-
-		// healing_bloom: no projectile — just heal self and end turn
-		if skillConfig.EffectType == "heal" {
-			healAmount := 30
-			player.HP += healAmount
-			if player.HP > player.MaxHP {
-				player.HP = player.MaxHP
-			}
-			ApplyStatusEffect(player, StatusEffect{
-				EffectID:       skillConfig.StatusEffectID,
-				TargetPlayerID: player.PlayerID,
-				DurationTurn:   1,
-				Value:          0,
-				SourcePlayerID: player.PlayerID,
-			})
-			player.SkillEnergy = 0
-
-			payload, _ := json.Marshal(map[string]interface{}{
-				"playerId":    player.PlayerID,
-				"skillId":     skillID,
-				"hp":          player.HP,
-				"skillEnergy": player.SkillEnergy,
-			})
-			m.broadcast(ws.Message{Event: "SkillUsed", Data: payload})
-
-			m.checkWinCondition(ctx)
-			if m.State.Status == "in_progress" {
-				m.endTurn(ctx)
-			}
-			return
-		}
-
-		// Calculate base damage factor (power_shot item still applies)
-		damageFactor := 1.0
-		if HasEffect(player, "power_shot") {
-			damageFactor = 1.5
-		}
-		damageFactor *= skillConfig.DamageMultiplier
-
-		// Build list of (angle, explosionRadius) pairs per projectile
-		type shotParams struct {
-			angle  float64
-			radius float64
-		}
-		var shots []shotParams
-
-		switch skillConfig.EffectType {
-		case "multi_projectile":
-			// triple_shot: fire 3 projectiles at angle-10, angle, angle+10
-			for _, offset := range []float64{-10, 0, 10} {
-				shots = append(shots, shotParams{angle: action.Angle + offset, radius: float64(weaponConfig.ExplosionRadius)})
-			}
-		case "single_large_bomb":
-			// heavy_bomb: single projectile, explosion radius * 1.5
-			shots = append(shots, shotParams{angle: action.Angle, radius: float64(weaponConfig.ExplosionRadius) * 1.5})
-		default:
-			// shock_field and any other types: single normal projectile
-			shots = append(shots, shotParams{angle: action.Angle, radius: float64(weaponConfig.ExplosionRadius)})
-		}
-
-		pierce := drillPierce(player)
-
-		var results []*ProjectileResult
-		var damagedPlayers []map[string]interface{}
-
-		for _, shot := range shots {
-			r := SimulateProjectile(
-				player.PlayerID,
-				player.TeamID,
-				player.Position,
-				shot.angle,
-				action.Power,
-				weaponConfig,
-				m.State.Wind,
-				m.Terrain,
-				m.State.Players,
-				pierce,
-			)
-			r.SkillID = skillID
-			r.ExplosionRadius = shot.radius
-
-			// Track shot fired for each projectile in the skill
-			player.ShotsFired++
-
-			if r.ExplosionPoint != nil {
-				m.Terrain.DestroyCircle(r.ExplosionPoint.X, r.ExplosionPoint.Y, r.ExplosionRadius)
-				r.TerrainDestroyed = true
-				r.TerrainVersion = m.Terrain.Version
-
-				for _, p := range m.State.Players {
-					if !p.IsAlive {
-						continue
-					}
-					// No friendly fire — skip teammates
-					if p.TeamID == player.TeamID {
-						continue
-					}
-
-					// Direct hit: use player's own position as explosion center (distance=0, full damage)
-					explosionCenter := *r.ExplosionPoint
-					if p.PlayerID == r.HitPlayerID {
-						explosionCenter = p.Position
-					}
-
-					damage := CalculateExplosionDamage(
-						p.Position,
-						explosionCenter,
-						float64(weaponConfig.Damage+player.DamageBonus)*damageFactor,
-						r.ExplosionRadius,
-						p.Defense,
-					)
-					damage, _ = ApplyCritical(damage, player.CritChance)
-					if damage > 0 {
-						p.HP -= damage
-						isKilled := false
-						if p.HP <= 0 {
-							p.HP = 0
-							p.IsAlive = false
-							isKilled = true
-						}
-
-						player.DamageDealt += damage
-						player.ShotsHit++
-						if isKilled {
-							player.KillCount++
-						}
-
-						damagedPlayers = append(damagedPlayers, map[string]interface{}{
-							"playerId": p.PlayerID,
-							"damage":   damage,
-							"hp":       p.HP,
-							"isAlive":  p.IsAlive,
-							"isKilled": isKilled,
-						})
-					}
-				}
-
-				// shock_field: apply "net" status to hit player
-				if skillConfig.EffectType == "debuff" && skillConfig.StatusEffectID != "" && r.HitPlayerID != "" {
-					if target, ok := m.State.Players[r.HitPlayerID]; ok && target.IsAlive {
-						ApplyStatusEffect(target, StatusEffect{
-							EffectID:       skillConfig.StatusEffectID,
-							TargetPlayerID: target.PlayerID,
-							DurationTurn:   1,
-							SourcePlayerID: player.PlayerID,
-						})
-					}
-				}
-
-				// Handle terrain collapse / fall damage
-				for _, p := range m.State.Players {
-					if !p.IsAlive {
-						continue
-					}
-					landY := m.Terrain.GetLandingY(p.Position.X, p.Position.Y)
-					if landY >= float64(m.Terrain.Height) {
-						// Fell off the map — instant death
-						remainingHP := p.HP
-						p.HP = 0
-						p.IsAlive = false
-						p.Position.Y = landY
-
-						player.KillCount++
-
-						damagedPlayers = append(damagedPlayers, map[string]interface{}{
-							"playerId": p.PlayerID,
-							"damage":   remainingHP,
-							"hp":       0,
-							"isAlive":  false,
-							"isKilled": true,
-							"type":     "fall",
-						})
-						continue
-					}
-					if landY > p.Position.Y {
-						fallDistance := landY - p.Position.Y
-						p.Position.Y = landY
-						fallDamage := CalculateFallDamage(fallDistance)
-						if fallDamage > 0 {
-							p.HP -= fallDamage
-							isKilled := false
-							if p.HP <= 0 {
-								p.HP = 0
-								p.IsAlive = false
-								isKilled = true
-							}
-							damagedPlayers = append(damagedPlayers, map[string]interface{}{
-								"playerId": p.PlayerID,
-								"damage":   fallDamage,
-								"hp":       p.HP,
-								"isAlive":  p.IsAlive,
-								"isKilled": isKilled,
-								"type":     "fall",
-							})
-						}
-					}
-				}
-			}
-
-			results = append(results, r)
-		}
-
-		// Reset skill energy after use
-		player.SkillEnergy = 0
-		skillPayload, _ := json.Marshal(map[string]interface{}{
-			"playerId":    player.PlayerID,
-			"skillId":     skillID,
-			"skillEnergy": player.SkillEnergy,
-		})
-		m.broadcast(ws.Message{Event: "SkillUsed", Data: skillPayload})
-
-		// Broadcast each projectile result
-		for _, r := range results {
-			payloadResult, _ := json.Marshal(r)
-			m.broadcast(ws.Message{Event: "ProjectileResult", Data: payloadResult})
-		}
-
-		if len(damagedPlayers) > 0 {
-			payloadDamaged, _ := json.Marshal(damagedPlayers)
-			m.broadcast(ws.Message{Event: "PlayerDamaged", Data: payloadDamaged})
-			m.el.Log("PlayerDamaged", "", damagedPlayers)
-		}
-
-		m.checkWinCondition(ctx)
-		if m.State.Status == "in_progress" {
-			flightTime := 0.0
-			for _, r := range results {
-				if len(r.Path) > 0 {
-					t := r.Path[len(r.Path)-1].Time
-					if t > flightTime {
-						flightTime = t
-					}
-				}
-			}
-			m.scheduleEndTurn(ctx, flightTime)
-		}
+		m.shootSkill(ctx, player, action, charConfig.SkillID, weaponConfig)
 		return
 	}
-	// ── End skill mode ───────────────────────────────────────────────────────
+
+	shot := &ShotResolved{ShooterID: player.PlayerID, ActionMode: "weapon"}
 
 	// ── Item mode ───────────────────────────────────────────────────────────
 	if action.ActionMode == "item" {
@@ -875,6 +630,8 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 			return
 		}
 		m.broadcastItemUsed(player.PlayerID, itemID)
+		shot.ActionMode = "item"
+		shot.ItemID = itemID
 	}
 	// ── End item mode ───────────────────────────────────────────────────────
 
@@ -906,6 +663,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 		m.State.Players,
 		pierce,
 	)
+	shot.Projectiles = []*ProjectileResult{result}
 
 	// Track shot fired
 	player.ShotsFired++
@@ -916,186 +674,143 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 		damageFactor = 1.5
 	}
 
-	// 2. Resolve hit and damage
-	var damagedPlayers []map[string]interface{}
-	var hitEnemies []*BattlePlayerState // enemies damaged by the explosion itself
+	// 2. Resolve explosion, damage and falls
+	tl := &shotTimeline{}
 	if result.ExplosionPoint != nil {
 		// Fragile terrain: double the explosion radius
 		if m.Terrain.GetTerrainTypeAt(result.ExplosionPoint.X, result.ExplosionPoint.Y) == "fragile" {
 			result.ExplosionRadius *= 2
 		}
 
-		// Destroy terrain
-		m.Terrain.DestroyCircle(result.ExplosionPoint.X, result.ExplosionPoint.Y, result.ExplosionRadius)
-		result.TerrainDestroyed = true
-		result.TerrainVersion = m.Terrain.Version
+		baseDamage := float64(weaponConfig.Damage+player.DamageBonus) * damageFactor
+		hitEnemies := m.explodeProjectile(player, result, baseDamage, tl)
+		m.settleFalls(player, flightEnd(result), tl)
 
-		// Check player splash damage (no friendly fire — skip teammates)
-		for _, p := range m.State.Players {
-			if !p.IsAlive {
+		// spider_net / freeze_bomb: control every enemy hit by the explosion for their next turn
+		for _, target := range hitEnemies {
+			if !target.IsAlive {
 				continue
 			}
-			if p.TeamID == player.TeamID {
-				continue
+			if HasEffect(player, "spider_net") {
+				applyShotStatus(tl, flightEnd(result), player, target, "net", 1)
 			}
-
-			// Direct hit: use player's own position as explosion center (distance=0, full damage)
-			explosionCenter := *result.ExplosionPoint
-			if p.PlayerID == result.HitPlayerID {
-				explosionCenter = p.Position
-			}
-
-			damage := CalculateExplosionDamage(
-				p.Position,
-				explosionCenter,
-				float64(weaponConfig.Damage+player.DamageBonus)*damageFactor,
-				result.ExplosionRadius,
-				p.Defense,
-			)
-			damage, _ = ApplyCritical(damage, player.CritChance)
-
-			if damage > 0 {
-				p.HP -= damage
-				isKilled := false
-				if p.HP <= 0 {
-					p.HP = 0
-					p.IsAlive = false
-					isKilled = true
-				}
-				hitEnemies = append(hitEnemies, p)
-
-				player.DamageDealt += damage
-				player.ShotsHit++
-				if isKilled {
-					player.KillCount++
-				}
-
-				damagedPlayers = append(damagedPlayers, map[string]interface{}{
-					"playerId": p.PlayerID,
-					"damage":   damage,
-					"hp":       p.HP,
-					"isAlive":  p.IsAlive,
-					"isKilled": isKilled,
-				})
-			}
-		}
-
-		// Handle terrain collapse check (falling players)
-		for _, p := range m.State.Players {
-			if !p.IsAlive {
-				continue
-			}
-
-			landY := m.Terrain.GetLandingY(p.Position.X, p.Position.Y)
-			if landY >= float64(m.Terrain.Height) {
-				// Fell off the map — instant death
-				remainingHP := p.HP
-				p.HP = 0
-				p.IsAlive = false
-				p.Position.Y = landY
-
-				player.KillCount++
-
-				damagedPlayers = append(damagedPlayers, map[string]interface{}{
-					"playerId": p.PlayerID,
-					"damage":   remainingHP,
-					"hp":       0,
-					"isAlive":  false,
-					"isKilled": true,
-					"type":     "fall",
-				})
-				continue
-			}
-			if landY > p.Position.Y {
-				fallDistance := landY - p.Position.Y
-				p.Position.Y = landY
-
-				fallDamage := CalculateFallDamage(fallDistance)
-				if fallDamage > 0 {
-					p.HP -= fallDamage
-					isKilled := false
-					if p.HP <= 0 {
-						p.HP = 0
-						p.IsAlive = false
-						isKilled = true
-					}
-
-					damagedPlayers = append(damagedPlayers, map[string]interface{}{
-						"playerId": p.PlayerID,
-						"damage":   fallDamage,
-						"hp":       p.HP,
-						"isAlive":  p.IsAlive,
-						"isKilled": isKilled,
-						"type":     "fall",
-					})
-				}
+			if HasEffect(player, "freeze_bomb") {
+				applyShotStatus(tl, flightEnd(result), player, target, "freeze", int(itemValue("freeze_bomb", 1)))
 			}
 		}
 	}
 
-	// spider_net / freeze_bomb: control every enemy hit by the explosion for their next turn
-	for _, target := range hitEnemies {
-		if !target.IsAlive {
+	// 3. Broadcast, check win conditions, schedule delayed end turn
+	m.finishShot(ctx, shot, tl)
+}
+
+// shootSkill fires the character's skill. Most skills launch projectiles; healing_bloom heals
+// the shooter instead.
+func (m *Match) shootSkill(ctx context.Context, player *BattlePlayerState, action ShootAction, skillID string, weaponConfig gamedata.WeaponConfig) {
+	skillConfig, skillExists := gamedata.Data.Skills[skillID]
+	if !skillExists {
+		return
+	}
+
+	// Reject if not enough skill energy
+	if player.SkillEnergy < 100 {
+		return
+	}
+
+	shot := &ShotResolved{ShooterID: player.PlayerID, ActionMode: "skill", SkillID: skillID}
+	tl := &shotTimeline{}
+
+	// healing_bloom: no projectile — just heal self and end turn
+	if skillConfig.EffectType == "heal" {
+		before := player.HP
+		player.HP += 30
+		if player.HP > player.MaxHP {
+			player.HP = player.MaxHP
+		}
+		tl.add(ShotEvent{Type: "heal", PlayerID: player.PlayerID, Amount: player.HP - before, HP: intPtr(player.HP)})
+		if skillConfig.StatusEffectID != "" {
+			applyShotStatus(tl, 0, player, player, skillConfig.StatusEffectID, 1)
+		}
+		player.SkillEnergy = 0
+
+		m.broadcastShot(shot, tl)
+		m.checkWinCondition(ctx)
+		if m.State.Status == "in_progress" {
+			m.endTurn(ctx)
+		}
+		return
+	}
+
+	// Calculate base damage factor (power_shot item still applies)
+	damageFactor := 1.0
+	if HasEffect(player, "power_shot") {
+		damageFactor = 1.5
+	}
+	damageFactor *= skillConfig.DamageMultiplier
+	baseDamage := float64(weaponConfig.Damage+player.DamageBonus) * damageFactor
+
+	// Build list of (angle, explosionRadius) pairs per projectile
+	type shotParams struct {
+		angle  float64
+		radius float64
+	}
+	var shots []shotParams
+
+	switch skillConfig.EffectType {
+	case "multi_projectile":
+		// triple_shot: fire 3 projectiles at angle-10, angle, angle+10
+		for _, offset := range []float64{-10, 0, 10} {
+			shots = append(shots, shotParams{angle: action.Angle + offset, radius: float64(weaponConfig.ExplosionRadius)})
+		}
+	case "single_large_bomb":
+		// heavy_bomb: single projectile, explosion radius * 1.5
+		shots = append(shots, shotParams{angle: action.Angle, radius: float64(weaponConfig.ExplosionRadius) * 1.5})
+	default:
+		// shock_field and any other types: single normal projectile
+		shots = append(shots, shotParams{angle: action.Angle, radius: float64(weaponConfig.ExplosionRadius)})
+	}
+
+	pierce := drillPierce(player)
+
+	// Projectiles are resolved in firing order; each sees the craters of the ones before it.
+	for _, s := range shots {
+		r := SimulateProjectile(
+			player.PlayerID,
+			player.TeamID,
+			player.Position,
+			s.angle,
+			action.Power,
+			weaponConfig,
+			m.State.Wind,
+			m.Terrain,
+			m.State.Players,
+			pierce,
+		)
+		r.SkillID = skillID
+		r.ExplosionRadius = s.radius
+		shot.Projectiles = append(shot.Projectiles, r)
+
+		// Track shot fired for each projectile in the skill
+		player.ShotsFired++
+
+		if r.ExplosionPoint == nil {
 			continue
 		}
-		if HasEffect(player, "spider_net") {
-			ApplyStatusEffect(target, StatusEffect{
-				EffectID:       "net",
-				TargetPlayerID: target.PlayerID,
-				DurationTurn:   1,
-				SourcePlayerID: player.PlayerID,
-			})
-		}
-		if HasEffect(player, "freeze_bomb") {
-			ApplyStatusEffect(target, StatusEffect{
-				EffectID:       "freeze",
-				TargetPlayerID: target.PlayerID,
-				DurationTurn:   int(itemValue("freeze_bomb", 1)),
-				SourcePlayerID: player.PlayerID,
-			})
-		}
-	}
+		m.explodeProjectile(player, r, baseDamage, tl)
 
-	// Broadcast ProjectileResult and PlayerDamaged
-	payloadResult, _ := json.Marshal(result)
-	m.broadcast(ws.Message{
-		Event: "ProjectileResult",
-		Data:  payloadResult,
-	})
-
-	if len(damagedPlayers) > 0 {
-		payloadDamaged, _ := json.Marshal(damagedPlayers)
-		m.broadcast(ws.Message{
-			Event: "PlayerDamaged",
-			Data:  payloadDamaged,
-		})
-		m.el.Log("PlayerDamaged", "", damagedPlayers)
-	}
-
-	// Broadcast updated positions for all players (handles terrain fall)
-	if result.TerrainDestroyed {
-		for _, p := range m.State.Players {
-			if !p.IsAlive {
-				continue
+		// shock_field: apply "net" status to hit player
+		if skillConfig.EffectType == "debuff" && skillConfig.StatusEffectID != "" && r.HitPlayerID != "" {
+			if target, ok := m.State.Players[r.HitPlayerID]; ok && target.IsAlive {
+				applyShotStatus(tl, flightEnd(r), player, target, skillConfig.StatusEffectID, 1)
 			}
-			posPayload, _ := json.Marshal(map[string]interface{}{
-				"playerId":   p.PlayerID,
-				"position":   p.Position,
-				"moveEnergy": p.MoveEnergy,
-			})
-			m.broadcast(ws.Message{Event: "PlayerMoved", Data: posPayload})
 		}
+
+		m.settleFalls(player, flightEnd(r), tl)
 	}
 
-	// 3. Complete shooting event, check win conditions, schedule delayed end turn
-	m.checkWinCondition(ctx)
-	if m.State.Status == "in_progress" {
-		flightTime := 0.0
-		if len(result.Path) > 0 {
-			flightTime = result.Path[len(result.Path)-1].Time
-		}
-		m.scheduleEndTurn(ctx, flightTime)
-	}
+	// Reset skill energy after use
+	player.SkillEnergy = 0
+	m.finishShot(ctx, shot, tl)
 }
 
 func (m *Match) processUseItem(ctx context.Context, client *ws.Client, action UseItemAction) {
@@ -1166,45 +881,35 @@ func (m *Match) shootTeleport(ctx context.Context, player *BattlePlayerState, ac
 		m.State.Players,
 		0, // no drilling
 	)
-	result.TerrainDestroyed = false
 	result.ExplosionRadius = 0
 
 	player.ShotsFired++
 	consumeItem(player, itemIdx)
+	m.broadcastItemUsed(player.PlayerID, "teleport")
 
-	// Broadcast projectile path (so client can animate the flight)
-	payloadResult, _ := json.Marshal(result)
-	m.broadcast(ws.Message{Event: "ProjectileResult", Data: payloadResult})
-
-	var target *Vector2
+	tl := &shotTimeline{}
 	if result.ExplosionPoint != nil && result.ExplosionPoint.Y < float64(m.Terrain.Height) {
 		landY := m.Terrain.GetLandingY(result.ExplosionPoint.X, result.ExplosionPoint.Y)
 		if landY < float64(m.Terrain.Height) {
-			target = &Vector2{X: result.ExplosionPoint.X, Y: landY}
+			from := player.Position
+			player.Position = Vector2{X: result.ExplosionPoint.X, Y: landY}
+			tl.add(ShotEvent{T: flightEnd(result), Type: "teleport", PlayerID: player.PlayerID, From: vecPtr(from), To: vecPtr(player.Position)})
 		}
 	}
 
-	flightTime := 0.0
-	if len(result.Path) > 0 {
-		flightTime = result.Path[len(result.Path)-1].Time
+	shot := &ShotResolved{
+		ShooterID:   player.PlayerID,
+		ActionMode:  "item",
+		ItemID:      "teleport",
+		Projectiles: []*ProjectileResult{result},
 	}
-	delay := flightTime + 0.3 // small buffer after animation
+	m.broadcastShot(shot, tl)
+
+	delay := shot.Duration + 0.3 // small buffer after animation
 	if delay < 0.5 {
 		delay = 0.5
 	}
-
 	m.resolveTurnAfter(ctx, delay, func(ctx context.Context) {
-		if target != nil && player.IsAlive {
-			player.Position = *target
-			posPayload, _ := json.Marshal(map[string]interface{}{
-				"playerId":   player.PlayerID,
-				"position":   player.Position,
-				"moveEnergy": player.MoveEnergy,
-			})
-			m.broadcast(ws.Message{Event: "PlayerMoved", Data: posPayload})
-		}
-		m.broadcastItemUsed(player.PlayerID, "teleport")
-
 		m.checkWinCondition(ctx)
 		if m.State.Status == "in_progress" {
 			m.endTurn(ctx)

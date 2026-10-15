@@ -59,7 +59,6 @@ func SimulateProjectile(
 		ProjectileID:     generateProjectileID(),
 		OwnerPlayerID:    ownerID,
 		ExplosionRadius:  float64(weapon.ExplosionRadius),
-		TerrainDestroyed: false,
 		Path:             []ProjectileStep{},
 	}
 

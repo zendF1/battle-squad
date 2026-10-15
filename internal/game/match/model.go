@@ -95,8 +95,40 @@ type ProjectileResult struct {
 	HitPlayerID     string           `json:"hitPlayerId,omitempty"` // empty if missed or hit terrain
 	ExplosionPoint  *Vector2         `json:"explosionPoint,omitempty"`
 	ExplosionRadius float64          `json:"explosionRadius"`
-	TerrainDestroyed bool            `json:"terrainDestroyed"`
-	TerrainVersion   uint64          `json:"terrainVersion,omitempty"` // terrain version after this explosion
+}
+
+// ShotEvent is one entry of a ShotResolved timeline. T is seconds since the shot was fired;
+// fields not relevant to Type are omitted.
+type ShotEvent struct {
+	T              float64  `json:"t"`
+	Type           string   `json:"type"` // explode, damage, heal, status, fall, die, teleport
+	PlayerID       string   `json:"playerId,omitempty"`
+	ProjectileID   string   `json:"projectileId,omitempty"`
+	Position       *Vector2 `json:"position,omitempty"`       // explode
+	Radius         float64  `json:"radius,omitempty"`         // explode
+	TerrainVersion uint64   `json:"terrainVersion,omitempty"` // explode: terrain version after the crater
+	Amount         int      `json:"amount,omitempty"`         // damage, heal
+	HP             *int     `json:"hp,omitempty"`             // damage, heal: HP after the change
+	Critical       bool     `json:"critical,omitempty"`       // damage
+	Cause          string   `json:"cause,omitempty"`          // damage, die: explosion, fall, out_of_map
+	EffectID       string   `json:"effectId,omitempty"`       // status
+	Turns          int      `json:"turns,omitempty"`          // status
+	From           *Vector2 `json:"from,omitempty"`           // fall, teleport
+	To             *Vector2 `json:"to,omitempty"`             // fall, teleport
+	Duration       float64  `json:"duration,omitempty"`       // fall: seconds until landing
+}
+
+// ShotResolved is the single message describing a whole shot: every projectile's flight plus
+// the time-ordered effects. The server state already reflects the outcome; clients replay it.
+type ShotResolved struct {
+	ShooterID   string              `json:"shooterId"`
+	ActionMode  string              `json:"actionMode"` // weapon, skill, item
+	SkillID     string              `json:"skillId,omitempty"`
+	ItemID      string              `json:"itemId,omitempty"`
+	SkillEnergy int                 `json:"skillEnergy"` // shooter's skill energy after the shot
+	Projectiles []*ProjectileResult `json:"projectiles"`
+	Events      []ShotEvent         `json:"events"`
+	Duration    float64             `json:"duration"` // seconds until the last flight or event ends
 }
 
 type MatchHistoryRecord struct {

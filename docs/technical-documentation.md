@@ -333,13 +333,26 @@ Client message → CompositeWSHandler
 | `MatchStarted` | `{matchId, players, turnOrder, wind, mapId}` | Trận bắt đầu |
 | `TurnStarted` | `{currentPlayerId, turnIndex, wind, timeLeft}` | Lượt mới |
 | `TurnTimerTick` | `{timeLeft}` | Đếm ngược (mỗi 1s) |
-| `PlayerMoved` | `{playerId, position}` | Player di chuyển |
-| `ProjectileResult` | `{path[], hitPlayerId?, explosionPoint, terrainDestroyed}` | Kết quả bắn |
-| `PlayerDamaged` | `{playerId, damage, hp, isAlive}` | Player bị damage |
-| `StatusEffectApplied` | `{effectId, targetPlayerId, duration}` | Buff/debuff |
-| `TerrainDestroyed` | `{center, radius}` | Terrain bị phá |
+| `PlayerMoved` | `{playerId, position, moveEnergy}` | Player tự di chuyển |
+| `ShotResolved` | `{shooterId, actionMode, skillId?, itemId?, skillEnergy, projectiles[], events[], duration}` | Toàn bộ kết quả một lượt bắn (weapon, skill, teleport) |
+| `ItemUsed` | `{playerId, itemId, players, wind}` | Item bị tiêu hao |
+| `PlayerDamaged` | `[{playerId, damage, hp, isAlive, type}]` | Damage ngoài phát bắn (lava đầu lượt) |
 | `MatchEnded` | `{winningTeam, rewards}` | Trận kết thúc |
 | `MatchStateSync` | `MatchState` | Full sync khi reconnect |
+
+**`ShotResolved`:** server tính xong toàn bộ phát bắn và state đã cập nhật trước khi gửi; client chỉ phát lại. `projectiles[]` là đường bay (`path[]` với `time`) của từng viên đạn. `events[]` sắp theo `t` (giây kể từ lúc bắn):
+
+| `type` | Trường | Ghi chú |
+|--------|--------|---------|
+| `explode` | `projectileId, position, radius, terrainVersion` | Khoét terrain tại `t` (cuối đường bay) |
+| `damage` | `playerId, amount, hp, cause, projectileId?, critical?` | `cause`: `explosion`, `fall`, `out_of_map` |
+| `heal` | `playerId, amount, hp` | |
+| `status` | `playerId, effectId, turns` | |
+| `fall` | `playerId, from, to, duration` | Rơi từ `t` đến `t + duration`; damage rơi nằm ở mốc chạm đất |
+| `die` | `playerId, cause` | |
+| `teleport` | `playerId, from, to` | |
+
+`duration` là lúc animation cuối cùng kết thúc; server kết thúc lượt sau `duration + 1.2s`.
 
 ---
 
