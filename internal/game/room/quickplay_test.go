@@ -25,3 +25,16 @@ func TestParseQuickPlayPayload(t *testing.T) {
 		}
 	}
 }
+
+func TestInternalEventsAreRejectedFromClients(t *testing.T) {
+	for _, event := range []string{"__start_tutorial", "__register_client"} {
+		if !isInternalEvent(event) {
+			t.Errorf("%s must be internal", event)
+		}
+	}
+	for _, event := range []string{"Move", "Shoot", "Ready", "StartMatch"} {
+		if isInternalEvent(event) {
+			t.Errorf("%s must reach the room", event)
+		}
+	}
+}

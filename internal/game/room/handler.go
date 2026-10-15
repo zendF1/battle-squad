@@ -3,6 +3,7 @@ package room
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"battle-squad/internal/game/ws"
@@ -108,6 +109,12 @@ func (h *WSHandler) HandleMessage(ctx context.Context, client *ws.Client, msg ws
 		}
 
 	default:
+		// Internal room events (__start_tutorial, __register_client, ...) are only sent by the server
+		if isInternalEvent(msg.Event) {
+			h.sendError(client, model.ErrBadRequest)
+			return
+		}
+
 		// Route room/match specific messages
 		if client.RoomID == "" {
 			errResp := model.AppError{Code: "ROOM_REQUIRED", Message: "You must join a room first", Status: 400}
@@ -152,4 +159,9 @@ func (h *WSHandler) sendError(client *ws.Client, appErr model.AppError) {
 		Data:      payload,
 		Timestamp: time.Now().Unix(),
 	}
+}
+
+// isInternalEvent reports whether an event name is reserved for server-side room events.
+func isInternalEvent(event string) bool {
+	return strings.HasPrefix(event, "__")
 }
