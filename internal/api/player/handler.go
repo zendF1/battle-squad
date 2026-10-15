@@ -45,14 +45,8 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.service.UpdateDisplayName(r.Context(), playerID, req.DisplayName)
-	if err != nil {
-		errResponse := model.AppError{
-			Code:    "PLAYER_UPDATE_FAILED",
-			Message: err.Error(),
-			Status:  http.StatusBadRequest,
-		}
-		model.WriteError(w, r, errResponse)
+	if err := h.service.UpdateDisplayName(r.Context(), playerID, req.DisplayName); err != nil {
+		model.WriteServiceError(w, r, err)
 		return
 	}
 

@@ -3,7 +3,11 @@ package player
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
+	"unicode/utf8"
+
+	"battle-squad/internal/shared/model"
 )
 
 type Service struct {
@@ -25,14 +29,25 @@ func (s *Service) GetProfile(ctx context.Context, playerID string) (*PlayerProfi
 	return profile, nil
 }
 
+// UpdateDisplayName stores the name with surrounding whitespace trimmed; it
+// must be 1 to MaxDisplayNameLength characters.
 func (s *Service) UpdateDisplayName(ctx context.Context, playerID, displayName string) error {
-	if displayName == "" {
-		return errors.New("display name cannot be empty")
+	name, err := normalizeDisplayName(displayName)
+	if err != nil {
+		return err
 	}
-	if len(displayName) > 50 {
-		return errors.New("display name is too long")
+	return s.repo.UpdateDisplayName(ctx, playerID, name)
+}
+
+func normalizeDisplayName(displayName string) (string, error) {
+	name := strings.TrimSpace(displayName)
+	if name == "" {
+		return "", model.ErrDisplayNameEmpty
 	}
-	return s.repo.UpdateDisplayName(ctx, playerID, displayName)
+	if utf8.RuneCountInString(name) > MaxDisplayNameLength {
+		return "", model.ErrDisplayNameTooLong
+	}
+	return name, nil
 }
 
 func (s *Service) RequestAccountDeletion(ctx context.Context, accountID string) (time.Time, error) {

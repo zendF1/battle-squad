@@ -14,11 +14,14 @@ type PlayerProfile struct {
 	LastLoginAt time.Time `json:"lastLoginAt"`
 }
 
+// MaxDisplayNameLength is the longest display name, in characters (runes).
+const MaxDisplayNameLength = 20
+
 type UpdateProfileRequest struct {
 	DisplayName string `json:"displayName"`
 }
 
 type AccountDeletionStatusResponse struct {
-	Status    string     `json:"status"`    // active, pending_deletion, deleted
+	Status    string     `json:"status"`              // active, pending_deletion, deleted
 	DeletedAt *time.Time `json:"deletedAt,omitempty"` // when grace period ends
 }

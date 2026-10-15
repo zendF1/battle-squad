@@ -69,6 +69,9 @@ var (
 	ErrBanned      = AppError{Code: "AUTH_ACCOUNT_BANNED", Message: "Your account has been banned", Status: http.StatusForbidden}
 	ErrForceUpdate = AppError{Code: "APP_FORCE_UPDATE", Message: "A newer version of the app is required to play", Status: http.StatusUpgradeRequired}
 
+	ErrDisplayNameEmpty   = AppError{Code: "PLAYER_UPDATE_FAILED", Message: "display name cannot be empty", Status: http.StatusBadRequest}
+	ErrDisplayNameTooLong = AppError{Code: "PLAYER_UPDATE_FAILED", Message: "display name is too long", Status: http.StatusBadRequest}
+
 	ErrInsufficientBalance  = AppError{Code: "SHOP_INSUFFICIENT_BALANCE", Message: "Insufficient balance for this purchase", Status: http.StatusBadRequest}
 	ErrItemOutOfStock       = AppError{Code: "SHOP_ITEM_OUT_OF_STOCK", Message: "Item offer is out of stock", Status: http.StatusConflict}
 	ErrShopAlreadyOwned     = AppError{Code: "SHOP_ALREADY_OWNED", Message: "You already own this character", Status: http.StatusConflict}
