@@ -174,7 +174,7 @@ Mọi response REST (trừ `/healthz`, `/readyz`, `/livez`, `/metrics`) đều c
 | Method | Path | Handler | Mô tả |
 |--------|------|---------|-------|
 | GET | `/player/profile` | GetProfile | Lấy profile (name, level, coin, gem) |
-| PUT | `/player/profile` | UpdateProfile | Đổi display name (max 50 chars) |
+| PUT | `/player/profile` | UpdateProfile | Đổi display name: body `{"displayName"}`, trim khoảng trắng hai đầu, 1–20 ký tự (đếm rune, không phải byte). Rỗng/quá dài → 400 `PLAYER_UPDATE_FAILED` |
 | POST | `/account/deletion/request` | RequestAccountDeletion | Yêu cầu xóa account (7 ngày grace) |
 | POST | `/account/deletion/cancel` | CancelAccountDeletion | Hủy yêu cầu xóa |
 | GET | `/account/deletion/status` | GetAccountDeletionStatus | Trạng thái xóa account |
@@ -186,11 +186,43 @@ Mọi response REST (trừ `/healthz`, `/readyz`, `/livez`, `/metrics`) đều c
 |--------|------|---------|-------|
 | GET | `/player/inventory` | GetInventory | Danh sách items đang có |
 | GET | `/shop/offers` | GetOffers | Các offer đang active |
-| POST | `/shop/purchase` | Purchase | Mua offer (idempotent, header `X-Idempotency-Key`) |
+| POST | `/shop/purchase` | Purchase | Mua offer: body `{offerId, idempotencyKey}` (key ≤ 64); cùng key + offer trả lại purchase cũ, không trừ tiền lần nữa |
 | GET | `/shop/purchases` | GetPurchases | Lịch sử mua hàng |
 | GET | `/iap/products` | GetProducts | Danh sách IAP products |
 | POST | `/iap/verify` | VerifyReceipt | Verify receipt từ App Store/Play Store |
 | POST | `/giftcode/redeem` | Redeem | Nhập gift code |
+
+**Character Progression:**
+
+| Method | Path | Handler | Mô tả |
+|--------|------|---------|-------|
+| GET | `/player/characters` | GetCharacters | Nhân vật đã sở hữu: level, exp, `statPoints`, 6 chỉ số `bonus*` |
+| POST | `/player/character/allocate-stats` | AllocateStats | Cộng điểm `{characterId, hp, damage, mobility, defense, skillPower, terrainDamage}` |
+| POST | `/player/character/reset-stats` | ResetStats | Tẩy điểm `{characterId}`: trả mọi điểm đã cộng về `statPoints`, phí `resetCostAmount` `resetCostCurrency` (seed: 500 coin). Khoá profile rồi row nhân vật `FOR UPDATE`, kiểm tra, trừ tiền và reset trong một transaction — reset đồng thời chỉ bị trừ tiền một lần |
+
+**Default shop catalog** (`migrations/014_default_shop_catalog.up.sql`, `ON CONFLICT DO NOTHING` nên chạy lại không ghi đè chỉnh sửa từ admin):
+
+| `offerId` | `itemId` | Loại | Giá | Số lượng | Giới hạn/người |
+|-----------|----------|------|-----|----------|----------------|
+| `item_medkit_x3` | `medkit` | item | 300 coin | 3 | — |
+| `item_teleport_x3` | `teleport` | item | 400 coin | 3 | — |
+| `item_power_shot_x3` | `power_shot` | item | 400 coin | 3 | — |
+| `item_drill_bomb_x3` | `drill_bomb` | item | 450 coin | 3 | — |
+| `item_spider_net_x3` | `spider_net` | item | 450 coin | 3 | — |
+| `item_freeze_bomb_x3` | `freeze_bomb` | item | 500 coin | 3 | — |
+| `item_air_strike_x3` | `air_strike` | item | 600 coin | 3 | — |
+| `item_wind_stopper_x3` | `wind_stopper` | item | 300 coin | 3 | — |
+| `unlock_tanko_coin` / `unlock_tanko_gem` | `tanko` | character_unlock | 5000 coin / 300 gem | 1 | 1 |
+| `unlock_spark_coin` / `unlock_spark_gem` | `spark` | character_unlock | 5000 coin / 300 gem | 1 | 1 |
+| `unlock_flora_coin` / `unlock_flora_gem` | `flora` | character_unlock | 5000 coin / 300 gem | 1 | 1 |
+
+`rookie` là nhân vật mặc định, không bán.
+
+| `productId` | `platformSkuId` (android = ios) | Gem | Bonus | Giá |
+|-------------|--------------------------------|-----|-------|-----|
+| `gems_100` | `com.battlesquad.gems_100` | 100 | 0 | $0.99 |
+| `gems_550` | `com.battlesquad.gems_550` | 500 | 50 | $4.99 |
+| `gems_1200` | `com.battlesquad.gems_1200` | 1000 | 200 | $9.99 |
 
 **Game Systems:**
 
@@ -427,14 +459,29 @@ Explosion damage:
   distance = dist(explosionCenter, playerPosition)
   if distance >= explosionRadius → 0 damage
   multiplier = 1.0 - (distance / explosionRadius)  // linear falloff
-  rawDamage = weaponDamage * multiplier
+  rawDamage = (weaponDamage + shooter.damageBonus) * itemFactor * multiplier
+    // itemFactor: power_shot ×1.5; skill: × skill.damageMultiplier × (1 + skillPowerBonus/100)
   finalDamage = rawDamage * (100 / (100 + playerDefense))
+  crit: ×1.5 với xác suất critChance%
 
 Fall damage:
   threshold = 150px
   if fallDistance > threshold:
     damage = (fallDistance - 150) * 0.25
 ```
+
+### Character Stat Bonuses
+
+Khi trận bắt đầu, room đọc `bonus_*` của `player_characters` (nhân vật đang chọn) và nhân với `statMultipliers` trong `game_settings.character_progression` (key thiếu hoặc 0 → mặc định của seed 006). Bot giữ chỉ số gốc của nhân vật; nhân vật chưa sở hữu (DEV_UNLOCK_ALL) cũng vậy. Equipment cộng thêm sau đó.
+
+| Chỉ số (`bonus_*`) | Key multiplier | Mặc định | Tác dụng trong trận (`BattlePlayerState`) |
+|--------------------|----------------|----------|-------------------------------------------|
+| `bonus_hp` | `hp` | 50 | `maxHp = character.hp + điểm × 50` |
+| `bonus_defense` | `defense` | 5 | `defense = character.defense + điểm × 5` |
+| `bonus_damage` | `damage` | 5 | `damageBonus += điểm × 5`, cộng phẳng vào damage vũ khí (cả weapon lẫn skill) |
+| `bonus_mobility` | `mobility` | 3 | `moveEnergyBonus += điểm × 3`; đầu mỗi lượt `moveEnergy = 100 + moveEnergyBonus` (1 năng lượng / 2px) |
+| `bonus_skill_power` | `skill_power` | 5 | `skillPowerBonus = điểm × 5` (%): damage skill × `(1 + skillPowerBonus/100)`, heal của `healing_bloom` = `round(30 × (1 + skillPowerBonus/100))` |
+| `bonus_terrain_damage` | `terrain_damage` | 3 | `terrainDamageBonus = điểm × 3` (%): bán kính khoét terrain = `explosionRadius × (1 + terrainDamageBonus/100)`; vùng sát thương vẫn dùng `explosionRadius`. `radius` của event `explode` là bán kính khoét |
 
 ### Terrain System
 
@@ -657,6 +704,13 @@ State-based decision making, difficulty theo rank tier:
 | `IAP_VERIFICATION_FAILED` | 400 | Store từ chối receipt |
 | `IAP_TRANSACTION_CONFLICT` | 409 | Receipt đã dùng cho người chơi/gói khác |
 | `IAP_STORE_NOT_CONFIGURED` | 503 | Chưa cấu hình xác minh store |
+| `PLAYER_UPDATE_FAILED` | 400 | Display name rỗng sau khi trim hoặc dài quá 20 ký tự |
+| `CHARACTER_NOT_FOUND` | 404 | Chưa sở hữu nhân vật |
+| `CHARACTER_INVALID_STATS` | 400 | Giá trị cộng điểm âm |
+| `CHARACTER_NO_STATS_ALLOCATED` | 400 | Tổng điểm cộng bằng 0 |
+| `CHARACTER_INSUFFICIENT_STAT_POINTS` | 400 | Không đủ `statPoints` |
+| `CHARACTER_NO_STATS_TO_RESET` | 400 | Chưa cộng điểm nào để tẩy |
+| `CHARACTER_INSUFFICIENT_BALANCE` | 400 | Không đủ tiền tẩy điểm |
 | `METHOD_NOT_ALLOWED` | 405 | Sai HTTP method |
 | `MATCH_NOT_YOUR_TURN` | 403 | Chưa đến lượt |
 | `MATCH_ALREADY_SHOT` | 409 | Đã bắn rồi |
