@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -28,10 +29,10 @@ type Config struct {
 	AppVersion      string
 	ProtocolVersion int
 	// IAPMockEnabled accepts any purchase token without asking the store.
-	// Opt-in only, and never honoured when APP_ENV=production.
+	// Opt-in only, and never honoured when APP_ENV is production (see IsProduction).
 	IAPMockEnabled bool
 	// DevUnlockAll lets QuickPlay use every character and item without owning
-	// or consuming them. Opt-in only, and never honoured when APP_ENV=production.
+	// or consuming them. Opt-in only, and never honoured when APP_ENV is production (see IsProduction).
 	DevUnlockAll bool
 }
 
@@ -64,10 +65,10 @@ func LoadConfig() *Config {
 	}
 
 	iapMockEnabled, _ := strconv.ParseBool(getEnv("IAP_MOCK_ENABLED", "false"))
-	iapMockEnabled = iapMockEnabled && env != "production"
+	iapMockEnabled = iapMockEnabled && !IsProduction(env)
 
 	devUnlockAll, _ := strconv.ParseBool(getEnv("DEV_UNLOCK_ALL", "false"))
-	devUnlockAll = devUnlockAll && env != "production"
+	devUnlockAll = devUnlockAll && !IsProduction(env)
 
 	return &Config{
 		Env:             env,
@@ -87,6 +88,13 @@ func LoadConfig() *Config {
 		IAPMockEnabled:  iapMockEnabled,
 		DevUnlockAll:    devUnlockAll,
 	}
+}
+
+// IsProduction reports whether an APP_ENV value names production, in any case
+// and as "production" or "prod".
+func IsProduction(env string) bool {
+	env = strings.TrimSpace(env)
+	return strings.EqualFold(env, "production") || strings.EqualFold(env, "prod")
 }
 
 func getEnv(key, fallback string) string {
