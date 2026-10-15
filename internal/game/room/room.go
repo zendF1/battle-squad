@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
-	"strconv"
 	"time"
 
 	"battle-squad/internal/api/character"
 	"battle-squad/internal/api/economy"
+	"battle-squad/internal/game/battlestats"
 	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/game/match"
 	"battle-squad/internal/game/matchmaker"
@@ -41,50 +40,12 @@ type Room struct {
 	matchDone chan struct{}
 }
 
-type milestoneConfig struct {
-	Bonus6  float64
-	Bonus10 float64
-	Bonus14 float64
-	Bonus16 float64
-}
-
-func (r *Room) getMilestoneConfig() milestoneConfig {
-	cfg := milestoneConfig{Bonus6: 0.10, Bonus10: 0.20, Bonus14: 0.40, Bonus16: 1.00}
-	keys := map[string]*float64{
-		"equipment.milestone_6_bonus":  &cfg.Bonus6,
-		"equipment.milestone_10_bonus": &cfg.Bonus10,
-		"equipment.milestone_14_bonus": &cfg.Bonus14,
-		"equipment.milestone_16_bonus": &cfg.Bonus16,
-	}
-	for key, target := range keys {
-		var val string
-		err := r.db.Pool.QueryRow(context.Background(),
-			`SELECT value FROM game_settings WHERE key = $1`, key).Scan(&val)
-		if err == nil {
-			if parsed, err := strconv.ParseFloat(val, 64); err == nil {
-				*target = parsed
-			}
-		}
-	}
-	return cfg
-}
-
-// baseStats are a character's config HP and defense with no bonuses.
-func baseStats(characterID string) battleStats {
-	s := battleStats{HP: 100, Defense: 50}
-	if c, ok := gamedata.Data.Characters[characterID]; ok {
-		s.HP, s.Defense = c.HP, c.Defense
-	}
-	return s
-}
-
 // getActualStats adds the player's allocated stat points and equipment to the
 // character's base stats. A character the player does not own gets base stats.
+// GET /player/characters reports the same numbers through battlestats.
 func (r *Room) getActualStats(playerID, characterID string) battleStats {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	stats := baseStats(characterID)
 
 	var pts statPoints
 	err := r.db.Pool.QueryRow(ctx,
@@ -92,7 +53,7 @@ func (r *Room) getActualStats(playerID, characterID string) battleStats {
 		 FROM player_characters WHERE player_id = $1 AND character_id = $2`,
 		playerID, characterID).Scan(&pts.HP, &pts.Damage, &pts.Mobility, &pts.Defense, &pts.SkillPower, &pts.TerrainDamage)
 	if err != nil {
-		return stats
+		return baseStats(characterID)
 	}
 
 	var cfgVal string
@@ -100,131 +61,12 @@ func (r *Room) getActualStats(playerID, characterID string) battleStats {
 		`SELECT value FROM game_settings WHERE key = $1`, character.SettingsKeyProgression).Scan(&cfgVal); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		observability.Log.Warn().Err(err).Msg("failed to load character_progression; using default stat multipliers")
 	}
-	stats = addStatPoints(stats, pts, character.LoadProgressionConfig(cfgVal))
 
-	var equipHP, equipDMG, equipDEF, equipMoveEnergy int
-	var equipCrit float64
-
-	ms := r.getMilestoneConfig()
-
-	// Gems are joined in so the loop never needs a second pool connection
-	// while eqRows still holds one.
-	eqRows, eqErr := r.db.Pool.Query(ctx,
-		`SELECT cei.stat_hp, cei.stat_damage, cei.stat_defense, cei.stat_crit, cei.stat_move_energy,
-		        pe.upgrade_level, pe.category, pe.tier,
-		        g1.gem_type, cg1.stat_value, g2.gem_type, cg2.stat_value
-		 FROM player_equipment pe
-		 JOIN config_equipment_items cei ON pe.item_id = cei.item_id
-		 LEFT JOIN player_gems g1 ON g1.gem_id = pe.gem_slot_1
-		 LEFT JOIN config_gems cg1 ON cg1.gem_type = g1.gem_type AND cg1.gem_level = g1.gem_level
-		 LEFT JOIN player_gems g2 ON g2.gem_id = pe.gem_slot_2
-		 LEFT JOIN config_gems cg2 ON cg2.gem_type = g2.gem_type AND cg2.gem_level = g2.gem_level
-		 WHERE pe.player_id = $1 AND pe.equipped_on = $2 AND pe.is_equipped = TRUE`,
-		playerID, characterID)
-	if eqErr == nil {
-		craftedTierCount := make(map[string]int)
-		for eqRows.Next() {
-			var statHP, statDMG, statDEF, statMoveEnergy, upgradeLevel int
-			var statCrit float64
-			var category string
-			var tier, gemType1, gemType2 *string
-			var gemVal1, gemVal2 *float64
-			if err := eqRows.Scan(&statHP, &statDMG, &statDEF, &statCrit, &statMoveEnergy,
-				&upgradeLevel, &category, &tier, &gemType1, &gemVal1, &gemType2, &gemVal2); err != nil {
-				continue
-			}
-			upgradeBonus := float64(upgradeLevel) * 0.02
-			milestoneBonus := 0.0
-			if upgradeLevel >= 6 {
-				milestoneBonus += ms.Bonus6
-			}
-			if upgradeLevel >= 10 {
-				milestoneBonus += ms.Bonus10
-			}
-			if upgradeLevel >= 14 {
-				milestoneBonus += ms.Bonus14
-			}
-			if upgradeLevel >= 16 {
-				milestoneBonus += ms.Bonus16
-			}
-			mul := 1.0 + upgradeBonus + milestoneBonus
-
-			equipHP += int(math.Round(float64(statHP) * mul))
-			equipDMG += int(math.Round(float64(statDMG) * mul))
-			equipDEF += int(math.Round(float64(statDEF) * mul))
-			equipCrit += statCrit * mul
-			equipMoveEnergy += int(math.Round(float64(statMoveEnergy) * mul))
-
-			if category == "crafted" && tier != nil {
-				craftedTierCount[*tier]++
-			}
-
-			// BUG 2 fix: handle all 4 gem types (hp, damage, defense, critical)
-			gems := [2]struct {
-				gemType *string
-				statVal *float64
-			}{{gemType1, gemVal1}, {gemType2, gemVal2}}
-			for _, g := range gems {
-				if g.gemType == nil || g.statVal == nil {
-					continue
-				}
-				switch *g.gemType {
-				case "hp":
-					equipHP += int(*g.statVal)
-				case "damage":
-					equipDMG += int(*g.statVal)
-				case "defense":
-					equipDEF += int(*g.statVal)
-				case "critical":
-					equipCrit += *g.statVal
-				}
-			}
-		}
-		eqRows.Close()
-
-		// BUG 4+5 fix: additive set bonus (sum all % first, apply once) + include bonus_dmg_pct
-		for t, count := range craftedTierCount {
-			var totalHPPct, totalDMGPct, totalDEFPct, totalCritPct float64
-			bonusRows, berr := r.db.Pool.Query(ctx,
-				`SELECT pieces_required, bonus_hp_pct, bonus_dmg_pct, bonus_def_pct, bonus_crit_pct
-				 FROM config_set_bonuses WHERE tier = $1 ORDER BY pieces_required`, t)
-			if berr != nil {
-				continue
-			}
-			for bonusRows.Next() {
-				var pieces int
-				var hpPct, dmgPct, defPct, critPct float64
-				if err := bonusRows.Scan(&pieces, &hpPct, &dmgPct, &defPct, &critPct); err != nil {
-					continue
-				}
-				if count >= pieces {
-					totalHPPct += hpPct
-					totalDMGPct += dmgPct
-					totalDEFPct += defPct
-					totalCritPct += critPct
-				}
-			}
-			bonusRows.Close()
-			// Apply additive bonus once
-			if totalHPPct > 0 {
-				equipHP = int(math.Round(float64(equipHP) * (1 + totalHPPct/100)))
-			}
-			if totalDMGPct > 0 {
-				equipDMG = int(math.Round(float64(equipDMG) * (1 + totalDMGPct/100)))
-			}
-			if totalDEFPct > 0 {
-				equipDEF = int(math.Round(float64(equipDEF) * (1 + totalDEFPct/100)))
-			}
-			equipCrit += totalCritPct
-		}
+	equipment, err := battlestats.LoadEquipmentStats(ctx, r.db.Pool, playerID, characterID)
+	if err != nil {
+		observability.Log.Warn().Err(err).Str("playerId", playerID).Msg("failed to load equipment stats; playing without equipment")
 	}
-
-	stats.HP += equipHP
-	stats.Defense += equipDEF
-	stats.DamageBonus += equipDMG
-	stats.MoveEnergyBonus += equipMoveEnergy
-	stats.CritChance += equipCrit
-	return stats
+	return battlestats.Compute(characterID, pts, character.LoadProgressionConfig(cfgVal).Multipliers(), equipment[characterID]).Total
 }
 
 func NewRoom(roomID string, initialState RoomState, hub *Hub, db *database.PostgresDB) *Room {

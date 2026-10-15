@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	"battle-squad/internal/api/economy"
+	"battle-squad/internal/game/battlestats"
+	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/model"
 
@@ -52,8 +54,10 @@ func (s *Service) GetPlayerCharacters(ctx context.Context, playerID string) ([]P
 	return chars, nil
 }
 
-// GetCharacters returns the player's characters and the stat reset fee, read from
-// the same character_progression config ResetStats charges.
+// GetCharacters returns the player's characters with their battle stats, the
+// stat reset fee (the same character_progression config ResetStats charges),
+// every character's base stats and the per-point stat multipliers. Stats come
+// from battlestats, the code the game server builds match players with.
 func (s *Service) GetCharacters(ctx context.Context, playerID string) (CharactersResponse, error) {
 	chars, err := s.GetPlayerCharacters(ctx, playerID)
 	if err != nil {
@@ -66,7 +70,33 @@ func (s *Service) GetCharacters(ctx context.Context, playerID string) (Character
 	if err != nil {
 		return CharactersResponse{}, err
 	}
-	return CharactersResponse{Characters: chars, ResetStatsCost: cfg.ResetStatsCost()}, nil
+	equipment, err := s.repo.GetEquipmentStats(ctx, playerID)
+	if err != nil {
+		return CharactersResponse{}, err
+	}
+	mult := cfg.Multipliers()
+	for i := range chars {
+		id := chars[i].CharacterID
+		chars[i].Stats = newCharacterStats(id, battlestats.Compute(id, chars[i].Points(), mult, equipment[id]))
+	}
+	return CharactersResponse{
+		Characters:      chars,
+		ResetStatsCost:  cfg.ResetStatsCost(),
+		BaseStats:       allBaseStats(),
+		StatMultipliers: mult,
+	}, nil
+}
+
+// allBaseStats returns the base stats of every character in the game data.
+func allBaseStats() map[string]BaseStats {
+	out := map[string]BaseStats{}
+	if gamedata.Data == nil {
+		return out
+	}
+	for id := range gamedata.Data.Characters {
+		out[id] = BaseStats{StatValues: statValues(battlestats.Base(id), true), WeaponDamage: battlestats.WeaponDamage(id)}
+	}
+	return out
 }
 
 // progressionConfig loads character_progression from game_settings (defaults when absent).

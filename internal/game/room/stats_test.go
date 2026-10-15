@@ -28,7 +28,7 @@ func TestAddStatPointsDefaultsMissingMultipliers(t *testing.T) {
 	// hp is configured; the rest (and an unreadable config) fall back to the defaults
 	for _, value := range []string{`{"statMultipliers":{"hp":20,"damage":0}}`, "", "not json"} {
 		cfg := character.LoadProgressionConfig(value)
-		got := addStatPoints(battleStats{}, statPoints{1, 1, 1, 1, 1, 1}, cfg)
+		got := addStatPoints(battleStats{}, statPoints{HP: 1, Damage: 1, Mobility: 1, Defense: 1, SkillPower: 1, TerrainDamage: 1}, cfg)
 		wantHP := 50
 		if value != "" && value != "not json" {
 			wantHP = 20

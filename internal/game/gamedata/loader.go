@@ -30,14 +30,14 @@ type CharacterConfig struct {
 }
 
 type WeaponConfig struct {
-	WeaponID        string  `yaml:"weaponId"`
-	Name            string  `yaml:"name"`
-	Damage          int     `yaml:"damage"`
-	ExplosionRadius int     `yaml:"explosionRadius"`
-	TerrainDamage   int     `yaml:"terrainDamage"`
+	WeaponID         string  `yaml:"weaponId"`
+	Name             string  `yaml:"name"`
+	Damage           int     `yaml:"damage"`
+	ExplosionRadius  int     `yaml:"explosionRadius"`
+	TerrainDamage    int     `yaml:"terrainDamage"`
 	ProjectileWeight float64 `yaml:"projectileWeight"`
-	WindInfluence   float64 `yaml:"windInfluence"`
-	MultiHit        int     `yaml:"multiHit"`
+	WindInfluence    float64 `yaml:"windInfluence"`
+	MultiHit         int     `yaml:"multiHit"`
 }
 
 type SkillConfig struct {
@@ -202,6 +202,18 @@ func LoadGameData(configDir string) error {
 
 	Data = gData
 	return nil
+}
+
+// Load loads the game data from the config tables and falls back to the YAML
+// files in configDir when that fails. The game server and the API both start
+// with it so they see the same character and weapon config.
+func Load(db *database.PostgresDB, configDir string) error {
+	dbErr := LoadGameDataFromDB(db)
+	if dbErr == nil {
+		return nil
+	}
+	observability.Log.Warn().Err(dbErr).Msg("failed to load config from DB, falling back to YAML")
+	return LoadGameData(configDir)
 }
 
 func loadYAMLFile(path string, target interface{}) error {

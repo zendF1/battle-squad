@@ -15,7 +15,8 @@ import (
 // newCharacterService uses the migrations/006 progression seed: reset costs 500 coin.
 func newCharacterService(t *testing.T, maxConns int32) (*Service, *database.PostgresDB) {
 	t.Helper()
-	db := dbtest.NewSchema(t, maxConns, "001_init_schema.up.sql", "004_admin_config_tables.up.sql", "006_character_progression.up.sql")
+	db := dbtest.NewSchema(t, maxConns, "001_init_schema.up.sql", "004_admin_config_tables.up.sql", "006_character_progression.up.sql",
+		"010_equipment_system.up.sql", "011_equipment_slot_unique.up.sql")
 	return NewService(NewRepository(db), economy.NewRepository(), db), db
 }
 

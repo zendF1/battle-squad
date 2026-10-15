@@ -108,7 +108,8 @@ internal/
 │   ├── matchmaker/       Matchmaking engine (Redis queue, leader election)
 │   ├── room/             Room hub + goroutines, battle room creation
 │   ├── match/            Match engine: physics, damage, terrain, bots, rewards
-│   └── gamedata/         Load game configs (YAML/DB)
+│   ├── battlestats/      Chỉ số vào trận (gốc + điểm + equipment), dùng chung cho room và GET /player/characters
+│   └── gamedata/         Load game configs (DB, fallback YAML) — game server và API đều load lúc khởi động
 │
 ├── admin/                Admin dashboard (chi router, HTML templates)
 │   ├── server.go         Routes + template rendering
@@ -196,7 +197,7 @@ Mọi response REST (trừ `/healthz`, `/readyz`, `/livez`, `/metrics`) đều c
 
 | Method | Path | Handler | Mô tả |
 |--------|------|---------|-------|
-| GET | `/player/characters` | GetCharacters | `{characters, resetStatsCost: {currency, amount}}`: nhân vật đã sở hữu (level, exp, `statPoints`, 6 chỉ số `bonus*`) và phí tẩy điểm, đọc từ cùng config `character_progression` mà reset-stats trừ |
+| GET | `/player/characters` | GetCharacters | `{characters, resetStatsCost: {currency, amount}, baseStats, statMultipliers}`: nhân vật đã sở hữu (level, exp, `statPoints`, 6 chỉ số `bonus*`, `stats` = chỉ số vào trận), phí tẩy điểm (cùng config `character_progression` mà reset-stats trừ), chỉ số gốc của mọi nhân vật và giá trị mỗi điểm — xem [Character Stat Bonuses](#character-stat-bonuses) |
 | POST | `/player/character/allocate-stats` | AllocateStats | Cộng điểm `{characterId, hp, damage, mobility, defense, skillPower, terrainDamage}` |
 | POST | `/player/character/reset-stats` | ResetStats | Tẩy điểm `{characterId}`: trả mọi điểm đã cộng về `statPoints`, phí `resetCostAmount` `resetCostCurrency` (seed: 500 coin). Khoá profile rồi row nhân vật `FOR UPDATE`, kiểm tra, trừ tiền và reset trong một transaction — reset đồng thời chỉ bị trừ tiền một lần |
 
@@ -482,6 +483,37 @@ Khi trận bắt đầu, room đọc `bonus_*` của `player_characters` (nhân 
 | `bonus_mobility` | `mobility` | 3 | `moveEnergyBonus += điểm × 3`; đầu mỗi lượt `moveEnergy = 100 + moveEnergyBonus` (1 năng lượng / 2px) |
 | `bonus_skill_power` | `skill_power` | 5 | `skillPowerBonus = điểm × 5` (%): damage skill × `(1 + skillPowerBonus/100)`, heal của `healing_bloom` = `round(30 × (1 + skillPowerBonus/100))` |
 | `bonus_terrain_damage` | `terrain_damage` | 3 | `terrainDamageBonus = điểm × 3` (%): bán kính khoét terrain = `explosionRadius × (1 + terrainDamageBonus/100)`; vùng sát thương vẫn dùng `explosionRadius`. `radius` của event `explode` là bán kính khoét |
+
+#### Chỉ số hiển thị (`GET /player/characters`)
+
+Room (`getActualStats` → `newBattlePlayer`) và API cùng tính bằng package `internal/game/battlestats` (`Base`, `FromPoints`, `FromEquipment`, `Compute`, `LoadEquipmentStats`), nên số trong profile là số dùng trong trận. API load game data (`config_characters`/`config_weapons`, fallback `configs/*.yaml`) lúc khởi động như game server — sửa config nhân vật/vũ khí cần restart cả hai.
+
+```json
+{
+  "characters": [{
+    "characterId": "tanko", "level": 3, "statPoints": 2, "bonusHp": 2, "bonusMobility": 1, "...": "...",
+    "stats": {
+      "maxHp": 268, "defense": 86, "damageBonus": 6, "moveEnergy": 105,
+      "skillPowerBonus": 0, "terrainDamageBonus": 0, "critChance": 2.2, "weaponDamage": 75,
+      "base":          {"maxHp": 130, "defense": 80, "damageBonus": 0, "moveEnergy": 100, "skillPowerBonus": 0, "terrainDamageBonus": 0},
+      "fromPoints":    {"maxHp": 100, "defense": 0,  "damageBonus": 0, "moveEnergy": 3,   "skillPowerBonus": 0, "terrainDamageBonus": 0},
+      "fromEquipment": {"maxHp": 38,  "defense": 6,  "damageBonus": 6, "moveEnergy": 2,   "skillPowerBonus": 0, "terrainDamageBonus": 0, "critChance": 2.2}
+    }
+  }],
+  "resetStatsCost": {"currency": "coin", "amount": 500},
+  "baseStats": {
+    "rookie": {"maxHp": 100, "defense": 50, "damageBonus": 0, "moveEnergy": 100, "skillPowerBonus": 0, "terrainDamageBonus": 0, "weaponDamage": 60},
+    "tanko":  {"maxHp": 130, "defense": 80, "damageBonus": 0, "moveEnergy": 100, "skillPowerBonus": 0, "terrainDamageBonus": 0, "weaponDamage": 75}
+  },
+  "statMultipliers": {"hp": 50, "damage": 5, "mobility": 3, "defense": 5, "skillPower": 5, "terrainDamage": 3}
+}
+```
+
+- `stats` (tổng) = `base + fromPoints + fromEquipment` từng key. Ở tổng và `base`, `moveEnergy` là năng lượng mỗi lượt (`100 + bonus`); ở `fromPoints`/`fromEquipment` là phần cộng thêm. `skillPowerBonus`, `terrainDamageBonus` là %; `damageBonus` cộng phẳng vào `weaponDamage` (damage vũ khí của nhân vật).
+- `critChance` (%) chỉ có khi khác 0 (chỉ equipment/gem/set cho crit); số thực, client tự làm tròn.
+- `baseStats`: mọi nhân vật trong game data (kể cả chưa sở hữu), không điểm, không equipment — cũng là chỉ số của bot.
+- `statMultipliers`: giá trị một điểm, đã điền mặc định cho key thiếu/0 — client dùng để xem trước khi cộng điểm.
+- Equipment (`FromEquipment`): mỗi món `round(stat × (1 + 0.02 × upgrade + milestone))` (milestone cộng dồn ở +6/+10/+14/+16, `game_settings` `equipment.milestone_*_bonus`, mặc định 0.10/0.20/0.40/1.00; crit không làm tròn), gem cộng phẳng (`hp`/`damage`/`defense` cắt phần thập phân, `critical` giữ nguyên), rồi mỗi tier crafted đủ `pieces_required` cộng dồn % của `config_set_bonuses` và nhân một lần vào tổng HP/damage/defense của equipment (crit cộng %).
 
 ### Terrain System
 

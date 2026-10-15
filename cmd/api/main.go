@@ -8,25 +8,26 @@ import (
 	"syscall"
 	"time"
 
-	"battle-squad/internal/api/auth"
-	"battle-squad/internal/api/player"
-	"battle-squad/internal/api/economy"
-	"battle-squad/internal/api/inventory"
-	"battle-squad/internal/api/character"
-	"battle-squad/internal/api/shop"
-	"battle-squad/internal/api/iap"
-	"battle-squad/internal/api/giftcode"
-	"battle-squad/internal/api/mission"
-	"battle-squad/internal/api/rank"
-	"battle-squad/internal/api/moderation"
 	"battle-squad/internal/api/appconfig"
-	"battle-squad/internal/api/equipment"
-	"battle-squad/internal/api/matchhistory"
-	"battle-squad/internal/api/rooms"
+	"battle-squad/internal/api/auth"
+	"battle-squad/internal/api/character"
 	"battle-squad/internal/api/dev"
+	"battle-squad/internal/api/economy"
+	"battle-squad/internal/api/equipment"
+	"battle-squad/internal/api/giftcode"
+	"battle-squad/internal/api/iap"
+	"battle-squad/internal/api/inventory"
+	"battle-squad/internal/api/matchhistory"
+	"battle-squad/internal/api/mission"
+	"battle-squad/internal/api/moderation"
+	"battle-squad/internal/api/player"
+	"battle-squad/internal/api/rank"
+	"battle-squad/internal/api/rooms"
+	"battle-squad/internal/api/shop"
+	"battle-squad/internal/game/gamedata"
+	sharedAuth "battle-squad/internal/shared/auth"
 	"battle-squad/internal/shared/config"
 	"battle-squad/internal/shared/database"
-	sharedAuth "battle-squad/internal/shared/auth"
 	"battle-squad/internal/shared/middleware"
 	"battle-squad/internal/shared/model"
 	"battle-squad/internal/shared/observability"
@@ -56,6 +57,12 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to connect to Postgres")
 	}
 	defer db.Close()
+
+	// Game data (characters, weapons) for the battle stats GET /player/characters
+	// reports — same DB-then-YAML load as the game server.
+	if err := gamedata.Load(db, "configs"); err != nil {
+		log.Fatal().Err(err).Msg("failed to load game data")
+	}
 
 	redisClient, err := database.NewRedisClient(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB, cfg.RedisPoolSize, cfg.RedisMinIdle)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"battle-squad/internal/game/battlestats"
 	"battle-squad/internal/shared/database"
 
 	"github.com/jackc/pgx/v5"
@@ -160,6 +161,12 @@ func (r *Repository) ResetStatsTx(ctx context.Context, tx pgx.Tx, playerID, char
 		return fmt.Errorf("reset stats: %d rows affected, want 1", tag.RowsAffected())
 	}
 	return nil
+}
+
+// GetEquipmentStats returns the equipment part of the battle stats for every
+// character the player has items equipped on.
+func (r *Repository) GetEquipmentStats(ctx context.Context, playerID string) (map[string]battlestats.Stats, error) {
+	return battlestats.LoadEquipmentStats(ctx, r.db.Pool, playerID, "")
 }
 
 // GetConfigValue fetches a single value from the game_settings table by key.

@@ -3,6 +3,8 @@ package character
 import (
 	"encoding/json"
 	"time"
+
+	"battle-squad/internal/game/battlestats"
 )
 
 // PlayerCharacter represents a character owned by a player with progression state.
@@ -21,6 +23,68 @@ type PlayerCharacter struct {
 	BonusSkillPower int       `json:"bonusSkillPower"`
 	BonusTerrainDmg int       `json:"bonusTerrainDmg"`
 	UnlockedAt      time.Time `json:"unlockedAt"`
+	// Stats are the numbers this character brings into a match.
+	Stats *CharacterStats `json:"stats,omitempty"`
+}
+
+// Points returns the allocated bonus points.
+func (c PlayerCharacter) Points() battlestats.Points {
+	return battlestats.Points{
+		HP: c.BonusHP, Damage: c.BonusDamage, Mobility: c.BonusMobility,
+		Defense: c.BonusDefense, SkillPower: c.BonusSkillPower, TerrainDamage: c.BonusTerrainDmg,
+	}
+}
+
+// StatValues are battle stats as the client shows them. In a total moveEnergy
+// is the per-turn energy (100 + bonuses); in a part (fromPoints,
+// fromEquipment) every field is what that part adds.
+type StatValues struct {
+	MaxHP              int     `json:"maxHp"`
+	Defense            int     `json:"defense"`
+	DamageBonus        int     `json:"damageBonus"`        // flat, added to weapon damage
+	MoveEnergy         int     `json:"moveEnergy"`         // per turn
+	SkillPowerBonus    int     `json:"skillPowerBonus"`    // percent
+	TerrainDamageBonus int     `json:"terrainDamageBonus"` // percent
+	CritChance         float64 `json:"critChance,omitempty"`
+}
+
+// BaseStats are a character's stats with no points or equipment.
+type BaseStats struct {
+	StatValues
+	WeaponDamage int `json:"weaponDamage"`
+}
+
+// CharacterStats are an owned character's battle stats and their parts:
+// total = base + fromPoints + fromEquipment.
+type CharacterStats struct {
+	StatValues
+	WeaponDamage  int        `json:"weaponDamage"`
+	Base          StatValues `json:"base"`
+	FromPoints    StatValues `json:"fromPoints"`
+	FromEquipment StatValues `json:"fromEquipment"`
+}
+
+// statValues converts battle stats; total adds BaseMoveEnergy to the move energy.
+func statValues(s battlestats.Stats, total bool) StatValues {
+	moveEnergy := s.MoveEnergyBonus
+	if total {
+		moveEnergy += battlestats.BaseMoveEnergy
+	}
+	return StatValues{
+		MaxHP: s.HP, Defense: s.Defense, DamageBonus: s.DamageBonus, MoveEnergy: moveEnergy,
+		SkillPowerBonus: s.SkillPowerBonus, TerrainDamageBonus: s.TerrainDamageBonus, CritChance: s.CritChance,
+	}
+}
+
+// newCharacterStats converts a battlestats breakdown.
+func newCharacterStats(characterID string, b battlestats.Breakdown) *CharacterStats {
+	return &CharacterStats{
+		StatValues:    statValues(b.Total, true),
+		WeaponDamage:  battlestats.WeaponDamage(characterID),
+		Base:          statValues(b.Base, true),
+		FromPoints:    statValues(b.FromPoints, false),
+		FromEquipment: statValues(b.FromEquipment, false),
+	}
 }
 
 // AllocateStatsPayload is the request body for allocating stat points.
@@ -45,6 +109,10 @@ type ResetStatsCost struct {
 type CharactersResponse struct {
 	Characters     []PlayerCharacter `json:"characters"`
 	ResetStatsCost ResetStatsCost    `json:"resetStatsCost"`
+	// BaseStats has every configured character (owned or not), by characterId.
+	BaseStats map[string]BaseStats `json:"baseStats"`
+	// StatMultipliers is what one allocated point adds in battle.
+	StatMultipliers battlestats.Multipliers `json:"statMultipliers"`
 }
 
 // ResetStatsPayload is the request body for resetting stat points.
@@ -85,6 +153,18 @@ func (c ProgressionConfig) StatMultiplier(stat string) int {
 		return v
 	}
 	return DefaultStatMultipliers[stat]
+}
+
+// Multipliers returns the per-point battle values, defaults filled in.
+func (c ProgressionConfig) Multipliers() battlestats.Multipliers {
+	return battlestats.Multipliers{
+		HP:            c.StatMultiplier(StatHP),
+		Damage:        c.StatMultiplier(StatDamage),
+		Mobility:      c.StatMultiplier(StatMobility),
+		Defense:       c.StatMultiplier(StatDefense),
+		SkillPower:    c.StatMultiplier(StatSkillPower),
+		TerrainDamage: c.StatMultiplier(StatTerrainDamage),
+	}
 }
 
 // ProgressionConfig holds server-side rules for character progression.

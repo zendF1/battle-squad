@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/shared/database/dbtest"
 	"battle-squad/internal/shared/observability"
 )
@@ -67,5 +68,69 @@ func TestGetCharactersFallsBackToDefaultResetCost(t *testing.T) {
 	}
 	if want := LoadProgressionConfig("").ResetStatsCost(); resp.ResetStatsCost != want {
 		t.Fatalf("resetStatsCost %+v, want the ResetStats default %+v", resp.ResetStatsCost, want)
+	}
+}
+
+// The response carries each owned character's battle stats, every character's
+// base stats and the per-point multipliers, with the documented JSON keys.
+func TestGetCharactersJSONIncludesStats(t *testing.T) {
+	prev := gamedata.Data
+	gamedata.Data = &gamedata.GameData{
+		Characters: map[string]gamedata.CharacterConfig{
+			"tanko": {CharacterID: "tanko", HP: 130, Defense: 80, WeaponID: "cannon_ball"},
+			"spark": {CharacterID: "spark", HP: 90, Defense: 40, WeaponID: "electric_orb"},
+		},
+		Weapons: map[string]gamedata.WeaponConfig{"cannon_ball": {Damage: 75}, "electric_orb": {Damage: 55}},
+	}
+	t.Cleanup(func() { gamedata.Data = prev })
+
+	svc, db := newCharacterService(t, 1)
+	dbtest.CreatePlayer(t, db, "p1", 0, 0)
+	addCharacter(t, db, "p1", "tanko", 0, 2, 1)
+
+	req := httptest.NewRequest(http.MethodGet, "/player/characters", nil)
+	req = req.WithContext(context.WithValue(req.Context(), observability.PlayerIDKey, "p1"))
+	rec := httptest.NewRecorder()
+	NewHandler(svc).GetCharacters(rec, req)
+
+	var env struct {
+		Data struct {
+			Characters []struct {
+				Stats map[string]any `json:"stats"`
+			} `json:"characters"`
+			BaseStats       map[string]map[string]any `json:"baseStats"`
+			StatMultipliers map[string]int            `json:"statMultipliers"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	d := env.Data
+	if len(d.Characters) != 1 {
+		t.Fatalf("body %s", rec.Body.String())
+	}
+	s := d.Characters[0].Stats
+	// migrations/006 seed: hp 50, skill_power 5 per point
+	if s["maxHp"] != 230.0 || s["defense"] != 80.0 || s["moveEnergy"] != 100.0 || s["skillPowerBonus"] != 5.0 ||
+		s["weaponDamage"] != 75.0 || s["damageBonus"] != 0.0 || s["terrainDamageBonus"] != 0.0 {
+		t.Fatalf("stats %v", s)
+	}
+	if _, ok := s["critChance"]; ok {
+		t.Fatalf("critChance sent without crit equipment: %v", s)
+	}
+	fp, _ := s["fromPoints"].(map[string]any)
+	fe, _ := s["fromEquipment"].(map[string]any)
+	base, _ := s["base"].(map[string]any)
+	if fp["maxHp"] != 100.0 || fp["moveEnergy"] != 0.0 || fe["maxHp"] != 0.0 || base["maxHp"] != 130.0 || base["moveEnergy"] != 100.0 {
+		t.Fatalf("parts base %v fromPoints %v fromEquipment %v", base, fp, fe)
+	}
+	if b := d.BaseStats["spark"]; len(d.BaseStats) != 2 || b["maxHp"] != 90.0 || b["defense"] != 40.0 || b["moveEnergy"] != 100.0 || b["weaponDamage"] != 55.0 {
+		t.Fatalf("baseStats %v", d.BaseStats)
+	}
+	want := map[string]int{"hp": 50, "damage": 5, "mobility": 3, "defense": 5, "skillPower": 5, "terrainDamage": 3}
+	for k, v := range want {
+		if d.StatMultipliers[k] != v {
+			t.Fatalf("statMultipliers %v, want %v", d.StatMultipliers, want)
+		}
 	}
 }

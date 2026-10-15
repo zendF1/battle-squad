@@ -70,11 +70,8 @@ func main() {
 	defer db.Close()
 
 	// 4. Load static game data configurations — try DB first, fall back to YAML
-	if err := gamedata.LoadGameDataFromDB(db); err != nil {
-		log.Warn().Err(err).Msg("failed to load config from DB, falling back to YAML")
-		if err := gamedata.LoadGameData("configs"); err != nil {
-			log.Fatal().Err(err).Msg("failed to load game data")
-		}
+	if err := gamedata.Load(db, "configs"); err != nil {
+		log.Fatal().Err(err).Msg("failed to load game data")
 	}
 	log.Info().Msg("game configurations loaded successfully")
 
