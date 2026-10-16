@@ -198,14 +198,14 @@ func TestHealSkillSendsHealEvent(t *testing.T) {
 	cur := m.State.CurrentPlayerID
 	p := m.State.Players[cur]
 	p.SkillEnergy = 100
-	p.HP = 50
+	p.HP = 750
 	groundPlayers(m, clients)
 
 	send(m, clients[cur], "Shoot", ShootAction{Angle: 60, Power: 20, ActionMode: "skill"})
 	s := shotResolved(t, clients[cur])
 
 	heals := eventsOf(s, "heal", cur)
-	if len(heals) != 1 || heals[0].Amount != 30 || *heals[0].HP != 80 || p.HP != 80 {
+	if len(heals) != 1 || heals[0].Amount != 450 || *heals[0].HP != 1200 || p.HP != 1200 {
 		t.Fatalf("heal events %+v, hp=%d", heals, p.HP)
 	}
 	if st := eventsOf(s, "status", cur); len(st) != 1 || st[0].EffectID != "heal" || st[0].Turns != 1 {

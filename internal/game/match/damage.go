@@ -3,12 +3,21 @@ package match
 import (
 	"math"
 	"math/rand"
+
+	"battle-squad/internal/game/gamedata"
 )
 
 const (
 	fallDamageThreshold  = 150.0 // threshold height in pixels
-	fallDamageMultiplier = 0.25  // 1 HP per 4 pixels of fall beyond threshold
+	fallDamageMultiplier = 3.75  // HP per pixel of fall beyond threshold (fall damage ignores defense)
 )
+
+// ReduceByDefense is the damage a target with defense takes from raw damage:
+// raw × K / (K + defense), K = combat.defense_k (gamedata.DefenseK).
+func ReduceByDefense(raw float64, defense int) float64 {
+	k := gamedata.DefenseK()
+	return raw * k / (k + float64(defense))
+}
 
 // craterRadius is the terrain an explosion carves: the blast radius grown by the
 // shooter's terrain damage bonus. Damage falloff keeps the blast radius.
@@ -41,12 +50,8 @@ func CalculateExplosionDamage(playerPos Vector2, explosionCenter Vector2, baseDa
 
 	rawDamage := baseDamage * damageMultiplier
 
-	// 3. Defense reduction formula
-	// finalDamage = rawDamage * (100 / (100 + defense))
-	defenseFactor := 100.0 / (100.0 + float64(defense))
-	finalDamage := rawDamage * defenseFactor
-
-	return int(math.Round(finalDamage))
+	// 3. Defense reduction: rawDamage × K / (K + defense)
+	return int(math.Round(ReduceByDefense(rawDamage, defense)))
 }
 
 func ApplyCritical(damage int, critChance float64) (int, bool) {

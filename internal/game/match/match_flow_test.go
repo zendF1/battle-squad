@@ -17,8 +17,8 @@ func newFlowMatch(t *testing.T) (*Match, map[string]*ws.Client) {
 	setFlowGameData()
 
 	players := []*BattlePlayerState{
-		{PlayerID: "p1", TeamID: 1, CharacterID: "c1", HP: 100, MaxHP: 100, Position: Vector2{X: 200, Y: 300}, IsAlive: true},
-		{PlayerID: "p2", TeamID: 2, CharacterID: "c1", HP: 100, MaxHP: 100, Position: Vector2{X: 1400, Y: 300}, IsAlive: true},
+		{PlayerID: "p1", TeamID: 1, CharacterID: "c1", HP: 1500, MaxHP: 1500, Position: Vector2{X: 200, Y: 300}, IsAlive: true},
+		{PlayerID: "p2", TeamID: 2, CharacterID: "c1", HP: 1500, MaxHP: 1500, Position: Vector2{X: 1400, Y: 300}, IsAlive: true},
 	}
 	clients := map[string]*ws.Client{
 		"p1": {PlayerID: "p1", Send: make(chan ws.Message, 256)},
@@ -38,7 +38,7 @@ func setFlowGameData() {
 			"c1": {CharacterID: "c1", WeaponID: "w1"},
 		},
 		Weapons: map[string]gamedata.WeaponConfig{
-			"w1": {WeaponID: "w1", Damage: 30, ExplosionRadius: 30, ProjectileWeight: 1, WindInfluence: 1},
+			"w1": {WeaponID: "w1", Damage: 240, ExplosionRadius: 30, ProjectileWeight: 1, WindInfluence: 1},
 		},
 		Skills: map[string]gamedata.SkillConfig{},
 		Items:  map[string]gamedata.ItemConfig{},

@@ -1,8 +1,11 @@
 package match
 
 import (
+	"math"
 	"math/rand"
 	"testing"
+
+	"battle-squad/internal/game/gamedata"
 )
 
 func TestCalculateExplosionDamage(t *testing.T) {
@@ -19,9 +22,9 @@ func TestCalculateExplosionDamage(t *testing.T) {
 		t.Errorf("Expected damage to be 60, got %d", dmg)
 	}
 
-	// 2. With defense = 100 (50% reduction):
-	// rawDmg = 60 -> finalDmg = 60 * (100 / (100 + 100)) = 30
-	defense = 100
+	// 2. With defense = K = 600 (50% reduction):
+	// rawDmg = 60 -> finalDmg = 60 * (600 / (600 + 600)) = 30
+	defense = 600
 	dmg = CalculateExplosionDamage(playerPos, explosionCenter, baseDamage, explosionRadius, defense)
 	if dmg != 30 {
 		t.Errorf("Expected damage to be 30, got %d", dmg)
@@ -42,10 +45,32 @@ func TestCalculateFallDamage(t *testing.T) {
 		t.Errorf("Expected 0 fall damage for 120px fall, got %d", dmg)
 	}
 
-	// Fall distance 190 -> excess 40 -> 40 * 0.25 = 10 damage
+	// Fall distance 190 -> excess 40 -> 40 * 3.75 = 150 damage
 	dmg = CalculateFallDamage(190.0)
-	if dmg != 10 {
-		t.Errorf("Expected 10 fall damage for 190px fall, got %d", dmg)
+	if dmg != 150 {
+		t.Errorf("Expected 150 fall damage for 190px fall, got %d", dmg)
+	}
+}
+
+// K comes from combat.defense_k: damage taken = raw × K / (K + defense).
+func TestReduceByDefenseUsesConfiguredK(t *testing.T) {
+	prev := gamedata.Physics
+	t.Cleanup(func() { gamedata.Physics = prev })
+
+	gamedata.Physics = nil
+	if got := ReduceByDefense(650, 50); math.Abs(got-600) > 1e-9 {
+		t.Fatalf("default K 600: 650 × 600/650 = 600, got %v", got)
+	}
+	gamedata.Physics = &gamedata.PhysicsConfig{DefenseK: 100}
+	if got := ReduceByDefense(60, 50); math.Abs(got-40) > 1e-9 {
+		t.Fatalf("K 100: 60 × 100/150 = 40, got %v", got)
+	}
+	if got := CalculateExplosionDamage(Vector2{}, Vector2{}, 60, 40, 50); got != 40 {
+		t.Fatalf("explosion damage with K 100: got %d, want 40", got)
+	}
+	gamedata.Physics = &gamedata.PhysicsConfig{DefenseK: 0}
+	if got := ReduceByDefense(650, 50); math.Abs(got-600) > 1e-9 {
+		t.Fatalf("K 0 falls back to 600, got %v", got)
 	}
 }
 
@@ -94,8 +119,8 @@ func TestApplyCritical_Multiplier(t *testing.T) {
 		{100, 150},
 		{200, 300},
 		{1, 2},   // 1 * 1.5 = 1.5, rounded to 2
-		{33, 50},  // 33 * 1.5 = 49.5, rounded to 50
-		{0, 0},    // 0 damage stays 0
+		{33, 50}, // 33 * 1.5 = 49.5, rounded to 50
+		{0, 0},   // 0 damage stays 0
 	}
 	for _, tc := range testCases {
 		dmg, _ := ApplyCritical(tc.baseDmg, 100)
@@ -125,15 +150,15 @@ func TestApplyCritical_StatisticalDistribution(t *testing.T) {
 
 func TestApplyCritical_WithEquipmentDefense(t *testing.T) {
 	// Full combat scenario: explosion damage → defense → critical
-	// Base 100 dmg, dist 0 (direct hit), defense 100 (50% reduction), 100% crit
+	// Base 100 dmg, dist 0 (direct hit), defense 600 (50% reduction), 100% crit
 	baseDmg := CalculateExplosionDamage(
 		Vector2{X: 100, Y: 100},
 		Vector2{X: 100, Y: 100}, // direct hit
 		100.0,
 		50.0,
-		100, // defense = 50% reduction
+		600, // defense = K: 50% reduction
 	)
-	// Expected: 100 * 1.0 (direct hit) * (100/200) = 50
+	// Expected: 100 * 1.0 (direct hit) * (600/1200) = 50
 	if baseDmg != 50 {
 		t.Fatalf("base damage with defense should be 50, got %d", baseDmg)
 	}

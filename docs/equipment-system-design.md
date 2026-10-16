@@ -43,17 +43,30 @@ Tài liệu thiết kế hệ thống trang bị cho Battle Squad.
 
 ### Chỉ số trang bị là điểm
 
-Mọi chỉ số HP / Damage / Defense / Move Energy của trang bị (`stat_hp`, `stat_damage`, `stat_defense`, `stat_move_energy`), của ngọc HP/Damage/Defense và set bonus là **điểm chỉ số**, cùng đơn vị với điểm nhân vật cộng tay khi lên cấp. Mỗi điểm đổi ra chỉ số trận bằng cùng `statMultipliers` của `game_settings.character_progression` (admin sửa được; hiện tại hp 50, damage 5, defense 5, mobility 3):
+Mọi chỉ số HP / Damage / Defense / Move Energy của trang bị (`stat_hp`, `stat_damage`, `stat_defense`, `stat_move_energy`), của ngọc HP/Damage/Defense và set bonus là **điểm chỉ số**, cùng đơn vị với điểm nhân vật cộng tay khi lên cấp. Mỗi điểm đổi ra chỉ số trận bằng cùng `statMultipliers` của `game_settings.character_progression` (admin sửa được; mặc định hp 2, damage 5, defense 1, mobility 1 — migration 021):
 
 | Điểm | Multiplier | Chỉ số trận |
 |------|-----------|-------------|
-| HP | `hp` (50) | max HP |
+| HP | `hp` (2) | max HP |
 | Damage | `damage` (5) | damage cộng phẳng vào vũ khí |
-| Defense | `defense` (5) | defense |
-| Move Energy | `mobility` (3) | năng lượng di chuyển mỗi lượt |
+| Defense | `defense` (1) | defense (giảm sát thương: nhận `raw × K/(K + defense)`, K = `combat.defense_k` = 600) |
+| Move Energy | `mobility` (1) | năng lượng di chuyển mỗi lượt |
 | Critical | — | % crit, **không** qua multiplier |
 
-VD: Iron Cap +20 HP = 20 điểm HP = 20 × 50 = **+1000 max HP**. Thứ tự tính (một hàm `battlestats` dùng chung cho game server và API): điểm mỗi món = `round(stat × hệ số nâng cấp)` → cộng điểm ngọc → nhân % set bonus vào tổng điểm (làm tròn) → nhân multiplier. Các bảng chỉ số trong tài liệu này (trang bị, ngọc) đều là điểm.
+VD: Iron Cap +20 HP = 20 điểm HP = 20 × 2 = **+40 max HP**. Thứ tự tính (một hàm `battlestats` dùng chung cho game server và API): điểm mỗi món = `round(stat × hệ số nâng cấp)` → cộng điểm ngọc → nhân % set bonus vào tổng điểm (làm tròn) → nhân multiplier. Các bảng chỉ số trong tài liệu này (trang bị, ngọc) đều là điểm.
+
+Tổng điểm 6 món (không ngọc) và chỉ số trận của Rookie (gốc HP 1.500, vũ khí 480, defense 50), bắn Rookie cùng đồ, trúng trực tiếp, không gió, không crit (`internal/game/room/balance_integration_test.go`):
+
+| Bộ đồ | Điểm HP / DMG / DEF / Move / Crit | Max HP | Damage | Defense | Sát thương / phát | Số phát hạ |
+|-------|-----------------------------------|--------|--------|---------|-------------------|-----------|
+| Không đồ | — | 1.500 | 480 | 50 | 443 | 4 |
+| Iron +0 | 80 / 10 / 8 / 5 / 2% | 1.660 | 530 | 58 | 483 | 4 |
+| Iron +16 | 241 / 30 / 24 / 15 / 6,04% | 1.982 | 630 | 74 | 561 | 4 |
+| Dragon +0 | 435 / 50 / 44 / 20 / 11% | 2.370 | 730 | 94 | 631 | 4 |
+| Dragon +16 | 1.313 / 151 / 132 / 60 / 33,2% | 4.126 | 1.235 | 182 | 948 | 5 |
+| Diamond +16 (đủ set 6) | 3.284 / 378 / 297 / 121 / 76,4% | 8.068 | 2.370 | 347 | 1.502 | 6 |
+
+Max HP so với không đồ: Iron +0 ≈ +11%, Dragon +0 ≈ +58%, Diamond +16 ≈ ×5,4.
 
 ### Hệ thống phụ trợ
 

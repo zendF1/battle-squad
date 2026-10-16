@@ -26,7 +26,7 @@ func newBotMatch(t *testing.T, botX, enemyX float64, wall *[2]int) (*Match, *Bat
 			"c1": {CharacterID: "c1", WeaponID: "w1"},
 		},
 		Weapons: map[string]gamedata.WeaponConfig{
-			"w1": {WeaponID: "w1", Damage: 30, ExplosionRadius: 30, ProjectileWeight: 1, WindInfluence: 1},
+			"w1": {WeaponID: "w1", Damage: 240, ExplosionRadius: 30, ProjectileWeight: 1, WindInfluence: 1},
 		},
 		Skills: map[string]gamedata.SkillConfig{},
 		Items:  map[string]gamedata.ItemConfig{},
@@ -45,9 +45,9 @@ func newBotMatch(t *testing.T, botX, enemyX float64, wall *[2]int) (*Match, *Bat
 		MapID: "bot_test", GridWidth: 100, GridHeight: 56, CellSize: botTestCell, Tiles: tiles,
 	}, nil)
 
-	bot := &BattlePlayerState{PlayerID: "bot_1", TeamID: 1, CharacterID: "c1", HP: 100, MaxHP: 100,
+	bot := &BattlePlayerState{PlayerID: "bot_1", TeamID: 1, CharacterID: "c1", HP: 1500, MaxHP: 1500,
 		MoveEnergy: 100, Position: Vector2{X: botX, Y: 0}, IsAlive: true, IsBot: true}
-	enemy := &BattlePlayerState{PlayerID: "p2", TeamID: 2, CharacterID: "c1", HP: 100, MaxHP: 100,
+	enemy := &BattlePlayerState{PlayerID: "p2", TeamID: 2, CharacterID: "c1", HP: 1500, MaxHP: 1500,
 		Position: Vector2{X: enemyX, Y: 0}, IsAlive: true}
 	m := NewMatch("m1", "r1", "pvp_1v1", "bot_test", []*BattlePlayerState{bot, enemy},
 		map[string]*ws.Client{}, nil, nil, nil, nil)
@@ -212,12 +212,12 @@ func TestBotMovesWhenEveryShotIsBlocked(t *testing.T) {
 
 func TestBotShootsAfterMedkit(t *testing.T) {
 	m, bot, _ := newBotMatch(t, 400, 1000, nil)
-	bot.HP = 20
+	bot.HP = 300
 	bot.Items = []string{"medkit"}
 	ctx := context.Background()
 
 	m.botStep(ctx, botTurnState{}, 0)
-	if bot.HP != 50 || len(bot.Items) != 0 {
+	if bot.HP != 750 || len(bot.Items) != 0 {
 		t.Fatalf("medkit not used: hp=%d items=%v", bot.HP, bot.Items)
 	}
 	if m.resolving || m.State.CurrentPlayerID != bot.PlayerID {

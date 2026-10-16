@@ -136,10 +136,28 @@ type PhysicsConfig struct {
 	MoveEnergyCostPer2px      float64
 	FallDamageThreshold       float64
 	FallDamagePerPixel        float64
+	// DefenseK is K in damage taken = raw × K / (K + defense)
+	// (game_settings combat.defense_k).
+	DefenseK float64
 }
 
 var Data *GameData
 var Physics *PhysicsConfig
+
+// SettingDefenseK is the game_settings key of PhysicsConfig.DefenseK.
+const SettingDefenseK = "combat.defense_k"
+
+// DefaultDefenseK is used when combat.defense_k is absent or not positive:
+// defense 50 takes 600/650 ≈ 92% of the raw damage, defense 600 half of it.
+const DefaultDefenseK = 600.0
+
+// DefenseK returns the loaded combat.defense_k, or DefaultDefenseK.
+func DefenseK() float64 {
+	if Physics != nil && Physics.DefenseK > 0 {
+		return Physics.DefenseK
+	}
+	return DefaultDefenseK
+}
 
 func LoadGameData(configDir string) error {
 	gData := &GameData{
@@ -438,6 +456,7 @@ func loadPhysicsFromDB(ctx context.Context, db *database.PostgresDB) (*PhysicsCo
 		MoveEnergyCostPer2px:      1.0,
 		FallDamageThreshold:       50.0,
 		FallDamagePerPixel:        0.5,
+		DefenseK:                  DefaultDefenseK,
 	}
 
 	if v, ok := settings["gravity"]; ok {
@@ -503,6 +522,11 @@ func loadPhysicsFromDB(ctx context.Context, db *database.PostgresDB) (*PhysicsCo
 	if v, ok := settings["fall_damage_per_pixel"]; ok {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			p.FallDamagePerPixel = f
+		}
+	}
+	if v, ok := settings[SettingDefenseK]; ok {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
+			p.DefenseK = f
 		}
 	}
 

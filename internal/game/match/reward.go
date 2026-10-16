@@ -13,6 +13,11 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// damagePerBonusExp is the damage dealt worth 1 bonus EXP. HP is 15× the old
+// balance (100 → 1500), so a match deals about 15× the damage: 300 keeps the
+// old 1 EXP per 20 damage.
+const damagePerBonusExp = 300.0
+
 // releaseReservationsSQL returns every still-reserved item of a match to its owner.
 const releaseReservationsSQL = `
 	UPDATE inventory_reservations SET status = 'released', updated_at = CURRENT_TIMESTAMP
@@ -130,13 +135,13 @@ func ProcessMatchRewards(
 
 		// 1. Calculate experience
 		// baseExp = 50, winBonusExp = 30
-		// damageBonusExp = totalDamage * 0.05
+		// damageBonusExp = totalDamage / damagePerBonusExp
 		// killBonusExp = killCount * 10
 		expGained := 50
 		if p.IsWinner {
 			expGained += 30
 		}
-		expGained += int(math.Round(float64(p.Damage) * 0.05))
+		expGained += int(math.Round(float64(p.Damage) / damagePerBonusExp))
 		expGained += p.Kills * 10
 
 		// 2. Calculate coins

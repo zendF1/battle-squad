@@ -136,19 +136,20 @@ const (
 	StatDamage        = "damage"         // +N weapon damage
 	StatMobility      = "mobility"       // +N max move energy
 	StatDefense       = "defense"        // +N defense
-	StatSkillPower    = "skill_power"    // +N% skill damage and healing
-	StatTerrainDamage = "terrain_damage" // +N% crater radius
+	StatSkillPower    = "skill_power"    // +N% skill damage and healing (1 = 1% per point)
+	StatTerrainDamage = "terrain_damage" // +N% crater radius (1 = 1% per point)
 )
 
 // DefaultStatMultipliers fill keys missing from (or zero in) the configured
-// statMultipliers; they match the migrations/006 seed.
+// statMultipliers; they match the migrations/006 seed (and 021, which moves
+// the old 50/5/3/5/5/3 default to these).
 var DefaultStatMultipliers = map[string]int{
-	StatHP:            50,
+	StatHP:            2,
 	StatDamage:        5,
-	StatMobility:      3,
-	StatDefense:       5,
-	StatSkillPower:    5,
-	StatTerrainDamage: 3,
+	StatMobility:      1,
+	StatDefense:       1,
+	StatSkillPower:    1,
+	StatTerrainDamage: 1,
 }
 
 // StatMultiplier returns the configured per-point value for stat, or its default.

@@ -77,10 +77,10 @@ func TestGetCharactersJSONIncludesStats(t *testing.T) {
 	prev := gamedata.Data
 	gamedata.Data = &gamedata.GameData{
 		Characters: map[string]gamedata.CharacterConfig{
-			"tanko": {CharacterID: "tanko", HP: 130, Defense: 80, WeaponID: "cannon_ball"},
-			"spark": {CharacterID: "spark", HP: 90, Defense: 40, WeaponID: "electric_orb"},
+			"tanko": {CharacterID: "tanko", HP: 1950, Defense: 80, WeaponID: "cannon_ball"},
+			"spark": {CharacterID: "spark", HP: 1350, Defense: 40, WeaponID: "electric_orb"},
 		},
-		Weapons: map[string]gamedata.WeaponConfig{"cannon_ball": {Damage: 75}, "electric_orb": {Damage: 55}},
+		Weapons: map[string]gamedata.WeaponConfig{"cannon_ball": {Damage: 600}, "electric_orb": {Damage: 440}},
 	}
 	t.Cleanup(func() { gamedata.Data = prev })
 
@@ -110,9 +110,9 @@ func TestGetCharactersJSONIncludesStats(t *testing.T) {
 		t.Fatalf("body %s", rec.Body.String())
 	}
 	s := d.Characters[0].Stats
-	// migrations/006 seed: hp 50, skill_power 5 per point
-	if s["maxHp"] != 230.0 || s["defense"] != 80.0 || s["moveEnergy"] != 100.0 || s["skillPowerBonus"] != 5.0 ||
-		s["weaponDamage"] != 75.0 || s["damageBonus"] != 0.0 || s["terrainDamageBonus"] != 0.0 {
+	// migrations/006 seed: hp 2, skill_power 1 per point
+	if s["maxHp"] != 1954.0 || s["defense"] != 80.0 || s["moveEnergy"] != 100.0 || s["skillPowerBonus"] != 1.0 ||
+		s["weaponDamage"] != 600.0 || s["damageBonus"] != 0.0 || s["terrainDamageBonus"] != 0.0 {
 		t.Fatalf("stats %v", s)
 	}
 	if _, ok := s["critChance"]; ok {
@@ -121,13 +121,13 @@ func TestGetCharactersJSONIncludesStats(t *testing.T) {
 	fp, _ := s["fromPoints"].(map[string]any)
 	fe, _ := s["fromEquipment"].(map[string]any)
 	base, _ := s["base"].(map[string]any)
-	if fp["maxHp"] != 100.0 || fp["moveEnergy"] != 0.0 || fe["maxHp"] != 0.0 || base["maxHp"] != 130.0 || base["moveEnergy"] != 100.0 {
+	if fp["maxHp"] != 4.0 || fp["moveEnergy"] != 0.0 || fe["maxHp"] != 0.0 || base["maxHp"] != 1950.0 || base["moveEnergy"] != 100.0 {
 		t.Fatalf("parts base %v fromPoints %v fromEquipment %v", base, fp, fe)
 	}
-	if b := d.BaseStats["spark"]; len(d.BaseStats) != 2 || b["maxHp"] != 90.0 || b["defense"] != 40.0 || b["moveEnergy"] != 100.0 || b["weaponDamage"] != 55.0 {
+	if b := d.BaseStats["spark"]; len(d.BaseStats) != 2 || b["maxHp"] != 1350.0 || b["defense"] != 40.0 || b["moveEnergy"] != 100.0 || b["weaponDamage"] != 440.0 {
 		t.Fatalf("baseStats %v", d.BaseStats)
 	}
-	want := map[string]int{"hp": 50, "damage": 5, "mobility": 3, "defense": 5, "skillPower": 5, "terrainDamage": 3}
+	want := map[string]int{"hp": 2, "damage": 5, "mobility": 1, "defense": 1, "skillPower": 1, "terrainDamage": 1}
 	for k, v := range want {
 		if d.StatMultipliers[k] != v {
 			t.Fatalf("statMultipliers %v, want %v", d.StatMultipliers, want)

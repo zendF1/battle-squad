@@ -29,11 +29,11 @@ func TestAddStatPointsDefaultsMissingMultipliers(t *testing.T) {
 	for _, value := range []string{`{"statMultipliers":{"hp":20,"damage":0}}`, "", "not json"} {
 		cfg := character.LoadProgressionConfig(value)
 		got := addStatPoints(battleStats{}, statPoints{HP: 1, Damage: 1, Mobility: 1, Defense: 1, SkillPower: 1, TerrainDamage: 1}, cfg)
-		wantHP := 50
+		wantHP := 2
 		if value != "" && value != "not json" {
 			wantHP = 20
 		}
-		want := battleStats{HP: wantHP, DamageBonus: 5, MoveEnergyBonus: 3, Defense: 5, SkillPowerBonus: 5, TerrainDamageBonus: 3}
+		want := battleStats{HP: wantHP, DamageBonus: 5, MoveEnergyBonus: 1, Defense: 1, SkillPowerBonus: 1, TerrainDamageBonus: 1}
 		if got != want {
 			t.Fatalf("config %q: got %+v, want %+v", value, got, want)
 		}
@@ -62,7 +62,7 @@ func TestGetActualStatsAppliesAllStatPoints(t *testing.T) {
 		"010_equipment_system.up.sql", "011_equipment_slot_unique.up.sql")
 	prev := gamedata.Data
 	gamedata.Data = &gamedata.GameData{Characters: map[string]gamedata.CharacterConfig{
-		"tanko": {CharacterID: "tanko", HP: 130, Defense: 80},
+		"tanko": {CharacterID: "tanko", HP: 1950, Defense: 80},
 	}}
 	t.Cleanup(func() { gamedata.Data = prev })
 
@@ -75,9 +75,9 @@ func TestGetActualStatsAppliesAllStatPoints(t *testing.T) {
 	}
 	r := &Room{db: db}
 
-	// migrations/006 seed: hp 50, damage 5, mobility 3, defense 5, skill_power 5, terrain_damage 3
+	// migrations/006 seed: hp 2, damage 5, mobility 1, defense 1, skill_power 1, terrain_damage 1
 	got := r.getActualStats("p1", "tanko")
-	want := battleStats{HP: 180, Defense: 100, DamageBonus: 10, MoveEnergyBonus: 9, SkillPowerBonus: 25, TerrainDamageBonus: 18}
+	want := battleStats{HP: 1952, Defense: 84, DamageBonus: 10, MoveEnergyBonus: 3, SkillPowerBonus: 5, TerrainDamageBonus: 6}
 	if got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}

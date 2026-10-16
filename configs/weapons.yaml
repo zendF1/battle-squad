@@ -1,6 +1,6 @@
 - weaponId: basic_rocket
   name: Basic Rocket
-  damage: 60
+  damage: 480
   explosionRadius: 40
   terrainDamage: 50
   projectileWeight: 1.0
@@ -9,7 +9,7 @@
 
 - weaponId: cannon_ball
   name: Cannon Ball
-  damage: 75
+  damage: 600
   explosionRadius: 50
   terrainDamage: 85
   projectileWeight: 1.5
@@ -18,7 +18,7 @@
 
 - weaponId: electric_orb
   name: Electric Orb
-  damage: 55
+  damage: 440
   explosionRadius: 35
   terrainDamage: 30
   projectileWeight: 0.8
@@ -27,7 +27,7 @@
 
 - weaponId: seed_bomb
   name: Seed Bomb
-  damage: 45
+  damage: 360
   explosionRadius: 40
   terrainDamage: 30
   projectileWeight: 0.9

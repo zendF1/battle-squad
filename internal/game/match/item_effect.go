@@ -39,8 +39,7 @@ func ApplyImmediateItem(
 
 	switch itemID {
 	case "medkit":
-		// +30 HP
-		player.HP += 30
+		player.HP += int(itemValue("medkit", defaultMedkitHeal))
 		if player.HP > player.MaxHP {
 			player.HP = player.MaxHP
 		}

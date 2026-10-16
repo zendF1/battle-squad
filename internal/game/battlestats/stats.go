@@ -16,7 +16,7 @@ const BaseMoveEnergy = 100
 
 // Default base stats for a character missing from the game data.
 const (
-	defaultHP      = 100
+	defaultHP      = 1500
 	defaultDefense = 50
 )
 

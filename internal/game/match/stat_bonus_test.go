@@ -74,13 +74,13 @@ func TestSkillPowerBonusScalesHeal(t *testing.T) {
 	p := m.State.Players[cur]
 	p.SkillEnergy = 100
 	p.SkillPowerBonus = 50
-	p.HP = 20
+	p.HP = 300
 	groundPlayers(m, clients)
 
 	send(m, clients[cur], "Shoot", ShootAction{Angle: 60, Power: 20, ActionMode: "skill"})
 	s := shotResolved(t, clients[cur])
-	if heals := eventsOf(s, "heal", cur); len(heals) != 1 || heals[0].Amount != 45 || p.HP != 65 {
-		t.Fatalf("heal events %+v, hp=%d; want 30 * 1.5 = 45", heals, p.HP)
+	if heals := eventsOf(s, "heal", cur); len(heals) != 1 || heals[0].Amount != 675 || p.HP != 975 {
+		t.Fatalf("heal events %+v, hp=%d; want 450 * 1.5 = 675", heals, p.HP)
 	}
 }
 
@@ -99,10 +99,10 @@ func TestDamageBonusAddsToWeaponDamage(t *testing.T) {
 		}
 		return hits[0].Amount
 	}
-	// Weapon damage 30; +30 flat doubles it
-	base, boosted := weaponDamage(0), weaponDamage(30)
+	// Weapon damage 240; +240 flat doubles it
+	base, boosted := weaponDamage(0), weaponDamage(240)
 	if base <= 0 || math.Abs(float64(boosted-2*base)) > 1 {
-		t.Fatalf("weapon damage %d with +30 bonus, want about 2 x %d", boosted, base)
+		t.Fatalf("weapon damage %d with +240 bonus, want about 2 x %d", boosted, base)
 	}
 }
 

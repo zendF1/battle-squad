@@ -48,6 +48,7 @@ func main() {
 		filepath.Join("migrations", "018_coin_exchange_offers.up.sql"),
 		filepath.Join("migrations", "019_equipment_design_levels.up.sql"),
 		filepath.Join("migrations", "020_gun_weapon_names.up.sql"),
+		filepath.Join("migrations", "021_big_numbers_balance.up.sql"),
 	}
 
 	for _, migrationPath := range migrations {

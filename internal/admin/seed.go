@@ -33,6 +33,7 @@ var defaultSettings = []settingDef{
 	{"move.energy_cost_per_2px", "0.5", "number", "Năng lượng tiêu hao mỗi 2 pixel di chuyển", "movement"},
 	{"fall.damage_threshold", "30", "number", "Khoảng rơi tối thiểu (pixels) trước khi nhận fall damage", "physics"},
 	{"fall.damage_per_pixel", "0.5", "number", "Damage mỗi pixel rơi vượt ngưỡng", "physics"},
+	{"combat.defense_k", "600", "number", "Hằng số phòng thủ K: sát thương nhận = sát thương × K / (K + phòng thủ)", "combat"},
 	{"equipment.merge_rate_per_item", "25", "number", "Tỷ lệ ghép mỗi viên (%). 4 viên = 4 × giá trị này", "equipment"},
 	{"equipment.milestone_6_bonus", "0.10", "number", "Bonus stat khi trang bị đạt +6 (10%)", "equipment"},
 	{"equipment.milestone_10_bonus", "0.20", "number", "Bonus stat khi trang bị đạt +10 (20%)", "equipment"},

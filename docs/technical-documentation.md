@@ -519,7 +519,7 @@ Room (waiting) → Host StartMatch → Match goroutine spawns
 ```
 startTurn()
   1. Tick status effects (decrement duration, remove expired)
-  2. Apply terrain damage (lava: 5 HP/turn)
+  2. Apply terrain damage (lava: 75 HP/turn)
   3. Reset move energy = 100
   4. Update wind (random power + direction, trừ khi WindStopper active)
   5. Broadcast TurnStarted
@@ -528,7 +528,7 @@ startTurn()
 Player actions trong turn:
   - Move: tiêu MoveEnergy, update position, check fall damage
   - Shoot: 1 lần/turn, simulate projectile physics, calculate damage, destroy terrain
-  - UseItem: medkit (+30 HP), teleport, wind_stopper, shot modifiers
+  - UseItem: medkit (+450 HP), teleport, wind_stopper, shot modifiers
   - EndTurn: chuyển sang player tiếp theo
 ```
 
@@ -563,27 +563,70 @@ Explosion damage:
   multiplier = 1.0 - (distance / explosionRadius)  // linear falloff
   rawDamage = (weaponDamage + shooter.damageBonus) * itemFactor * multiplier
     // itemFactor: power_shot ×1.5; skill: × skill.damageMultiplier × (1 + skillPowerBonus/100)
-  finalDamage = rawDamage * (100 / (100 + playerDefense))
+  finalDamage = rawDamage * (K / (K + playerDefense))   // K = game_settings combat.defense_k, mặc định 600
   crit: ×1.5 với xác suất critChance%
 
-Fall damage:
+Fall damage (không qua defense):
   threshold = 150px
   if fallDistance > threshold:
-    damage = (fallDistance - 150) * 0.25
+    damage = (fallDistance - 150) * 3.75
 ```
+
+`ReduceByDefense` (`match/damage.go`) là công thức defense duy nhất: `CalculateExplosionDamage` (trận) và bot (`evalShot`) đều gọi nó. K đọc lúc game server load game data (`gamedata.DefenseK()`, thiếu hoặc ≤ 0 → 600), sửa ở trang Physics của admin rồi restart `cmd/game`. Defense 50 nhận 600/650 ≈ 92% sát thương, defense 600 nhận 50%.
+
+### Balance ("số lớn")
+
+Migration `021_big_numbers_balance` (chạy lại mỗi deploy, chỉ sửa dòng còn giữ giá trị cũ) và `configs/*.yaml` đổi sang thang số lớn: HP ×15, damage vũ khí ×8, defense giữ nguyên, K 100 → 600. Hiệu ứng % (power_shot ×1.5, `damageMultiplier` skill, skill power/terrain %) giữ nguyên.
+
+| Nhân vật | HP | Damage vũ khí (`config_weapons`, cũng là `config_characters.damage`) | Defense |
+|----------|----|------------------------------------------------------------------|---------|
+| Rookie (basic_rocket) | 100 → **1.500** | 60 → **480** | 50 |
+| Tanko (cannon_ball) | 130 → **1.950** | 75 → **600** | 80 |
+| Spark (electric_orb) | 90 → **1.350** | 55 → **440** | 40 |
+| Flora (seed_bomb) | 95 → **1.425** | 45 → **360** | 50 |
+
+Các số khác đã đổi:
+
+| Giá trị | Cũ → mới | Ở đâu |
+|---------|----------|-------|
+| `statMultipliers` hp / damage / defense / mobility / skill_power / terrain_damage | 50/5/5/3/5/3 → **2/5/1/1/1/1** | `character_progression` (021 chỉ đổi khi object còn đúng mặc định cũ), seed 006, `character.DefaultStatMultipliers`. skill_power / terrain_damage là % mỗi điểm (1 = 1%) |
+| K defense | 100 → **600** | `combat.defense_k` (021 + admin `SeedSettings`), `gamedata.DefaultDefenseK` |
+| Medkit | +30 → **+450** HP | `config_items.value` của `medkit` (game server giờ đọc value, mặc định 450), `items.yaml` |
+| Healing Bloom | 30 → **450** HP trước skill power | `match.skillHealAmount` |
+| Lava đầu lượt | 5 → **75** HP | `match.lavaDamage` |
+| Fall damage | 0,25 → **3,75** HP/px quá 150px | `match.fallDamageMultiplier` |
+| HP mặc định nhân vật không có trong game data | 100 → **1.500** | `battlestats.defaultHP` |
+| EXP thưởng theo damage gây ra | 1 EXP / 20 damage → **1 EXP / 300 damage** | `match.damagePerBonusExp` (một trận gây ≈15× damage hơn trước) |
+
+Không đổi: `air_strike` value 30 (không code nào đọc), `drill_bomb` 50 (px xuyên), `spider_net` cap 50 move energy, `power_shot` ×1.5, `damageMultiplier` skill (1.25 / 1.3 / 0.9), `fall.damage_per_pixel` / `fall.damage_threshold` trong `game_settings` (không được đọc: fall damage dùng hằng số trong `damage.go`).
+
+Kiểm tra bằng `TestBalanceHitsToKill` (`internal/game/room/balance_integration_test.go`, cần `TEST_POSTGRES_DSN`): chạy mọi migration, catalog thật, `configs/*.yaml`, `getActualStats` của room và `CalculateExplosionDamage`. Rookie bắn Rookie cùng build, trúng trực tiếp, không gió, không crit:
+
+| Build | Max HP | Damage thô | Defense | Sát thương / phát | Số phát hạ |
+|-------|--------|-----------|---------|-------------------|-----------|
+| Không đồ | 1.500 | 480 | 50 | 443 | 4 |
+| Iron +0 (6 món) | 1.660 | 530 | 58 | 483 | 4 |
+| Iron +16 | 1.982 | 630 | 74 | 561 | 4 |
+| Dragon +0 | 2.370 | 730 | 94 | 631 | 4 |
+| Dragon +16 | 4.126 | 1.235 | 182 | 948 | 5 |
+| Diamond +16 đủ set | 8.068 | 2.370 | 347 | 1.502 | 6 |
+| Lv80, 79 điểm vào HP | 1.658 | 480 | 50 | 443 | 4 |
+| Lv80, 79 điểm vào damage | 1.500 | 875 | 50 | 808 | 2 |
+
+Cộng điểm nghiêng về damage: build damage Lv80 hạ Rookie không đồ trong 2 phát và build HP Lv80 trong 3 phát (1.658 / 808); build HP chịu 4 phát của Rookie không đồ (đã chấp nhận).
 
 ### Character Stat Bonuses
 
-Khi trận bắt đầu, room đọc `bonus_*` của `player_characters` (nhân vật đang chọn) và nhân với `statMultipliers` trong `game_settings.character_progression` (key thiếu hoặc 0 → mặc định của seed 006). Bot giữ chỉ số gốc của nhân vật; nhân vật chưa sở hữu (DEV_UNLOCK_ALL) cũng vậy. Equipment cộng thêm sau đó — chỉ số equipment cũng là **điểm**, đổi ra chỉ số bằng cùng `statMultipliers` (VD Iron Cap `stat_hp` 20 = 20 điểm HP = +1000 max HP); crit là % không qua multiplier.
+Khi trận bắt đầu, room đọc `bonus_*` của `player_characters` (nhân vật đang chọn) và nhân với `statMultipliers` trong `game_settings.character_progression` (key thiếu hoặc 0 → mặc định của seed 006). Bot giữ chỉ số gốc của nhân vật; nhân vật chưa sở hữu (DEV_UNLOCK_ALL) cũng vậy. Equipment cộng thêm sau đó — chỉ số equipment cũng là **điểm**, đổi ra chỉ số bằng cùng `statMultipliers` (VD Iron Cap `stat_hp` 20 = 20 điểm HP = +40 max HP); crit là % không qua multiplier.
 
 | Chỉ số (`bonus_*`) | Key multiplier | Mặc định | Tác dụng trong trận (`BattlePlayerState`) |
 |--------------------|----------------|----------|-------------------------------------------|
-| `bonus_hp` | `hp` | 50 | `maxHp = character.hp + điểm × 50` |
-| `bonus_defense` | `defense` | 5 | `defense = character.defense + điểm × 5` |
+| `bonus_hp` | `hp` | 2 | `maxHp = character.hp + điểm × 2` |
+| `bonus_defense` | `defense` | 1 | `defense = character.defense + điểm × 1` |
 | `bonus_damage` | `damage` | 5 | `damageBonus += điểm × 5`, cộng phẳng vào damage vũ khí (cả weapon lẫn skill) |
-| `bonus_mobility` | `mobility` | 3 | `moveEnergyBonus += điểm × 3`; đầu mỗi lượt `moveEnergy = 100 + moveEnergyBonus` (1 năng lượng / 2px) |
-| `bonus_skill_power` | `skill_power` | 5 | `skillPowerBonus = điểm × 5` (%): damage skill × `(1 + skillPowerBonus/100)`, heal của `healing_bloom` = `round(30 × (1 + skillPowerBonus/100))` |
-| `bonus_terrain_damage` | `terrain_damage` | 3 | `terrainDamageBonus = điểm × 3` (%): bán kính khoét terrain = `explosionRadius × (1 + terrainDamageBonus/100)`; vùng sát thương vẫn dùng `explosionRadius`. `radius` của event `explode` là bán kính khoét |
+| `bonus_mobility` | `mobility` | 1 | `moveEnergyBonus += điểm × 1`; đầu mỗi lượt `moveEnergy = 100 + moveEnergyBonus` (1 năng lượng / 2px) |
+| `bonus_skill_power` | `skill_power` | 1 | `skillPowerBonus = điểm × 1` (%): damage skill × `(1 + skillPowerBonus/100)`, heal của `healing_bloom` = `round(450 × (1 + skillPowerBonus/100))` |
+| `bonus_terrain_damage` | `terrain_damage` | 1 | `terrainDamageBonus = điểm × 1` (%): bán kính khoét terrain = `explosionRadius × (1 + terrainDamageBonus/100)`; vùng sát thương vẫn dùng `explosionRadius`. `radius` của event `explode` là bán kính khoét |
 
 #### Chỉ số hiển thị (`GET /player/characters`)
 
@@ -594,28 +637,28 @@ Room (`getActualStats` → `newBattlePlayer`) và API cùng tính bằng package
   "characters": [{
     "characterId": "tanko", "level": 3, "statPoints": 2, "bonusHp": 2, "bonusMobility": 1, "...": "...",
     "stats": {
-      "maxHp": 1330, "defense": 90, "damageBonus": 55, "moveEnergy": 103,
-      "skillPowerBonus": 0, "terrainDamageBonus": 0, "critChance": 2.2, "weaponDamage": 75,
-      "base":          {"maxHp": 130,  "defense": 80, "damageBonus": 0,  "moveEnergy": 100, "skillPowerBonus": 0, "terrainDamageBonus": 0},
-      "fromPoints":    {"maxHp": 100,  "defense": 0,  "damageBonus": 0,  "moveEnergy": 3,   "skillPowerBonus": 0, "terrainDamageBonus": 0},
-      "fromEquipment": {"maxHp": 1100, "defense": 10, "damageBonus": 55, "moveEnergy": 0,   "skillPowerBonus": 0, "terrainDamageBonus": 0, "critChance": 2.2},
+      "maxHp": 1998, "defense": 82, "damageBonus": 55, "moveEnergy": 101,
+      "skillPowerBonus": 0, "terrainDamageBonus": 0, "critChance": 2.2, "weaponDamage": 600,
+      "base":          {"maxHp": 1950, "defense": 80, "damageBonus": 0,  "moveEnergy": 100, "skillPowerBonus": 0, "terrainDamageBonus": 0},
+      "fromPoints":    {"maxHp": 4,    "defense": 0,  "damageBonus": 0,  "moveEnergy": 1,   "skillPowerBonus": 0, "terrainDamageBonus": 0},
+      "fromEquipment": {"maxHp": 44,   "defense": 2,  "damageBonus": 55, "moveEnergy": 0,   "skillPowerBonus": 0, "terrainDamageBonus": 0, "critChance": 2.2},
       "equipmentPoints": {"hp": 22, "damage": 11, "defense": 2, "mobility": 0, "crit": 2.2}
     }
   }],
   "resetStatsCost": {"currency": "coin", "amount": 500},
   "baseStats": {
-    "rookie": {"maxHp": 100, "defense": 50, "damageBonus": 0, "moveEnergy": 100, "skillPowerBonus": 0, "terrainDamageBonus": 0, "weaponDamage": 60},
-    "tanko":  {"maxHp": 130, "defense": 80, "damageBonus": 0, "moveEnergy": 100, "skillPowerBonus": 0, "terrainDamageBonus": 0, "weaponDamage": 75}
+    "rookie": {"maxHp": 1500, "defense": 50, "damageBonus": 0, "moveEnergy": 100, "skillPowerBonus": 0, "terrainDamageBonus": 0, "weaponDamage": 480},
+    "tanko":  {"maxHp": 1950, "defense": 80, "damageBonus": 0, "moveEnergy": 100, "skillPowerBonus": 0, "terrainDamageBonus": 0, "weaponDamage": 600}
   },
-  "statMultipliers": {"hp": 50, "damage": 5, "mobility": 3, "defense": 5, "skillPower": 5, "terrainDamage": 3}
+  "statMultipliers": {"hp": 2, "damage": 5, "mobility": 1, "defense": 1, "skillPower": 1, "terrainDamage": 1}
 }
 ```
 
-- `stats` (tổng) = `base + fromPoints + fromEquipment` từng key. `fromEquipment` là chỉ số đã đổi; `equipmentPoints` là số điểm equipment trước khi đổi (để client hiện "Máu +22 điểm (+1.100)"). Ở tổng và `base`, `moveEnergy` là năng lượng mỗi lượt (`100 + bonus`); ở `fromPoints`/`fromEquipment` là phần cộng thêm. `skillPowerBonus`, `terrainDamageBonus` là %; `damageBonus` cộng phẳng vào `weaponDamage` (damage vũ khí của nhân vật).
+- `stats` (tổng) = `base + fromPoints + fromEquipment` từng key. `fromEquipment` là chỉ số đã đổi; `equipmentPoints` là số điểm equipment trước khi đổi (để client hiện "Máu +22 điểm (+44)"). Ở tổng và `base`, `moveEnergy` là năng lượng mỗi lượt (`100 + bonus`); ở `fromPoints`/`fromEquipment` là phần cộng thêm. `skillPowerBonus`, `terrainDamageBonus` là %; `damageBonus` cộng phẳng vào `weaponDamage` (damage vũ khí của nhân vật).
 - `critChance` (%) chỉ có khi khác 0 (chỉ equipment/gem/set cho crit); số thực, client tự làm tròn.
 - `baseStats`: mọi nhân vật trong game data (kể cả chưa sở hữu), không điểm, không equipment — cũng là chỉ số của bot.
 - `statMultipliers`: giá trị một điểm, đã điền mặc định cho key thiếu/0 — client dùng để xem trước khi cộng điểm.
-- Equipment là **điểm**, cùng đơn vị với điểm cộng tay. `SumEquipment` tính `equipmentPoints`: mỗi món `round(stat × (1 + 0.02 × upgrade + milestone))` điểm (milestone cộng dồn ở +6/+10/+14/+16, `game_settings` `equipment.milestone_*_bonus`, mặc định 0.10/0.20/0.40/1.00; crit không làm tròn), gem `hp`/`damage`/`defense` cộng `stat_value` điểm (cắt phần thập phân), `critical` cộng % giữ nguyên, rồi mỗi tier crafted đủ `pieces_required` cộng dồn % của `config_set_bonuses` và nhân một lần (làm tròn) vào tổng điểm HP/damage/defense (crit cộng %). `FromEquipment` đổi điểm sang chỉ số bằng cùng `statMultipliers`: `hp × hp` → maxHp, `damage × damage` → damageBonus, `defense × defense` → defense, `stat_move_energy × mobility` → moveEnergy; crit không có multiplier, là % crit. Room và API dùng chung hàm này nên làm tròn giống hệt. Ví dụ (multiplier mặc định): Iron Cap +0 (hp 20, def 2) = +1000 maxHp, +10 defense; ở +5 = 22 điểm HP = +1100.
+- Equipment là **điểm**, cùng đơn vị với điểm cộng tay. `SumEquipment` tính `equipmentPoints`: mỗi món `round(stat × (1 + 0.02 × upgrade + milestone))` điểm (milestone cộng dồn ở +6/+10/+14/+16, `game_settings` `equipment.milestone_*_bonus`, mặc định 0.10/0.20/0.40/1.00; crit không làm tròn), gem `hp`/`damage`/`defense` cộng `stat_value` điểm (cắt phần thập phân), `critical` cộng % giữ nguyên, rồi mỗi tier crafted đủ `pieces_required` cộng dồn % của `config_set_bonuses` và nhân một lần (làm tròn) vào tổng điểm HP/damage/defense (crit cộng %). `FromEquipment` đổi điểm sang chỉ số bằng cùng `statMultipliers`: `hp × hp` → maxHp, `damage × damage` → damageBonus, `defense × defense` → defense, `stat_move_energy × mobility` → moveEnergy; crit không có multiplier, là % crit. Room và API dùng chung hàm này nên làm tròn giống hệt. Ví dụ (multiplier mặc định): Iron Cap +0 (hp 20, def 2) = +40 maxHp, +2 defense; ở +5 = 22 điểm HP = +44.
 
 ### Terrain System
 
@@ -628,7 +671,7 @@ Room (`getActualStats` → `newBattlePlayer`) và API cùng tính bằng package
 | `steel_base` | Platform bậc thang |
 
 Terrain zones đặc biệt:
-- `lava`: 5 damage/turn khi đứng
+- `lava`: 75 damage/turn khi đứng (không qua defense)
 - `ice`: Trượt (giảm friction)
 - `fragile`: Sập sau khi bị bắn
 
@@ -640,7 +683,7 @@ Methods: `IsSolid(x,y)`, `DestroyCircle(cx,cy,radius)`, `GetLandingY(x,maxY)`, `
 
 | Item | Hiệu ứng |
 |------|----------|
-| `medkit` | +30 HP (cap tại MaxHP) |
+| `medkit` | +`config_items.value` HP (mặc định 450, cap tại MaxHP) |
 | `teleport` | Dịch chuyển đến vị trí target |
 | `wind_stopper` | Triệt tiêu gió 2 lượt (global) |
 
@@ -662,7 +705,7 @@ Sau mỗi trận:
 |------|-------|------|
 | EXP cơ bản | 80 (50+30) | 50 |
 | Coins | 50 (30+20) | 30 |
-| Damage bonus | +5% damage dealt | +5% |
+| Damage bonus | +1 EXP / 300 damage dealt | +1 EXP / 300 damage |
 | Kill bonus | +10/kill | +10/kill |
 
 EXP vào cả profile và nhân vật đang chơi (`player_characters.exp`, cộng dồn). Level nhân vật = level cao nhất của `game_settings.character_levels` có `expRequired` ≤ exp; mỗi level lên được `pointsPerLevel` (10) điểm. Bảng mặc định (migration 006 + 019) có level 2–80: L2–L10 giữ nguyên 200, 400, 700, 1100, 1600, 2200, 3000, 4000, 5200; từ L11 bước lên level sau tăng thêm 25:
@@ -674,7 +717,7 @@ EXP vào cả profile và nhân vật đang chơi (`player_characters.exp`, cộ
 | EXP tích luỹ | 5.200 | 11.575 | 18.575 | 34.450 | 43.325 | 52.825 | 85.075 | 136.825 | 151.325 |
 | ≈ số trận (≈90 EXP/trận) | 58 | 129 | 206 | 383 | 481 | 587 | 945 | 1.520 | 1.681 |
 
-≈90 EXP/trận là trung bình thắng/thua (50/80) + ~300 damage (+15) + ~0,5 kill. Level 80 cao hơn level yêu cầu lớn nhất của trang bị (75). Admin thêm/bớt level ở `/api/config/character-levels`; level tối đa là level cuối bảng.
+≈90 EXP/trận là trung bình thắng/thua (50/80) + ~4.500 damage (+15) + ~0,5 kill. Level 80 cao hơn level yêu cầu lớn nhất của trang bị (75). Admin thêm/bớt level ở `/api/config/character-levels`; level tối đa là level cuối bảng.
 
 **Rating (chỉ ranked):**
 - `pvp_1v1`: cố định +25/-20

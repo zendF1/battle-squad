@@ -35,7 +35,9 @@ const (
 	// context because the match context is usually already cancelled by then.
 	reservationReleaseTimeout = 5 * time.Second
 
-	skillHealAmount = 30.0 // healing_bloom heal before the skill power bonus
+	skillHealAmount   = 450.0 // healing_bloom heal before the skill power bonus
+	defaultMedkitHeal = 450.0 // medkit heal when config_items has no value
+	lavaDamage        = 75    // HP lost at the start of a turn on lava (ignores defense)
 )
 
 type Match struct {
@@ -424,10 +426,9 @@ func (m *Match) startTurn(ctx context.Context) {
 
 	// Skill energy is incremented at end of turn, not start
 
-	// Lava terrain: deal 5 damage to the current player at the start of their turn
+	// Lava terrain: the current player takes lavaDamage at the start of their turn
 	terrainType := m.Terrain.GetTerrainTypeAt(player.Position.X, player.Position.Y)
 	if terrainType == "lava" {
-		lavaDamage := 5
 		player.HP -= lavaDamage
 		if player.HP <= 0 {
 			player.HP = 0

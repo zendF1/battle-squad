@@ -2,7 +2,7 @@
   name: Medkit
   type: heal
   targetType: self
-  value: 30.0
+  value: 450.0
   maxUsePerMatch: 1
   cooldown: 0
 
