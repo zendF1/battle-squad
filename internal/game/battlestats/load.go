@@ -115,14 +115,14 @@ func LoadSetBonuses(ctx context.Context, q Querier) (map[string][]SetBonus, erro
 	return out, rows.Err()
 }
 
-// LoadEquipmentStats returns the equipment part of the battle stats for each
-// character the player has items equipped on (characterID "" = all).
-func LoadEquipmentStats(ctx context.Context, q Querier, playerID, characterID string) (map[string]Stats, error) {
+// LoadEquipmentPoints returns the equipment points of each character the
+// player has items equipped on (characterID "" = all); Compute converts them.
+func LoadEquipmentPoints(ctx context.Context, q Querier, playerID, characterID string) (map[string]EquipmentPoints, error) {
 	equipped, err := LoadEquipped(ctx, q, playerID, characterID)
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string]Stats, len(equipped))
+	out := make(map[string]EquipmentPoints, len(equipped))
 	if len(equipped) == 0 {
 		return out, nil
 	}
@@ -135,7 +135,7 @@ func LoadEquipmentStats(ctx context.Context, q Querier, playerID, characterID st
 		return nil, err
 	}
 	for charID, items := range equipped {
-		out[charID] = FromEquipment(items, setBonuses, ms)
+		out[charID] = SumEquipment(items, setBonuses, ms)
 	}
 	return out, nil
 }

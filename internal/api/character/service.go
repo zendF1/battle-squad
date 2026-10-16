@@ -70,7 +70,7 @@ func (s *Service) GetCharacters(ctx context.Context, playerID string) (Character
 	if err != nil {
 		return CharactersResponse{}, err
 	}
-	equipment, err := s.repo.GetEquipmentStats(ctx, playerID)
+	equipment, err := s.repo.GetEquipmentPoints(ctx, playerID)
 	if err != nil {
 		return CharactersResponse{}, err
 	}

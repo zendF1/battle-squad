@@ -62,7 +62,7 @@ func (r *Room) getActualStats(playerID, characterID string) battleStats {
 		observability.Log.Warn().Err(err).Msg("failed to load character_progression; using default stat multipliers")
 	}
 
-	equipment, err := battlestats.LoadEquipmentStats(ctx, r.db.Pool, playerID, characterID)
+	equipment, err := battlestats.LoadEquipmentPoints(ctx, r.db.Pool, playerID, characterID)
 	if err != nil {
 		observability.Log.Warn().Err(err).Str("playerId", playerID).Msg("failed to load equipment stats; playing without equipment")
 	}

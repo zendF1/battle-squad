@@ -460,14 +460,15 @@ func TestCharacterStatsFollowEquipment(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if fe := fromEquipment(); fe.MaxHP != 30 || fe.Defense != 3 || fe.DamageBonus != 8 {
-		t.Fatalf("fromEquipment after equip %+v, want hp 30 def 3 dmg 8", fe)
+	// equipment stats are points × the default multipliers (hp 50, defense 5, damage 5)
+	if fe := fromEquipment(); fe.MaxHP != 30*50 || fe.Defense != 3*5 || fe.DamageBonus != 8*5 {
+		t.Fatalf("fromEquipment after equip %+v, want hp 1500 def 15 dmg 40", fe)
 	}
 
 	if err := svc.UnequipItem(ctx, "p1", UnequipRequest{EquipmentID: vest}); err != nil {
 		t.Fatal(err)
 	}
-	if fe := fromEquipment(); fe.MaxHP != 0 || fe.Defense != 0 || fe.DamageBonus != 8 {
+	if fe := fromEquipment(); fe.MaxHP != 0 || fe.Defense != 0 || fe.DamageBonus != 8*5 {
 		t.Fatalf("fromEquipment after unequip %+v, want only the sword", fe)
 	}
 }

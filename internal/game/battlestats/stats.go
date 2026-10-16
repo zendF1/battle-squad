@@ -20,7 +20,7 @@ const (
 	defaultDefense = 50
 )
 
-// Stats are battle stats, or a part of them (points, equipment).
+// Stats are battle stats, or a part of them (from points, from equipment).
 type Stats struct {
 	HP                 int
 	Defense            int
@@ -148,19 +148,32 @@ func (ms Milestones) upgradeMultiplier(level int) float64 {
 	return mul
 }
 
-// FromEquipment sums equipped items: item stats × upgrade multiplier, plus
-// gems, then each crafted tier's reached set bonuses (percentages summed per
-// tier and applied once to the equipment totals; crit is added).
-func FromEquipment(items []EquippedItem, setBonuses map[string][]SetBonus, ms Milestones) Stats {
-	var s Stats
+// EquipmentPoints are the stat points a character's equipped items add, in the
+// same unit as allocated points: they become battle stats through the same
+// statMultipliers (see FromEquipment). Crit has no multiplier and is a crit
+// chance percent.
+type EquipmentPoints struct {
+	HP       int     `json:"hp"`
+	Damage   int     `json:"damage"`
+	Defense  int     `json:"defense"`
+	Mobility int     `json:"mobility"` // from stat_move_energy
+	Crit     float64 `json:"crit"`     // percent
+}
+
+// SumEquipment sums equipped items' points: each item stat × its upgrade
+// multiplier, rounded per item, plus gem values (truncated per gem), then each
+// crafted tier's reached set bonuses (percentages summed per tier, applied
+// once to the point totals and rounded; set crit is added).
+func SumEquipment(items []EquippedItem, setBonuses map[string][]SetBonus, ms Milestones) EquipmentPoints {
+	var e EquipmentPoints
 	craftedTierCount := make(map[string]int)
 	for _, it := range items {
 		mul := ms.upgradeMultiplier(it.UpgradeLevel)
-		s.HP += int(math.Round(float64(it.HP) * mul))
-		s.DamageBonus += int(math.Round(float64(it.Damage) * mul))
-		s.Defense += int(math.Round(float64(it.Defense) * mul))
-		s.CritChance += it.Crit * mul
-		s.MoveEnergyBonus += int(math.Round(float64(it.MoveEnergy) * mul))
+		e.HP += int(math.Round(float64(it.HP) * mul))
+		e.Damage += int(math.Round(float64(it.Damage) * mul))
+		e.Defense += int(math.Round(float64(it.Defense) * mul))
+		e.Crit += it.Crit * mul
+		e.Mobility += int(math.Round(float64(it.MoveEnergy) * mul))
 
 		if it.Category == "crafted" && it.Tier != "" {
 			craftedTierCount[it.Tier]++
@@ -168,13 +181,13 @@ func FromEquipment(items []EquippedItem, setBonuses map[string][]SetBonus, ms Mi
 		for _, g := range it.Gems {
 			switch g.Type {
 			case "hp":
-				s.HP += int(g.Value)
+				e.HP += int(g.Value)
 			case "damage":
-				s.DamageBonus += int(g.Value)
+				e.Damage += int(g.Value)
 			case "defense":
-				s.Defense += int(g.Value)
+				e.Defense += int(g.Value)
 			case "critical":
-				s.CritChance += g.Value
+				e.Crit += g.Value
 			}
 		}
 	}
@@ -195,28 +208,47 @@ func FromEquipment(items []EquippedItem, setBonuses map[string][]SetBonus, ms Mi
 			}
 		}
 		if hpPct > 0 {
-			s.HP = int(math.Round(float64(s.HP) * (1 + hpPct/100)))
+			e.HP = int(math.Round(float64(e.HP) * (1 + hpPct/100)))
 		}
 		if dmgPct > 0 {
-			s.DamageBonus = int(math.Round(float64(s.DamageBonus) * (1 + dmgPct/100)))
+			e.Damage = int(math.Round(float64(e.Damage) * (1 + dmgPct/100)))
 		}
 		if defPct > 0 {
-			s.Defense = int(math.Round(float64(s.Defense) * (1 + defPct/100)))
+			e.Defense = int(math.Round(float64(e.Defense) * (1 + defPct/100)))
 		}
-		s.CritChance += critPct
+		e.Crit += critPct
 	}
-	return s
+	return e
+}
+
+// FromEquipment converts equipment points to battle stats with the per-point
+// multipliers allocated points use: hp → max HP, damage → damage bonus,
+// defense → defense, mobility → move energy. Crit is already a percent.
+func FromEquipment(e EquipmentPoints, m Multipliers) Stats {
+	return Stats{
+		HP:              e.HP * m.HP,
+		DamageBonus:     e.Damage * m.Damage,
+		Defense:         e.Defense * m.Defense,
+		MoveEnergyBonus: e.Mobility * m.Mobility,
+		CritChance:      e.Crit,
+	}
 }
 
 // Breakdown is a character's battle stats and where they come from:
-// Total = Base + FromPoints + FromEquipment.
+// Total = Base + FromPoints + FromEquipment. EquipmentPoints are the points
+// FromEquipment was converted from.
 type Breakdown struct {
 	Base, FromPoints, FromEquipment, Total Stats
+	EquipmentPoints                        EquipmentPoints
 }
 
-// Compute builds the breakdown for an owned character.
-func Compute(characterID string, p Points, m Multipliers, equipment Stats) Breakdown {
-	b := Breakdown{Base: Base(characterID), FromPoints: FromPoints(p, m), FromEquipment: equipment}
+// Compute builds the breakdown for an owned character; allocated points and
+// equipment points are converted with the same multipliers.
+func Compute(characterID string, p Points, m Multipliers, equipment EquipmentPoints) Breakdown {
+	b := Breakdown{
+		Base: Base(characterID), FromPoints: FromPoints(p, m),
+		FromEquipment: FromEquipment(equipment, m), EquipmentPoints: equipment,
+	}
 	b.Total = b.Base.Add(b.FromPoints).Add(b.FromEquipment)
 	return b
 }

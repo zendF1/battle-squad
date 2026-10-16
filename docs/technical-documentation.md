@@ -246,7 +246,7 @@ Down migration chỉ xoá gói còn đúng giá trị seed và chưa ai mua.
 
 **Equipment (trang bị):**
 
-Slot: `weapon`, `armor`, `helmet`, `pants`, `boots`, `gloves`. Mỗi món sở hữu (`player_equipment`) có `upgradeLevel` 0–16, tối đa 2 ô ngọc, và được mặc cho **một** nhân vật (`equippedOn`); mỗi (nhân vật, slot) chỉ một món. Chỉ số equipment vào `stats.fromEquipment` của `GET /player/characters` và vào trận (xem [Chỉ số hiển thị](#chỉ-số-hiển-thị-get-playercharacters)).
+Slot: `weapon`, `armor`, `helmet`, `pants`, `boots`, `gloves`. Mỗi món sở hữu (`player_equipment`) có `upgradeLevel` 0–16, tối đa 2 ô ngọc, và được mặc cho **một** nhân vật (`equippedOn`); mỗi (nhân vật, slot) chỉ một món. Chỉ số equipment là điểm (đổi bằng `statMultipliers`, crit là %), vào `stats.equipmentPoints` / `stats.fromEquipment` của `GET /player/characters` và vào trận (xem [Chỉ số hiển thị](#chỉ-số-hiển-thị-get-playercharacters)).
 
 | Method | Path | Handler | Mô tả |
 |--------|------|---------|-------|
@@ -574,7 +574,7 @@ Fall damage:
 
 ### Character Stat Bonuses
 
-Khi trận bắt đầu, room đọc `bonus_*` của `player_characters` (nhân vật đang chọn) và nhân với `statMultipliers` trong `game_settings.character_progression` (key thiếu hoặc 0 → mặc định của seed 006). Bot giữ chỉ số gốc của nhân vật; nhân vật chưa sở hữu (DEV_UNLOCK_ALL) cũng vậy. Equipment cộng thêm sau đó.
+Khi trận bắt đầu, room đọc `bonus_*` của `player_characters` (nhân vật đang chọn) và nhân với `statMultipliers` trong `game_settings.character_progression` (key thiếu hoặc 0 → mặc định của seed 006). Bot giữ chỉ số gốc của nhân vật; nhân vật chưa sở hữu (DEV_UNLOCK_ALL) cũng vậy. Equipment cộng thêm sau đó — chỉ số equipment cũng là **điểm**, đổi ra chỉ số bằng cùng `statMultipliers` (VD Iron Cap `stat_hp` 20 = 20 điểm HP = +1000 max HP); crit là % không qua multiplier.
 
 | Chỉ số (`bonus_*`) | Key multiplier | Mặc định | Tác dụng trong trận (`BattlePlayerState`) |
 |--------------------|----------------|----------|-------------------------------------------|
@@ -587,18 +587,19 @@ Khi trận bắt đầu, room đọc `bonus_*` của `player_characters` (nhân 
 
 #### Chỉ số hiển thị (`GET /player/characters`)
 
-Room (`getActualStats` → `newBattlePlayer`) và API cùng tính bằng package `internal/game/battlestats` (`Base`, `FromPoints`, `FromEquipment`, `Compute`, `LoadEquipmentStats`), nên số trong profile là số dùng trong trận. API load game data (`config_characters`/`config_weapons`, fallback `configs/*.yaml`) lúc khởi động như game server — sửa config nhân vật/vũ khí cần restart cả hai.
+Room (`getActualStats` → `newBattlePlayer`) và API cùng tính bằng package `internal/game/battlestats` (`Base`, `FromPoints`, `SumEquipment`, `FromEquipment`, `Compute`, `LoadEquipmentPoints`), nên số trong profile là số dùng trong trận. API load game data (`config_characters`/`config_weapons`, fallback `configs/*.yaml`) lúc khởi động như game server — sửa config nhân vật/vũ khí cần restart cả hai.
 
 ```json
 {
   "characters": [{
     "characterId": "tanko", "level": 3, "statPoints": 2, "bonusHp": 2, "bonusMobility": 1, "...": "...",
     "stats": {
-      "maxHp": 268, "defense": 86, "damageBonus": 6, "moveEnergy": 105,
+      "maxHp": 1330, "defense": 90, "damageBonus": 55, "moveEnergy": 103,
       "skillPowerBonus": 0, "terrainDamageBonus": 0, "critChance": 2.2, "weaponDamage": 75,
-      "base":          {"maxHp": 130, "defense": 80, "damageBonus": 0, "moveEnergy": 100, "skillPowerBonus": 0, "terrainDamageBonus": 0},
-      "fromPoints":    {"maxHp": 100, "defense": 0,  "damageBonus": 0, "moveEnergy": 3,   "skillPowerBonus": 0, "terrainDamageBonus": 0},
-      "fromEquipment": {"maxHp": 38,  "defense": 6,  "damageBonus": 6, "moveEnergy": 2,   "skillPowerBonus": 0, "terrainDamageBonus": 0, "critChance": 2.2}
+      "base":          {"maxHp": 130,  "defense": 80, "damageBonus": 0,  "moveEnergy": 100, "skillPowerBonus": 0, "terrainDamageBonus": 0},
+      "fromPoints":    {"maxHp": 100,  "defense": 0,  "damageBonus": 0,  "moveEnergy": 3,   "skillPowerBonus": 0, "terrainDamageBonus": 0},
+      "fromEquipment": {"maxHp": 1100, "defense": 10, "damageBonus": 55, "moveEnergy": 0,   "skillPowerBonus": 0, "terrainDamageBonus": 0, "critChance": 2.2},
+      "equipmentPoints": {"hp": 22, "damage": 11, "defense": 2, "mobility": 0, "crit": 2.2}
     }
   }],
   "resetStatsCost": {"currency": "coin", "amount": 500},
@@ -610,11 +611,11 @@ Room (`getActualStats` → `newBattlePlayer`) và API cùng tính bằng package
 }
 ```
 
-- `stats` (tổng) = `base + fromPoints + fromEquipment` từng key. Ở tổng và `base`, `moveEnergy` là năng lượng mỗi lượt (`100 + bonus`); ở `fromPoints`/`fromEquipment` là phần cộng thêm. `skillPowerBonus`, `terrainDamageBonus` là %; `damageBonus` cộng phẳng vào `weaponDamage` (damage vũ khí của nhân vật).
+- `stats` (tổng) = `base + fromPoints + fromEquipment` từng key. `fromEquipment` là chỉ số đã đổi; `equipmentPoints` là số điểm equipment trước khi đổi (để client hiện "Máu +22 điểm (+1.100)"). Ở tổng và `base`, `moveEnergy` là năng lượng mỗi lượt (`100 + bonus`); ở `fromPoints`/`fromEquipment` là phần cộng thêm. `skillPowerBonus`, `terrainDamageBonus` là %; `damageBonus` cộng phẳng vào `weaponDamage` (damage vũ khí của nhân vật).
 - `critChance` (%) chỉ có khi khác 0 (chỉ equipment/gem/set cho crit); số thực, client tự làm tròn.
 - `baseStats`: mọi nhân vật trong game data (kể cả chưa sở hữu), không điểm, không equipment — cũng là chỉ số của bot.
 - `statMultipliers`: giá trị một điểm, đã điền mặc định cho key thiếu/0 — client dùng để xem trước khi cộng điểm.
-- Equipment (`FromEquipment`): mỗi món `round(stat × (1 + 0.02 × upgrade + milestone))` (milestone cộng dồn ở +6/+10/+14/+16, `game_settings` `equipment.milestone_*_bonus`, mặc định 0.10/0.20/0.40/1.00; crit không làm tròn), gem cộng phẳng (`hp`/`damage`/`defense` cắt phần thập phân, `critical` giữ nguyên), rồi mỗi tier crafted đủ `pieces_required` cộng dồn % của `config_set_bonuses` và nhân một lần vào tổng HP/damage/defense của equipment (crit cộng %).
+- Equipment là **điểm**, cùng đơn vị với điểm cộng tay. `SumEquipment` tính `equipmentPoints`: mỗi món `round(stat × (1 + 0.02 × upgrade + milestone))` điểm (milestone cộng dồn ở +6/+10/+14/+16, `game_settings` `equipment.milestone_*_bonus`, mặc định 0.10/0.20/0.40/1.00; crit không làm tròn), gem `hp`/`damage`/`defense` cộng `stat_value` điểm (cắt phần thập phân), `critical` cộng % giữ nguyên, rồi mỗi tier crafted đủ `pieces_required` cộng dồn % của `config_set_bonuses` và nhân một lần (làm tròn) vào tổng điểm HP/damage/defense (crit cộng %). `FromEquipment` đổi điểm sang chỉ số bằng cùng `statMultipliers`: `hp × hp` → maxHp, `damage × damage` → damageBonus, `defense × defense` → defense, `stat_move_energy × mobility` → moveEnergy; crit không có multiplier, là % crit. Room và API dùng chung hàm này nên làm tròn giống hệt. Ví dụ (multiplier mặc định): Iron Cap +0 (hp 20, def 2) = +1000 maxHp, +10 defense; ở +5 = 22 điểm HP = +1100.
 
 ### Terrain System
 

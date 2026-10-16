@@ -253,8 +253,8 @@ func TestOwnedRetiredWeaponStillEquips(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, c := range resp.Characters {
-		if c.CharacterID == "tanko" && (c.Stats == nil || c.Stats.FromEquipment.DamageBonus != 8) {
-			t.Fatalf("tanko stats %+v, want damage bonus 8 from the retired weapon", c.Stats)
+		if c.CharacterID == "tanko" && (c.Stats == nil || c.Stats.EquipmentPoints.Damage != 8 || c.Stats.FromEquipment.DamageBonus != 8*5) {
+			t.Fatalf("tanko stats %+v, want 8 damage points (+40 damage bonus) from the retired weapon", c.Stats)
 		}
 	}
 	if err := svc.UnequipItem(ctx, "p1", UnequipRequest{EquipmentID: id}); err != nil {

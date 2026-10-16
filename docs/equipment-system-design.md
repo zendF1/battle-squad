@@ -41,6 +41,20 @@ Tài liệu thiết kế hệ thống trang bị cho Battle Squad.
 | Set bonus | Không | Có (đủ 6 món) |
 | Nâng cấp | Có (+0 → +16) | Có (+0 → +16) |
 
+### Chỉ số trang bị là điểm
+
+Mọi chỉ số HP / Damage / Defense / Move Energy của trang bị (`stat_hp`, `stat_damage`, `stat_defense`, `stat_move_energy`), của ngọc HP/Damage/Defense và set bonus là **điểm chỉ số**, cùng đơn vị với điểm nhân vật cộng tay khi lên cấp. Mỗi điểm đổi ra chỉ số trận bằng cùng `statMultipliers` của `game_settings.character_progression` (admin sửa được; hiện tại hp 50, damage 5, defense 5, mobility 3):
+
+| Điểm | Multiplier | Chỉ số trận |
+|------|-----------|-------------|
+| HP | `hp` (50) | max HP |
+| Damage | `damage` (5) | damage cộng phẳng vào vũ khí |
+| Defense | `defense` (5) | defense |
+| Move Energy | `mobility` (3) | năng lượng di chuyển mỗi lượt |
+| Critical | — | % crit, **không** qua multiplier |
+
+VD: Iron Cap +20 HP = 20 điểm HP = 20 × 50 = **+1000 max HP**. Thứ tự tính (một hàm `battlestats` dùng chung cho game server và API): điểm mỗi món = `round(stat × hệ số nâng cấp)` → cộng điểm ngọc → nhân % set bonus vào tổng điểm (làm tròn) → nhân multiplier. Các bảng chỉ số trong tài liệu này (trang bị, ngọc) đều là điểm.
+
 ### Hệ thống phụ trợ
 
 - **Đá nâng cấp** — 12 cấp độ, dùng để nâng cấp trang bị
@@ -293,8 +307,10 @@ Trong đó:
 Ví dụ: Vũ khí base DMG 50, nâng lên +10
   upgrade_bonus = 10 × 0.02 = 0.20
   milestone_bonus = 0.10 (+6) + 0.20 (+10) = 0.30
-  final = 50 × (1 + 0.20 + 0.30) = 50 × 1.50 = 75 DMG
+  final = 50 × (1 + 0.20 + 0.30) = 50 × 1.50 = 75 điểm DMG (× multiplier damage 5 = +375 damage)
 ```
+
+`final_stat` là điểm, làm tròn mỗi món (crit giữ số thực); sau đó mới đổi ra chỉ số bằng `statMultipliers`.
 
 ---
 
@@ -398,10 +414,12 @@ Ví dụ nâng +6 → +7 (cost = 180, max = 56%):
 
 | Loại ngọc | Stat tăng | Màu |
 |-----------|----------|-----|
-| Ngọc HP | +HP flat | Xanh lá |
-| Ngọc Damage | +Damage flat | Đỏ |
-| Ngọc Defense | +Defense flat | Xanh dương |
+| Ngọc HP | +điểm HP | Xanh lá |
+| Ngọc Damage | +điểm Damage | Đỏ |
+| Ngọc Defense | +điểm Defense | Xanh dương |
 | Ngọc Critical | +Critical % | Vàng |
+
+Giá trị ngọc HP/Damage/Defense là điểm (đổi bằng `statMultipliers` như chỉ số trang bị); Critical là %.
 
 ### Cấp độ ngọc
 
@@ -534,6 +552,8 @@ Tổng nhận: 2 × Đá cấp 7 + 1 × Đá cấp 6 (nếu có phần lẻ)
 
 ## 13. Gợi ý chỉ số (Stat Suggestion)
 
+Các giá trị dưới đây là **điểm** (xem [Chỉ số trang bị là điểm](#chỉ-số-trang-bị-là-điểm)); crit là %.
+
 ### Base stat trang bị thường
 
 **Vũ khí (weapon) — Damage chủ lực:**
@@ -661,16 +681,18 @@ Mỗi tier chế tạo cần **5 loại nguyên liệu**, trong đó:
 
 | Stat | Ảnh hưởng |
 |------|----------|
-| **Damage (DMG)** | Cộng vào base damage của vũ khí nhân vật. `finalDamage = weaponDamage + equipDMG` |
-| **HP** | Cộng vào max HP. `finalHP = baseHP + equipHP` |
-| **Defense (DEF)** | Giảm damage nhận vào. `damageTaken = incomingDamage × (100 / (100 + DEF))` |
-| **Critical (Crit %)** | % cơ hội gây damage x1.5. Roll mỗi phát bắn. |
-| **Move Energy** | Cộng vào energy mỗi lượt. `turnEnergy = 100 + equipMoveEnergy` |
+| **Damage (DMG)** | Cộng vào base damage của vũ khí nhân vật. `finalDamage = weaponDamage + equipDMG × m.damage` |
+| **HP** | Cộng vào max HP. `finalHP = baseHP + equipHP × m.hp` |
+| **Defense (DEF)** | Giảm damage nhận vào. `defense = baseDEF + equipDEF × m.defense`; `damageTaken = incomingDamage × (100 / (100 + defense))` |
+| **Critical (Crit %)** | % cơ hội gây damage x1.5. Roll mỗi phát bắn. Không qua multiplier. |
+| **Move Energy** | Cộng vào energy mỗi lượt. `turnEnergy = 100 + equipMoveEnergy × m.mobility` |
+
+`equipX` là điểm trang bị (sau nâng cấp, ngọc, set bonus); `m.*` là `statMultipliers`. Điểm cộng tay của nhân vật cũng cộng theo đúng multiplier này.
 
 ### Công thức damage đầy đủ
 
 ```
-1. Base damage = weaponConfig.damage + totalEquipDMG
+1. Base damage = weaponConfig.damage + damageBonus (điểm damage × m.damage)
 2. Skill modifier (nếu dùng skill): damage *= skillConfig.damageMultiplier
 3. Wind effect: đạn bay theo wind, ảnh hưởng landing point
 4. Distance falloff: damage *= (1 - distance/explosionRadius)
@@ -679,28 +701,22 @@ Mỗi tier chế tạo cần **5 loại nguyên liệu**, trong đó:
 7. Clamp: finalDamage = max(1, round(finalDamage))
 ```
 
-### Power budget (full gear ví dụ)
+### Power budget (multiplier hiện tại: hp 50, damage 5, defense 5, mobility 3)
 
-**Player Lv40, full trang bị thường cấp 4, +0, không ngọc:**
+Bộ 6 món trang bị thường (nón, áo, quần, giày, găng, vũ khí), không ngọc, không set bonus. Chỉ số trận = điểm × multiplier.
 
-| Stat | Base (no equip) | + Full gear | Tổng |
-|------|-----------------|------------|------|
-| HP | 500 | +435 | 935 |
-| DMG | 30 | +50 | 80 |
-| DEF | 0 | +44 | 44 |
-| Crit | 0% | +11% | 11% |
-| Move Energy | 100 | +20 | 120 |
+| Bộ | Điểm HP / DMG / DEF / Move / Crit | + max HP | + damage | + defense | + move energy | Crit |
+|----|-----------------------------------|----------|----------|-----------|---------------|------|
+| Iron +0 | 80 / 10 / 8 / 5 / 2% | +4000 | +50 | +40 | +15 | 2% |
+| Iron +16 | 241 / 30 / 24 / 15 / 6.04% | +12050 | +150 | +120 | +45 | 6.04% |
+| Dragon +0 | 435 / 50 / 44 / 20 / 11% | +21750 | +250 | +220 | +60 | 11% |
+| Dragon +16 | 1313 / 151 / 132 / 60 / 33.22% | +65650 | +755 | +660 | +180 | 33.22% |
+| Kim cương +0 (full set) | 1088 / 125 / 99 / 40 / 32% | +54400 | +625 | +495 | +120 | 32% |
+| Kim cương +16 (full set) | 3284 / 378 / 297 / 121 / 76.44% | +164200 | +1890 | +1485 | +363 | 76.44% |
 
-**Player Lv75, full Kim cương +10, 2 ngọc cấp 7 mỗi item, full set bonus:**
+So sánh: HP gốc nhân vật 90–130, defense gốc 40–80, damage vũ khí 45–75; Lv80 có 79 điểm cộng tay (`pointsPerLevel` 1) = tối đa +3950 HP hoặc +395 damage hoặc +395 defense. Damage nhận = `100 / (100 + defense)`.
 
-| Stat | Base | Gear | +10 bonus | Gems | Set bonus | Tổng |
-|------|------|------|-----------|------|-----------|------|
-| HP | 500 | +1600 | +800 | +3600 | +15% | ~7475 |
-| DMG | 30 | +100 | +50 | +480 | +15% | ~758 |
-| DEF | 0 | +150 | +75 | +360 | +12% | ~655 |
-| Crit | 0% | +20% | +10% | +24% | +10% | 64% |
-
-> Chỉ số minh họa. Cần balance test thực tế.
+> Chưa balance lại sau khi đổi chỉ số trang bị sang điểm — cần chỉnh multiplier hoặc chỉ số trang bị.
 
 ---
 

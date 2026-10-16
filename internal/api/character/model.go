@@ -55,13 +55,16 @@ type BaseStats struct {
 }
 
 // CharacterStats are an owned character's battle stats and their parts:
-// total = base + fromPoints + fromEquipment.
+// total = base + fromPoints + fromEquipment. Equipment adds stat points like
+// allocated points do: EquipmentPoints are those points, FromEquipment is them
+// converted with statMultipliers (crit is a percent and is not converted).
 type CharacterStats struct {
 	StatValues
-	WeaponDamage  int        `json:"weaponDamage"`
-	Base          StatValues `json:"base"`
-	FromPoints    StatValues `json:"fromPoints"`
-	FromEquipment StatValues `json:"fromEquipment"`
+	WeaponDamage    int                         `json:"weaponDamage"`
+	Base            StatValues                  `json:"base"`
+	FromPoints      StatValues                  `json:"fromPoints"`
+	FromEquipment   StatValues                  `json:"fromEquipment"`
+	EquipmentPoints battlestats.EquipmentPoints `json:"equipmentPoints"`
 }
 
 // statValues converts battle stats; total adds BaseMoveEnergy to the move energy.
@@ -79,11 +82,12 @@ func statValues(s battlestats.Stats, total bool) StatValues {
 // newCharacterStats converts a battlestats breakdown.
 func newCharacterStats(characterID string, b battlestats.Breakdown) *CharacterStats {
 	return &CharacterStats{
-		StatValues:    statValues(b.Total, true),
-		WeaponDamage:  battlestats.WeaponDamage(characterID),
-		Base:          statValues(b.Base, true),
-		FromPoints:    statValues(b.FromPoints, false),
-		FromEquipment: statValues(b.FromEquipment, false),
+		StatValues:      statValues(b.Total, true),
+		WeaponDamage:    battlestats.WeaponDamage(characterID),
+		Base:            statValues(b.Base, true),
+		FromPoints:      statValues(b.FromPoints, false),
+		FromEquipment:   statValues(b.FromEquipment, false),
+		EquipmentPoints: b.EquipmentPoints,
 	}
 }
 

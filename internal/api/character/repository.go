@@ -164,10 +164,10 @@ func (r *Repository) ResetStatsTx(ctx context.Context, tx pgx.Tx, playerID, char
 	return nil
 }
 
-// GetEquipmentStats returns the equipment part of the battle stats for every
+// GetEquipmentPoints returns the equipment points (see battlestats) of every
 // character the player has items equipped on.
-func (r *Repository) GetEquipmentStats(ctx context.Context, playerID string) (map[string]battlestats.Stats, error) {
-	return battlestats.LoadEquipmentStats(ctx, r.db.Pool, playerID, "")
+func (r *Repository) GetEquipmentPoints(ctx context.Context, playerID string) (map[string]battlestats.EquipmentPoints, error) {
+	return battlestats.LoadEquipmentPoints(ctx, r.db.Pool, playerID, "")
 }
 
 // GetConfigValue fetches a single value from the game_settings table by key.

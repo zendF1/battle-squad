@@ -90,21 +90,22 @@ func TestAPICharacterStatsMatchBattle(t *testing.T) {
 		points    [6]int // hp, damage, mobility, defense, skill_power, terrain_damage
 		items     []testItem
 		wantMaxHP int // pinned so a formula change on both sides is noticed
+		wantHPPts int // equipment hp points
 	}{
 		{name: "no points or equipment", character: "rookie", wantMaxHP: 100},
 		{name: "points only", character: "tanko", points: [6]int{3, 2, 4, 1, 5, 2}, wantMaxHP: 130 + 3*40},
 		{name: "points + upgraded shop item with gems", character: "spark", points: [6]int{1, 0, 2, 0, 1, 0},
 			items: []testItem{{slot: "weapon", category: "shop", hp: 40, dmg: 8, def: 6, crit: 2, moveEnergy: 5, upgrade: 7, gems: []string{"hp", "critical"}}},
-			// item hp 40 × (1 + 0.14 + 0.15) = 51.6 → 52, + gem 25
-			wantMaxHP: 90 + 40 + 52 + 25},
+			// item hp 40 × (1 + 0.14 + 0.15) = 51.6 → 52 points, + gem 25 points; × 40 HP per point
+			wantMaxHP: 90 + 40 + (52+25)*40, wantHPPts: 77},
 		{name: "points + crafted set of 3", character: "flora", points: [6]int{2, 1, 1, 3, 0, 4},
 			items: []testItem{
 				{slot: "weapon", category: "crafted", tier: "rare", hp: 20, dmg: 10, upgrade: 10, gems: []string{"damage", "defense"}},
 				{slot: "armor", category: "crafted", tier: "rare", hp: 60, def: 12, upgrade: 3},
 				{slot: "helmet", category: "crafted", tier: "rare", hp: 30, def: 5, crit: 1, moveEnergy: 3},
 			},
-			// hp: 20×1.55=31 + 60×1.06=63.6→64 + 30 = 125, × (1 + 15%) = 143.75 → 144
-			wantMaxHP: 95 + 80 + 144},
+			// hp points: 20×1.55=31 + 60×1.06=63.6→64 + 30 = 125, × (1 + 15%) = 143.75 → 144; × 40 HP per point
+			wantMaxHP: 95 + 80 + 144*40, wantHPPts: 144},
 	}
 
 	svc := character.NewService(character.NewRepository(db), economy.NewRepository(), db)
@@ -157,6 +158,12 @@ func TestAPICharacterStatsMatchBattle(t *testing.T) {
 			}
 			if fp.MaxHP != p[0]*40 || fp.MoveEnergy != p[2]*4 || fp.SkillPowerBonus != p[4]*7 {
 				t.Fatalf("fromPoints %+v ignores the configured multipliers", fp)
+			}
+			// fromEquipment is the equipment points through the same multipliers
+			ep := api.EquipmentPoints
+			if ep.HP != tt.wantHPPts || fe.MaxHP != ep.HP*40 || fe.DamageBonus != ep.Damage*6 || fe.Defense != ep.Defense*2 ||
+				fe.MoveEnergy != ep.Mobility*4 || fe.CritChance != ep.Crit || fe.SkillPowerBonus != 0 || fe.TerrainDamageBonus != 0 {
+				t.Fatalf("equipmentPoints %+v, fromEquipment %+v", ep, fe)
 			}
 		})
 	}
