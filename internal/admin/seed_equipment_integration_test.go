@@ -8,8 +8,8 @@ import (
 	"battle-squad/internal/shared/database/dbtest"
 )
 
-// SeedEquipmentConfig and migrations/016 + 019 must seed the same equipment
-// catalog (design required levels, per-character weapons, retired generic weapons).
+// SeedEquipmentConfig and migrations/016 + 019 + 020 must seed the same equipment
+// catalog (design required levels, per-character guns, retired generic weapons).
 func TestSeedEquipmentConfigMatchesMigration(t *testing.T) {
 	ctx := context.Background()
 	seeded := dbtest.NewSchema(t, 0, "001_init_schema.up.sql", "010_equipment_system.up.sql")
@@ -17,7 +17,7 @@ func TestSeedEquipmentConfigMatchesMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	migrated := dbtest.NewSchema(t, 0, "001_init_schema.up.sql", "004_admin_config_tables.up.sql", "010_equipment_system.up.sql",
-		"016_default_equipment_catalog.up.sql", "019_equipment_design_levels.up.sql")
+		"016_default_equipment_catalog.up.sql", "019_equipment_design_levels.up.sql", "020_gun_weapon_names.up.sql")
 
 	queries := map[string]string{
 		"items": `SELECT item_id, name, slot, category, tier, required_level, character_id, gem_slots, stat_hp, stat_damage,

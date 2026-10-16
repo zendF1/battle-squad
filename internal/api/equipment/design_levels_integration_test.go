@@ -264,3 +264,41 @@ func TestOwnedRetiredWeaponStillEquips(t *testing.T) {
 		t.Fatalf("equip retired weapon on another character: %v", err)
 	}
 }
+
+// 020 renames the sword-named weapons to guns, only where the old default
+// name is still there, and a rerun changes nothing.
+func TestGunNamesMigrationKeepsAdminRenames(t *testing.T) {
+	db := dbtest.NewSchema(t, 0, "001_init_schema.up.sql", "004_admin_config_tables.up.sql", "006_character_progression.up.sql",
+		"010_equipment_system.up.sql", catalogMigration, designLevelsMigration)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `UPDATE config_equipment_items SET name = 'Golden Edge' WHERE item_id = 'crafted_weapon_gold';
+		UPDATE config_equipment_items SET name = 'Lucky Sword' WHERE item_id = 'rookie_weapon_lv30'`); err != nil {
+		t.Fatal(err)
+	}
+	runMigration(t, db, gunNamesMigration)
+	before := tableDump(t, db)
+	runMigration(t, db, gunNamesMigration)
+	if after := tableDump(t, db); after != before {
+		t.Fatalf("rerun changed rows:\nbefore %s\nafter  %s", before, after)
+	}
+
+	names := map[string]string{
+		"rookie_weapon_lv10": "Iron Bazooka", "rookie_weapon_lv40": "Dragon Bazooka", "rookie_weapon_lv30": "Lucky Sword",
+		"tanko_weapon_lv20": "Steel Cannon", "spark_weapon_lv30": "Mithril Shock Rifle", "flora_weapon_lv40": "Dragon Seed Launcher",
+		"normal_weapon_lv10": "Iron Blaster", "normal_weapon_lv40": "Dragon Blaster",
+		"crafted_weapon_silver": "Silver Blaster", "crafted_weapon_gold": "Golden Edge", "crafted_weapon_diamond": "Diamond Blaster",
+		"normal_armor_lv10": "Iron Vest", "crafted_boots_titan": "Titan Boots",
+	}
+	for id, want := range names {
+		var got string
+		if err := db.Pool.QueryRow(ctx, `SELECT name FROM config_equipment_items WHERE item_id = $1`, id).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("%s name %q, want %q", id, got, want)
+		}
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM config_equipment_items WHERE slot = 'weapon' AND name LIKE '%Sword%'`); got != 1 {
+		t.Errorf("%d sword-named weapons left, want only the admin-renamed one", got)
+	}
+}

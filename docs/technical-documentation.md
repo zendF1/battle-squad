@@ -134,7 +134,7 @@ internal/
     └── jobs/             ban_expire, daily_reset, account_deletion
 
 configs/                  YAML game data (characters, weapons, skills, items, maps, physics)
-migrations/               SQL migration files (001-019)
+migrations/               SQL migration files (001-020)
 ```
 
 ---
@@ -273,13 +273,13 @@ Slot: `weapon`, `armor`, `helmet`, `pants`, `boots`, `gloves`. Mỗi món sở h
 ```json
 {
   "items": [
-    {"itemId": "rookie_weapon_lv10", "name": "Rookie Sword", "slot": "weapon", "category": "normal", "requiredLevel": 10,
+    {"itemId": "rookie_weapon_lv10", "name": "Iron Bazooka", "slot": "weapon", "category": "normal", "requiredLevel": 10,
      "characterId": "rookie", "gemSlots": 1, "statHp": 0, "statDamage": 8, "statDefense": 0, "statCrit": 0, "statMoveEnergy": 0,
      "priceCoin": 500, "priceGem": 0, "isActive": true},
-    {"itemId": "normal_weapon_lv10", "name": "Iron Sword", "slot": "weapon", "category": "normal", "requiredLevel": 10,
+    {"itemId": "normal_weapon_lv10", "name": "Iron Blaster", "slot": "weapon", "category": "normal", "requiredLevel": 10,
      "gemSlots": 1, "statHp": 0, "statDamage": 8, "statDefense": 0, "statCrit": 0, "statMoveEnergy": 0,
      "priceCoin": 500, "priceGem": 0, "isActive": false},
-    {"itemId": "crafted_weapon_silver", "name": "Silver Sword", "slot": "weapon", "category": "crafted", "tier": "silver",
+    {"itemId": "crafted_weapon_silver", "name": "Silver Blaster", "slot": "weapon", "category": "crafted", "tier": "silver",
      "requiredLevel": 15, "gemSlots": 2, "statHp": 0, "statDamage": 10, "statDefense": 0, "statCrit": 0, "statMoveEnergy": 0,
      "priceCoin": 0, "priceGem": 0, "isActive": true}
   ],
@@ -313,12 +313,14 @@ Level yêu cầu theo `docs/equipment-system-design.md` (là **level nhân vật
 | Titan | `crafted_<slot>_titan` | 55 | Chế tạo | 2 |
 | Diamond | `crafted_<slot>_diamond` | 75 | Chế tạo | 2 |
 
-Đồ thường dùng chung cho mọi nhân vật, **trừ vũ khí**: mỗi nhân vật có 4 vũ khí riêng (`characterId` = nhân vật, tên "Rookie Sword" / "Tanko Cannon" / "Spark Staff" / "Flora Slingshot", chỉ số và giá bằng tier vũ khí chung). Đồ crafted dùng chung. 4 vũ khí chung `normal_weapon_lv10..40` (Iron/Steel/Mithril/Dragon Sword) được `migrations/019_equipment_design_levels.up.sql` tắt (`is_active = false`): không bán nữa, món đã mua vẫn mặc được cho mọi nhân vật và vẫn có trong catalog.
+Đồ thường dùng chung cho mọi nhân vật, **trừ vũ khí**: mỗi nhân vật có 4 vũ khí riêng (`characterId` = nhân vật; súng, tên "<Iron|Steel|Mithril|Dragon> <súng>": Rookie Bazooka, Tanko Cannon, Spark Shock Rifle, Flora Seed Launcher; chỉ số và giá bằng tier vũ khí chung). Đồ crafted dùng chung (vũ khí crafted: Silver/Gold/Titan/Diamond Blaster). 4 vũ khí chung `normal_weapon_lv10..40` (Iron/Steel/Mithril/Dragon Blaster) được `migrations/019_equipment_design_levels.up.sql` tắt (`is_active = false`): không bán nữa, món đã mua vẫn mặc được cho mọi nhân vật và vẫn có trong catalog.
 
 Migration 019 (chạy lại mỗi lần deploy, mọi bước có điều kiện nên chạy lại không đổi gì và không ghi đè chỉnh sửa admin):
 1. Trả level yêu cầu về thiết kế cho DB còn giữ bảng sai 1/4/7/10 (normal) và 2/5/8/10 (crafted) của bản 016 cũ: mỗi slot chỉ được sửa khi **cả 4** dòng của slot (normal lv10..lv40, hoặc crafted silver..diamond) vẫn đúng giá trị đã remap; slot admin đã sửa một dòng thì giữ nguyên cả slot. 016 không còn bước remap.
 2. Mở rộng `character_levels` tới level 80 (xem [Reward System](#reward-system)), chỉ khi giá trị còn đúng nguyên văn bảng 10 level của migration 006.
 3. Tắt 4 vũ khí chung nếu còn đúng như seed, và chỉ khi chưa có vũ khí riêng nào (nên chỉ chạy một lần: admin bật lại thì lần sau không tắt nữa); rồi thêm 16 vũ khí riêng (`ON CONFLICT DO NOTHING`).
+
+`migrations/020_gun_weapon_names.up.sql` đổi tên vũ khí kiếm (bản 016/019 đầu) sang súng như trên — chỉ dòng còn đúng tên cũ (admin đã đổi tên thì giữ), chạy lại không đổi gì; down trả tên cũ cho dòng còn đúng tên súng (chạy trước down 019/016).
 
 Down của 019 xoá vũ khí riêng còn đúng seed và không ai sở hữu, bật lại vũ khí chung còn đúng seed, trả bảng 10 level nếu còn đúng bảng 80 level; không đổi level yêu cầu. Chạy down 019 trước down 016.
 

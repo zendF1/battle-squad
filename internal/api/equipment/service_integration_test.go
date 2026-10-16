@@ -24,12 +24,13 @@ import (
 const (
 	catalogMigration      = "016_default_equipment_catalog.up.sql"
 	designLevelsMigration = "019_equipment_design_levels.up.sql"
+	gunNamesMigration     = "020_gun_weapon_names.up.sql"
 )
 
 var equipmentMigrations = []string{
 	"001_init_schema.up.sql", "004_admin_config_tables.up.sql", "006_character_progression.up.sql",
 	"010_equipment_system.up.sql", "011_equipment_slot_unique.up.sql",
-	catalogMigration, "017_equipment_purchase_idempotency.up.sql", designLevelsMigration,
+	catalogMigration, "017_equipment_purchase_idempotency.up.sql", designLevelsMigration, gunNamesMigration,
 }
 
 // newEquipmentService builds the schema with the default catalog. maxConns 1
@@ -247,7 +248,7 @@ func TestCatalogEndpointReturnsAllRows(t *testing.T) {
 		if m["category"] == "crafted" {
 			crafted++
 		}
-		if m["itemId"] == "normal_weapon_lv20" && (m["requiredLevel"] != 20.0 || m["statDamage"] != 15.0 || m["priceCoin"] != 1500.0 || m["name"] != "Steel Sword") {
+		if m["itemId"] == "normal_weapon_lv20" && (m["requiredLevel"] != 20.0 || m["statDamage"] != 15.0 || m["priceCoin"] != 1500.0 || m["name"] != "Steel Blaster") {
 			t.Fatalf("normal_weapon_lv20 %v", m)
 		}
 		if m["itemId"] == "spark_weapon_lv30" && (m["requiredLevel"] != 30.0 || m["statDamage"] != 25.0 || m["characterId"] != "spark" || m["isActive"] != true) {
@@ -548,7 +549,7 @@ func TestCraftReadsBothRecipeKeys(t *testing.T) {
 	}
 }
 
-// The down migrations (019 then 016) remove only unedited default rows, keep
+// The down migrations (020, 019, then 016) remove only unedited default rows, keep
 // what players own, and leave the rate/stone/gem/set bonus tables alone.
 func TestCatalogDownMigrationKeepsOwnedRows(t *testing.T) {
 	svc, db := newEquipmentService(t, 0)
@@ -565,7 +566,7 @@ func TestCatalogDownMigrationKeepsOwnedRows(t *testing.T) {
 		UPDATE config_materials SET price_gem = 1 WHERE material_id = 'silver_ore'`); err != nil {
 		t.Fatal(err)
 	}
-	for _, file := range []string{"019_equipment_design_levels.down.sql", "016_default_equipment_catalog.down.sql"} {
+	for _, file := range []string{"020_gun_weapon_names.down.sql", "019_equipment_design_levels.down.sql", "016_default_equipment_catalog.down.sql"} {
 		sql, err := os.ReadFile(filepath.Join("..", "..", "..", "migrations", file))
 		if err != nil {
 			t.Fatal(err)

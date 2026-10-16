@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/shared/database"
@@ -359,7 +360,7 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 	observability.Log.Info().Int("count", len(setBonuses)).Msg("seeded config_set_bonuses")
 
 	// ── Normal equipment items ─────────────────────────────────────────────────
-	// Same rows as migrations/016 + 019. Required levels 10/20/30/40 (the id
+	// Same rows as migrations/016 + 019 + 020. Required levels 10/20/30/40 (the id
 	// suffix). Weapons are per character (characterWeapons below); the generic
 	// weapons stay for pieces players already own but are inactive (not sold).
 	type equipItem struct {
@@ -376,10 +377,10 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 	}
 	normalItems := []equipItem{
 		// weapon
-		{"normal_weapon_lv10", "Iron Sword", "weapon", 10, 0, 8, 0, 0, 0, 500},
-		{"normal_weapon_lv20", "Steel Sword", "weapon", 20, 0, 15, 0, 1, 0, 1500},
-		{"normal_weapon_lv30", "Mithril Sword", "weapon", 30, 0, 25, 0, 2, 0, 4000},
-		{"normal_weapon_lv40", "Dragon Sword", "weapon", 40, 0, 38, 0, 3, 0, 10000},
+		{"normal_weapon_lv10", "Iron Blaster", "weapon", 10, 0, 8, 0, 0, 0, 500},
+		{"normal_weapon_lv20", "Steel Blaster", "weapon", 20, 0, 15, 0, 1, 0, 1500},
+		{"normal_weapon_lv30", "Mithril Blaster", "weapon", 30, 0, 25, 0, 2, 0, 4000},
+		{"normal_weapon_lv40", "Dragon Blaster", "weapon", 40, 0, 38, 0, 3, 0, 10000},
 		// armor
 		{"normal_armor_lv10", "Iron Vest", "armor", 10, 30, 0, 3, 0, 0, 400},
 		{"normal_armor_lv20", "Steel Vest", "armor", 20, 60, 0, 6, 0, 0, 1200},
@@ -424,15 +425,17 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 			return fmt.Errorf("insert normal equipment item %s: %w", it.itemID, err)
 		}
 	}
-	// Per-character weapons: each generic weapon tier's stats and price.
-	characterWeapons := []struct{ characterID, name string }{
-		{"rookie", "Rookie Sword"}, {"tanko", "Tanko Cannon"}, {"spark", "Spark Staff"}, {"flora", "Flora Slingshot"},
+	// Per-character guns (migrations 019 + 020): each generic weapon tier's
+	// stats and price, named "<tier word> <gun>" (Iron Bazooka ... Dragon Bazooka).
+	characterWeapons := []struct{ characterID, gun string }{
+		{"rookie", "Bazooka"}, {"tanko", "Cannon"}, {"spark", "Shock Rifle"}, {"flora", "Seed Launcher"},
 	}
 	for _, c := range characterWeapons {
 		for _, w := range normalWeapons {
 			itemID := fmt.Sprintf("%s_weapon_lv%d", c.characterID, w.level)
+			tierWord := strings.Fields(w.name)[0] // Iron, Steel, Mithril, Dragon
 			if _, err := db.Pool.Exec(ctx, equipItemQuery,
-				itemID, c.name, "weapon", w.level, c.characterID,
+				itemID, tierWord+" "+c.gun, "weapon", w.level, c.characterID,
 				w.statHP, w.statDamage, w.statDefense, w.statCrit, w.statMoveEnergy,
 				w.priceCoin, true,
 			); err != nil {
@@ -459,10 +462,10 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 	}
 	craftedItems := []craftedItem{
 		// weapon: base DMG {8,25,38,38}, Crit {0,2,3,3}
-		{"crafted_weapon_silver", "Silver Sword", "weapon", "silver", 15, 0, 10, 0, 0, 0},
-		{"crafted_weapon_gold", "Gold Sword", "weapon", "gold", 35, 0, 33, 0, 3, 0},
-		{"crafted_weapon_titan", "Titan Sword", "weapon", "titan", 55, 0, 57, 0, 5, 0},
-		{"crafted_weapon_diamond", "Diamond Sword", "weapon", "diamond", 75, 0, 76, 0, 6, 0},
+		{"crafted_weapon_silver", "Silver Blaster", "weapon", "silver", 15, 0, 10, 0, 0, 0},
+		{"crafted_weapon_gold", "Gold Blaster", "weapon", "gold", 35, 0, 33, 0, 3, 0},
+		{"crafted_weapon_titan", "Titan Blaster", "weapon", "titan", 55, 0, 57, 0, 5, 0},
+		{"crafted_weapon_diamond", "Diamond Blaster", "weapon", "diamond", 75, 0, 76, 0, 6, 0},
 		// armor: base HP {30,100,150,150}, DEF {3,10,15,15}
 		{"crafted_armor_silver", "Silver Vest", "armor", "silver", 15, 39, 0, 4, 0, 0},
 		{"crafted_armor_gold", "Gold Vest", "armor", "gold", 35, 130, 0, 13, 0, 0},

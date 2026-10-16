@@ -97,7 +97,7 @@ Mỗi nhân vật (character) có **6 slot** trang bị:
 
 | Item | Slot | Level | Giá (Coin) | Dành cho |
 |------|------|-------|-----------|----------|
-| Rookie Sword Lv10 | weapon | 10 | 500 | Rookie |
+| Iron Bazooka Lv10 | weapon | 10 | 500 | Rookie |
 | Iron Vest Lv10 | armor | 10 | 400 | Mọi nhân vật |
 | Iron Cap Lv10 | helmet | 10 | 300 | Mọi nhân vật |
 | Iron Pants Lv10 | pants | 10 | 350 | Mọi nhân vật |
@@ -105,7 +105,7 @@ Mỗi nhân vật (character) có **6 slot** trang bị:
 | Iron Gloves Lv10 | gloves | 10 | 250 | Mọi nhân vật |
 | ... | ... | 20, 30, 40 | ... (giá tăng dần) | |
 
-Vũ khí của các nhân vật khác: Tanko Cannon, Spark Staff, Flora Slingshot (Lv10/20/30/40, cùng chỉ số và giá với Rookie Sword cùng cấp).
+Vũ khí là súng (game bắn súng), tên "<cấp> <loại súng>" (Iron/Steel/Mithril/Dragon theo Lv10/20/30/40): Rookie Bazooka, Tanko Cannon (đại pháo), Spark Shock Rifle (súng điện), Flora Seed Launcher (súng hạt) — cùng chỉ số và giá theo cấp. Vũ khí crafted: Silver/Gold/Titan/Diamond Blaster.
 
 ---
 
