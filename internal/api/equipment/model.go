@@ -243,12 +243,3 @@ type MergeResult struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
-
-// EquipmentStats holds computed total stats from all equipped items for a character.
-type EquipmentStats struct {
-	HP         int     `json:"hp"`
-	Damage     int     `json:"damage"`
-	Defense    int     `json:"defense"`
-	CritPct    float64 `json:"critPct"`
-	MoveEnergy int     `json:"moveEnergy"`
-}

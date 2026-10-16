@@ -970,12 +970,4 @@ func (s *Service) CraftEquipment(ctx context.Context, playerID string, req Craft
 	return equipmentID, nil
 }
 
-// ---------------------------------------------------------------------------
-// GetEquipmentStatsForCharacter
-// ---------------------------------------------------------------------------
-
-func (s *Service) GetEquipmentStatsForCharacter(ctx context.Context, playerID, characterID string) (*EquipmentStats, error) {
-	return s.repo.GetEquipmentStatsForCharacter(ctx, playerID, characterID)
-}
-
 // CalculateUpgradeMultiplier is in logic.go
