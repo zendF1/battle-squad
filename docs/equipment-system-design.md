@@ -68,7 +68,7 @@ Mỗi nhân vật (character) có **6 slot** trang bị:
 
 - Mỗi slot chỉ mặc được 1 trang bị cùng loại slot
 - Trang bị có yêu cầu **character level** tối thiểu
-- Trang bị mua từ shop dành riêng cho từng nhân vật (character-specific)
+- Trang bị mua từ shop dùng chung cho mọi nhân vật, **trừ vũ khí**: vũ khí dành riêng cho từng nhân vật (character-specific)
 - Trang bị chế tạo dùng chung cho mọi nhân vật
 
 ---
@@ -86,24 +86,26 @@ Mỗi nhân vật (character) có **6 slot** trang bị:
 
 ### Đặc điểm
 
-- Mua trực tiếp trong shop, **theo từng nhân vật** (mỗi character có shop riêng)
+- Mua trực tiếp trong shop. Áo, mũ, quần, giày, găng tay **dùng chung** cho mọi nhân vật; **vũ khí theo từng nhân vật** (mỗi character có vũ khí riêng, cùng chỉ số/giá theo cấp)
 - Thanh toán bằng **coin** (currency farm từ chơi game)
 - Khi mua: trạng thái **unlock** (có thể bán lại)
 - Khi mặc vào: trạng thái **lock** (không bán lại được)
 - **1 ô ngọc** per item
 - **Không có set bonus**
 
-### Ví dụ shop Rookie (nhân vật Rookie)
+### Ví dụ shop khi chọn Rookie
 
-| Item | Slot | Level | Giá (Coin) |
-|------|------|-------|-----------|
-| Rookie Sword Lv10 | weapon | 10 | 500 |
-| Rookie Vest Lv10 | armor | 10 | 400 |
-| Rookie Cap Lv10 | helmet | 10 | 300 |
-| Rookie Pants Lv10 | pants | 10 | 350 |
-| Rookie Sneakers Lv10 | boots | 10 | 300 |
-| Rookie Gloves Lv10 | gloves | 10 | 250 |
-| ... | ... | 20, 30, 40 | ... (giá tăng dần) |
+| Item | Slot | Level | Giá (Coin) | Dành cho |
+|------|------|-------|-----------|----------|
+| Rookie Sword Lv10 | weapon | 10 | 500 | Rookie |
+| Iron Vest Lv10 | armor | 10 | 400 | Mọi nhân vật |
+| Iron Cap Lv10 | helmet | 10 | 300 | Mọi nhân vật |
+| Iron Pants Lv10 | pants | 10 | 350 | Mọi nhân vật |
+| Iron Boots Lv10 | boots | 10 | 300 | Mọi nhân vật |
+| Iron Gloves Lv10 | gloves | 10 | 250 | Mọi nhân vật |
+| ... | ... | 20, 30, 40 | ... (giá tăng dần) | |
+
+Vũ khí của các nhân vật khác: Tanko Cannon, Spark Staff, Flora Slingshot (Lv10/20/30/40, cùng chỉ số và giá với Rookie Sword cùng cấp).
 
 ---
 
@@ -771,7 +773,7 @@ CREATE TABLE IF NOT EXISTS config_equipment_items (
     category        VARCHAR(20) NOT NULL,       -- normal / crafted
     tier            VARCHAR(20),                -- NULL / silver / gold / titan / diamond
     required_level  INT NOT NULL,
-    character_id    VARCHAR(50),                -- NULL = all characters (crafted)
+    character_id    VARCHAR(50),                -- NULL = all characters (crafted, normal non-weapon)
     gem_slots       SMALLINT NOT NULL DEFAULT 1,
     stat_hp         INT NOT NULL DEFAULT 0,
     stat_damage     INT NOT NULL DEFAULT 0,
@@ -867,7 +869,7 @@ POST   /crafting/craft                      -- Chế tạo {recipeId}
 ### Shop (mở rộng)
 
 ```
-GET    /shop/equipment?characterId=xxx      -- Shop trang bị theo nhân vật
+GET    /shop/equipment?characterId=xxx      -- Shop trang bị: đồ dùng chung + vũ khí của nhân vật
 POST   /shop/equipment/buy                  -- Mua trang bị {itemId}
 GET    /shop/stones                         -- Shop đá nâng cấp
 POST   /shop/stones/buy                     -- Mua đá {stoneLevel, quantity}

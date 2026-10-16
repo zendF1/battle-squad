@@ -134,7 +134,7 @@ internal/
     └── jobs/             ban_expire, daily_reset, account_deletion
 
 configs/                  YAML game data (characters, weapons, skills, items, maps, physics)
-migrations/               SQL migration files (001-005)
+migrations/               SQL migration files (001-019)
 ```
 
 ---
@@ -250,7 +250,7 @@ Slot: `weapon`, `armor`, `helmet`, `pants`, `boots`, `gloves`. Mỗi món sở h
 
 | Method | Path | Handler | Mô tả |
 |--------|------|---------|-------|
-| GET | `/equipment/catalog` | GetCatalog | Toàn bộ catalog đang active: `{items, upgradeRates, setBonuses, stones}` (items gồm cả `normal` và `crafted`). Client cache được, chỉ đổi khi admin sửa config |
+| GET | `/equipment/catalog` | GetCatalog | Toàn bộ catalog: `{items, upgradeRates, setBonuses, stones}` (items gồm cả `normal` và `crafted`, **cả item đã tắt** với `isActive: false` — món người chơi đã sở hữu vẫn cần tên/chỉ số; client lọc `isActive` cho shop). Client cache được, chỉ đổi khi admin sửa config |
 | GET | `/player/equipment` | GetEquipment | Trang bị đang có (mới nhất trước). Tên/chỉ số lấy từ catalog theo `itemId` |
 | POST | `/player/equipment/equip` | EquipItem | `{equipmentId, characterId}` → `{"success":true}`. Slot của nhân vật đã có món khác thì món cũ tự tháo. Món đang mặc (cho bất kỳ nhân vật nào) → 409 `EQUIP_ALREADY_EQUIPPED`: tháo trước rồi mặc lại |
 | POST | `/player/equipment/unequip` | UnequipItem | `{equipmentId}` → `{"success":true}`; món không đang mặc → 409 `EQUIP_NOT_EQUIPPED` |
@@ -259,7 +259,7 @@ Slot: `weapon`, `armor`, `helmet`, `pants`, `boots`, `gloves`. Mỗi món sở h
 | POST | `/player/equipment/socket` | SocketGem | `{equipmentId, slotIndex (1\|2), gemId}` |
 | POST | `/player/equipment/unsocket` | UnsocketGem | `{equipmentId, slotIndex}` |
 | GET | `/player/stones` · `/player/gems` · `/player/materials` | GetStones · GetGems · GetMaterials | `[{stoneLevel, quantity}]` · `[{gemId, gemType, gemLevel}]` · `[{materialId, quantity}]` (kèm `playerId`) |
-| GET | `/shop/equipment?characterId=` | GetShopEquipment | Item `normal` active dùng được cho nhân vật đó (`characterId` null = mọi nhân vật) |
+| GET | `/shop/equipment?characterId=` | GetShopEquipment | Item `normal` active dùng được cho nhân vật đó: đồ dùng chung (`characterId` null: áo, mũ, quần, giày, găng) + vũ khí của nhân vật đó (`<character>_weapon_lvN`). Không có `characterId` → chỉ đồ dùng chung |
 | POST | `/shop/equipment/buy` | BuyEquipment | `{itemId, idempotencyKey}` → `{equipmentId}`. Trả `priceCoin` (hoặc `priceGem` nếu coin = 0). Key ≤ 64, tuỳ chọn: cùng key + item trả lại `equipmentId` của lần mua đầu, không trừ tiền lần nữa; key đã dùng cho item khác → 409 `IDEMPOTENCY_KEY_REUSED`; lần mua lỗi không lưu key nên retry chạy lại từ đầu. Không gửi key → mỗi request mua một món (như cũ). Không đủ tiền → 400 `SHOP_INSUFFICIENT_BALANCE`; item không có/đã tắt → 404 `EQUIP_NOT_FOUND`; item crafted, thiếu `itemId` hoặc key > 64 → 400 `BAD_REQUEST`. Khoá profile `FOR UPDATE` nên các lần mua của một người chạy tuần tự |
 | GET/POST | `/shop/stones`, `/shop/stones/buy` | GetShopStones, BuyStones | `{stoneLevel, quantity}`; đá `merge_only` không bán |
 | GET/POST | `/shop/gems`, `/shop/gems/buy` | GetShopGems, BuyGems | `{gemType, gemLevel (1–6), quantity}`; lv1–3 = level×200 coin, lv4–6 = (level−3)×30 gem |
@@ -273,11 +273,14 @@ Slot: `weapon`, `armor`, `helmet`, `pants`, `boots`, `gloves`. Mỗi món sở h
 ```json
 {
   "items": [
-    {"itemId": "normal_weapon_lv10", "name": "Iron Sword", "slot": "weapon", "category": "normal", "requiredLevel": 1,
-     "gemSlots": 1, "statHp": 0, "statDamage": 8, "statDefense": 0, "statCrit": 0, "statMoveEnergy": 0,
+    {"itemId": "rookie_weapon_lv10", "name": "Rookie Sword", "slot": "weapon", "category": "normal", "requiredLevel": 10,
+     "characterId": "rookie", "gemSlots": 1, "statHp": 0, "statDamage": 8, "statDefense": 0, "statCrit": 0, "statMoveEnergy": 0,
      "priceCoin": 500, "priceGem": 0, "isActive": true},
+    {"itemId": "normal_weapon_lv10", "name": "Iron Sword", "slot": "weapon", "category": "normal", "requiredLevel": 10,
+     "gemSlots": 1, "statHp": 0, "statDamage": 8, "statDefense": 0, "statCrit": 0, "statMoveEnergy": 0,
+     "priceCoin": 500, "priceGem": 0, "isActive": false},
     {"itemId": "crafted_weapon_silver", "name": "Silver Sword", "slot": "weapon", "category": "crafted", "tier": "silver",
-     "requiredLevel": 2, "gemSlots": 2, "statHp": 0, "statDamage": 10, "statDefense": 0, "statCrit": 0, "statMoveEnergy": 0,
+     "requiredLevel": 15, "gemSlots": 2, "statHp": 0, "statDamage": 10, "statDefense": 0, "statCrit": 0, "statMoveEnergy": 0,
      "priceCoin": 0, "priceGem": 0, "isActive": true}
   ],
   "upgradeRates": [{"fromLevel": 0, "toLevel": 1, "upgradeCost": 1, "maxPercent": 80, "failResetTo": 0}],
@@ -293,24 +296,33 @@ Slot: `weapon`, `armor`, `helmet`, `pants`, `boots`, `gloves`. Mỗi món sở h
   "upgradeLevel": 0, "isEquipped": true, "equippedOn": "tanko", "isLocked": true, "createdAt": "2026-10-15T10:00:00Z"}]
 ```
 
-Điều kiện mặc: sở hữu nhân vật (`CHARACTER_NOT_FOUND`), `characterId` của item null hoặc trùng (`EQUIP_WRONG_CHARACTER`), level nhân vật ≥ `requiredLevel` (`EQUIP_LEVEL_REQUIRED`). Level nhân vật tối đa 10.
+Điều kiện mặc: sở hữu nhân vật (`CHARACTER_NOT_FOUND`), `characterId` của item null hoặc trùng (`EQUIP_WRONG_CHARACTER`), level nhân vật ≥ `requiredLevel` (`EQUIP_LEVEL_REQUIRED`). Mặc/tháo, cường hoá, khảm ngọc, tách và chỉ số vào trận không xét `isActive`: item đã tắt chỉ không bán nữa, món đã có vẫn dùng bình thường. Level nhân vật tối đa = level cuối của bảng `character_levels` (mặc định 80, xem [Reward System](#reward-system)).
 
 **Default equipment catalog** (`migrations/016_default_equipment_catalog.up.sql`, cùng dữ liệu với `cmd/admin` `SeedEquipmentConfig`; `ON CONFLICT DO NOTHING` nên chạy lại không ghi đè chỉnh sửa từ admin):
 
-| Tier | Item id (× 6 slot) | Lv yêu cầu | Nguồn | Ô ngọc |
-|------|--------------------|-----------|-------|--------|
-| Iron | `normal_<slot>_lv10` | 1 | Shop (coin) | 1 |
-| Steel | `normal_<slot>_lv20` | 4 | Shop (coin) | 1 |
-| Mithril | `normal_<slot>_lv30` | 7 | Shop (coin) | 1 |
-| Dragon | `normal_<slot>_lv40` | 10 | Shop (coin) | 1 |
-| Silver | `crafted_<slot>_silver` | 2 | Chế tạo `recipe_<slot>_silver` | 2 |
-| Gold | `crafted_<slot>_gold` | 5 | Chế tạo | 2 |
-| Titan | `crafted_<slot>_titan` | 8 | Chế tạo | 2 |
-| Diamond | `crafted_<slot>_diamond` | 10 | Chế tạo | 2 |
+Level yêu cầu theo `docs/equipment-system-design.md` (là **level nhân vật**); hậu tố `lvN` của item normal chính là level yêu cầu:
 
-Hậu tố `lvN` của item normal là id cũ (giữ nguyên để không vỡ dữ liệu), không phải level yêu cầu. Level yêu cầu cũ 10/20/30/40 (crafted 15/35/55/75) lớn hơn level tối đa của nhân vật nên migration 016 đổi sang bảng trên; việc đổi chỉ chạy một lần cho DB đã seed bằng admin: `_lv20/_lv30/_lv40` và crafted chỉ đổi khi còn giữ giá trị cũ (đều > 10, không trùng level hợp lệ), còn `_lv10` (giá trị cũ 10 cũng là level hợp lệ) chỉ đổi khi `_lv20/_lv30/_lv40` cùng slot vẫn còn 20/30/40 — nên giá trị admin đặt sau đó (kể cả 10) không bị chạy lại ghi đè.
+| Tier | Item id | Lv yêu cầu | Nguồn | Ô ngọc |
+|------|---------|-----------|-------|--------|
+| Iron | `normal_<slot>_lv10` (5 slot không phải weapon) · `<character>_weapon_lv10` | 10 | Shop (coin) | 1 |
+| Steel | `normal_<slot>_lv20` · `<character>_weapon_lv20` | 20 | Shop (coin) | 1 |
+| Mithril | `normal_<slot>_lv30` · `<character>_weapon_lv30` | 30 | Shop (coin) | 1 |
+| Dragon | `normal_<slot>_lv40` · `<character>_weapon_lv40` | 40 | Shop (coin) | 1 |
+| Silver | `crafted_<slot>_silver` (× 6 slot) | 15 | Chế tạo `recipe_<slot>_silver` | 2 |
+| Gold | `crafted_<slot>_gold` | 35 | Chế tạo | 2 |
+| Titan | `crafted_<slot>_titan` | 55 | Chế tạo | 2 |
+| Diamond | `crafted_<slot>_diamond` | 75 | Chế tạo | 2 |
 
-Giá normal (coin) — weapon 500/1500/4000/10000, armor 400/1200/3500/8000, helmet 300/900/2500/6000, pants 350/1000/3000/7000, boots 300/800/2200/5500, gloves 250/750/2000/5000. Ngoài ra: 16 mức cường hoá (`config_upgrade_rates`), 12 cấp đá (1–6 coin, 7–10 gem, 11–12 chỉ ghép), ngọc `hp`/`damage`/`defense`/`critical` lv1–10, set bonus 2/4/6 món cho mỗi tier crafted, 20 nguyên liệu (5 mỗi tier) và 24 công thức (5 nguyên liệu của tier × 10/20/30/40, weapon × 15/30/45/60). JSON nguyên liệu của công thức dùng key `materialId`; công thức cũ của admin dùng `material_id` vẫn đọc được và được migration đổi key (giữ các key khác; `quantity` dạng số/chuỗi số được làm tròn thành số nguyên, giá trị khác giữ nguyên). Down migration chỉ xoá item/nguyên liệu/công thức còn đúng như seed và không ai sở hữu; không đụng `config_upgrade_rates`, `config_stones`, `config_gems`, `config_set_bonuses`.
+Đồ thường dùng chung cho mọi nhân vật, **trừ vũ khí**: mỗi nhân vật có 4 vũ khí riêng (`characterId` = nhân vật, tên "Rookie Sword" / "Tanko Cannon" / "Spark Staff" / "Flora Slingshot", chỉ số và giá bằng tier vũ khí chung). Đồ crafted dùng chung. 4 vũ khí chung `normal_weapon_lv10..40` (Iron/Steel/Mithril/Dragon Sword) được `migrations/019_equipment_design_levels.up.sql` tắt (`is_active = false`): không bán nữa, món đã mua vẫn mặc được cho mọi nhân vật và vẫn có trong catalog.
+
+Migration 019 (chạy lại mỗi lần deploy, mọi bước có điều kiện nên chạy lại không đổi gì và không ghi đè chỉnh sửa admin):
+1. Trả level yêu cầu về thiết kế cho DB còn giữ bảng sai 1/4/7/10 (normal) và 2/5/8/10 (crafted) của bản 016 cũ: mỗi slot chỉ được sửa khi **cả 4** dòng của slot (normal lv10..lv40, hoặc crafted silver..diamond) vẫn đúng giá trị đã remap; slot admin đã sửa một dòng thì giữ nguyên cả slot. 016 không còn bước remap.
+2. Mở rộng `character_levels` tới level 80 (xem [Reward System](#reward-system)), chỉ khi giá trị còn đúng nguyên văn bảng 10 level của migration 006.
+3. Tắt 4 vũ khí chung nếu còn đúng như seed, và chỉ khi chưa có vũ khí riêng nào (nên chỉ chạy một lần: admin bật lại thì lần sau không tắt nữa); rồi thêm 16 vũ khí riêng (`ON CONFLICT DO NOTHING`).
+
+Down của 019 xoá vũ khí riêng còn đúng seed và không ai sở hữu, bật lại vũ khí chung còn đúng seed, trả bảng 10 level nếu còn đúng bảng 80 level; không đổi level yêu cầu. Chạy down 019 trước down 016.
+
+Giá normal (coin) — weapon (mỗi nhân vật) 500/1500/4000/10000, armor 400/1200/3500/8000, helmet 300/900/2500/6000, pants 350/1000/3000/7000, boots 300/800/2200/5500, gloves 250/750/2000/5000. Ngoài ra: 16 mức cường hoá (`config_upgrade_rates`), 12 cấp đá (1–6 coin, 7–10 gem, 11–12 chỉ ghép), ngọc `hp`/`damage`/`defense`/`critical` lv1–10, set bonus 2/4/6 món cho mỗi tier crafted, 20 nguyên liệu (5 mỗi tier) và 24 công thức (5 nguyên liệu của tier × 10/20/30/40, weapon × 15/30/45/60). JSON nguyên liệu của công thức dùng key `materialId`; công thức cũ của admin dùng `material_id` vẫn đọc được và được migration đổi key (giữ các key khác; `quantity` dạng số/chuỗi số được làm tròn thành số nguyên, giá trị khác giữ nguyên). Down migration chỉ xoá item/nguyên liệu/công thức còn đúng như seed và không ai sở hữu; không đụng `config_upgrade_rates`, `config_stones`, `config_gems`, `config_set_bonuses`.
 
 **Game Systems:**
 
@@ -649,6 +661,17 @@ Sau mỗi trận:
 | Coins | 50 (30+20) | 30 |
 | Damage bonus | +5% damage dealt | +5% |
 | Kill bonus | +10/kill | +10/kill |
+
+EXP vào cả profile và nhân vật đang chơi (`player_characters.exp`, cộng dồn). Level nhân vật = level cao nhất của `game_settings.character_levels` có `expRequired` ≤ exp; mỗi level lên được `pointsPerLevel` (10) điểm. Bảng mặc định (migration 006 + 019) có level 2–80: L2–L10 giữ nguyên 200, 400, 700, 1100, 1600, 2200, 3000, 4000, 5200; từ L11 bước lên level sau tăng thêm 25:
+
+`expRequired(L) = 5200 + 1200·n + 25·n(n+1)/2`, `n = L − 10` (bước từ L−1 lên L = 1200 + 25·n)
+
+| Level | 10 | 15 | 20 | 30 | 35 | 40 | 55 | 75 | 80 |
+|-------|----|----|----|----|----|----|----|----|----|
+| EXP tích luỹ | 5.200 | 11.575 | 18.575 | 34.450 | 43.325 | 52.825 | 85.075 | 136.825 | 151.325 |
+| ≈ số trận (≈90 EXP/trận) | 58 | 129 | 206 | 383 | 481 | 587 | 945 | 1.520 | 1.681 |
+
+≈90 EXP/trận là trung bình thắng/thua (50/80) + ~300 damage (+15) + ~0,5 kill. Level 80 cao hơn level yêu cầu lớn nhất của trang bị (75). Admin thêm/bớt level ở `/api/config/character-levels`; level tối đa là level cuối bảng.
 
 **Rating (chỉ ranked):**
 - `pvp_1v1`: cố định +25/-20

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -20,12 +21,15 @@ import (
 	"battle-squad/internal/shared/observability"
 )
 
-const catalogMigration = "016_default_equipment_catalog.up.sql"
+const (
+	catalogMigration      = "016_default_equipment_catalog.up.sql"
+	designLevelsMigration = "019_equipment_design_levels.up.sql"
+)
 
 var equipmentMigrations = []string{
 	"001_init_schema.up.sql", "004_admin_config_tables.up.sql", "006_character_progression.up.sql",
 	"010_equipment_system.up.sql", "011_equipment_slot_unique.up.sql",
-	catalogMigration, "017_equipment_purchase_idempotency.up.sql",
+	catalogMigration, "017_equipment_purchase_idempotency.up.sql", designLevelsMigration,
 }
 
 // newEquipmentService builds the schema with the default catalog. maxConns 1
@@ -111,7 +115,8 @@ func TestCatalogMigrationSeedsAndIsIdempotent(t *testing.T) {
 	db := dbtest.NewSchema(t, 0, "001_init_schema.up.sql", "010_equipment_system.up.sql")
 	ctx := context.Background()
 
-	// Rows seeded by cmd/admin before 016: old required levels, material_id key.
+	// Rows seeded by cmd/admin before 016 (design levels, one admin-edited),
+	// recipes with the material_id key.
 	if _, err := db.Pool.Exec(ctx, `
 		INSERT INTO config_equipment_items (item_id, name, slot, category, tier, required_level, gem_slots, stat_damage, price_coin) VALUES
 			('normal_weapon_lv20', 'Steel Sword', 'weapon', 'normal', NULL, 20, 1, 15, 1500),
@@ -137,9 +142,9 @@ func TestCatalogMigrationSeedsAndIsIdempotent(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, string(sql)); err != nil {
 		t.Fatalf("first run: %v", err)
 	}
-	// Admin edits after the first run: price, and lv10 back to 10 (a valid level)
+	// Admin edits after the first run
 	if _, err := db.Pool.Exec(ctx, `UPDATE config_equipment_items SET price_coin = 999 WHERE item_id = 'normal_weapon_lv10';
-		UPDATE config_equipment_items SET required_level = 10 WHERE item_id IN ('normal_armor_lv10', 'normal_helmet_lv10')`); err != nil {
+		UPDATE config_equipment_items SET required_level = 12 WHERE item_id IN ('normal_armor_lv10', 'crafted_helmet_gold')`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(ctx, string(sql)); err != nil {
@@ -162,22 +167,20 @@ func TestCatalogMigrationSeedsAndIsIdempotent(t *testing.T) {
 		}
 	}
 
+	// 016 seeds the design levels and never rewrites a level
 	levels := map[string]int{
-		"normal_weapon_lv10":     1,
-		"normal_weapon_lv20":     4, // remapped from the old default 20
-		"normal_helmet_lv30":     7,
-		"normal_gloves_lv40":     10,
+		"normal_weapon_lv10":     10,
+		"normal_weapon_lv20":     20,
+		"normal_helmet_lv30":     30,
+		"normal_gloves_lv40":     40,
 		"normal_armor_lv30":      3,  // admin-edited level kept
-		"normal_armor_lv10":      10, // set by admin after the first run: not remapped again
-		"normal_helmet_lv10":     10, // remapped to 1 on the first run, set back to 10 by admin
-		"normal_helmet_lv20":     4,
-		"normal_helmet_lv40":     10,
-		"normal_boots_lv10":      10, // slot's lv20 was edited, so lv10 is not treated as the old default
+		"normal_armor_lv10":      12, // edited after the first run
 		"normal_boots_lv20":      5,
-		"crafted_weapon_silver":  2,
-		"crafted_armor_gold":     5,
-		"crafted_boots_titan":    8, // remapped from 55
-		"crafted_gloves_diamond": 10,
+		"crafted_weapon_silver":  15,
+		"crafted_helmet_gold":    12,
+		"crafted_armor_gold":     35,
+		"crafted_boots_titan":    55,
+		"crafted_gloves_diamond": 75,
 	}
 	for id, want := range levels {
 		if got := countRows(t, db, `SELECT required_level FROM config_equipment_items WHERE item_id = $1`, id); got != want {
@@ -211,7 +214,9 @@ func TestCatalogMigrationSeedsAndIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestCatalogEndpointReturnsActiveRows(t *testing.T) {
+// The catalog serves every item with isActive: retired items stay so owned
+// pieces keep their name and stats.
+func TestCatalogEndpointReturnsAllRows(t *testing.T) {
 	svc, db := newEquipmentService(t, 1)
 	h := NewHandler(svc)
 	if _, err := db.Pool.Exec(context.Background(), `UPDATE config_equipment_items SET is_active = FALSE WHERE item_id = 'normal_boots_lv40'`); err != nil {
@@ -227,24 +232,30 @@ func TestCatalogEndpointReturnsActiveRows(t *testing.T) {
 	rates, _ := data["upgradeRates"].([]any)
 	bonuses, _ := data["setBonuses"].([]any)
 	stones, _ := data["stones"].([]any)
-	if len(items) != 47 || len(rates) != 16 || len(bonuses) != 12 || len(stones) != 12 {
-		t.Fatalf("items %d rates %d setBonuses %d stones %d, want 47 16 12 12", len(items), len(rates), len(bonuses), len(stones))
+	if len(items) != 64 || len(rates) != 16 || len(bonuses) != 12 || len(stones) != 12 {
+		t.Fatalf("items %d rates %d setBonuses %d stones %d, want 64 16 12 12", len(items), len(rates), len(bonuses), len(stones))
 	}
-	var crafted int
+	var crafted, inactive int
 	for _, it := range items {
 		m := it.(map[string]any)
-		if m["itemId"] == "normal_boots_lv40" {
-			t.Fatal("inactive item served")
+		if m["isActive"] == false {
+			inactive++
+			if id, _ := m["itemId"].(string); id != "normal_boots_lv40" && !strings.HasPrefix(id, "normal_weapon_") {
+				t.Fatalf("%s inactive", id)
+			}
 		}
 		if m["category"] == "crafted" {
 			crafted++
 		}
-		if m["itemId"] == "normal_weapon_lv20" && (m["requiredLevel"] != 4.0 || m["statDamage"] != 15.0 || m["priceCoin"] != 1500.0 || m["name"] != "Steel Sword") {
+		if m["itemId"] == "normal_weapon_lv20" && (m["requiredLevel"] != 20.0 || m["statDamage"] != 15.0 || m["priceCoin"] != 1500.0 || m["name"] != "Steel Sword") {
 			t.Fatalf("normal_weapon_lv20 %v", m)
 		}
+		if m["itemId"] == "spark_weapon_lv30" && (m["requiredLevel"] != 30.0 || m["statDamage"] != 25.0 || m["characterId"] != "spark" || m["isActive"] != true) {
+			t.Fatalf("spark_weapon_lv30 %v", m)
+		}
 	}
-	if crafted != 24 {
-		t.Fatalf("crafted items %d, want 24", crafted)
+	if crafted != 24 || inactive != 5 {
+		t.Fatalf("crafted %d inactive %d, want 24 and 5 (4 generic weapons + the boots)", crafted, inactive)
 	}
 	r0 := rates[0].(map[string]any)
 	if r0["fromLevel"] != 0.0 || r0["toLevel"] != 1.0 || r0["maxPercent"] != 80.0 || r0["failResetTo"] != 0.0 || r0["upgradeCost"] != 1.0 {
@@ -259,8 +270,8 @@ func TestBuyEquipment(t *testing.T) {
 	dbtest.CreatePlayer(t, db, "p1", 1_000, 0)
 	dbtest.CreatePlayer(t, db, "poor", 499, 0)
 
-	// normal_weapon_lv10 costs 500 coin
-	code, env := callHandler(t, h.BuyEquipment, "poor", BuyEquipmentRequest{ItemID: "normal_weapon_lv10", IdempotencyKey: "k"})
+	// rookie_weapon_lv10 costs 500 coin
+	code, env := callHandler(t, h.BuyEquipment, "poor", BuyEquipmentRequest{ItemID: "rookie_weapon_lv10", IdempotencyKey: "k"})
 	if code != http.StatusBadRequest || errorCode(env) != "SHOP_INSUFFICIENT_BALANCE" {
 		t.Fatalf("poor: status %d body %v", code, env)
 	}
@@ -268,7 +279,7 @@ func TestBuyEquipment(t *testing.T) {
 		t.Fatalf("failed buy charged or granted: coin %d", coin)
 	}
 
-	code, env = callHandler(t, h.BuyEquipment, "p1", BuyEquipmentRequest{ItemID: "normal_weapon_lv10", IdempotencyKey: "k1"})
+	code, env = callHandler(t, h.BuyEquipment, "p1", BuyEquipmentRequest{ItemID: "rookie_weapon_lv10", IdempotencyKey: "k1"})
 	if code != http.StatusOK {
 		t.Fatalf("buy: status %d body %v", code, env)
 	}
@@ -278,7 +289,7 @@ func TestBuyEquipment(t *testing.T) {
 	}
 
 	// Same key + item: the first equipment back, no second charge
-	code, env = callHandler(t, h.BuyEquipment, "p1", BuyEquipmentRequest{ItemID: "normal_weapon_lv10", IdempotencyKey: "k1"})
+	code, env = callHandler(t, h.BuyEquipment, "p1", BuyEquipmentRequest{ItemID: "rookie_weapon_lv10", IdempotencyKey: "k1"})
 	if code != http.StatusOK || env["data"].(map[string]any)["equipmentId"] != first {
 		t.Fatalf("replay: status %d body %v, want equipmentId %s", code, env, first)
 	}
@@ -303,7 +314,8 @@ func TestBuyEquipment(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, `UPDATE config_equipment_items SET is_active = FALSE WHERE item_id = 'normal_gloves_lv10'`); err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"normal_gloves_lv10", "no_such_item"} {
+	// normal_weapon_lv10 left the shop in 019
+	for _, id := range []string{"normal_gloves_lv10", "normal_weapon_lv10", "no_such_item"} {
 		code, env = callHandler(t, h.BuyEquipment, "p1", BuyEquipmentRequest{ItemID: id})
 		if code != http.StatusNotFound || errorCode(env) != "EQUIP_NOT_FOUND" {
 			t.Fatalf("%s: status %d body %v", id, code, env)
@@ -357,13 +369,8 @@ func TestEquipRulesAndSlotSwap(t *testing.T) {
 	svc, db := newEquipmentService(t, 1)
 	ctx := context.Background()
 	dbtest.CreatePlayer(t, db, "p1", 100_000, 0)
-	addCharacter(t, db, "p1", "tanko", 1)
-	addCharacter(t, db, "p1", "spark", 1)
-	if _, err := db.Pool.Exec(ctx, `
-		INSERT INTO config_equipment_items (item_id, name, slot, category, required_level, character_id, gem_slots, stat_hp, price_coin)
-		VALUES ('test_spark_helmet', 'Spark Cap', 'helmet', 'normal', 1, 'spark', 1, 5, 10)`); err != nil {
-		t.Fatal(err)
-	}
+	addCharacter(t, db, "p1", "tanko", 10)
+	addCharacter(t, db, "p1", "spark", 10)
 	buy := func(itemID string) string {
 		t.Helper()
 		id, err := svc.BuyEquipment(ctx, "p1", BuyEquipmentRequest{ItemID: itemID})
@@ -372,25 +379,28 @@ func TestEquipRulesAndSlotSwap(t *testing.T) {
 		}
 		return id
 	}
-	sword1 := buy("normal_weapon_lv10")
-	sword4 := buy("normal_weapon_lv20") // required level 4
-	sparkCap := buy("test_spark_helmet")
+	sword1 := buy("tanko_weapon_lv10")
+	sword4 := buy("tanko_weapon_lv20") // required level 20
+	sparkStaff := buy("spark_weapon_lv10")
 
-	wantCode(t, svc.EquipItem(ctx, "p1", EquipRequest{EquipmentID: sparkCap, CharacterID: "tanko"}), "EQUIP_WRONG_CHARACTER")
+	wantCode(t, svc.EquipItem(ctx, "p1", EquipRequest{EquipmentID: sparkStaff, CharacterID: "tanko"}), "EQUIP_WRONG_CHARACTER")
+	wantCode(t, svc.EquipItem(ctx, "p1", EquipRequest{EquipmentID: sword1, CharacterID: "spark"}), "EQUIP_WRONG_CHARACTER")
 	wantCode(t, svc.EquipItem(ctx, "p1", EquipRequest{EquipmentID: sword4, CharacterID: "tanko"}), "EQUIP_LEVEL_REQUIRED")
-	wantCode(t, svc.EquipItem(ctx, "p1", EquipRequest{EquipmentID: sword1, CharacterID: "flora"}), "CHARACTER_NOT_FOUND")
+	wantCode(t, svc.EquipItem(ctx, "p1", EquipRequest{EquipmentID: sword1, CharacterID: "flora"}), "EQUIP_WRONG_CHARACTER")
 	wantCode(t, svc.EquipItem(ctx, "p2", EquipRequest{EquipmentID: sword1, CharacterID: "tanko"}), "EQUIP_NOT_OWNED")
-	if err := svc.EquipItem(ctx, "p1", EquipRequest{EquipmentID: sparkCap, CharacterID: "spark"}); err != nil {
-		t.Fatalf("equip spark cap on spark: %v", err)
+	if err := svc.EquipItem(ctx, "p1", EquipRequest{EquipmentID: sparkStaff, CharacterID: "spark"}); err != nil {
+		t.Fatalf("equip spark staff on spark: %v", err)
 	}
+	vest := buy("normal_armor_lv10") // shared: any owned character
+	wantCode(t, svc.EquipItem(ctx, "p1", EquipRequest{EquipmentID: vest, CharacterID: "flora"}), "CHARACTER_NOT_FOUND")
 
 	if err := svc.EquipItem(ctx, "p1", EquipRequest{EquipmentID: sword1, CharacterID: "tanko"}); err != nil {
 		t.Fatalf("equip sword1: %v", err)
 	}
 	wantCode(t, svc.EquipItem(ctx, "p1", EquipRequest{EquipmentID: sword1, CharacterID: "spark"}), "EQUIP_ALREADY_EQUIPPED")
 
-	// Level 4 reaches the Lv4 tier; equipping into the taken slot swaps
-	if _, err := db.Pool.Exec(ctx, `UPDATE player_characters SET level = 4 WHERE player_id = 'p1' AND character_id = 'tanko'`); err != nil {
+	// Level 20 reaches the Lv20 tier; equipping into the taken slot swaps
+	if _, err := db.Pool.Exec(ctx, `UPDATE player_characters SET level = 20 WHERE player_id = 'p1' AND character_id = 'tanko'`); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.EquipItem(ctx, "p1", EquipRequest{EquipmentID: sword4, CharacterID: "tanko"}); err != nil {
@@ -410,7 +420,7 @@ func TestEquipRulesAndSlotSwap(t *testing.T) {
 		t.Fatalf("after unequip equipped %v on %v", on, char)
 	}
 	wantCode(t, svc.UnequipItem(ctx, "p1", UnequipRequest{EquipmentID: sword4}), "EQUIP_NOT_EQUIPPED")
-	wantCode(t, svc.UnequipItem(ctx, "p2", UnequipRequest{EquipmentID: sparkCap}), "EQUIP_NOT_OWNED")
+	wantCode(t, svc.UnequipItem(ctx, "p2", UnequipRequest{EquipmentID: sparkStaff}), "EQUIP_NOT_OWNED")
 }
 
 // GET /player/characters fromEquipment follows equip and unequip.
@@ -419,7 +429,7 @@ func TestCharacterStatsFollowEquipment(t *testing.T) {
 	chars := character.NewService(character.NewRepository(db), economy.NewRepository(), db)
 	ctx := context.Background()
 	dbtest.CreatePlayer(t, db, "p1", 10_000, 0)
-	addCharacter(t, db, "p1", "tanko", 1)
+	addCharacter(t, db, "p1", "tanko", 10)
 
 	fromEquipment := func() character.StatValues {
 		t.Helper()
@@ -440,7 +450,7 @@ func TestCharacterStatsFollowEquipment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sword, err := svc.BuyEquipment(ctx, "p1", BuyEquipmentRequest{ItemID: "normal_weapon_lv10"}) // dmg 8
+	sword, err := svc.BuyEquipment(ctx, "p1", BuyEquipmentRequest{ItemID: "tanko_weapon_lv10"}) // dmg 8
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -466,7 +476,7 @@ func TestDismantleRefusesEquipped(t *testing.T) {
 	h := NewHandler(svc)
 	ctx := context.Background()
 	dbtest.CreatePlayer(t, db, "p1", 10_000, 0)
-	addCharacter(t, db, "p1", "tanko", 1)
+	addCharacter(t, db, "p1", "tanko", 10)
 	id, err := svc.BuyEquipment(ctx, "p1", BuyEquipmentRequest{ItemID: "normal_boots_lv10"})
 	if err != nil {
 		t.Fatal(err)
@@ -538,13 +548,16 @@ func TestCraftReadsBothRecipeKeys(t *testing.T) {
 	}
 }
 
-// The down migration removes only unedited default rows, keeps what players
-// own, and leaves the rate/stone/gem/set bonus tables alone.
+// The down migrations (019 then 016) remove only unedited default rows, keep
+// what players own, and leave the rate/stone/gem/set bonus tables alone.
 func TestCatalogDownMigrationKeepsOwnedRows(t *testing.T) {
 	svc, db := newEquipmentService(t, 0)
 	ctx := context.Background()
 	dbtest.CreatePlayer(t, db, "p1", 1_000, 0)
-	if _, err := svc.BuyEquipment(ctx, "p1", BuyEquipmentRequest{ItemID: "normal_weapon_lv10"}); err != nil {
+	if _, err := svc.BuyEquipment(ctx, "p1", BuyEquipmentRequest{ItemID: "normal_helmet_lv10"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.BuyEquipment(ctx, "p1", BuyEquipmentRequest{ItemID: "flora_weapon_lv10"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(ctx, `UPDATE config_equipment_items SET price_coin = 1 WHERE item_id = 'normal_armor_lv40';
@@ -552,19 +565,24 @@ func TestCatalogDownMigrationKeepsOwnedRows(t *testing.T) {
 		UPDATE config_materials SET price_gem = 1 WHERE material_id = 'silver_ore'`); err != nil {
 		t.Fatal(err)
 	}
-	sql, err := os.ReadFile(filepath.Join("..", "..", "..", "migrations", "016_default_equipment_catalog.down.sql"))
-	if err != nil {
-		t.Fatal(err)
+	for _, file := range []string{"019_equipment_design_levels.down.sql", "016_default_equipment_catalog.down.sql"} {
+		sql, err := os.ReadFile(filepath.Join("..", "..", "..", "migrations", file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Pool.Exec(ctx, string(sql)); err != nil {
+			t.Fatalf("down %s: %v", file, err)
+		}
 	}
-	if _, err := db.Pool.Exec(ctx, string(sql)); err != nil {
-		t.Fatalf("down: %v", err)
+	// owned (2), edited, and the result of the kept (edited) recipe
+	if got := countRows(t, db, `SELECT COUNT(*) FROM config_equipment_items`); got != 4 {
+		t.Fatalf("items left %d, want 4", got)
 	}
-	// owned, edited, and the result of the kept (edited) recipe
-	if got := countRows(t, db, `SELECT COUNT(*) FROM config_equipment_items`); got != 3 {
-		t.Fatalf("items left %d, want 3", got)
-	}
-	if got := countRows(t, db, `SELECT COUNT(*) FROM config_equipment_items WHERE item_id IN ('normal_weapon_lv10', 'normal_armor_lv40', 'crafted_gloves_gold')`); got != 3 {
+	if got := countRows(t, db, `SELECT COUNT(*) FROM config_equipment_items WHERE item_id IN ('normal_helmet_lv10', 'flora_weapon_lv10', 'normal_armor_lv40', 'crafted_gloves_gold')`); got != 4 {
 		t.Fatal("owned, edited or recipe-referenced item deleted")
+	}
+	if got := countRows(t, db, `SELECT jsonb_array_length(value::jsonb->'levels') FROM game_settings WHERE key = 'character_levels'`); got != 9 {
+		t.Fatalf("character_levels has %d levels after down, want the 9 of migration 006", got)
 	}
 	if got := countRows(t, db, `SELECT COUNT(*) FROM config_crafting_recipes`); got != 1 {
 		t.Fatalf("recipes left %d, want only the edited one", got)

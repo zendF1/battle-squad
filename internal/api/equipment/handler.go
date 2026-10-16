@@ -304,8 +304,8 @@ func (h *Handler) BuyEquipment(w http.ResponseWriter, r *http.Request) {
 // Catalog
 // ---------------------------------------------------------------------------
 
-// GetCatalog serves every active item (normal and crafted), upgrade rates,
-// set bonuses and stones.
+// GetCatalog serves every item (normal and crafted, isActive tells whether it
+// is still sold), upgrade rates, set bonuses and stones.
 func (h *Handler) GetCatalog(w http.ResponseWriter, r *http.Request) {
 	catalog, err := h.service.GetCatalog(r.Context())
 	if err != nil {

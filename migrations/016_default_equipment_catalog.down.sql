@@ -1,10 +1,10 @@
 -- Removes the default equipment catalog rows that are exactly as migration
 -- 016 seeded them (same keys and values): rows an admin edited stay, and
 -- items or materials a player owns stay so their stats and inventory keep
--- resolving. The required_level remap and the recipe key rename are not
--- reverted. config_upgrade_rates, config_stones, config_gems and
--- config_set_bonuses are left as they are (no-op): upgrades, dismantle
--- refunds, gem and set stats of existing gear depend on them. Tables are kept.
+-- resolving. The recipe key rename is not reverted; run 019's down first.
+-- config_upgrade_rates, config_stones, config_gems and config_set_bonuses are
+-- left as they are (no-op): upgrades, dismantle refunds, gem and set stats of
+-- existing gear depend on them. Tables are kept.
 
 DELETE FROM config_crafting_recipes r
 USING (
@@ -30,54 +30,54 @@ WHERE r.recipe_id = seeded.recipe_id
 
 DELETE FROM config_equipment_items c
 USING (VALUES
-    ('normal_weapon_lv10', 'Iron Sword',     'weapon', 'normal', NULL, 1,  NULL, 1, 0, 8,  0, 0, 0, 500,   0),
-    ('normal_weapon_lv20', 'Steel Sword',    'weapon', 'normal', NULL, 4,  NULL, 1, 0, 15, 0, 1, 0, 1500,  0),
-    ('normal_weapon_lv30', 'Mithril Sword',  'weapon', 'normal', NULL, 7,  NULL, 1, 0, 25, 0, 2, 0, 4000,  0),
-    ('normal_weapon_lv40', 'Dragon Sword',   'weapon', 'normal', NULL, 10, NULL, 1, 0, 38, 0, 3, 0, 10000, 0),
-    ('normal_armor_lv10',  'Iron Vest',      'armor',  'normal', NULL, 1,  NULL, 1, 30,  0, 3,  0, 0, 400,  0),
-    ('normal_armor_lv20',  'Steel Vest',     'armor',  'normal', NULL, 4,  NULL, 1, 60,  0, 6,  0, 0, 1200, 0),
-    ('normal_armor_lv30',  'Mithril Vest',   'armor',  'normal', NULL, 7,  NULL, 1, 100, 0, 10, 0, 0, 3500, 0),
-    ('normal_armor_lv40',  'Dragon Vest',    'armor',  'normal', NULL, 10, NULL, 1, 150, 0, 15, 0, 0, 8000, 0),
-    ('normal_helmet_lv10', 'Iron Cap',       'helmet', 'normal', NULL, 1,  NULL, 1, 20,  0, 2,  0, 0, 300,  0),
-    ('normal_helmet_lv20', 'Steel Cap',      'helmet', 'normal', NULL, 4,  NULL, 1, 40,  0, 4,  0, 0, 900,  0),
-    ('normal_helmet_lv30', 'Mithril Cap',    'helmet', 'normal', NULL, 7,  NULL, 1, 70,  0, 7,  0, 0, 2500, 0),
-    ('normal_helmet_lv40', 'Dragon Cap',     'helmet', 'normal', NULL, 10, NULL, 1, 110, 0, 11, 0, 0, 6000, 0),
-    ('normal_pants_lv10',  'Iron Pants',     'pants',  'normal', NULL, 1,  NULL, 1, 20,  0, 2,  0, 0, 350,  0),
-    ('normal_pants_lv20',  'Steel Pants',    'pants',  'normal', NULL, 4,  NULL, 1, 45,  0, 5,  0, 0, 1000, 0),
-    ('normal_pants_lv30',  'Mithril Pants',  'pants',  'normal', NULL, 7,  NULL, 1, 75,  0, 8,  0, 0, 3000, 0),
-    ('normal_pants_lv40',  'Dragon Pants',   'pants',  'normal', NULL, 10, NULL, 1, 120, 0, 12, 0, 0, 7000, 0),
-    ('normal_boots_lv10',  'Iron Boots',     'boots',  'normal', NULL, 1,  NULL, 1, 10, 0, 1, 0, 5,  300,  0),
-    ('normal_boots_lv20',  'Steel Boots',    'boots',  'normal', NULL, 4,  NULL, 1, 20, 0, 2, 0, 10, 800,  0),
-    ('normal_boots_lv30',  'Mithril Boots',  'boots',  'normal', NULL, 7,  NULL, 1, 35, 0, 4, 0, 15, 2200, 0),
-    ('normal_boots_lv40',  'Dragon Boots',   'boots',  'normal', NULL, 10, NULL, 1, 55, 0, 6, 0, 20, 5500, 0),
-    ('normal_gloves_lv10', 'Iron Gloves',    'gloves', 'normal', NULL, 1,  NULL, 1, 0, 2,  0, 2, 0, 250,  0),
-    ('normal_gloves_lv20', 'Steel Gloves',   'gloves', 'normal', NULL, 4,  NULL, 1, 0, 4,  0, 4, 0, 750,  0),
-    ('normal_gloves_lv30', 'Mithril Gloves', 'gloves', 'normal', NULL, 7,  NULL, 1, 0, 7,  0, 6, 0, 2000, 0),
-    ('normal_gloves_lv40', 'Dragon Gloves',  'gloves', 'normal', NULL, 10, NULL, 1, 0, 12, 0, 8, 0, 5000, 0),
-    ('crafted_weapon_silver',  'Silver Sword',   'weapon', 'crafted', 'silver',  2,  NULL, 2, 0, 10, 0, 0, 0, 0, 0),
-    ('crafted_weapon_gold',    'Gold Sword',     'weapon', 'crafted', 'gold',    5,  NULL, 2, 0, 33, 0, 3, 0, 0, 0),
-    ('crafted_weapon_titan',   'Titan Sword',    'weapon', 'crafted', 'titan',   8,  NULL, 2, 0, 57, 0, 5, 0, 0, 0),
-    ('crafted_weapon_diamond', 'Diamond Sword',  'weapon', 'crafted', 'diamond', 10, NULL, 2, 0, 76, 0, 6, 0, 0, 0),
-    ('crafted_armor_silver',   'Silver Vest',    'armor',  'crafted', 'silver',  2,  NULL, 2, 39,  0, 4,  0, 0, 0, 0),
-    ('crafted_armor_gold',     'Gold Vest',      'armor',  'crafted', 'gold',    5,  NULL, 2, 130, 0, 13, 0, 0, 0, 0),
-    ('crafted_armor_titan',    'Titan Vest',     'armor',  'crafted', 'titan',   8,  NULL, 2, 225, 0, 23, 0, 0, 0, 0),
-    ('crafted_armor_diamond',  'Diamond Vest',   'armor',  'crafted', 'diamond', 10, NULL, 2, 300, 0, 30, 0, 0, 0, 0),
-    ('crafted_helmet_silver',  'Silver Cap',     'helmet', 'crafted', 'silver',  2,  NULL, 2, 26,  0, 3,  0, 0, 0, 0),
-    ('crafted_helmet_gold',    'Gold Cap',       'helmet', 'crafted', 'gold',    5,  NULL, 2, 91,  0, 9,  0, 0, 0, 0),
-    ('crafted_helmet_titan',   'Titan Cap',      'helmet', 'crafted', 'titan',   8,  NULL, 2, 165, 0, 17, 0, 0, 0, 0),
-    ('crafted_helmet_diamond', 'Diamond Cap',    'helmet', 'crafted', 'diamond', 10, NULL, 2, 220, 0, 22, 0, 0, 0, 0),
-    ('crafted_pants_silver',   'Silver Pants',   'pants',  'crafted', 'silver',  2,  NULL, 2, 26,  0, 3,  0, 0, 0, 0),
-    ('crafted_pants_gold',     'Gold Pants',     'pants',  'crafted', 'gold',    5,  NULL, 2, 98,  0, 10, 0, 0, 0, 0),
-    ('crafted_pants_titan',    'Titan Pants',    'pants',  'crafted', 'titan',   8,  NULL, 2, 180, 0, 18, 0, 0, 0, 0),
-    ('crafted_pants_diamond',  'Diamond Pants',  'pants',  'crafted', 'diamond', 10, NULL, 2, 240, 0, 24, 0, 0, 0, 0),
-    ('crafted_boots_silver',   'Silver Boots',   'boots',  'crafted', 'silver',  2,  NULL, 2, 13,  0, 1,  0, 7,  0, 0),
-    ('crafted_boots_gold',     'Gold Boots',     'boots',  'crafted', 'gold',    5,  NULL, 2, 46,  0, 5,  0, 20, 0, 0),
-    ('crafted_boots_titan',    'Titan Boots',    'boots',  'crafted', 'titan',   8,  NULL, 2, 83,  0, 9,  0, 30, 0, 0),
-    ('crafted_boots_diamond',  'Diamond Boots',  'boots',  'crafted', 'diamond', 10, NULL, 2, 110, 0, 12, 0, 40, 0, 0),
-    ('crafted_gloves_silver',  'Silver Gloves',  'gloves', 'crafted', 'silver',  2,  NULL, 2, 0, 3,  0, 3,  0, 0, 0),
-    ('crafted_gloves_gold',    'Gold Gloves',    'gloves', 'crafted', 'gold',    5,  NULL, 2, 0, 9,  0, 8,  0, 0, 0),
-    ('crafted_gloves_titan',   'Titan Gloves',   'gloves', 'crafted', 'titan',   8,  NULL, 2, 0, 18, 0, 12, 0, 0, 0),
-    ('crafted_gloves_diamond', 'Diamond Gloves', 'gloves', 'crafted', 'diamond', 10, NULL, 2, 0, 24, 0, 16, 0, 0, 0)
+    ('normal_weapon_lv10', 'Iron Sword',     'weapon', 'normal', NULL, 10, NULL, 1, 0, 8,  0, 0, 0, 500,   0),
+    ('normal_weapon_lv20', 'Steel Sword',    'weapon', 'normal', NULL, 20, NULL, 1, 0, 15, 0, 1, 0, 1500,  0),
+    ('normal_weapon_lv30', 'Mithril Sword',  'weapon', 'normal', NULL, 30, NULL, 1, 0, 25, 0, 2, 0, 4000,  0),
+    ('normal_weapon_lv40', 'Dragon Sword',   'weapon', 'normal', NULL, 40, NULL, 1, 0, 38, 0, 3, 0, 10000, 0),
+    ('normal_armor_lv10',  'Iron Vest',      'armor',  'normal', NULL, 10, NULL, 1, 30,  0, 3,  0, 0, 400,  0),
+    ('normal_armor_lv20',  'Steel Vest',     'armor',  'normal', NULL, 20, NULL, 1, 60,  0, 6,  0, 0, 1200, 0),
+    ('normal_armor_lv30',  'Mithril Vest',   'armor',  'normal', NULL, 30, NULL, 1, 100, 0, 10, 0, 0, 3500, 0),
+    ('normal_armor_lv40',  'Dragon Vest',    'armor',  'normal', NULL, 40, NULL, 1, 150, 0, 15, 0, 0, 8000, 0),
+    ('normal_helmet_lv10', 'Iron Cap',       'helmet', 'normal', NULL, 10, NULL, 1, 20,  0, 2,  0, 0, 300,  0),
+    ('normal_helmet_lv20', 'Steel Cap',      'helmet', 'normal', NULL, 20, NULL, 1, 40,  0, 4,  0, 0, 900,  0),
+    ('normal_helmet_lv30', 'Mithril Cap',    'helmet', 'normal', NULL, 30, NULL, 1, 70,  0, 7,  0, 0, 2500, 0),
+    ('normal_helmet_lv40', 'Dragon Cap',     'helmet', 'normal', NULL, 40, NULL, 1, 110, 0, 11, 0, 0, 6000, 0),
+    ('normal_pants_lv10',  'Iron Pants',     'pants',  'normal', NULL, 10, NULL, 1, 20,  0, 2,  0, 0, 350,  0),
+    ('normal_pants_lv20',  'Steel Pants',    'pants',  'normal', NULL, 20, NULL, 1, 45,  0, 5,  0, 0, 1000, 0),
+    ('normal_pants_lv30',  'Mithril Pants',  'pants',  'normal', NULL, 30, NULL, 1, 75,  0, 8,  0, 0, 3000, 0),
+    ('normal_pants_lv40',  'Dragon Pants',   'pants',  'normal', NULL, 40, NULL, 1, 120, 0, 12, 0, 0, 7000, 0),
+    ('normal_boots_lv10',  'Iron Boots',     'boots',  'normal', NULL, 10, NULL, 1, 10, 0, 1, 0, 5,  300,  0),
+    ('normal_boots_lv20',  'Steel Boots',    'boots',  'normal', NULL, 20, NULL, 1, 20, 0, 2, 0, 10, 800,  0),
+    ('normal_boots_lv30',  'Mithril Boots',  'boots',  'normal', NULL, 30, NULL, 1, 35, 0, 4, 0, 15, 2200, 0),
+    ('normal_boots_lv40',  'Dragon Boots',   'boots',  'normal', NULL, 40, NULL, 1, 55, 0, 6, 0, 20, 5500, 0),
+    ('normal_gloves_lv10', 'Iron Gloves',    'gloves', 'normal', NULL, 10, NULL, 1, 0, 2,  0, 2, 0, 250,  0),
+    ('normal_gloves_lv20', 'Steel Gloves',   'gloves', 'normal', NULL, 20, NULL, 1, 0, 4,  0, 4, 0, 750,  0),
+    ('normal_gloves_lv30', 'Mithril Gloves', 'gloves', 'normal', NULL, 30, NULL, 1, 0, 7,  0, 6, 0, 2000, 0),
+    ('normal_gloves_lv40', 'Dragon Gloves',  'gloves', 'normal', NULL, 40, NULL, 1, 0, 12, 0, 8, 0, 5000, 0),
+    ('crafted_weapon_silver',  'Silver Sword',   'weapon', 'crafted', 'silver',  15, NULL, 2, 0, 10, 0, 0, 0, 0, 0),
+    ('crafted_weapon_gold',    'Gold Sword',     'weapon', 'crafted', 'gold',    35, NULL, 2, 0, 33, 0, 3, 0, 0, 0),
+    ('crafted_weapon_titan',   'Titan Sword',    'weapon', 'crafted', 'titan',   55, NULL, 2, 0, 57, 0, 5, 0, 0, 0),
+    ('crafted_weapon_diamond', 'Diamond Sword',  'weapon', 'crafted', 'diamond', 75, NULL, 2, 0, 76, 0, 6, 0, 0, 0),
+    ('crafted_armor_silver',   'Silver Vest',    'armor',  'crafted', 'silver',  15, NULL, 2, 39,  0, 4,  0, 0, 0, 0),
+    ('crafted_armor_gold',     'Gold Vest',      'armor',  'crafted', 'gold',    35, NULL, 2, 130, 0, 13, 0, 0, 0, 0),
+    ('crafted_armor_titan',    'Titan Vest',     'armor',  'crafted', 'titan',   55, NULL, 2, 225, 0, 23, 0, 0, 0, 0),
+    ('crafted_armor_diamond',  'Diamond Vest',   'armor',  'crafted', 'diamond', 75, NULL, 2, 300, 0, 30, 0, 0, 0, 0),
+    ('crafted_helmet_silver',  'Silver Cap',     'helmet', 'crafted', 'silver',  15, NULL, 2, 26,  0, 3,  0, 0, 0, 0),
+    ('crafted_helmet_gold',    'Gold Cap',       'helmet', 'crafted', 'gold',    35, NULL, 2, 91,  0, 9,  0, 0, 0, 0),
+    ('crafted_helmet_titan',   'Titan Cap',      'helmet', 'crafted', 'titan',   55, NULL, 2, 165, 0, 17, 0, 0, 0, 0),
+    ('crafted_helmet_diamond', 'Diamond Cap',    'helmet', 'crafted', 'diamond', 75, NULL, 2, 220, 0, 22, 0, 0, 0, 0),
+    ('crafted_pants_silver',   'Silver Pants',   'pants',  'crafted', 'silver',  15, NULL, 2, 26,  0, 3,  0, 0, 0, 0),
+    ('crafted_pants_gold',     'Gold Pants',     'pants',  'crafted', 'gold',    35, NULL, 2, 98,  0, 10, 0, 0, 0, 0),
+    ('crafted_pants_titan',    'Titan Pants',    'pants',  'crafted', 'titan',   55, NULL, 2, 180, 0, 18, 0, 0, 0, 0),
+    ('crafted_pants_diamond',  'Diamond Pants',  'pants',  'crafted', 'diamond', 75, NULL, 2, 240, 0, 24, 0, 0, 0, 0),
+    ('crafted_boots_silver',   'Silver Boots',   'boots',  'crafted', 'silver',  15, NULL, 2, 13,  0, 1,  0, 7,  0, 0),
+    ('crafted_boots_gold',     'Gold Boots',     'boots',  'crafted', 'gold',    35, NULL, 2, 46,  0, 5,  0, 20, 0, 0),
+    ('crafted_boots_titan',    'Titan Boots',    'boots',  'crafted', 'titan',   55, NULL, 2, 83,  0, 9,  0, 30, 0, 0),
+    ('crafted_boots_diamond',  'Diamond Boots',  'boots',  'crafted', 'diamond', 75, NULL, 2, 110, 0, 12, 0, 40, 0, 0),
+    ('crafted_gloves_silver',  'Silver Gloves',  'gloves', 'crafted', 'silver',  15, NULL, 2, 0, 3,  0, 3,  0, 0, 0),
+    ('crafted_gloves_gold',    'Gold Gloves',    'gloves', 'crafted', 'gold',    35, NULL, 2, 0, 9,  0, 8,  0, 0, 0),
+    ('crafted_gloves_titan',   'Titan Gloves',   'gloves', 'crafted', 'titan',   55, NULL, 2, 0, 18, 0, 12, 0, 0, 0),
+    ('crafted_gloves_diamond', 'Diamond Gloves', 'gloves', 'crafted', 'diamond', 75, NULL, 2, 0, 24, 0, 16, 0, 0, 0)
 ) AS seeded(item_id, name, slot, category, tier, required_level, character_id, gem_slots,
             stat_hp, stat_damage, stat_defense, stat_crit, stat_move_energy, price_coin, price_gem)
 WHERE c.item_id = seeded.item_id

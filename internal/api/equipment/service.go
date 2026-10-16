@@ -89,10 +89,13 @@ func (s *Service) GetCraftingRecipes(ctx context.Context) ([]CraftingRecipe, err
 	return s.repo.GetAllCraftingRecipes(ctx)
 }
 
-// GetCatalog returns every active item (normal and crafted), the upgrade
-// rates, set bonuses and stones. Lists are never nil.
+// GetCatalog returns every item (normal and crafted) with isActive, the
+// upgrade rates, set bonuses and stones. Inactive items are included so owned
+// pieces of retired items keep their name and stats; the shop sells only
+// active ones (GET /shop/equipment, or the catalog filtered by isActive).
+// Lists are never nil.
 func (s *Service) GetCatalog(ctx context.Context) (*Catalog, error) {
-	items, err := s.repo.GetActiveEquipmentItemConfigs(ctx)
+	items, err := s.repo.GetAllEquipmentItemConfigs(ctx)
 	if err != nil {
 		return nil, err
 	}

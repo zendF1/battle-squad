@@ -524,25 +524,14 @@ func (r *Repository) getEquipmentItemConfig(ctx context.Context, q rowQuerier, i
 	return &c, nil
 }
 
+// GetAllEquipmentItemConfigs returns every item, normal and crafted, active or
+// not (an inactive item is no longer sold but pieces players own still use it).
 func (r *Repository) GetAllEquipmentItemConfigs(ctx context.Context) ([]EquipmentItemConfig, error) {
 	query := `
 		SELECT item_id, name, slot, category, tier, required_level, character_id,
 		       gem_slots, stat_hp, stat_damage, stat_defense, stat_crit, stat_move_energy,
 		       price_coin, price_gem, is_active
 		FROM config_equipment_items
-		ORDER BY item_id ASC
-	`
-	return r.queryEquipmentItemConfigs(ctx, query)
-}
-
-// GetActiveEquipmentItemConfigs returns every active item, normal and crafted.
-func (r *Repository) GetActiveEquipmentItemConfigs(ctx context.Context) ([]EquipmentItemConfig, error) {
-	query := `
-		SELECT item_id, name, slot, category, tier, required_level, character_id,
-		       gem_slots, stat_hp, stat_damage, stat_defense, stat_crit, stat_move_energy,
-		       price_coin, price_gem, is_active
-		FROM config_equipment_items
-		WHERE is_active = TRUE
 		ORDER BY category ASC, slot ASC, required_level ASC, item_id ASC
 	`
 	return r.queryEquipmentItemConfigs(ctx, query)

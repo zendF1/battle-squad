@@ -220,11 +220,11 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 	// ── Upgrade rates ─────────────────────────────────────────────────────────
 	type upgradeRate struct {
-		fromLevel    int
-		toLevel      int
-		upgradeCost  int
-		maxPercent   float64
-		failResetTo  int
+		fromLevel   int
+		toLevel     int
+		upgradeCost int
+		maxPercent  float64
+		failResetTo int
 	}
 	upgradeRates := []upgradeRate{
 		{0, 1, 1, 80, 0},
@@ -288,8 +288,8 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 
 	// ── Gem configs ────────────────────────────────────────────────────────────
 	type gemConfig struct {
-		gemType  string
-		gemLevel int
+		gemType   string
+		gemLevel  int
 		statValue float64
 	}
 	hpValues := []float64{20, 40, 70, 110, 160, 220, 300, 400, 520, 660}
@@ -359,8 +359,9 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 	observability.Log.Info().Int("count", len(setBonuses)).Msg("seeded config_set_bonuses")
 
 	// ── Normal equipment items ─────────────────────────────────────────────────
-	// Same rows as migrations/016. Required levels 1/4/7/10 fit the character
-	// level cap (10); ids keep the old lvN suffix.
+	// Same rows as migrations/016 + 019. Required levels 10/20/30/40 (the id
+	// suffix). Weapons are per character (characterWeapons below); the generic
+	// weapons stay for pieces players already own but are inactive (not sold).
 	type equipItem struct {
 		itemID         string
 		name           string
@@ -375,55 +376,75 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 	}
 	normalItems := []equipItem{
 		// weapon
-		{"normal_weapon_lv10", "Iron Sword", "weapon", 1, 0, 8, 0, 0, 0, 500},
-		{"normal_weapon_lv20", "Steel Sword", "weapon", 4, 0, 15, 0, 1, 0, 1500},
-		{"normal_weapon_lv30", "Mithril Sword", "weapon", 7, 0, 25, 0, 2, 0, 4000},
-		{"normal_weapon_lv40", "Dragon Sword", "weapon", 10, 0, 38, 0, 3, 0, 10000},
+		{"normal_weapon_lv10", "Iron Sword", "weapon", 10, 0, 8, 0, 0, 0, 500},
+		{"normal_weapon_lv20", "Steel Sword", "weapon", 20, 0, 15, 0, 1, 0, 1500},
+		{"normal_weapon_lv30", "Mithril Sword", "weapon", 30, 0, 25, 0, 2, 0, 4000},
+		{"normal_weapon_lv40", "Dragon Sword", "weapon", 40, 0, 38, 0, 3, 0, 10000},
 		// armor
-		{"normal_armor_lv10", "Iron Vest", "armor", 1, 30, 0, 3, 0, 0, 400},
-		{"normal_armor_lv20", "Steel Vest", "armor", 4, 60, 0, 6, 0, 0, 1200},
-		{"normal_armor_lv30", "Mithril Vest", "armor", 7, 100, 0, 10, 0, 0, 3500},
-		{"normal_armor_lv40", "Dragon Vest", "armor", 10, 150, 0, 15, 0, 0, 8000},
+		{"normal_armor_lv10", "Iron Vest", "armor", 10, 30, 0, 3, 0, 0, 400},
+		{"normal_armor_lv20", "Steel Vest", "armor", 20, 60, 0, 6, 0, 0, 1200},
+		{"normal_armor_lv30", "Mithril Vest", "armor", 30, 100, 0, 10, 0, 0, 3500},
+		{"normal_armor_lv40", "Dragon Vest", "armor", 40, 150, 0, 15, 0, 0, 8000},
 		// helmet
-		{"normal_helmet_lv10", "Iron Cap", "helmet", 1, 20, 0, 2, 0, 0, 300},
-		{"normal_helmet_lv20", "Steel Cap", "helmet", 4, 40, 0, 4, 0, 0, 900},
-		{"normal_helmet_lv30", "Mithril Cap", "helmet", 7, 70, 0, 7, 0, 0, 2500},
-		{"normal_helmet_lv40", "Dragon Cap", "helmet", 10, 110, 0, 11, 0, 0, 6000},
+		{"normal_helmet_lv10", "Iron Cap", "helmet", 10, 20, 0, 2, 0, 0, 300},
+		{"normal_helmet_lv20", "Steel Cap", "helmet", 20, 40, 0, 4, 0, 0, 900},
+		{"normal_helmet_lv30", "Mithril Cap", "helmet", 30, 70, 0, 7, 0, 0, 2500},
+		{"normal_helmet_lv40", "Dragon Cap", "helmet", 40, 110, 0, 11, 0, 0, 6000},
 		// pants
-		{"normal_pants_lv10", "Iron Pants", "pants", 1, 20, 0, 2, 0, 0, 350},
-		{"normal_pants_lv20", "Steel Pants", "pants", 4, 45, 0, 5, 0, 0, 1000},
-		{"normal_pants_lv30", "Mithril Pants", "pants", 7, 75, 0, 8, 0, 0, 3000},
-		{"normal_pants_lv40", "Dragon Pants", "pants", 10, 120, 0, 12, 0, 0, 7000},
+		{"normal_pants_lv10", "Iron Pants", "pants", 10, 20, 0, 2, 0, 0, 350},
+		{"normal_pants_lv20", "Steel Pants", "pants", 20, 45, 0, 5, 0, 0, 1000},
+		{"normal_pants_lv30", "Mithril Pants", "pants", 30, 75, 0, 8, 0, 0, 3000},
+		{"normal_pants_lv40", "Dragon Pants", "pants", 40, 120, 0, 12, 0, 0, 7000},
 		// boots
-		{"normal_boots_lv10", "Iron Boots", "boots", 1, 10, 0, 1, 0, 5, 300},
-		{"normal_boots_lv20", "Steel Boots", "boots", 4, 20, 0, 2, 0, 10, 800},
-		{"normal_boots_lv30", "Mithril Boots", "boots", 7, 35, 0, 4, 0, 15, 2200},
-		{"normal_boots_lv40", "Dragon Boots", "boots", 10, 55, 0, 6, 0, 20, 5500},
+		{"normal_boots_lv10", "Iron Boots", "boots", 10, 10, 0, 1, 0, 5, 300},
+		{"normal_boots_lv20", "Steel Boots", "boots", 20, 20, 0, 2, 0, 10, 800},
+		{"normal_boots_lv30", "Mithril Boots", "boots", 30, 35, 0, 4, 0, 15, 2200},
+		{"normal_boots_lv40", "Dragon Boots", "boots", 40, 55, 0, 6, 0, 20, 5500},
 		// gloves
-		{"normal_gloves_lv10", "Iron Gloves", "gloves", 1, 0, 2, 0, 2, 0, 250},
-		{"normal_gloves_lv20", "Steel Gloves", "gloves", 4, 0, 4, 0, 4, 0, 750},
-		{"normal_gloves_lv30", "Mithril Gloves", "gloves", 7, 0, 7, 0, 6, 0, 2000},
-		{"normal_gloves_lv40", "Dragon Gloves", "gloves", 10, 0, 12, 0, 8, 0, 5000},
+		{"normal_gloves_lv10", "Iron Gloves", "gloves", 10, 0, 2, 0, 2, 0, 250},
+		{"normal_gloves_lv20", "Steel Gloves", "gloves", 20, 0, 4, 0, 4, 0, 750},
+		{"normal_gloves_lv30", "Mithril Gloves", "gloves", 30, 0, 7, 0, 6, 0, 2000},
+		{"normal_gloves_lv40", "Dragon Gloves", "gloves", 40, 0, 12, 0, 8, 0, 5000},
 	}
 	equipItemQuery := `INSERT INTO config_equipment_items
 		(item_id, name, slot, category, tier, required_level, character_id, gem_slots,
-		 stat_hp, stat_damage, stat_defense, stat_crit, stat_move_energy, price_coin, price_gem)
-		VALUES ($1, $2, $3, 'normal', NULL, $4, NULL, 1, $5, $6, $7, $8, $9, $10, 0)
+		 stat_hp, stat_damage, stat_defense, stat_crit, stat_move_energy, price_coin, price_gem, is_active)
+		VALUES ($1, $2, $3, 'normal', NULL, $4, $5, 1, $6, $7, $8, $9, $10, $11, 0, $12)
 		ON CONFLICT (item_id) DO NOTHING`
+	var normalWeapons []equipItem
 	for _, it := range normalItems {
+		if it.slot == "weapon" {
+			normalWeapons = append(normalWeapons, it)
+		}
 		if _, err := db.Pool.Exec(ctx, equipItemQuery,
-			it.itemID, it.name, it.slot, it.level,
+			it.itemID, it.name, it.slot, it.level, nil,
 			it.statHP, it.statDamage, it.statDefense, it.statCrit, it.statMoveEnergy,
-			it.priceCoin,
+			it.priceCoin, it.slot != "weapon",
 		); err != nil {
 			return fmt.Errorf("insert normal equipment item %s: %w", it.itemID, err)
 		}
 	}
-	observability.Log.Info().Int("count", len(normalItems)).Msg("seeded normal config_equipment_items")
+	// Per-character weapons: each generic weapon tier's stats and price.
+	characterWeapons := []struct{ characterID, name string }{
+		{"rookie", "Rookie Sword"}, {"tanko", "Tanko Cannon"}, {"spark", "Spark Staff"}, {"flora", "Flora Slingshot"},
+	}
+	for _, c := range characterWeapons {
+		for _, w := range normalWeapons {
+			itemID := fmt.Sprintf("%s_weapon_lv%d", c.characterID, w.level)
+			if _, err := db.Pool.Exec(ctx, equipItemQuery,
+				itemID, c.name, "weapon", w.level, c.characterID,
+				w.statHP, w.statDamage, w.statDefense, w.statCrit, w.statMoveEnergy,
+				w.priceCoin, true,
+			); err != nil {
+				return fmt.Errorf("insert character weapon %s: %w", itemID, err)
+			}
+		}
+	}
+	observability.Log.Info().Int("count", len(normalItems)+len(characterWeapons)*len(normalWeapons)).Msg("seeded normal config_equipment_items")
 
 	// ── Crafted equipment items ────────────────────────────────────────────────
 	// Multipliers: silver=1.3×Lv10, gold=1.3×Lv30, titan=1.5×Lv40, diamond=2.0×Lv40
-	// Required levels silver/gold/titan/diamond = 2/5/8/10.
+	// Required levels silver/gold/titan/diamond = 15/35/55/75.
 	type craftedItem struct {
 		itemID         string
 		name           string
@@ -438,35 +459,35 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 	}
 	craftedItems := []craftedItem{
 		// weapon: base DMG {8,25,38,38}, Crit {0,2,3,3}
-		{"crafted_weapon_silver", "Silver Sword", "weapon", "silver", 2, 0, 10, 0, 0, 0},
-		{"crafted_weapon_gold", "Gold Sword", "weapon", "gold", 5, 0, 33, 0, 3, 0},
-		{"crafted_weapon_titan", "Titan Sword", "weapon", "titan", 8, 0, 57, 0, 5, 0},
-		{"crafted_weapon_diamond", "Diamond Sword", "weapon", "diamond", 10, 0, 76, 0, 6, 0},
+		{"crafted_weapon_silver", "Silver Sword", "weapon", "silver", 15, 0, 10, 0, 0, 0},
+		{"crafted_weapon_gold", "Gold Sword", "weapon", "gold", 35, 0, 33, 0, 3, 0},
+		{"crafted_weapon_titan", "Titan Sword", "weapon", "titan", 55, 0, 57, 0, 5, 0},
+		{"crafted_weapon_diamond", "Diamond Sword", "weapon", "diamond", 75, 0, 76, 0, 6, 0},
 		// armor: base HP {30,100,150,150}, DEF {3,10,15,15}
-		{"crafted_armor_silver", "Silver Vest", "armor", "silver", 2, 39, 0, 4, 0, 0},
-		{"crafted_armor_gold", "Gold Vest", "armor", "gold", 5, 130, 0, 13, 0, 0},
-		{"crafted_armor_titan", "Titan Vest", "armor", "titan", 8, 225, 0, 23, 0, 0},
-		{"crafted_armor_diamond", "Diamond Vest", "armor", "diamond", 10, 300, 0, 30, 0, 0},
+		{"crafted_armor_silver", "Silver Vest", "armor", "silver", 15, 39, 0, 4, 0, 0},
+		{"crafted_armor_gold", "Gold Vest", "armor", "gold", 35, 130, 0, 13, 0, 0},
+		{"crafted_armor_titan", "Titan Vest", "armor", "titan", 55, 225, 0, 23, 0, 0},
+		{"crafted_armor_diamond", "Diamond Vest", "armor", "diamond", 75, 300, 0, 30, 0, 0},
 		// helmet: base HP {20,70,110,110}, DEF {2,7,11,11}
-		{"crafted_helmet_silver", "Silver Cap", "helmet", "silver", 2, 26, 0, 3, 0, 0},
-		{"crafted_helmet_gold", "Gold Cap", "helmet", "gold", 5, 91, 0, 9, 0, 0},
-		{"crafted_helmet_titan", "Titan Cap", "helmet", "titan", 8, 165, 0, 17, 0, 0},
-		{"crafted_helmet_diamond", "Diamond Cap", "helmet", "diamond", 10, 220, 0, 22, 0, 0},
+		{"crafted_helmet_silver", "Silver Cap", "helmet", "silver", 15, 26, 0, 3, 0, 0},
+		{"crafted_helmet_gold", "Gold Cap", "helmet", "gold", 35, 91, 0, 9, 0, 0},
+		{"crafted_helmet_titan", "Titan Cap", "helmet", "titan", 55, 165, 0, 17, 0, 0},
+		{"crafted_helmet_diamond", "Diamond Cap", "helmet", "diamond", 75, 220, 0, 22, 0, 0},
 		// pants: base HP {20,75,120,120}, DEF {2,8,12,12}
-		{"crafted_pants_silver", "Silver Pants", "pants", "silver", 2, 26, 0, 3, 0, 0},
-		{"crafted_pants_gold", "Gold Pants", "pants", "gold", 5, 98, 0, 10, 0, 0},
-		{"crafted_pants_titan", "Titan Pants", "pants", "titan", 8, 180, 0, 18, 0, 0},
-		{"crafted_pants_diamond", "Diamond Pants", "pants", "diamond", 10, 240, 0, 24, 0, 0},
+		{"crafted_pants_silver", "Silver Pants", "pants", "silver", 15, 26, 0, 3, 0, 0},
+		{"crafted_pants_gold", "Gold Pants", "pants", "gold", 35, 98, 0, 10, 0, 0},
+		{"crafted_pants_titan", "Titan Pants", "pants", "titan", 55, 180, 0, 18, 0, 0},
+		{"crafted_pants_diamond", "Diamond Pants", "pants", "diamond", 75, 240, 0, 24, 0, 0},
 		// boots: base HP {10,35,55,55}, DEF {1,4,6,6}, MoveEnergy {5,15,20,20}
-		{"crafted_boots_silver", "Silver Boots", "boots", "silver", 2, 13, 0, 1, 0, 7},
-		{"crafted_boots_gold", "Gold Boots", "boots", "gold", 5, 46, 0, 5, 0, 20},
-		{"crafted_boots_titan", "Titan Boots", "boots", "titan", 8, 83, 0, 9, 0, 30},
-		{"crafted_boots_diamond", "Diamond Boots", "boots", "diamond", 10, 110, 0, 12, 0, 40},
+		{"crafted_boots_silver", "Silver Boots", "boots", "silver", 15, 13, 0, 1, 0, 7},
+		{"crafted_boots_gold", "Gold Boots", "boots", "gold", 35, 46, 0, 5, 0, 20},
+		{"crafted_boots_titan", "Titan Boots", "boots", "titan", 55, 83, 0, 9, 0, 30},
+		{"crafted_boots_diamond", "Diamond Boots", "boots", "diamond", 75, 110, 0, 12, 0, 40},
 		// gloves: base DMG {2,7,12,12}, Crit {2,6,8,8}
-		{"crafted_gloves_silver", "Silver Gloves", "gloves", "silver", 2, 0, 3, 0, 3, 0},
-		{"crafted_gloves_gold", "Gold Gloves", "gloves", "gold", 5, 0, 9, 0, 8, 0},
-		{"crafted_gloves_titan", "Titan Gloves", "gloves", "titan", 8, 0, 18, 0, 12, 0},
-		{"crafted_gloves_diamond", "Diamond Gloves", "gloves", "diamond", 10, 0, 24, 0, 16, 0},
+		{"crafted_gloves_silver", "Silver Gloves", "gloves", "silver", 15, 0, 3, 0, 3, 0},
+		{"crafted_gloves_gold", "Gold Gloves", "gloves", "gold", 35, 0, 9, 0, 8, 0},
+		{"crafted_gloves_titan", "Titan Gloves", "gloves", "titan", 55, 0, 18, 0, 12, 0},
+		{"crafted_gloves_diamond", "Diamond Gloves", "gloves", "diamond", 75, 0, 24, 0, 16, 0},
 	}
 	craftedItemQuery := `INSERT INTO config_equipment_items
 		(item_id, name, slot, category, tier, required_level, character_id, gem_slots,
