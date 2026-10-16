@@ -139,13 +139,14 @@ func (r *Repository) LockAllocatedPointsTx(ctx context.Context, tx pgx.Tx, playe
 	return total, err
 }
 
-// ResetStatsTx moves all allocated bonus points back into stat_points and zeroes all bonuses.
-func (r *Repository) ResetStatsTx(ctx context.Context, tx pgx.Tx, playerID, characterID string) error {
+// ResetStatsTx zeroes all bonuses and sets stat_points to what the character's level earns
+// under the current rule, (level - 1) * pointsPerLevel, so a changed pointsPerLevel applies
+// to characters that reset. Levels are the only source of stat points.
+func (r *Repository) ResetStatsTx(ctx context.Context, tx pgx.Tx, playerID, characterID string, pointsPerLevel int) error {
 	tag, err := tx.Exec(ctx, `
 		UPDATE player_characters
 		SET
-			stat_points          = stat_points + bonus_hp + bonus_damage + bonus_mobility
-			                       + bonus_defense + bonus_skill_power + bonus_terrain_damage,
+			stat_points          = GREATEST(level - 1, 0) * $3,
 			bonus_hp             = 0,
 			bonus_damage         = 0,
 			bonus_mobility       = 0,
@@ -153,7 +154,7 @@ func (r *Repository) ResetStatsTx(ctx context.Context, tx pgx.Tx, playerID, char
 			bonus_skill_power    = 0,
 			bonus_terrain_damage = 0
 		WHERE player_id = $1 AND character_id = $2
-	`, playerID, characterID)
+	`, playerID, characterID, pointsPerLevel)
 	if err != nil {
 		return err
 	}

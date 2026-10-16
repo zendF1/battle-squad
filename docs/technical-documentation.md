@@ -199,7 +199,7 @@ Mọi response REST (trừ `/healthz`, `/readyz`, `/livez`, `/metrics`) đều c
 |--------|------|---------|-------|
 | GET | `/player/characters` | GetCharacters | `{characters, resetStatsCost: {currency, amount}, baseStats, statMultipliers}`: nhân vật đã sở hữu (level, exp, `statPoints`, 6 chỉ số `bonus*`, `stats` = chỉ số vào trận), phí tẩy điểm (cùng config `character_progression` mà reset-stats trừ), chỉ số gốc của mọi nhân vật và giá trị mỗi điểm — xem [Character Stat Bonuses](#character-stat-bonuses) |
 | POST | `/player/character/allocate-stats` | AllocateStats | Cộng điểm `{characterId, hp, damage, mobility, defense, skillPower, terrainDamage}` |
-| POST | `/player/character/reset-stats` | ResetStats | Tẩy điểm `{characterId}`: trả mọi điểm đã cộng về `statPoints`, phí `resetCostAmount` `resetCostCurrency` (seed: 500 coin). Khoá profile rồi row nhân vật `FOR UPDATE`, kiểm tra, trừ tiền và reset trong một transaction — reset đồng thời chỉ bị trừ tiền một lần |
+| POST | `/player/character/reset-stats` | ResetStats | Tẩy điểm `{characterId}`: xoá mọi điểm đã cộng và đặt `statPoints = (level − 1) × pointsPerLevel` theo config hiện tại (đổi `pointsPerLevel` thì nhân vật tẩy điểm sẽ nhận số điểm theo luật mới), phí `resetCostAmount` `resetCostCurrency` (seed: 500 coin). Khoá profile rồi row nhân vật `FOR UPDATE`, kiểm tra, trừ tiền và reset trong một transaction — reset đồng thời chỉ bị trừ tiền một lần |
 
 **Offer types** (`offerType` trong `shop_offers`, admin chọn trong dropdown):
 

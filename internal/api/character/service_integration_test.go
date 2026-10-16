@@ -29,6 +29,22 @@ func addCharacter(t *testing.T, db *database.PostgresDB, playerID, characterID s
 	}
 }
 
+func setLevel(t *testing.T, db *database.PostgresDB, playerID, characterID string, level int) {
+	t.Helper()
+	if _, err := db.Pool.Exec(context.Background(),
+		`UPDATE player_characters SET level = $3 WHERE player_id = $1 AND character_id = $2`, playerID, characterID, level); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func setPointsPerLevel(t *testing.T, db *database.PostgresDB, points int) {
+	t.Helper()
+	if _, err := db.Pool.Exec(context.Background(),
+		`UPDATE game_settings SET value = jsonb_set(value::jsonb, '{pointsPerLevel}', to_jsonb($1::int))::text WHERE key = 'character_progression'`, points); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func characterPoints(t *testing.T, db *database.PostgresDB, playerID, characterID string) (statPoints, allocated int) {
 	t.Helper()
 	if err := db.Pool.QueryRow(context.Background(), `
@@ -52,6 +68,7 @@ func TestResetStatsChargesAndRefundsInOneTx(t *testing.T) {
 	svc, db := newCharacterService(t, 1)
 	dbtest.CreatePlayer(t, db, "p1", 600, 0)
 	addCharacter(t, db, "p1", "tanko", 2, 3, 5)
+	setLevel(t, db, "p1", "tanko", 2) // level 2 earns 10 points under the seeded pointsPerLevel 10
 
 	if err := svc.ResetStats(context.Background(), "p1", "tanko"); err != nil {
 		t.Fatal(err)
@@ -92,6 +109,8 @@ func TestConcurrentResetsChargeOnce(t *testing.T) {
 	svc, db := newCharacterService(t, 8)
 	dbtest.CreatePlayer(t, db, "p1", 5000, 0)
 	addCharacter(t, db, "p1", "tanko", 0, 4, 1)
+	setPointsPerLevel(t, db, 1)
+	setLevel(t, db, "p1", "tanko", 6) // 5 points at 1 per level
 
 	const n = 6
 	errs := make([]error, n)
@@ -121,5 +140,22 @@ func TestConcurrentResetsChargeOnce(t *testing.T) {
 	}
 	if pts, alloc := characterPoints(t, db, "p1", "tanko"); pts != 5 || alloc != 0 {
 		t.Fatalf("stat_points %d allocated %d, want 5 and 0", pts, alloc)
+	}
+}
+
+// Reset grants what the level earns under the current pointsPerLevel, so points granted under
+// an older, higher rule shrink to the new rule.
+func TestResetStatsAppliesCurrentPointsPerLevel(t *testing.T) {
+	svc, db := newCharacterService(t, 1)
+	dbtest.CreatePlayer(t, db, "p1", 600, 0)
+	addCharacter(t, db, "p1", "rookie", 5, 15, 0) // 20 points from level 3 at 10 per level
+	setLevel(t, db, "p1", "rookie", 3)
+	setPointsPerLevel(t, db, 1)
+
+	if err := svc.ResetStats(context.Background(), "p1", "rookie"); err != nil {
+		t.Fatal(err)
+	}
+	if pts, alloc := characterPoints(t, db, "p1", "rookie"); pts != 2 || alloc != 0 {
+		t.Fatalf("stat_points %d allocated %d, want 2 and 0", pts, alloc)
 	}
 }

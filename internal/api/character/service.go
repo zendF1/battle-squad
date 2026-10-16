@@ -151,7 +151,8 @@ func (s *Service) AllocateStats(ctx context.Context, playerID string, payload Al
 	return nil
 }
 
-// ResetStats charges the player the reset cost and refunds all allocated bonus points.
+// ResetStats charges the player the reset cost, clears all allocated bonus points and
+// grants the points the character's level earns under the current pointsPerLevel.
 func (s *Service) ResetStats(ctx context.Context, playerID, characterID string) error {
 	if characterID == "" {
 		return model.ErrBadRequest
@@ -209,7 +210,7 @@ func (s *Service) ResetStats(ctx context.Context, playerID, characterID string) 
 		return fmt.Errorf("debit reset cost: %w", err)
 	}
 
-	if err := s.repo.ResetStatsTx(ctx, tx, playerID, characterID); err != nil {
+	if err := s.repo.ResetStatsTx(ctx, tx, playerID, characterID, cfg.PointsPerLevel); err != nil {
 		return fmt.Errorf("reset stats: %w", err)
 	}
 
