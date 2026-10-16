@@ -51,9 +51,12 @@ func (r *Repository) CreditTx(ctx context.Context, tx pgx.Tx, playerID, currency
 	}
 
 	// 2. Update balance
-	_, err = tx.Exec(ctx, queryUpdate, newBalance, playerID)
+	tag, err := tx.Exec(ctx, queryUpdate, newBalance, playerID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to update player balance: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return 0, fmt.Errorf("failed to update player balance: %d rows affected", tag.RowsAffected())
 	}
 
 	// 3. Record transaction log
@@ -103,9 +106,12 @@ func (r *Repository) DebitTx(ctx context.Context, tx pgx.Tx, playerID, currency 
 	}
 
 	// 2. Update balance
-	_, err = tx.Exec(ctx, queryUpdate, newBalance, playerID)
+	tag, err := tx.Exec(ctx, queryUpdate, newBalance, playerID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to update player balance: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return 0, fmt.Errorf("failed to update player balance: %d rows affected", tag.RowsAffected())
 	}
 
 	// 3. Record transaction log

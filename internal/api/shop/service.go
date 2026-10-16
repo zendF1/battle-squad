@@ -22,6 +22,9 @@ var (
 	ErrCharacterAlreadyOwned  = errors.New("character already owned")
 	ErrIdempotencyKeyMismatch = errors.New("idempotency key was already used for a different offer")
 	ErrIdempotencyKeyTooLong  = errors.New("idempotency key is too long")
+	// ErrCoinPackMisconfigured is a catalog error (500): a coin pack must be
+	// itemId "coin" paid in gem, so coin can never buy coin.
+	ErrCoinPackMisconfigured = errors.New("coin_pack offer must have itemId coin and priceCurrency gem")
 )
 
 type Service struct {
@@ -113,6 +116,10 @@ func (s *Service) Purchase(ctx context.Context, playerID, offerID, idempotencyKe
 		}
 	}
 
+	if offer.OfferType == "coin_pack" && (offer.ItemID != "coin" || offer.PriceCurrency != "gem" || offer.Quantity <= 0) {
+		return nil, fmt.Errorf("offer %s: %w", offerID, ErrCoinPackMisconfigured)
+	}
+
 	// 5. Debit currency balance
 	_, err = s.economyRepo.DebitTx(ctx, tx, playerID, offer.PriceCurrency, offer.PriceAmount, "shop_purchase", offerID, false)
 	if err != nil {
@@ -133,6 +140,11 @@ func (s *Service) Purchase(ctx context.Context, playerID, offerID, idempotencyKe
 		}
 		if !unlocked {
 			return nil, ErrCharacterAlreadyOwned // rollback undoes the debit
+		}
+	case "coin_pack":
+		// Gem -> coin exchange: credit in the same tx as the gem debit
+		if _, err := s.economyRepo.CreditTx(ctx, tx, playerID, "coin", offer.Quantity, "shop_purchase", offerID); err != nil {
+			return nil, fmt.Errorf("failed to credit coin: %w", err)
 		}
 	default:
 		return nil, fmt.Errorf("unsupported offer type: %s", offer.OfferType)

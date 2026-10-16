@@ -18,13 +18,17 @@
 </div>
 <div class="form-group">
     <label>Offer Type</label>
-    <input type="text" name="offer_type" value="{{.Offer.OfferType}}">
-    <div class="desc">Type of offer (e.g. normal, bundle, limited)</div>
+    {{$type := .Offer.OfferType}}
+    <select name="offer_type">
+        {{range .OfferTypes}}<option value="{{.}}" {{if eq . $type}}selected{{end}}>{{.}}</option>
+        {{end}}{{if and $type (not .KnownOfferType)}}<option value="{{$type}}" selected>{{$type}} (unsupported)</option>{{end}}
+    </select>
+    <div class="desc">item / bundle: grants Quantity of Item ID to the inventory. character_unlock: unlocks character Item ID. coin_pack: gem &rarr; coin exchange, Item ID must be <code>coin</code>, currency <code>gem</code>, Quantity = coins granted</div>
 </div>
 <div class="form-group">
     <label>Price Currency</label>
     <input type="text" name="price_currency" value="{{.Offer.PriceCurrency}}">
-    <div class="desc">Currency type: coins or gems</div>
+    <div class="desc">Currency: <code>coin</code> or <code>gem</code> (coin_pack must be <code>gem</code>)</div>
 </div>
 <div class="form-group">
     <label>Price Amount</label>

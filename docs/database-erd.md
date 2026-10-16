@@ -96,7 +96,7 @@ erDiagram
     shop_offers {
         VARCHAR offer_id PK
         VARCHAR item_id
-        VARCHAR offer_type "item, character_unlock, bundle"
+        VARCHAR offer_type "item, character_unlock, bundle, coin_pack"
         VARCHAR price_currency "coin, gem"
         INT price_amount
         INT quantity

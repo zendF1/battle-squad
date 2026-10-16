@@ -8,6 +8,18 @@ import (
 	"battle-squad/internal/shared/observability"
 )
 
+// shopOfferTypes are the offer types the API purchase flow supports.
+var shopOfferTypes = []string{"item", "bundle", "character_unlock", "coin_pack"}
+
+func isShopOfferType(t string) bool {
+	for _, v := range shopOfferTypes {
+		if v == t {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) handleShopList(w http.ResponseWriter, r *http.Request) {
 	offers, err := s.repo.GetShopOffers(r.Context())
 	if err != nil {
@@ -43,8 +55,10 @@ func (s *Server) handleShopEdit(w http.ResponseWriter, r *http.Request) {
 
 	s.render(w, "shop_edit", map[string]interface{}{
 		"ActivePage": "shop",
-		"Offer":      offer,
-		"IsNew":      isNew,
+		"Offer":          offer,
+		"IsNew":          isNew,
+		"OfferTypes":     shopOfferTypes,
+		"KnownOfferType": isShopOfferType(offer.OfferType),
 	})
 }
 
@@ -77,6 +91,15 @@ func (s *Server) handleShopSave(w http.ResponseWriter, r *http.Request) {
 		Quantity:       formInt(r, "quantity"),
 		LimitPerPlayer: limitPerPlayer,
 		IsActive:       r.FormValue("is_active") == "true",
+	}
+
+	if !isShopOfferType(o.OfferType) {
+		http.Redirect(w, r, "/shop?error=Unsupported+offer+type", http.StatusSeeOther)
+		return
+	}
+	if o.OfferType == "coin_pack" && (o.ItemID != "coin" || o.PriceCurrency != "gem" || o.Quantity <= 0) {
+		http.Redirect(w, r, "/shop?error=coin_pack+needs+item+coin,+currency+gem+and+quantity+%3E+0", http.StatusSeeOther)
+		return
 	}
 
 	if err := s.repo.UpsertShopOffer(r.Context(), o); err != nil {

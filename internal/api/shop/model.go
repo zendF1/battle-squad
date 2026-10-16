@@ -5,7 +5,7 @@ import "time"
 type ShopOffer struct {
 	OfferID       string     `json:"offerId"`
 	ItemID        string     `json:"itemId"`
-	OfferType     string     `json:"offerType"` // item, character_unlock, bundle
+	OfferType     string     `json:"offerType"` // item, character_unlock, bundle, coin_pack (gem -> coin)
 	PriceCurrency string     `json:"priceCurrency"` // coin, gem
 	PriceAmount   int        `json:"priceAmount"`
 	Quantity      int        `json:"quantity"`

@@ -187,7 +187,7 @@ Mọi response REST (trừ `/healthz`, `/readyz`, `/livez`, `/metrics`) đều c
 |--------|------|---------|-------|
 | GET | `/player/inventory` | GetInventory | Danh sách items đang có |
 | GET | `/shop/offers` | GetOffers | Các offer đang active |
-| POST | `/shop/purchase` | Purchase | Mua offer: body `{offerId, idempotencyKey}` (key ≤ 64); cùng key + offer trả lại purchase cũ, không trừ tiền lần nữa |
+| POST | `/shop/purchase` | Purchase | Mua offer: body `{offerId, idempotencyKey}` (key ≤ 64); cùng key + offer trả lại purchase cũ, không trừ tiền lần nữa. Không đủ tiền → 400 `SHOP_INSUFFICIENT_BALANCE` |
 | GET | `/shop/purchases` | GetPurchases | Lịch sử mua hàng |
 | GET | `/iap/products` | GetProducts | Danh sách IAP products |
 | POST | `/iap/verify` | VerifyReceipt | Verify receipt từ App Store/Play Store |
@@ -200,6 +200,14 @@ Mọi response REST (trừ `/healthz`, `/readyz`, `/livez`, `/metrics`) đều c
 | GET | `/player/characters` | GetCharacters | `{characters, resetStatsCost: {currency, amount}, baseStats, statMultipliers}`: nhân vật đã sở hữu (level, exp, `statPoints`, 6 chỉ số `bonus*`, `stats` = chỉ số vào trận), phí tẩy điểm (cùng config `character_progression` mà reset-stats trừ), chỉ số gốc của mọi nhân vật và giá trị mỗi điểm — xem [Character Stat Bonuses](#character-stat-bonuses) |
 | POST | `/player/character/allocate-stats` | AllocateStats | Cộng điểm `{characterId, hp, damage, mobility, defense, skillPower, terrainDamage}` |
 | POST | `/player/character/reset-stats` | ResetStats | Tẩy điểm `{characterId}`: trả mọi điểm đã cộng về `statPoints`, phí `resetCostAmount` `resetCostCurrency` (seed: 500 coin). Khoá profile rồi row nhân vật `FOR UPDATE`, kiểm tra, trừ tiền và reset trong một transaction — reset đồng thời chỉ bị trừ tiền một lần |
+
+**Offer types** (`offerType` trong `shop_offers`, admin chọn trong dropdown):
+
+| `offerType` | Khi mua | `quantityGranted` |
+|-------------|---------|-------------------|
+| `item`, `bundle` | Cộng `quantity` item `itemId` vào inventory | số item |
+| `character_unlock` | Mở nhân vật `itemId`; đã có → 409 `SHOP_ALREADY_OWNED`, không trừ tiền | 1 |
+| `coin_pack` | Đổi kim cương ra xu: trừ `priceAmount` gem và cộng `quantity` coin trong cùng một transaction (2 dòng `economy_transactions`, `source = shop_purchase`, `ref_id = offerId`). Bắt buộc `itemId = coin`, `priceCurrency = gem`, `quantity > 0`; sai cấu hình → 500 trước khi trừ tiền (admin cũng chặn khi lưu) | số xu |
 
 **Default shop catalog** (`migrations/014_default_shop_catalog.up.sql`, `ON CONFLICT DO NOTHING` nên chạy lại không ghi đè chỉnh sửa từ admin):
 
@@ -218,6 +226,17 @@ Mọi response REST (trừ `/healthz`, `/readyz`, `/livez`, `/metrics`) đều c
 | `unlock_flora_coin` / `unlock_flora_gem` | `flora` | character_unlock | 5000 coin / 300 gem | 1 | 1 |
 
 `rookie` là nhân vật mặc định, không bán.
+
+Gói đổi kim cương ra xu (`migrations/018_coin_exchange_offers.up.sql`, `ON CONFLICT DO NOTHING`): tỉ giá gốc 1 gem = 100 coin, không bonus, không giới hạn/người. Client tính nhãn bonus so với tỉ giá gốc (chỉ hiện khi gói lời hơn 100 xu/kim cương).
+
+| `offerId` | `itemId` | Loại | Giá | Số lượng (coin) | Giới hạn/người |
+|-----------|----------|------|-----|-----------------|----------------|
+| `coin_pack_10` | `coin` | coin_pack | 10 gem | 1000 | — |
+| `coin_pack_50` | `coin` | coin_pack | 50 gem | 5000 | — |
+| `coin_pack_100` | `coin` | coin_pack | 100 gem | 10000 | — |
+| `coin_pack_500` | `coin` | coin_pack | 500 gem | 50000 | — |
+
+Down migration chỉ xoá gói còn đúng giá trị seed và chưa ai mua.
 
 | `productId` | `platformSkuId` (android = ios) | Gem | Bonus | Giá |
 |-------------|--------------------------------|-----|-------|-----|

@@ -138,7 +138,7 @@ const schema = [
   ]},
   { id:'shop', label:'Shop & IAP', cls:'domain-shop', gridCol:1, gridRow:0, gridW:1, tables:[
     { name:'shop_offers', cols:[
-      {n:'offer_id',t:'VARCHAR',pk:1},{n:'item_id',t:'VARCHAR'},{n:'offer_type',t:'VARCHAR',c:'item, character_unlock'},{n:'price_currency',t:'VARCHAR',c:'coin, gem'},{n:'price_amount',t:'INT'},{n:'is_active',t:'BOOLEAN'}
+      {n:'offer_id',t:'VARCHAR',pk:1},{n:'item_id',t:'VARCHAR'},{n:'offer_type',t:'VARCHAR',c:'item, character_unlock, bundle, coin_pack'},{n:'price_currency',t:'VARCHAR',c:'coin, gem'},{n:'price_amount',t:'INT'},{n:'is_active',t:'BOOLEAN'}
     ]},
     { name:'shop_purchases', cols:[
       {n:'purchase_id',t:'VARCHAR',pk:1},{n:'player_id',t:'VARCHAR',fk:1},{n:'offer_id',t:'VARCHAR',fk:1},{n:'price_amount',t:'INT'},{n:'status',t:'VARCHAR',c:'completed, failed'}
