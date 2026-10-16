@@ -104,6 +104,8 @@ type Gem struct {
 
 // EquippedItem is one item a character wears, with its config stats.
 type EquippedItem struct {
+	ItemID              string
+	Slot                string // weapon, armor, helmet, pants, boots, gloves
 	HP, Damage, Defense int
 	Crit                float64
 	MoveEnergy          int

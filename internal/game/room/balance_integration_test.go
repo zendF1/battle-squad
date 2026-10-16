@@ -128,7 +128,7 @@ func TestBalanceHitsToKill(t *testing.T) {
 				t.Fatalf("equipment points %+v, want %+v", got, tt.wantPts)
 			}
 
-			s := r.getActualStats(playerID, "rookie")
+			s, _ := r.getActualStats(playerID, "rookie")
 			hit := directHit("rookie", s, s.Defense)
 			hits := int(math.Ceil(float64(s.HP) / float64(hit)))
 			raw := battlestats.WeaponDamage("rookie") + s.DamageBonus

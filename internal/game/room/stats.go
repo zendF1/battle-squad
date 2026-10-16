@@ -24,13 +24,15 @@ func addStatPoints(s battleStats, pts statPoints, cfg character.ProgressionConfi
 	return s.Add(battlestats.FromPoints(pts, cfg.Multipliers()))
 }
 
-// newBattlePlayer builds a player's match state from the room entry and stats.
-func newBattlePlayer(p RoomPlayer, spawn match.Vector2, s battleStats, isBot bool) *match.BattlePlayerState {
+// newBattlePlayer builds a player's match state from the room entry, stats and
+// the item id of the equipped weapon ("" = none, e.g. bots).
+func newBattlePlayer(p RoomPlayer, spawn match.Vector2, s battleStats, weaponItemID string, isBot bool) *match.BattlePlayerState {
 	return &match.BattlePlayerState{
 		PlayerID:           p.PlayerID,
 		DisplayName:        p.DisplayName,
 		TeamID:             p.TeamID,
 		CharacterID:        p.CharacterID,
+		WeaponItemID:       weaponItemID,
 		HP:                 s.HP,
 		MaxHP:              s.HP,
 		Defense:            s.Defense,

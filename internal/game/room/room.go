@@ -41,9 +41,11 @@ type Room struct {
 }
 
 // getActualStats adds the player's allocated stat points and equipment to the
-// character's base stats. A character the player does not own gets base stats.
-// GET /player/characters reports the same numbers through battlestats.
-func (r *Room) getActualStats(playerID, characterID string) battleStats {
+// character's base stats, and returns the item id of the weapon the character
+// has equipped ("" = none; clients draw that gun). A character the player does
+// not own gets base stats and no weapon. GET /player/characters reports the
+// same numbers through battlestats.
+func (r *Room) getActualStats(playerID, characterID string) (battleStats, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -53,7 +55,7 @@ func (r *Room) getActualStats(playerID, characterID string) battleStats {
 		 FROM player_characters WHERE player_id = $1 AND character_id = $2`,
 		playerID, characterID).Scan(&pts.HP, &pts.Damage, &pts.Mobility, &pts.Defense, &pts.SkillPower, &pts.TerrainDamage)
 	if err != nil {
-		return baseStats(characterID)
+		return baseStats(characterID), ""
 	}
 
 	var cfgVal string
@@ -62,11 +64,12 @@ func (r *Room) getActualStats(playerID, characterID string) battleStats {
 		observability.Log.Warn().Err(err).Msg("failed to load character_progression; using default stat multipliers")
 	}
 
-	equipment, err := battlestats.LoadEquipmentPoints(ctx, r.db.Pool, playerID, characterID)
+	loadouts, err := battlestats.LoadLoadouts(ctx, r.db.Pool, playerID, characterID)
 	if err != nil {
 		observability.Log.Warn().Err(err).Str("playerId", playerID).Msg("failed to load equipment stats; playing without equipment")
 	}
-	return battlestats.Compute(characterID, pts, character.LoadProgressionConfig(cfgVal).Multipliers(), equipment[characterID]).Total
+	l := loadouts[characterID]
+	return battlestats.Compute(characterID, pts, character.LoadProgressionConfig(cfgVal).Multipliers(), l.Points).Total, l.WeaponItemID
 }
 
 func NewRoom(roomID string, initialState RoomState, hub *Hub, db *database.PostgresDB) *Room {
@@ -510,7 +513,8 @@ func (r *Room) processStartMatch(client *ws.Client) {
 			team1Idx++
 		}
 
-		matchPlayers = append(matchPlayers, newBattlePlayer(p, spawnPos, r.getActualStats(p.PlayerID, p.CharacterID), false))
+		stats, weapon := r.getActualStats(p.PlayerID, p.CharacterID)
+		matchPlayers = append(matchPlayers, newBattlePlayer(p, spawnPos, stats, weapon, false))
 	}
 
 	// Instantiate match engine
@@ -590,11 +594,11 @@ func (r *Room) processStartTutorial(client *ws.Client, payload QuickPlayPayload)
 		}
 
 		isBot := p.PlayerID[:4] == "bot_"
-		stats := baseStats(p.CharacterID)
+		stats, weapon := baseStats(p.CharacterID), ""
 		if !isBot {
-			stats = r.getActualStats(p.PlayerID, p.CharacterID)
+			stats, weapon = r.getActualStats(p.PlayerID, p.CharacterID)
 		}
-		bp := newBattlePlayer(p, spawnPos, stats, isBot)
+		bp := newBattlePlayer(p, spawnPos, stats, weapon, isBot)
 		bp.IsIdle = isBot && !aiBot
 		matchPlayers = append(matchPlayers, bp)
 	}
@@ -670,11 +674,11 @@ func (r *Room) startRankedMatch(matchID string, botTierConfig matchmaker.BotTier
 		}
 
 		isBot := len(p.PlayerID) >= 4 && p.PlayerID[:4] == "bot_"
-		stats := baseStats(p.CharacterID)
+		stats, weapon := baseStats(p.CharacterID), ""
 		if !isBot {
-			stats = r.getActualStats(p.PlayerID, p.CharacterID)
+			stats, weapon = r.getActualStats(p.PlayerID, p.CharacterID)
 		}
-		matchPlayers = append(matchPlayers, newBattlePlayer(p, spawnPos, stats, isBot))
+		matchPlayers = append(matchPlayers, newBattlePlayer(p, spawnPos, stats, weapon, isBot))
 	}
 
 	// Collect per-team ratings for Elo calculation

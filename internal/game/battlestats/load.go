@@ -54,7 +54,7 @@ func LoadMilestones(ctx context.Context, q Querier) (Milestones, error) {
 func LoadEquipped(ctx context.Context, q Querier, playerID, characterID string) (map[string][]EquippedItem, error) {
 	// Gems are joined in so no second query runs while rows hold a connection.
 	rows, err := q.Query(ctx,
-		`SELECT pe.equipped_on, cei.stat_hp, cei.stat_damage, cei.stat_defense, cei.stat_crit, cei.stat_move_energy,
+		`SELECT pe.equipped_on, pe.item_id, pe.slot, cei.stat_hp, cei.stat_damage, cei.stat_defense, cei.stat_crit, cei.stat_move_energy,
 		        pe.upgrade_level, pe.category, COALESCE(pe.tier, ''),
 		        g1.gem_type, cg1.stat_value, g2.gem_type, cg2.stat_value
 		 FROM player_equipment pe
@@ -77,7 +77,7 @@ func LoadEquipped(ctx context.Context, q Querier, playerID, characterID string) 
 		var it EquippedItem
 		var gemType1, gemType2 *string
 		var gemVal1, gemVal2 *float64
-		if err := rows.Scan(&on, &it.HP, &it.Damage, &it.Defense, &it.Crit, &it.MoveEnergy,
+		if err := rows.Scan(&on, &it.ItemID, &it.Slot, &it.HP, &it.Damage, &it.Defense, &it.Crit, &it.MoveEnergy,
 			&it.UpgradeLevel, &it.Category, &it.Tier, &gemType1, &gemVal1, &gemType2, &gemVal2); err != nil {
 			return nil, fmt.Errorf("scan equipped item: %w", err)
 		}
@@ -115,14 +115,31 @@ func LoadSetBonuses(ctx context.Context, q Querier) (map[string][]SetBonus, erro
 	return out, rows.Err()
 }
 
-// LoadEquipmentPoints returns the equipment points of each character the
-// player has items equipped on (characterID "" = all); Compute converts them.
-func LoadEquipmentPoints(ctx context.Context, q Querier, playerID, characterID string) (map[string]EquipmentPoints, error) {
+// Loadout is what a character wears into battle: the points of its equipped
+// items and the item id of its weapon ("" = none).
+type Loadout struct {
+	Points       EquipmentPoints
+	WeaponItemID string
+}
+
+// WeaponItemID returns the item id of the equipped weapon, "" when none.
+func WeaponItemID(items []EquippedItem) string {
+	for _, it := range items {
+		if it.Slot == "weapon" {
+			return it.ItemID
+		}
+	}
+	return ""
+}
+
+// LoadLoadouts returns the loadout of each character the player has items
+// equipped on (characterID "" = all); Compute converts the points.
+func LoadLoadouts(ctx context.Context, q Querier, playerID, characterID string) (map[string]Loadout, error) {
 	equipped, err := LoadEquipped(ctx, q, playerID, characterID)
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string]EquipmentPoints, len(equipped))
+	out := make(map[string]Loadout, len(equipped))
 	if len(equipped) == 0 {
 		return out, nil
 	}
@@ -135,7 +152,21 @@ func LoadEquipmentPoints(ctx context.Context, q Querier, playerID, characterID s
 		return nil, err
 	}
 	for charID, items := range equipped {
-		out[charID] = SumEquipment(items, setBonuses, ms)
+		out[charID] = Loadout{Points: SumEquipment(items, setBonuses, ms), WeaponItemID: WeaponItemID(items)}
+	}
+	return out, nil
+}
+
+// LoadEquipmentPoints returns the equipment points of each character the
+// player has items equipped on (characterID "" = all); Compute converts them.
+func LoadEquipmentPoints(ctx context.Context, q Querier, playerID, characterID string) (map[string]EquipmentPoints, error) {
+	loadouts, err := LoadLoadouts(ctx, q, playerID, characterID)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]EquipmentPoints, len(loadouts))
+	for charID, l := range loadouts {
+		out[charID] = l.Points
 	}
 	return out, nil
 }

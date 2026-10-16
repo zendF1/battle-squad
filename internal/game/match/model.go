@@ -20,6 +20,7 @@ type BattlePlayerState struct {
 	DisplayName     string         `json:"displayName"`
 	TeamID          int            `json:"teamId"`
 	CharacterID     string         `json:"characterId"`
+	WeaponItemID    string         `json:"weaponItemId"` // equipped weapon's item id, "" = none (bots); clients draw that gun
 	HP              int            `json:"hp"`
 	MaxHP           int            `json:"maxHp"`
 	Defense         int            `json:"defense"`

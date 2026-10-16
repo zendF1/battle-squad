@@ -131,3 +131,13 @@ func TestComputeSumsParts(t *testing.T) {
 		t.Fatalf("breakdown %+v", b)
 	}
 }
+
+func TestWeaponItemID(t *testing.T) {
+	items := []EquippedItem{{ItemID: "normal_helmet_lv10", Slot: "helmet"}, {ItemID: "crafted_weapon_gold", Slot: "weapon"}}
+	if got := WeaponItemID(items); got != "crafted_weapon_gold" {
+		t.Fatalf("got %q", got)
+	}
+	if got := WeaponItemID(items[:1]); got != "" {
+		t.Fatalf("no weapon: got %q", got)
+	}
+}

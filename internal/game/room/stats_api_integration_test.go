@@ -132,8 +132,8 @@ func TestAPICharacterStatsMatchBattle(t *testing.T) {
 				t.Fatalf("characters %+v", resp.Characters)
 			}
 			api := resp.Characters[0].Stats
-			bp := newBattlePlayer(RoomPlayer{PlayerID: playerID, CharacterID: tt.character}, match.Vector2{},
-				r.getActualStats(playerID, tt.character), false)
+			stats, weapon := r.getActualStats(playerID, tt.character)
+			bp := newBattlePlayer(RoomPlayer{PlayerID: playerID, CharacterID: tt.character}, match.Vector2{}, stats, weapon, false)
 
 			if api.MaxHP != bp.MaxHP || api.Defense != bp.Defense || api.DamageBonus != bp.DamageBonus ||
 				api.MoveEnergy != bp.MoveEnergy || api.SkillPowerBonus != bp.SkillPowerBonus ||
@@ -179,7 +179,7 @@ func TestAPICharacterStatsMatchBattle(t *testing.T) {
 		t.Fatalf("baseStats %+v", resp.BaseStats)
 	}
 	for id := range gamedata.Data.Characters {
-		bp := newBattlePlayer(RoomPlayer{CharacterID: id}, match.Vector2{}, baseStats(id), true)
+		bp := newBattlePlayer(RoomPlayer{CharacterID: id}, match.Vector2{}, baseStats(id), "", true)
 		got := resp.BaseStats[id]
 		if got.MaxHP != bp.MaxHP || got.Defense != bp.Defense || got.MoveEnergy != bp.MoveEnergy || got.DamageBonus != 0 ||
 			got.WeaponDamage != gamedata.Data.Weapons[gamedata.Data.Characters[id].WeaponID].Damage {

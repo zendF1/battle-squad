@@ -2,6 +2,8 @@ package room
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"battle-squad/internal/api/character"
@@ -43,7 +45,7 @@ func TestAddStatPointsDefaultsMissingMultipliers(t *testing.T) {
 func TestNewBattlePlayerCarriesStats(t *testing.T) {
 	p := RoomPlayer{PlayerID: "p1", DisplayName: "P", TeamID: 2, CharacterID: "tanko", Items: []string{"medkit"}}
 	s := battleStats{HP: 180, Defense: 60, DamageBonus: 10, MoveEnergyBonus: 9, CritChance: 2, SkillPowerBonus: 15, TerrainDamageBonus: 6}
-	bp := newBattlePlayer(p, match.Vector2{X: 5, Y: 6}, s, false)
+	bp := newBattlePlayer(p, match.Vector2{X: 5, Y: 6}, s, "tanko_weapon_lv30", false)
 
 	if bp.HP != 180 || bp.MaxHP != 180 || bp.Defense != 60 || bp.DamageBonus != 10 ||
 		bp.MoveEnergy != 109 || bp.MoveEnergyBonus != 9 || bp.CritChance != 2 ||
@@ -53,6 +55,16 @@ func TestNewBattlePlayerCarriesStats(t *testing.T) {
 	if bp.PlayerID != "p1" || bp.TeamID != 2 || bp.CharacterID != "tanko" || bp.Position != (match.Vector2{X: 5, Y: 6}) ||
 		len(bp.Items) != 1 || !bp.IsAlive || bp.IsBot || bp.StatusEffects == nil {
 		t.Fatalf("player fields not carried: %+v", bp)
+	}
+	if bp.WeaponItemID != "tanko_weapon_lv30" {
+		t.Fatalf("weapon not carried: %q", bp.WeaponItemID)
+	}
+	raw, err := json.Marshal(bp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"weaponItemId":"tanko_weapon_lv30"`) {
+		t.Fatalf("weaponItemId not serialised: %s", raw)
 	}
 }
 
@@ -76,14 +88,51 @@ func TestGetActualStatsAppliesAllStatPoints(t *testing.T) {
 	r := &Room{db: db}
 
 	// migrations/006 seed: hp 2, damage 5, mobility 1, defense 1, skill_power 1, terrain_damage 1
-	got := r.getActualStats("p1", "tanko")
+	got, weapon := r.getActualStats("p1", "tanko")
 	want := battleStats{HP: 1952, Defense: 84, DamageBonus: 10, MoveEnergyBonus: 3, SkillPowerBonus: 5, TerrainDamageBonus: 6}
 	if got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
+	if weapon != "" {
+		t.Fatalf("no weapon equipped, got %q", weapon)
+	}
 
 	// A character the player does not own keeps its base stats
-	if got := r.getActualStats("p1", "spark"); got != baseStats("spark") {
-		t.Fatalf("unowned character got %+v", got)
+	if got, weapon := r.getActualStats("p1", "spark"); got != baseStats("spark") || weapon != "" {
+		t.Fatalf("unowned character got %+v, %q", got, weapon)
+	}
+}
+
+// The weapon equipped on the character comes back with its stats (the same
+// query); other slots and other characters' weapons do not count.
+func TestGetActualStatsReturnsEquippedWeapon(t *testing.T) {
+	db := dbtest.NewSchema(t, 0,
+		"001_init_schema.up.sql", "004_admin_config_tables.up.sql", "006_character_progression.up.sql",
+		"010_equipment_system.up.sql", "011_equipment_slot_unique.up.sql")
+	ctx := context.Background()
+	dbtest.CreatePlayer(t, db, "p1", 0, 0)
+	if _, err := db.Pool.Exec(ctx, `
+		INSERT INTO player_characters (player_id, character_id) VALUES ('p1', 'tanko'), ('p1', 'rookie');
+		INSERT INTO config_equipment_items (item_id, name, slot, category, stat_damage, stat_hp) VALUES
+			('tanko_weapon_lv30', 'Mithril Cannon', 'weapon', 'normal', 25, 0),
+			('rookie_weapon_lv10', 'Iron Bazooka', 'weapon', 'normal', 8, 0),
+			('normal_helmet_lv10', 'Iron Cap', 'helmet', 'normal', 0, 20);
+		INSERT INTO player_equipment (player_id, item_id, slot, category, is_equipped, equipped_on) VALUES
+			('p1', 'normal_helmet_lv10', 'helmet', 'normal', TRUE, 'tanko'),
+			('p1', 'tanko_weapon_lv30', 'weapon', 'normal', TRUE, 'tanko'),
+			('p1', 'rookie_weapon_lv10', 'weapon', 'normal', FALSE, NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	r := &Room{db: db}
+
+	s, weapon := r.getActualStats("p1", "tanko")
+	if weapon != "tanko_weapon_lv30" {
+		t.Fatalf("tanko weapon %q, want tanko_weapon_lv30", weapon)
+	}
+	if s.DamageBonus == 0 || s.HP <= baseStats("tanko").HP {
+		t.Fatalf("equipment stats not applied: %+v", s)
+	}
+	if _, weapon := r.getActualStats("p1", "rookie"); weapon != "" {
+		t.Fatalf("rookie wears no weapon (one is owned, not equipped), got %q", weapon)
 	}
 }

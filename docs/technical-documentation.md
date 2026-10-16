@@ -489,6 +489,8 @@ Client message → CompositeWSHandler
 
 `duration` là lúc animation cuối cùng kết thúc; server kết thúc lượt sau `duration + 1.2s`.
 
+**Player trong `players`** (`BattlePlayerState`, cùng shape trong `MatchStarted`, `MatchStateSync`, `ItemUsed`): `{playerId, displayName, teamId, characterId, weaponItemId, hp, maxHp, defense, position{x,y}, moveEnergy, items[], statusEffects[], isAlive, isBot, damageBonus, critChance, moveEnergyBonus, skillPowerBonus, terrainDamageBonus, skillEnergy, damageDealt, killCount, shotsFired, shotsHit}`. `weaponItemId` là `item_id` của vũ khí nhân vật đang mặc lúc vào trận (VD `rookie_weapon_lv30`, `crafted_weapon_gold`, `normal_weapon_lv10`), `""` khi không mặc vũ khí và với bot. Room đọc nó cùng câu query equipment khi tính chỉ số (`battlestats.LoadLoadouts`), không tốn thêm gì mỗi phát bắn. Chỉ dùng để client vẽ súng đang cầm; không ảnh hưởng gameplay.
+
 ---
 
 ## 7. Match Engine
