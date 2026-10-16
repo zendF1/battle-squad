@@ -257,12 +257,12 @@ func botWeapon(bot *BattlePlayerState) (gamedata.WeaponConfig, bool) {
 }
 
 // bestShot searches a coarse angle/power grid, then refines the best few
-// candidates at 1° / 1 power resolution.
-func (b *BotBrain) bestShot(m *Match, bot *BattlePlayerState, origin Vector2, weapon gamedata.WeaponConfig) shotPlan {
+// candidates at 1° / 1 power resolution, for the bot standing at feet.
+func (b *BotBrain) bestShot(m *Match, bot *BattlePlayerState, feet Vector2, weapon gamedata.WeaponConfig) shotPlan {
 	var top []shotPlan // best first, at most botRefineTop
 	for angle := botMinAngle; angle <= botMaxAngle; angle += botCoarseAngleStep {
 		for power := botMinPower; power <= maxShotPower; power += botCoarsePowerStep {
-			top = insertTop(top, b.evalShot(m, bot, origin, angle, power, weapon))
+			top = insertTop(top, b.evalShot(m, bot, feet, angle, power, weapon))
 		}
 	}
 
@@ -277,7 +277,7 @@ func (b *BotBrain) bestShot(m *Match, bot *BattlePlayerState, origin Vector2, we
 				if angle < botMinAngle || angle > botMaxAngle || power < botMinPower || power > maxShotPower {
 					continue
 				}
-				if s := b.evalShot(m, bot, origin, angle, power, weapon); s.betterThan(best) {
+				if s := b.evalShot(m, bot, feet, angle, power, weapon); s.betterThan(best) {
 					best = s
 				}
 			}
@@ -306,9 +306,10 @@ func insertTop(top []shotPlan, s shotPlan) []shotPlan {
 	return top
 }
 
-// evalShot simulates one shot exactly as processShoot would and scores where it explodes.
-func (b *BotBrain) evalShot(m *Match, bot *BattlePlayerState, origin Vector2, angle, power float64, weapon gamedata.WeaponConfig) shotPlan {
-	r := SimulateProjectile(bot.PlayerID, bot.TeamID, origin, angle, power, weapon,
+// evalShot simulates one shot exactly as processShoot would for the bot standing at feet
+// (the shot starts at the body centre) and scores where it explodes.
+func (b *BotBrain) evalShot(m *Match, bot *BattlePlayerState, feet Vector2, angle, power float64, weapon gamedata.WeaponConfig) shotPlan {
+	r := SimulateProjectile(bot.PlayerID, bot.TeamID, shotOriginAt(m.Terrain, feet), angle, power, weapon,
 		m.State.Wind, m.Terrain, m.State.Players, drillPierce(bot))
 	if r.ExplosionPoint == nil {
 		return shotPlan{}
@@ -326,7 +327,7 @@ func (b *BotBrain) evalShot(m *Match, bot *BattlePlayerState, origin Vector2, an
 		}
 		pos := p.Position
 		if p.PlayerID == bot.PlayerID {
-			pos = origin
+			pos = feet
 		}
 		dist := math.Hypot(pos.X-ep.X, pos.Y-ep.Y)
 		if p.TeamID == bot.TeamID {

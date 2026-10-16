@@ -722,7 +722,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 	// ── End item mode ───────────────────────────────────────────────────────
 
 	// Determine projectile origin, angle, and power — may be overridden by air_strike
-	shootOrigin := player.Position
+	shootOrigin := shotOrigin(m.Terrain, player)
 	shootAngle := action.Angle
 	shootPower := action.Power
 
@@ -863,7 +863,7 @@ func (m *Match) shootSkill(ctx context.Context, player *BattlePlayerState, actio
 		r := SimulateProjectile(
 			player.PlayerID,
 			player.TeamID,
-			player.Position,
+			shotOrigin(m.Terrain, player),
 			s.angle,
 			action.Power,
 			weaponConfig,
@@ -958,7 +958,7 @@ func (m *Match) shootTeleport(ctx context.Context, player *BattlePlayerState, ac
 	result := SimulateProjectile(
 		player.PlayerID,
 		player.TeamID,
-		player.Position,
+		shotOrigin(m.Terrain, player),
 		action.Angle,
 		action.Power,
 		weaponConfig,
@@ -1010,7 +1010,7 @@ func (m *Match) airStrikeX(player *BattlePlayerState, action ShootAction, weapon
 	if action.TargetX != nil && isFinite(*action.TargetX) {
 		x = *action.TargetX
 	} else {
-		aimed := SimulateProjectile(player.PlayerID, player.TeamID, player.Position, action.Angle, action.Power,
+		aimed := SimulateProjectile(player.PlayerID, player.TeamID, shotOrigin(m.Terrain, player), action.Angle, action.Power,
 			weaponConfig, m.State.Wind, m.Terrain, m.State.Players, 0)
 		if aimed.ExplosionPoint != nil {
 			x = aimed.ExplosionPoint.X

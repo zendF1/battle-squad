@@ -556,6 +556,14 @@ SimulateProjectile(startPos, angle, power, wind, weaponConfig):
     Record path mỗi 0.05s cho client animation
 ```
 
+**Shot origin (client contract):** mọi phát bắn (weapon, skill, teleport, và phát ngắm thử để chọn cột air strike) bắt đầu từ tâm thân nhân vật, không phải chân:
+
+```
+shot origin = position − (0, 20)        // ShotOriginLift = PlayerHeight / 2 = 20
+```
+
+`position` là chân (pixel solid đầu tiên dưới chân). Fallback khi có trần thấp: quét lên từ `position.y − 1` tới `position.y − 20` theo cột `position.x`, dừng trước pixel `IsSolid` đầu tiên; origin là pixel free cao nhất đã quét (nếu `position.y − 1` đã solid thì origin = `position`). Ngoài map theo X hoặc trên đỉnh map (y < 0) tính là free. Ngoại lệ: air strike bắn từ `(targetX, 0)`. Va chạm player đo tới cùng điểm tâm thân `position − (0, 20)` (hitRadius 24). Bot dùng cùng origin (`shotOriginAt`). Aim preview của Godot client phải dùng đúng origin này; parity fixture `tests/fixtures/terrain_parity.json` (sinh bởi `TestExportClientFixture`) có `feetX/feetY` (position) và `x/y` (origin) cho mỗi shot, gồm vài case origin bị hạ do trần thấp hoặc chân nằm trong terrain.
+
 ### Damage Calculation
 
 ```

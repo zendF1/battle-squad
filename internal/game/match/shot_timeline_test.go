@@ -131,6 +131,8 @@ func TestFallEventsMatchLandingTime(t *testing.T) {
 	shooter := m.State.Players[cur]
 	groundPlayers(m, clients)
 	start := shooter.Position
+	// Calm wind: the shot starts at the body centre, so its longer flight would drift off the crater.
+	m.State.Wind = WindState{}
 
 	// Blow the ground out from under the shooter so they fall into the crater.
 	send(m, clients[cur], "Shoot", ShootAction{Angle: 90, Power: 10, ActionMode: "weapon"})

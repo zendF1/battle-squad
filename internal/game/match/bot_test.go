@@ -65,7 +65,7 @@ func newBotMatch(t *testing.T, botX, enemyX float64, wall *[2]int) (*Match, *Bat
 func assertShotLands(t *testing.T, m *Match, bot, target *BattlePlayerState, act ShootAction) {
 	t.Helper()
 	weapon := gamedata.Data.Weapons["w1"]
-	r := SimulateProjectile(bot.PlayerID, bot.TeamID, bot.Position, act.Angle, act.Power, weapon,
+	r := SimulateProjectile(bot.PlayerID, bot.TeamID, shotOrigin(m.Terrain, bot), act.Angle, act.Power, weapon,
 		m.State.Wind, m.Terrain, m.State.Players, 0)
 	if r.ExplosionPoint == nil {
 		t.Fatalf("shot %.0f°/%.0f never exploded", act.Angle, act.Power)

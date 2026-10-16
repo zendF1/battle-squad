@@ -33,7 +33,11 @@ type fixtureWalk struct {
 
 // fixtureShot is SimulateProjectile against terrain only. The initial velocity is recorded,
 // not the angle, so the client parity test avoids Go-vs-C differences in cos/sin.
+// X, Y is the shot origin: shotOriginAt(FeetX, FeetY), the shooter's body centre
+// (feet − (0, ShotOriginLift), or lower under a low ceiling).
 type fixtureShot struct {
+	FeetX     float64 `json:"feetX"`
+	FeetY     float64 `json:"feetY"`
 	X         float64 `json:"x"`
 	Y         float64 `json:"y"`
 	VX        float64 `json:"vx"`
@@ -143,16 +147,18 @@ func TestExportClientFixture(t *testing.T) {
 	_, _, windScale, _, _, _ := getPhysics()
 	weapon := gamedata.WeaponConfig{ExplosionRadius: 20, ProjectileWeight: 1, WindInfluence: 1}
 	var shots []fixtureShot
-	for len(shots) < 60 {
-		w := walks[len(shots)%len(walks)]
-		angle := rng.Float64() * 180
-		power := 10 + rng.Float64()*90
-		wind := WindState{Direction: rng.Intn(3) - 1, Power: rng.Float64() * 4}
-		r := SimulateProjectile("shooter", 1, Vector2{X: w.StartX, Y: w.StartY}, angle, power, weapon, wind,
+	loweredOrigins := 0 // shots whose origin sits below the body centre (low ceiling or embedded feet)
+	addShot := func(feet Vector2, angle, power float64, wind WindState) {
+		origin := shotOriginAt(terrain, feet)
+		if origin.Y != feet.Y-ShotOriginLift {
+			loweredOrigins++
+		}
+		r := SimulateProjectile("shooter", 1, origin, angle, power, weapon, wind,
 			terrain, map[string]*BattlePlayerState{}, 0)
 		rad := angle * math.Pi / 180.0
 		shot := fixtureShot{
-			X: w.StartX, Y: w.StartY,
+			FeetX: feet.X, FeetY: feet.Y,
+			X: origin.X, Y: origin.Y,
 			VX: power * 6.0 * math.Cos(rad), VY: -power * 6.0 * math.Sin(rad),
 			WindForce: float64(wind.Direction) * wind.Power * windScale * weapon.WindInfluence,
 		}
@@ -160,6 +166,29 @@ func TestExportClientFixture(t *testing.T) {
 			shot.Hit, shot.HitX, shot.HitY = true, r.ExplosionPoint.X, r.ExplosionPoint.Y
 		}
 		shots = append(shots, shot)
+	}
+	for len(shots) < 60 {
+		w := walks[len(shots)%len(walks)]
+		angle := rng.Float64() * 180
+		power := 10 + rng.Float64()*90
+		wind := WindState{Direction: rng.Intn(3) - 1, Power: rng.Float64() * 4}
+		addShot(Vector2{X: w.StartX, Y: w.StartY}, angle, power, wind)
+	}
+	// Lowered origins (no rng, so the move sequences below are unchanged): feet 12 px under a
+	// terrain overhang, where the origin is the free pixel just below it, and feet embedded in
+	// the ground, where the origin is the feet.
+	for x, lowCeilings := 0, 0; x < terrain.Width && lowCeilings < 3; x += 7 {
+		for y := 1; y < terrain.Height-13; y++ {
+			if terrain.IsSolid(float64(x), float64(y-1)) && !terrain.IsSolid(float64(x), float64(y)) &&
+				!terrain.IsSolid(float64(x), float64(y+12)) {
+				addShot(Vector2{X: float64(x), Y: float64(y + 12)}, 30+float64(lowCeilings)*60, 40, WindState{})
+				lowCeilings++
+				break
+			}
+		}
+	}
+	for _, x := range []float64{150, 450} {
+		addShot(Vector2{X: x, Y: terrain.GetLandingY(x, 0) + 8}, 60, 40, WindState{})
 	}
 
 	// Move sequences through the real processMove, with direction changes and energy limits.
@@ -198,6 +227,6 @@ func TestExportClientFixture(t *testing.T) {
 	if err := os.WriteFile(out, data, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("wrote %s (%dx%d, %d ops, %d landings, %d walks, %d shots, %d move sequences)",
-		out, terrain.Width, terrain.Height, len(ops), len(landings), len(walks), len(shots), len(moves))
+	t.Logf("wrote %s (%dx%d, %d ops, %d landings, %d walks, %d shots (%d lowered origins), %d move sequences)",
+		out, terrain.Width, terrain.Height, len(ops), len(landings), len(walks), len(shots), loweredOrigins, len(moves))
 }

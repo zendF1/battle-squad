@@ -25,6 +25,31 @@ func getPhysics() (timeStep, gravity, windScale, hitRadius, recordStep, maxFligh
 	return 0.02, 200.0, 30.0, 24.0, 0.05, 6.0
 }
 
+// ShotOriginLift is how far above the feet a shot starts: the body centre, the same point
+// projectile hits are measured against (PlayerHeight / 2).
+const ShotOriginLift = PlayerHeight / 2
+
+// shotOriginAt returns where a shot fired by a player standing at feet (the solid pixel under
+// the feet) starts: the body centre feet − (0, ShotOriginLift). When terrain sits in that
+// column below the body centre (a low ceiling), it falls back to the highest free point above
+// the feet: pixels feet.Y−1, feet.Y−2, … are scanned upwards and the scan stops before the
+// first solid one. If feet.Y−1 is already solid the origin is feet itself.
+func shotOriginAt(t *Terrain, feet Vector2) Vector2 {
+	lift := 0
+	for k := 1; k <= ShotOriginLift; k++ {
+		if t != nil && t.IsSolid(feet.X, feet.Y-float64(k)) {
+			break
+		}
+		lift = k
+	}
+	return Vector2{X: feet.X, Y: feet.Y - float64(lift)}
+}
+
+// shotOrigin is shotOriginAt for the player's current position.
+func shotOrigin(t *Terrain, p *BattlePlayerState) Vector2 {
+	return shotOriginAt(t, p.Position)
+}
+
 func SimulateProjectile(
 	ownerID string,
 	ownerTeamID int,
@@ -171,7 +196,7 @@ func checkSegmentCollisions(
 				continue // skip all teammates (including self)
 			}
 			ddx := px - p.Position.X
-			ddy := py - (p.Position.Y - 20) // center of player body (sprite is 48px tall, anchor bottom)
+			ddy := py - (p.Position.Y - ShotOriginLift) // centre of the player body
 			d := math.Sqrt(ddx*ddx + ddy*ddy)
 			if d <= hitRadius {
 				return true, Vector2{X: px, Y: py}, p.PlayerID
