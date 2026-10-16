@@ -2,6 +2,7 @@ package match
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"testing"
 	"time"
@@ -226,9 +227,15 @@ func TestBotShootsAfterMedkit(t *testing.T) {
 
 	select {
 	case ev := <-m.Events:
-		m.handleEvent(ev)
+		m.handleEvent(ev) // aims
 	case <-time.After(botFollowUpDelay + time.Second):
 		t.Fatal("bot did not schedule a follow-up action after medkit")
+	}
+	select {
+	case ev := <-m.Events:
+		m.handleEvent(ev) // fires
+	case <-time.After(botAimMaxDelay + time.Second):
+		t.Fatal("bot did not shoot after aiming")
 	}
 	if !m.resolving || bot.ShotsFired != 1 {
 		t.Fatalf("bot did not shoot after medkit: resolving=%v shots=%d", m.resolving, bot.ShotsFired)
@@ -327,20 +334,205 @@ func TestPredictMoveMatchesProcessMoveOnIce(t *testing.T) {
 	}
 }
 
-// botTurnEvents runs one bot step with a client watching the match and
-// returns the events it was sent.
-func botTurnEvents(t *testing.T, m *Match, bot *BattlePlayerState) []string {
-	t.Helper()
+// watchMatch connects a client for p2 and returns it.
+func watchMatch(m *Match) *ws.Client {
 	c := &ws.Client{PlayerID: "p2", Send: make(chan ws.Message, 256)}
 	m.Clients["p2"] = c
-	m.botStep(context.Background(), botTurnState{}, 0)
-	var events []string
+	return c
+}
+
+// drainSent returns the messages sent to c so far.
+func drainSent(c *ws.Client) []ws.Message {
+	var msgs []ws.Message
 	for {
 		select {
 		case msg := <-c.Send:
-			events = append(events, msg.Event)
+			msgs = append(msgs, msg)
 		default:
-			return events
+			return msgs
+		}
+	}
+}
+
+// botTurnEvents runs one bot step with a client watching the match, runs the
+// delayed shot after an aim, and returns the events the client was sent.
+func botTurnEvents(t *testing.T, m *Match, bot *BattlePlayerState) []string {
+	t.Helper()
+	c := watchMatch(m)
+	m.botStep(context.Background(), botTurnState{}, 0)
+	var events []string
+	for _, msg := range drainSent(c) {
+		events = append(events, msg.Event)
+	}
+	if len(events) > 0 && events[len(events)-1] == "PlayerAiming" {
+		select {
+		case ev := <-m.Events:
+			m.handleEvent(ev)
+		case <-time.After(botAimMaxDelay + time.Second):
+			t.Fatal("bot aimed but never fired")
+		}
+		for _, msg := range drainSent(c) {
+			events = append(events, msg.Event)
+		}
+	}
+	return events
+}
+
+// aimingOf decodes the single PlayerAiming in msgs.
+func aimingOf(t *testing.T, msgs []ws.Message) PlayerAiming {
+	t.Helper()
+	var found []PlayerAiming
+	for _, msg := range msgs {
+		if msg.Event == "ShotResolved" {
+			t.Fatalf("shot fired with the aim, before the aim delay")
+		}
+		if msg.Event == "PlayerAiming" {
+			var a PlayerAiming
+			if err := json.Unmarshal(msg.Data, &a); err != nil {
+				t.Fatal(err)
+			}
+			found = append(found, a)
+		}
+	}
+	if len(found) != 1 {
+		t.Fatalf("want one PlayerAiming, got %d in %d messages", len(found), len(msgs))
+	}
+	return found[0]
+}
+
+func TestBotAimsBeforeShooting(t *testing.T) {
+	m, bot, _ := newBotMatch(t, 400, 1000, nil)
+	c := watchMatch(m)
+
+	start := time.Now()
+	m.botStep(context.Background(), botTurnState{}, 0)
+	aim := aimingOf(t, drainSent(c))
+	if aim.PlayerID != bot.PlayerID {
+		t.Fatalf("aiming playerId=%q, want %q", aim.PlayerID, bot.PlayerID)
+	}
+	if d := time.Duration(aim.DurationMs) * time.Millisecond; d < botAimMinDelay || d > botAimMaxDelay {
+		t.Fatalf("durationMs=%d outside [%v, %v]", aim.DurationMs, botAimMinDelay, botAimMaxDelay)
+	}
+	if bot.ShotsFired != 0 || m.resolving {
+		t.Fatalf("bot fired while aiming: shots=%d resolving=%v", bot.ShotsFired, m.resolving)
+	}
+
+	var ev matchEvent
+	select {
+	case ev = <-m.Events:
+	case <-time.After(botAimMaxDelay + time.Second):
+		t.Fatal("aimed shot never scheduled")
+	}
+	// runOnTurnAfter timers are not early; allow a little scheduling slack
+	if waited := time.Since(start); waited < time.Duration(aim.DurationMs)*time.Millisecond-50*time.Millisecond {
+		t.Fatalf("shot arrived after %v, before durationMs=%d", waited, aim.DurationMs)
+	}
+	m.handleEvent(ev)
+	if bot.ShotsFired != 1 || !m.resolving {
+		t.Fatalf("bot did not fire after aiming: shots=%d resolving=%v", bot.ShotsFired, m.resolving)
+	}
+
+	var shot ShotResolved
+	for _, msg := range drainSent(c) {
+		if msg.Event == "ShotResolved" {
+			if err := json.Unmarshal(msg.Data, &shot); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if shot.ShooterID != bot.PlayerID || len(shot.Projectiles) == 0 {
+		t.Fatalf("no ShotResolved from the bot after aiming: %+v", shot)
+	}
+}
+
+// loggedEvents drains the match event log (not started in unit tests).
+func loggedEvents(m *Match) []eventLogEntry {
+	var entries []eventLogEntry
+	for {
+		select {
+		case e := <-m.el.events:
+			entries = append(entries, e)
+		default:
+			return entries
+		}
+	}
+}
+
+func TestBotAimAngleIsTheFiredAngle(t *testing.T) {
+	// A miss roll fires a nearby angle, not the best one: the aim must show it
+	for _, chance := range []float64{100, 0} {
+		m, bot, _ := newBotMatch(t, 400, 1000, nil)
+		m.BotTier.HitChance = chance
+		c := watchMatch(m)
+
+		m.botStep(context.Background(), botTurnState{}, 0)
+		aim := aimingOf(t, drainSent(c))
+		m.handleEvent(<-m.Events)
+		if bot.ShotsFired != 1 {
+			t.Fatalf("hitChance=%v: bot did not fire", chance)
+		}
+
+		var logged []string
+		var fired *ShootAction
+		for _, e := range loggedEvents(m) {
+			logged = append(logged, e.eventType)
+			if e.eventType == "Shoot" {
+				fired = &ShootAction{}
+				if err := json.Unmarshal(e.data, fired); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		if len(logged) < 2 || logged[0] != "PlayerAiming" || logged[1] != "Shoot" {
+			t.Fatalf("hitChance=%v: event log %v, want PlayerAiming then Shoot", chance, logged)
+		}
+		if fired.Angle != aim.Angle {
+			t.Fatalf("hitChance=%v: aimed %.2f°, fired %.2f°", chance, aim.Angle, fired.Angle)
+		}
+	}
+}
+
+func TestTurnChangeCancelsAimedShot(t *testing.T) {
+	m, bot, enemy := newBotMatch(t, 400, 1000, nil)
+	c := watchMatch(m)
+
+	m.botStep(context.Background(), botTurnState{}, 0)
+	aimingOf(t, drainSent(c))
+	m.endTurn(context.Background()) // e.g. the turn timer ran out while aiming
+
+	select {
+	case ev := <-m.Events:
+		m.handleEvent(ev)
+	case <-time.After(botAimMaxDelay + time.Second):
+		t.Fatal("aimed shot callback never ran")
+	}
+	if bot.ShotsFired != 0 || m.resolving {
+		t.Fatalf("aimed shot fired after the turn changed: shots=%d resolving=%v", bot.ShotsFired, m.resolving)
+	}
+	if m.State.CurrentPlayerID != enemy.PlayerID {
+		t.Fatalf("stale aimed shot changed the turn: current=%s", m.State.CurrentPlayerID)
+	}
+}
+
+func TestBotDeadDuringAimDoesNotShoot(t *testing.T) {
+	m, bot, _ := newBotMatch(t, 400, 1000, nil)
+	watchMatch(m)
+
+	m.botStep(context.Background(), botTurnState{}, 0)
+	bot.IsAlive = false
+	m.handleEvent(<-m.Events)
+	if bot.ShotsFired != 0 || m.resolving {
+		t.Fatalf("dead bot fired its aimed shot: shots=%d resolving=%v", bot.ShotsFired, m.resolving)
+	}
+}
+
+func TestRandomDelayRange(t *testing.T) {
+	for i := 0; i < 1000; i++ {
+		if d := randomDelay(botAimMinDelay, botAimMaxDelay); d < botAimMinDelay || d > botAimMaxDelay {
+			t.Fatalf("aim delay %v outside [%v, %v]", d, botAimMinDelay, botAimMaxDelay)
+		}
+		if d := randomDelay(botTurnStartMinDelay, botTurnStartMaxDelay); d < botTurnStartMinDelay || d > botTurnStartMaxDelay {
+			t.Fatalf("turn start delay %v outside [%v, %v]", d, botTurnStartMinDelay, botTurnStartMaxDelay)
 		}
 	}
 }

@@ -482,8 +482,8 @@ func (m *Match) startTurn(ctx context.Context) {
 			Str("matchId", m.State.MatchID).
 			Str("botId", player.PlayerID).
 			Msg("[RANKED-DEBUG] startTurn: scheduling bot action")
-		// Random delay 2-6s so bots feel natural, not instant
-		botDelay := time.Duration(2000+rand.Intn(4000)) * time.Millisecond
+		// Short idle before acting; the bot then spends its "thinking" time visibly aiming
+		botDelay := randomDelay(botTurnStartMinDelay, botTurnStartMaxDelay)
 		m.runOnTurnAfter(ctx, botDelay, func(ctx context.Context) {
 			m.botStep(ctx, botTurnState{}, 0)
 		})

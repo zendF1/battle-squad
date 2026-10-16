@@ -3,6 +3,7 @@ package match
 import (
 	"context"
 	crand "crypto/rand"
+	"encoding/json"
 	"math"
 	"math/big"
 	"math/rand"
@@ -10,6 +11,7 @@ import (
 
 	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/game/matchmaker"
+	"battle-squad/internal/game/ws"
 )
 
 // DefaultBotTier is used for matches that do not set a rank tier (casual rooms).
@@ -33,7 +35,20 @@ const (
 
 	botMaxSteps      = 3                       // medkit, move, shoot
 	botFollowUpDelay = 1500 * time.Millisecond // let clients animate a heal or move before the next action
+
+	// Idle time from TurnStarted to the bot's first action
+	botTurnStartMinDelay = 1000 * time.Millisecond
+	botTurnStartMaxDelay = 2500 * time.Millisecond
+
+	// How long the bot visibly aims (PlayerAiming) before the shot is fired
+	botAimMinDelay = 1200 * time.Millisecond
+	botAimMaxDelay = 2400 * time.Millisecond
 )
+
+// randomDelay returns a uniform duration in [min, max].
+func randomDelay(min, max time.Duration) time.Duration {
+	return min + time.Duration(rand.Int63n(int64(max-min)+1))
+}
 
 // botStep performs one bot action on the match loop. Medkits and moves do not
 // end the turn, so the bot schedules its next step after them.
@@ -60,12 +75,12 @@ func (m *Match) botStep(ctx context.Context, turn botTurnState, step int) {
 		m.processMove(ctx, nil, act)
 		turn.moved = true
 	case ShootAction:
-		m.el.Log("Shoot", bot.PlayerID, act)
-		seq := m.turnSeq
-		m.processShoot(ctx, nil, act)
-		if m.turnSeq == seq && !m.resolving && m.State.Status == "in_progress" {
-			m.endTurn(ctx) // shot was rejected; don't stall until the turn timer
-		}
+		// Aim visibly first; the shot follows unless the turn ends meanwhile
+		delay := randomDelay(botAimMinDelay, botAimMaxDelay)
+		m.broadcastAiming(bot.PlayerID, act.Angle, delay)
+		m.runOnTurnAfter(ctx, delay, func(ctx context.Context) {
+			m.botShoot(ctx, bot.PlayerID, act)
+		})
 		return
 	default:
 		m.el.Log("EndTurn", bot.PlayerID, nil)
@@ -76,6 +91,30 @@ func (m *Match) botStep(ctx context.Context, turn botTurnState, step int) {
 	m.runOnTurnAfter(ctx, botFollowUpDelay, func(ctx context.Context) {
 		m.botStep(ctx, turn, step+1)
 	})
+}
+
+// botShoot fires the shot the bot aimed with PlayerAiming. runOnTurnAfter
+// already dropped it if the match ended or the turn changed.
+func (m *Match) botShoot(ctx context.Context, botID string, act ShootAction) {
+	bot := m.State.Players[botID]
+	if m.State.CurrentPlayerID != botID || m.resolving || bot == nil || !bot.IsAlive {
+		return
+	}
+	m.el.Log("Shoot", botID, act)
+	seq := m.turnSeq
+	m.processShoot(ctx, nil, act)
+	if m.turnSeq == seq && !m.resolving && m.State.Status == "in_progress" {
+		m.endTurn(ctx) // shot was rejected; don't stall until the turn timer
+	}
+}
+
+// broadcastAiming tells clients a player is aiming at angle (the angle the shot
+// will be fired with) for duration before the shot. Power stays hidden.
+func (m *Match) broadcastAiming(playerID string, angle float64, duration time.Duration) {
+	ev := PlayerAiming{PlayerID: playerID, Angle: angle, DurationMs: int(duration.Milliseconds())}
+	payload, _ := json.Marshal(ev)
+	m.broadcast(ws.Message{Event: "PlayerAiming", Data: payload})
+	m.el.Log("PlayerAiming", playerID, ev)
 }
 
 // BotBrain picks bot actions. Shots are aimed by simulating candidate

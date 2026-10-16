@@ -336,7 +336,7 @@ Match Goroutine (single thread):
 startTurn() detects bot's turn
     │
     ▼
-runOnTurnAfter(2-6s random)          ◄── Feel natural; dropped if the turn changed
+runOnTurnAfter(1-2.5s random)        ◄── Feel natural; dropped if the turn changed
     │
     ▼
 botStep() on the match goroutine     ◄── No shared-state races
@@ -355,7 +355,10 @@ BotBrain.DecideAction(m, bot, turn)  ◄── Tier from Match.BotTier
     │
     └── Shoot:
         ├── crypto/rand roll 0-999 < HitChance×10 → best shot (hits)
-        └── otherwise → near miss: lands just outside the blast radius
+        ├── otherwise → near miss: lands just outside the blast radius
+        └── broadcast PlayerAiming {playerId, angle, durationMs}, then
+            runOnTurnAfter(1.2-2.4s) → botShoot → processShoot
+            (dropped if the turn changed; re-checks bot's turn, alive, not resolving)
 ```
 
 ---

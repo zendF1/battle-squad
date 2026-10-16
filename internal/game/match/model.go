@@ -138,6 +138,15 @@ type ShotResolved struct {
 	Duration    float64             `json:"duration"` // seconds until the last flight or event ends
 }
 
+// PlayerAiming is broadcast while a player aims, before its shot. Angle uses the
+// Shoot action convention and is the angle the shot will be fired with; the
+// ShotResolved follows about DurationMs later. Sent for bots only for now.
+type PlayerAiming struct {
+	PlayerID   string  `json:"playerId"`
+	Angle      float64 `json:"angle"`
+	DurationMs int     `json:"durationMs"`
+}
+
 type MatchHistoryRecord struct {
 	MatchID    string    `json:"matchId"`
 	PlayerID   string    `json:"playerId"`

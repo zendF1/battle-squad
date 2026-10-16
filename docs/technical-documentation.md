@@ -469,6 +469,7 @@ Client message → CompositeWSHandler
 | `TurnStarted` | `{currentPlayerId, turnIndex, wind, timeLeft}` | Lượt mới |
 | `TurnTimerTick` | `{timeLeft}` | Đếm ngược (mỗi 1s) |
 | `PlayerMoved` | `{playerId, position, moveEnergy, seq?}` | Player di chuyển; có `seq` khi trả lời `Move` có `seq` |
+| `PlayerAiming` | `{playerId, angle, durationMs}` | Player đang ngắm trước khi bắn. `angle` cùng quy ước với `Shoot.angle` và là đúng góc sẽ bắn (phát cố tình trượt thì là góc trượt); `ShotResolved` của player đó tới sau khoảng `durationMs`. Không gửi power. Hiện chỉ gửi cho bot; nếu lượt đổi (timeout) trong lúc ngắm thì không có phát bắn |
 | `ShotResolved` | `{shooterId, actionMode, skillId?, itemId?, skillEnergy, projectiles[], events[], duration}` | Toàn bộ kết quả một lượt bắn (weapon, skill, teleport) |
 | `ItemUsed` | `{playerId, itemId, players, wind}` | Item bị tiêu hao |
 | `PlayerDamaged` | `[{playerId, damage, hp, isAlive, type}]` | Damage ngoài phát bắn (lava đầu lượt) |
@@ -525,7 +526,11 @@ startTurn()
   3. Reset move energy = 100
   4. Update wind (random power + direction, trừ khi WindStopper active)
   5. Broadcast TurnStarted
-  6. Nếu bot → delay 1-2s → DecideAction → inject event
+  6. Nếu bot → delay 1–2.5s (botTurnStartMin/MaxDelay) → botStep → DecideAction
+     - Medkit / Move: xử lý ngay, botStep tiếp sau botFollowUpDelay 1.5s
+     - Shoot: broadcast PlayerAiming {playerId, angle, durationMs}, bắn sau 1.2–2.4s
+       (botAimMin/MaxDelay) qua runOnTurnAfter — bị huỷ nếu lượt đổi/trận kết thúc;
+       lúc bắn kiểm tra lại vẫn là lượt bot, bot còn sống, chưa resolving
 
 Player actions trong turn:
   - Move: tiêu MoveEnergy, update position, check fall damage
