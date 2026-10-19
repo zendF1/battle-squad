@@ -228,6 +228,7 @@ func main() {
 		r.Post("/player/equipment/unequip", equipmentHandler.UnequipItem)
 		r.Post("/player/equipment/upgrade", equipmentHandler.Upgrade)
 		r.Post("/player/equipment/dismantle", equipmentHandler.Dismantle)
+		r.Post("/player/equipment/sell", equipmentHandler.Sell)
 		r.Post("/player/equipment/socket", equipmentHandler.SocketGem)
 		r.Post("/player/equipment/unsocket", equipmentHandler.UnsocketGem)
 

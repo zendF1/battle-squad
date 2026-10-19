@@ -1,6 +1,10 @@
 package equipment
 
-import "sort"
+import (
+	"math"
+	"sort"
+	"strconv"
+)
 
 // logic.go contains all pure gameplay calculation functions.
 // These are extracted from service.go for testability without DB dependencies.
@@ -98,6 +102,41 @@ func CalculateDismantleRefund(totalPowerUsed int, powers map[int]int) map[int]in
 		}
 	}
 	return result
+}
+
+// DefaultSellRate is the share of the buy price paid back when selling a piece,
+// used when game_settings "equipment.sell_rate" is missing or invalid.
+const DefaultSellRate = 0.25
+
+// ParseSellRate reads the "equipment.sell_rate" setting: a float in (0, 1],
+// else DefaultSellRate.
+func ParseSellRate(raw string) float64 {
+	rate, err := strconv.ParseFloat(raw, 64)
+	if err != nil || math.IsNaN(rate) || rate <= 0 || rate > 1 {
+		return DefaultSellRate
+	}
+	return rate
+}
+
+// ItemPrice is what the shop charges for an item: priceCoin, else priceGem.
+// amount 0 means the item is free (crafted).
+func ItemPrice(cfg *EquipmentItemConfig) (currency string, amount int) {
+	if cfg.PriceCoin > 0 {
+		return "coin", cfg.PriceCoin
+	}
+	if cfg.PriceGem > 0 {
+		return "gem", cfg.PriceGem
+	}
+	return "", 0
+}
+
+// CalculateSellRefund is floor(price × rate). The epsilon keeps products that
+// are whole in decimal (100 × 0.29) from flooring one below.
+func CalculateSellRefund(price int, rate float64) int {
+	if price <= 0 || rate <= 0 {
+		return 0
+	}
+	return int(math.Floor(float64(price)*rate + 1e-9))
 }
 
 // CalculateMergeSuccessRate returns the merge success probability (0-100).

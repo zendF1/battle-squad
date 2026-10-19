@@ -250,12 +250,13 @@ Slot: `weapon`, `armor`, `helmet`, `pants`, `boots`, `gloves`. Mỗi món sở h
 
 | Method | Path | Handler | Mô tả |
 |--------|------|---------|-------|
-| GET | `/equipment/catalog` | GetCatalog | Toàn bộ catalog: `{items, upgradeRates, setBonuses, stones}` (items gồm cả `normal` và `crafted`, **cả item đã tắt** với `isActive: false` — món người chơi đã sở hữu vẫn cần tên/chỉ số; client lọc `isActive` cho shop). Client cache được, chỉ đổi khi admin sửa config |
+| GET | `/equipment/catalog` | GetCatalog | Toàn bộ catalog: `{items, upgradeRates, setBonuses, stones, sellRate}` (`sellRate`: tỉ lệ hoàn khi bán, xem `/player/equipment/sell`; items gồm cả `normal` và `crafted`, **cả item đã tắt** với `isActive: false` — món người chơi đã sở hữu vẫn cần tên/chỉ số; client lọc `isActive` cho shop). Client cache được, chỉ đổi khi admin sửa config |
 | GET | `/player/equipment` | GetEquipment | Trang bị đang có (mới nhất trước). Tên/chỉ số lấy từ catalog theo `itemId` |
 | POST | `/player/equipment/equip` | EquipItem | `{equipmentId, characterId}` → `{"success":true}`. Slot của nhân vật đã có món khác thì món cũ tự tháo. Món đang mặc (cho bất kỳ nhân vật nào) → 409 `EQUIP_ALREADY_EQUIPPED`: tháo trước rồi mặc lại |
 | POST | `/player/equipment/unequip` | UnequipItem | `{equipmentId}` → `{"success":true}`; món không đang mặc → 409 `EQUIP_NOT_EQUIPPED` |
 | POST | `/player/equipment/upgrade` | Upgrade | `{equipmentId, stones: [{stoneLevel, quantity}]}` → `{success, newLevel, percent, equipmentId}` |
-| POST | `/player/equipment/dismantle` | Dismantle | `{equipmentId}` → `{"success":true}`; hoàn 50% power đá đã dùng từ safe zone gần nhất. Món đang mặc → 409 `EQUIP_EQUIPPED` |
+| POST | `/player/equipment/dismantle` | Dismantle | `{equipmentId}` → `{"success":true}`; hoàn 50% power đá đã dùng từ safe zone gần nhất. Món đang mặc → 409 `EQUIP_EQUIPPED`. Món đã khoá (`isLocked`) vẫn tách được — client dùng làm "Vứt" |
+| POST | `/player/equipment/sell` | Sell | `{equipmentId}` → `{currency, amount, balance, stones: [{stoneLevel, quantity}]}`. Làm đúng như dismantle (tháo ngọc về kho, hoàn đá theo safe zone, xoá món) và cộng thêm `amount` = floor(giá mua × `sellRate`) của tiền mua món đó (`priceCoin` > 0 → coin, không thì gem); `balance` = số dư mới của tiền đó, `stones` = đá hoàn (rỗng nếu không). `sellRate` = game_settings `equipment.sell_rate` (migration 022, mặc định 0.25; thiếu/sai/ngoài (0, 1] → 0.25). Log `economy_transactions` source `sell_equipment`, `ref_id` = itemId. Lỗi (không đổi gì): món đã từng mặc (`isLocked`, gồm mọi món đang mặc) → 409 `EQUIP_LOCKED`; không sở hữu / đã bán → 403 `EQUIP_NOT_OWNED`; item không còn config, giá 0 (crafted) hoặc tiền hoàn làm tròn về 0 → 400 `EQUIP_NOT_SELLABLE` |
 | POST | `/player/equipment/socket` | SocketGem | `{equipmentId, slotIndex (1\|2), gemId}` |
 | POST | `/player/equipment/unsocket` | UnsocketGem | `{equipmentId, slotIndex}` |
 | GET | `/player/stones` · `/player/gems` · `/player/materials` | GetStones · GetGems · GetMaterials | `[{stoneLevel, quantity}]` · `[{gemId, gemType, gemLevel}]` · `[{materialId, quantity}]` (kèm `playerId`) |
@@ -285,7 +286,8 @@ Slot: `weapon`, `armor`, `helmet`, `pants`, `boots`, `gloves`. Mỗi món sở h
   ],
   "upgradeRates": [{"fromLevel": 0, "toLevel": 1, "upgradeCost": 1, "maxPercent": 80, "failResetTo": 0}],
   "setBonuses": [{"tier": "silver", "piecesRequired": 2, "bonusHpPct": 3, "bonusDmgPct": 0, "bonusDefPct": 0, "bonusCritPct": 0}],
-  "stones": [{"stoneLevel": 1, "power": 1, "priceCoin": 100, "priceGem": 0, "source": "coin_shop"}]
+  "stones": [{"stoneLevel": 1, "power": 1, "priceCoin": 100, "priceGem": 0, "source": "coin_shop"}],
+  "sellRate": 0.25
 }
 ```
 

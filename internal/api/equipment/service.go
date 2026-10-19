@@ -11,6 +11,7 @@ import (
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/model"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -47,6 +48,17 @@ func (s *Service) getMergeRatePerItem(ctx context.Context) float64 {
 		return 25.0
 	}
 	return rate
+}
+
+// getSellRate reads game_settings "equipment.sell_rate" (ParseSellRate).
+func (s *Service) getSellRate(ctx context.Context) float64 {
+	var val string
+	err := s.db.Pool.QueryRow(ctx,
+		`SELECT value FROM game_settings WHERE key = 'equipment.sell_rate'`).Scan(&val)
+	if err != nil {
+		return DefaultSellRate
+	}
+	return ParseSellRate(val)
 }
 
 // ---------------------------------------------------------------------------
@@ -111,7 +123,7 @@ func (s *Service) GetCatalog(ctx context.Context) (*Catalog, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &Catalog{Items: items, UpgradeRates: rates, SetBonuses: bonuses, Stones: stones}
+	c := &Catalog{Items: items, UpgradeRates: rates, SetBonuses: bonuses, Stones: stones, SellRate: s.getSellRate(ctx)}
 	if c.Items == nil {
 		c.Items = []EquipmentItemConfig{}
 	}
@@ -183,12 +195,7 @@ func (s *Service) BuyEquipment(ctx context.Context, playerID string, req BuyEqui
 		return "", model.ErrEquipmentNotForSale
 	}
 
-	currency, amount := "", 0
-	if cfg.PriceCoin > 0 {
-		currency, amount = "coin", cfg.PriceCoin
-	} else if cfg.PriceGem > 0 {
-		currency, amount = "gem", cfg.PriceGem
-	}
+	currency, amount := ItemPrice(cfg)
 	if amount > 0 {
 		if _, err := s.economyRepo.DebitTx(ctx, tx, playerID, currency, amount, "buy_equipment", req.ItemID, false); err != nil {
 			return "", err
@@ -584,60 +591,71 @@ func (s *Service) UpgradeEquipment(ctx context.Context, playerID string, req Upg
 }
 
 // ---------------------------------------------------------------------------
-// DismantleEquipment
+// DismantleEquipment / SellEquipment
 // ---------------------------------------------------------------------------
 
 // getSafezoneStart and CalculateDismantleRefund are in logic.go
 
-func (s *Service) DismantleEquipment(ctx context.Context, playerID string, req DismantleRequest) error {
-	// Refund uses the same power table as UpgradeEquipment. Loaded before the
-	// tx so we never hit the pool while holding a tx connection.
+// loadStoneConfigs returns config_stones (ascending level) and level → power,
+// the table UpgradeEquipment values stones with. Callers load it before their
+// tx so the pool is never hit while holding a tx connection.
+func (s *Service) loadStoneConfigs(ctx context.Context) ([]StoneConfig, map[int]int, error) {
 	stoneCfgs, err := s.repo.GetAllStoneConfigs(ctx)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	stonePowers := make(map[int]int, len(stoneCfgs))
 	for _, c := range stoneCfgs {
 		stonePowers[c.StoneLevel] = c.Power
 	}
+	return stoneCfgs, stonePowers, nil
+}
 
-	tx, err := s.db.Pool.Begin(ctx)
+// lockRemovableTx locks the player's piece so a concurrent dismantle, sell or
+// upgrade waits, then sees it gone. Not owned (or already removed) is
+// ErrEquipmentNotOwned; with rejectLocked a piece ever equipped (is_locked,
+// so also every worn piece) is ErrEquipmentLocked; equipped is
+// ErrEquipmentEquipped.
+func (s *Service) lockRemovableTx(ctx context.Context, tx pgx.Tx, playerID, equipmentID string, rejectLocked bool) (*PlayerEquipment, error) {
+	equip, err := s.repo.GetPlayerEquipmentForUpdateTx(ctx, tx, playerID, equipmentID)
 	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	// Lock the row so a concurrent dismantle/upgrade waits, then sees it gone
-	equip, err := s.repo.GetPlayerEquipmentForUpdateTx(ctx, tx, playerID, req.EquipmentID)
-	if err != nil {
-		return err
+		return nil, err
 	}
 	if equip == nil {
-		return model.ErrEquipmentNotOwned
+		return nil, model.ErrEquipmentNotOwned
+	}
+	if rejectLocked && equip.IsLocked {
+		return nil, model.ErrEquipmentLocked
 	}
 	if equip.IsEquipped {
-		return model.ErrEquipmentEquipped
+		return nil, model.ErrEquipmentEquipped
 	}
+	return equip, nil
+}
 
-	// Clear gem slots (gems remain in player_gems inventory, just unset the slot references)
+// removeLockedTx removes a piece locked by lockRemovableTx: unsets its gem
+// slots (the gems stay in player_gems), refunds stones for its upgrades and
+// deletes it. Returns the refunded stones in ascending level.
+func (s *Service) removeLockedTx(ctx context.Context, tx pgx.Tx, playerID string, equip *PlayerEquipment, stoneCfgs []StoneConfig, stonePowers map[int]int) ([]StoneInput, error) {
 	if equip.GemSlot1 != nil {
-		if err := s.repo.SetGemSlotTx(ctx, tx, req.EquipmentID, 1, nil); err != nil {
-			return err
+		if err := s.repo.SetGemSlotTx(ctx, tx, equip.EquipmentID, 1, nil); err != nil {
+			return nil, err
 		}
 	}
 	if equip.GemSlot2 != nil {
-		if err := s.repo.SetGemSlotTx(ctx, tx, req.EquipmentID, 2, nil); err != nil {
-			return err
+		if err := s.repo.SetGemSlotTx(ctx, tx, equip.EquipmentID, 2, nil); err != nil {
+			return nil, err
 		}
 	}
 
+	refunded := []StoneInput{}
 	// If upgrade level > 0, calculate and refund stones
 	if equip.UpgradeLevel > 0 {
 		safezoneStart := getSafezoneStart(equip.UpgradeLevel)
 
-		logs, err := s.repo.GetUpgradeLogForDismantleTx(ctx, tx, req.EquipmentID, safezoneStart)
+		logs, err := s.repo.GetUpgradeLogForDismantleTx(ctx, tx, equip.EquipmentID, safezoneStart)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		var sumPower int
@@ -654,20 +672,98 @@ func (s *Service) DismantleEquipment(ctx context.Context, playerID string, req D
 				continue
 			}
 			if err := s.repo.AddStonesTx(ctx, tx, playerID, c.StoneLevel, qty); err != nil {
-				return err
+				return nil, err
 			}
+			refunded = append(refunded, StoneInput{StoneLevel: c.StoneLevel, Quantity: qty})
 		}
 	}
 
-	deleted, err := s.repo.DeleteEquipmentTx(ctx, tx, req.EquipmentID)
+	deleted, err := s.repo.DeleteEquipmentTx(ctx, tx, equip.EquipmentID)
+	if err != nil {
+		return nil, err
+	}
+	if deleted != 1 {
+		return nil, model.ErrEquipmentNotOwned
+	}
+	return refunded, nil
+}
+
+func (s *Service) DismantleEquipment(ctx context.Context, playerID string, req DismantleRequest) error {
+	stoneCfgs, stonePowers, err := s.loadStoneConfigs(ctx)
 	if err != nil {
 		return err
 	}
-	if deleted != 1 {
-		return model.ErrEquipmentNotOwned
+
+	tx, err := s.db.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// Locked (once equipped) pieces may still be dismantled
+	equip, err := s.lockRemovableTx(ctx, tx, playerID, req.EquipmentID, false)
+	if err != nil {
+		return err
+	}
+	if _, err := s.removeLockedTx(ctx, tx, playerID, equip, stoneCfgs, stonePowers); err != nil {
+		return err
 	}
 
 	return tx.Commit(ctx)
+}
+
+// SellEquipment does everything DismantleEquipment does and also pays
+// floor(price × sell rate) of the item's buy currency (coin if priceCoin > 0,
+// else gem). A piece ever equipped (is_locked) is ErrEquipmentLocked
+// (docs/equipment-system-design.md §11). An item without config, with price 0 (crafted) or whose refund
+// rounds to 0 is ErrEquipmentNotSellable and nothing changes. The credit runs
+// before the stone refund so locks go equipment → profile → stones, the order
+// BuyStones (profile → stones) also uses.
+func (s *Service) SellEquipment(ctx context.Context, playerID string, req SellRequest) (*SellResult, error) {
+	sellRate := s.getSellRate(ctx)
+	stoneCfgs, stonePowers, err := s.loadStoneConfigs(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := s.db.Pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	equip, err := s.lockRemovableTx(ctx, tx, playerID, req.EquipmentID, true)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, err := s.repo.GetEquipmentItemConfigTx(ctx, tx, equip.ItemID)
+	if err != nil {
+		return nil, err
+	}
+	if cfg == nil {
+		return nil, model.ErrEquipmentNotSellable
+	}
+	currency, price := ItemPrice(cfg)
+	amount := CalculateSellRefund(price, sellRate)
+	if amount <= 0 {
+		return nil, model.ErrEquipmentNotSellable
+	}
+
+	balance, err := s.economyRepo.CreditTx(ctx, tx, playerID, currency, amount, "sell_equipment", equip.ItemID)
+	if err != nil {
+		return nil, err
+	}
+
+	stones, err := s.removeLockedTx(ctx, tx, playerID, equip, stoneCfgs, stonePowers)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return &SellResult{Currency: currency, Amount: amount, Balance: balance, Stones: stones}, nil
 }
 
 // ---------------------------------------------------------------------------

@@ -161,6 +161,10 @@ type DismantleRequest struct {
 	EquipmentID string `json:"equipmentId"`
 }
 
+type SellRequest struct {
+	EquipmentID string `json:"equipmentId"`
+}
+
 type SocketGemRequest struct {
 	EquipmentID string `json:"equipmentId"`
 	SlotIndex   int    `json:"slotIndex"`
@@ -213,12 +217,24 @@ type CraftRequest struct {
 // --- Response types ---
 
 // Catalog is the GET /equipment/catalog data: every active item (normal and
-// crafted), the upgrade rates, set bonuses and stones.
+// crafted), the upgrade rates, set bonuses, stones and the sell rate.
 type Catalog struct {
 	Items        []EquipmentItemConfig `json:"items"`
 	UpgradeRates []UpgradeRateConfig   `json:"upgradeRates"`
 	SetBonuses   []SetBonusConfig      `json:"setBonuses"`
 	Stones       []StoneConfig         `json:"stones"`
+	// SellRate: selling a piece pays floor(price × sellRate) of its currency.
+	SellRate float64 `json:"sellRate"`
+}
+
+// SellResult is the POST /player/equipment/sell data: the amount of currency
+// paid, the new balance of that currency and the stones refunded for upgrades
+// (ascending stoneLevel, empty when none).
+type SellResult struct {
+	Currency string       `json:"currency"`
+	Amount   int          `json:"amount"`
+	Balance  int          `json:"balance"`
+	Stones   []StoneInput `json:"stones"`
 }
 
 // BuyEquipmentResult is the POST /shop/equipment/buy data.

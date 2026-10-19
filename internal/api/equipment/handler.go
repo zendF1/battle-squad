@@ -168,7 +168,7 @@ func (h *Handler) UnequipItem(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------------------------------------------------------------------------
-// Upgrade / Dismantle
+// Upgrade / Dismantle / Sell
 // ---------------------------------------------------------------------------
 
 func (h *Handler) Upgrade(w http.ResponseWriter, r *http.Request) {
@@ -212,6 +212,29 @@ func (h *Handler) Dismantle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	model.WriteOK(w, nil)
+}
+
+// Sell is Dismantle plus floor(price × sellRate) of the item's currency.
+func (h *Handler) Sell(w http.ResponseWriter, r *http.Request) {
+	playerID := getPlayerID(r)
+	if playerID == "" {
+		model.WriteError(w, r, model.ErrUnauthorized)
+		return
+	}
+
+	var req SellRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		model.WriteError(w, r, model.ErrBadRequest)
+		return
+	}
+
+	result, err := h.service.SellEquipment(r.Context(), playerID, req)
+	if err != nil {
+		handleServiceError(w, r, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
 }
 
 // ---------------------------------------------------------------------------

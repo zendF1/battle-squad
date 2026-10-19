@@ -513,11 +513,16 @@ Cơ chế giống hệt ghép đá nâng cấp:
 - Equip vào nhân vật → **lock vĩnh viễn** → không thể bán lại
 - Tháo ra (unequip) → vẫn **lock** → không đổi lại unlock
 
+### Bán cho hệ thống (`POST /player/equipment/sell`)
+
+- Chỉ món **unlock** (chưa từng mặc); món lock → `EQUIP_LOCKED`. Tách (dismantle) vẫn được với món lock
+- Nhận floor(giá mua × `equipment.sell_rate`) (mặc định 0.25) bằng tiền đã mua (coin, hoặc gem nếu giá coin = 0); đồ crafted (giá 0) không bán được (`EQUIP_NOT_SELLABLE`)
+- Còn lại giống tách: ngọc về inventory, hoàn đá theo safe zone, xoá trang bị
+
 ### Bán lại (tương lai)
 
 - Hệ thống chợ giao dịch (marketplace) giữa các player: **chưa hỗ trợ**
 - Khi có marketplace: chỉ item **unlock** mới list bán được
-- Bán cho NPC/system: có thể hỗ trợ, nhận lại % coin
 
 ---
 
@@ -884,6 +889,7 @@ POST   /player/equipment/equip              -- Mặc trang bị {equipmentId, ch
 POST   /player/equipment/unequip            -- Tháo trang bị {equipmentId}
 POST   /player/equipment/upgrade            -- Nâng cấp {equipmentId, stoneId}
 POST   /player/equipment/dismantle          -- Tách trang bị {equipmentId}
+POST   /player/equipment/sell               -- Bán trang bị unlock {equipmentId} → {currency, amount, balance, stones}
 POST   /player/equipment/socket             -- Khảm ngọc {equipmentId, slotIndex, gemId}
 POST   /player/equipment/unsocket           -- Tháo ngọc {equipmentId, slotIndex}
 ```

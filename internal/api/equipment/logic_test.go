@@ -706,3 +706,64 @@ func TestDismantleRefund_SkipsNonPositivePower(t *testing.T) {
 		t.Errorf("refund = %v, want map[3:2]", refund)
 	}
 }
+
+// ===========================================================================
+// Sell — rate parsing, price and refund rounding
+// ===========================================================================
+
+func TestParseSellRate(t *testing.T) {
+	cases := map[string]float64{
+		"0.25": 0.25, "0.5": 0.5, "1": 1, " 0.3": DefaultSellRate, "0.3": 0.3, "1e-1": 0.1,
+		"": DefaultSellRate, "abc": DefaultSellRate, "0": DefaultSellRate, "-0.2": DefaultSellRate,
+		"1.01": DefaultSellRate, "NaN": DefaultSellRate, "Inf": DefaultSellRate, "+Inf": DefaultSellRate,
+	}
+	for raw, want := range cases {
+		if got := ParseSellRate(raw); got != want {
+			t.Errorf("ParseSellRate(%q) = %v, want %v", raw, got, want)
+		}
+	}
+}
+
+func TestCalculateSellRefund(t *testing.T) {
+	cases := []struct {
+		price int
+		rate  float64
+		want  int
+	}{
+		{250, 0.25, 62}, // 62.5 floors
+		{500, 0.25, 125},
+		{10000, 0.25, 2500},
+		{3, 0.25, 0},
+		{1000, 0.3, 300},
+		{100, 0.29, 29}, // 28.999999999999996 in float
+		{100, 0.07, 7},  // 7.000000000000001
+		{1000, 1, 1000},
+		{0, 0.25, 0},
+		{-100, 0.25, 0},
+		{100, 0, 0},
+	}
+	for _, c := range cases {
+		if got := CalculateSellRefund(c.price, c.rate); got != c.want {
+			t.Errorf("CalculateSellRefund(%d, %v) = %d, want %d", c.price, c.rate, got, c.want)
+		}
+	}
+}
+
+func TestItemPrice(t *testing.T) {
+	cases := []struct {
+		coin, gem  int
+		currency   string
+		wantAmount int
+	}{
+		{500, 0, "coin", 500},
+		{500, 20, "coin", 500},
+		{0, 20, "gem", 20},
+		{0, 0, "", 0},
+	}
+	for _, c := range cases {
+		cur, amt := ItemPrice(&EquipmentItemConfig{PriceCoin: c.coin, PriceGem: c.gem})
+		if cur != c.currency || amt != c.wantAmount {
+			t.Errorf("ItemPrice(coin %d, gem %d) = %s %d, want %s %d", c.coin, c.gem, cur, amt, c.currency, c.wantAmount)
+		}
+	}
+}

@@ -25,12 +25,14 @@ const (
 	catalogMigration      = "016_default_equipment_catalog.up.sql"
 	designLevelsMigration = "019_equipment_design_levels.up.sql"
 	gunNamesMigration     = "020_gun_weapon_names.up.sql"
+	sellRateMigration     = "022_equipment_sell_rate.up.sql"
 )
 
 var equipmentMigrations = []string{
 	"001_init_schema.up.sql", "004_admin_config_tables.up.sql", "006_character_progression.up.sql",
 	"010_equipment_system.up.sql", "011_equipment_slot_unique.up.sql",
 	catalogMigration, "017_equipment_purchase_idempotency.up.sql", designLevelsMigration, gunNamesMigration,
+	sellRateMigration,
 }
 
 // newEquipmentService builds the schema with the default catalog. maxConns 1
@@ -235,6 +237,9 @@ func TestCatalogEndpointReturnsAllRows(t *testing.T) {
 	stones, _ := data["stones"].([]any)
 	if len(items) != 64 || len(rates) != 16 || len(bonuses) != 12 || len(stones) != 12 {
 		t.Fatalf("items %d rates %d setBonuses %d stones %d, want 64 16 12 12", len(items), len(rates), len(bonuses), len(stones))
+	}
+	if data["sellRate"] != 0.25 {
+		t.Fatalf("sellRate %v, want the seeded 0.25", data["sellRate"])
 	}
 	var crafted, inactive int
 	for _, it := range items {
@@ -595,5 +600,386 @@ func TestCatalogDownMigrationKeepsOwnedRows(t *testing.T) {
 	if got := countRows(t, db, `SELECT COUNT(*) FROM config_upgrade_rates`) + countRows(t, db, `SELECT COUNT(*) FROM config_stones`) +
 		countRows(t, db, `SELECT COUNT(*) FROM config_gems`) + countRows(t, db, `SELECT COUNT(*) FROM config_set_bonuses`); got != 16+12+40+12 {
 		t.Fatalf("rates/stones/gems/set bonuses changed: %d rows", got)
+	}
+}
+
+// --- Sell ---
+
+// upgradePiece seeds a piece's upgrade state: level 7
+// (safe zone +6) with logs of 20 + 10 power from +6 and 100 from +2.
+func upgradePiece(t *testing.T, db *database.PostgresDB, equipmentID string) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `UPDATE player_equipment SET upgrade_level = 7 WHERE equipment_id = $1`, equipmentID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO equipment_upgrade_log (equipment_id, from_level, to_level, total_power, success) VALUES
+		($1, 2, 3, 100, TRUE), ($1, 6, 6, 20, FALSE), ($1, 6, 7, 10, TRUE)`, equipmentID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func stoneCount(t *testing.T, db *database.PostgresDB, playerID string) map[int]int {
+	t.Helper()
+	rows, err := db.Pool.Query(context.Background(), `SELECT stone_level, quantity FROM player_stones WHERE player_id = $1 AND quantity > 0`, playerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	got := map[int]int{}
+	for rows.Next() {
+		var level, qty int
+		if err := rows.Scan(&level, &qty); err != nil {
+			t.Fatal(err)
+		}
+		got[level] = qty
+	}
+	return got
+}
+
+func sellLogs(t *testing.T, db *database.PostgresDB, playerID string) int {
+	t.Helper()
+	return countRows(t, db, `SELECT COUNT(*) FROM economy_transactions WHERE player_id = $1 AND source = 'sell_equipment'`, playerID)
+}
+
+func buyGem(t *testing.T, svc *Service, db *database.PostgresDB, playerID string) string {
+	t.Helper()
+	ctx := context.Background()
+	if err := svc.BuyGems(ctx, playerID, BuyGemRequest{GemType: "hp", GemLevel: 1, Quantity: 1}); err != nil {
+		t.Fatal(err)
+	}
+	var gemID string
+	if err := db.Pool.QueryRow(ctx, `SELECT gem_id::text FROM player_gems WHERE player_id = $1 ORDER BY created_at DESC LIMIT 1`, playerID).Scan(&gemID); err != nil {
+		t.Fatal(err)
+	}
+	return gemID
+}
+
+// Selling pays floor(price × 0.25) once, unsockets gems, refunds stones like
+// dismantle and deletes the piece.
+func TestSellEquipment(t *testing.T) {
+	svc, db := newEquipmentService(t, 1)
+	h := NewHandler(svc)
+	ctx := context.Background()
+	dbtest.CreatePlayer(t, db, "p1", 10_000, 0)
+
+	// rookie_weapon_lv10: 500 coin, 1 gem slot
+	id, err := svc.BuyEquipment(ctx, "p1", BuyEquipmentRequest{ItemID: "rookie_weapon_lv10"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gemID := buyGem(t, svc, db, "p1") // 200 coin
+	if err := svc.SocketGem(ctx, "p1", SocketGemRequest{EquipmentID: id, SlotIndex: 1, GemID: gemID}); err != nil {
+		t.Fatal(err)
+	}
+	upgradePiece(t, db, id)
+
+	code, env := callHandler(t, h.Sell, "p1", SellRequest{EquipmentID: id})
+	if code != http.StatusOK {
+		t.Fatalf("sell: status %d body %v", code, env)
+	}
+	data, _ := env["data"].(map[string]any)
+	// 15 power refunded (half of 20 + 10) = 1 × level 3 (9) + 2 × level 2 (3)
+	wantStones := []any{map[string]any{"stoneLevel": 2.0, "quantity": 2.0}, map[string]any{"stoneLevel": 3.0, "quantity": 1.0}}
+	stonesJSON, _ := json.Marshal(data["stones"])
+	wantJSON, _ := json.Marshal(wantStones)
+	if data["currency"] != "coin" || data["amount"] != 125.0 || data["balance"] != 9_425.0 || string(stonesJSON) != string(wantJSON) {
+		t.Fatalf("sell data %v, want coin 125 balance 9425 stones %s", data, wantJSON)
+	}
+	if coin, _ := dbtest.Balance(t, db, "p1"); coin != 9_425 {
+		t.Fatalf("coin %d, want 10000 - 500 - 200 + 125", coin)
+	}
+	if ownedEquipment(t, db, "p1") != 0 {
+		t.Fatal("piece still owned after sell")
+	}
+	if got := stoneCount(t, db, "p1"); len(got) != 2 || got[2] != 2 || got[3] != 1 {
+		t.Fatalf("stones %v, want level 2 ×2 and level 3 ×1", got)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM player_gems WHERE gem_id = $1 AND player_id = 'p1'`, gemID); got != 1 {
+		t.Fatal("socketed gem lost on sell")
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM economy_transactions WHERE player_id = 'p1' AND source = 'sell_equipment'
+		AND currency = 'coin' AND amount = 125 AND balance_after = 9425 AND ref_id = 'rookie_weapon_lv10'`); got != 1 {
+		t.Fatalf("%d sell transaction logs, want 1", got)
+	}
+
+	// Selling it again: gone, nothing credited
+	code, env = callHandler(t, h.Sell, "p1", SellRequest{EquipmentID: id})
+	if code != http.StatusForbidden || errorCode(env) != "EQUIP_NOT_OWNED" {
+		t.Fatalf("second sell: status %d body %v", code, env)
+	}
+	if coin, _ := dbtest.Balance(t, db, "p1"); coin != 9_425 || sellLogs(t, db, "p1") != 1 {
+		t.Fatalf("second sell credited: coin %d logs %d", coin, sellLogs(t, db, "p1"))
+	}
+
+	// The gem is free: it sockets into another piece
+	other, err := svc.BuyEquipment(ctx, "p1", BuyEquipmentRequest{ItemID: "normal_helmet_lv10"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SocketGem(ctx, "p1", SocketGemRequest{EquipmentID: other, SlotIndex: 1, GemID: gemID}); err != nil {
+		t.Fatalf("socket the sold piece's gem: %v", err)
+	}
+
+	// Dismantling the same upgrade state refunds the same stones and no coin
+	piece, err := svc.BuyEquipment(ctx, "p1", BuyEquipmentRequest{ItemID: "normal_boots_lv10"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	upgradePiece(t, db, piece)
+	coinBefore, _ := dbtest.Balance(t, db, "p1")
+	if err := svc.DismantleEquipment(ctx, "p1", DismantleRequest{EquipmentID: piece}); err != nil {
+		t.Fatal(err)
+	}
+	if coin, _ := dbtest.Balance(t, db, "p1"); coin != coinBefore {
+		t.Fatalf("dismantle paid coin: %d -> %d", coinBefore, coin)
+	}
+	if got := stoneCount(t, db, "p1"); got[2] != 4 || got[3] != 2 {
+		t.Fatalf("stones after dismantle %v, want level 2 ×4 and level 3 ×2", got)
+	}
+}
+
+// A gem-priced item pays gem; the rate comes from game_settings and falls back
+// to 0.25 when missing or out of range.
+func TestSellEquipmentCurrencyAndRate(t *testing.T) {
+	svc, db := newEquipmentService(t, 1)
+	ctx := context.Background()
+	dbtest.CreatePlayer(t, db, "p1", 10_000, 100)
+	if _, err := db.Pool.Exec(ctx, `UPDATE config_equipment_items SET price_coin = 0, price_gem = 40 WHERE item_id = 'normal_gloves_lv10'`); err != nil {
+		t.Fatal(err)
+	}
+	buy := func(itemID string) string {
+		t.Helper()
+		id, err := svc.BuyEquipment(ctx, "p1", BuyEquipmentRequest{ItemID: itemID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	setRate := func(value string) {
+		t.Helper()
+		if _, err := db.Pool.Exec(ctx, `UPDATE game_settings SET value = $1 WHERE key = 'equipment.sell_rate'`, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	res, err := svc.SellEquipment(ctx, "p1", SellRequest{EquipmentID: buy("normal_gloves_lv10")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Currency != "gem" || res.Amount != 10 || res.Balance != 70 || len(res.Stones) != 0 {
+		t.Fatalf("gem sell %+v, want gem 10 balance 70 no stones", res)
+	}
+	if _, gem := dbtest.Balance(t, db, "p1"); gem != 70 {
+		t.Fatalf("gem %d, want 100 - 40 + 10", gem)
+	}
+
+	setRate("0.5")
+	// Rerunning 022 keeps the edited rate
+	sql, err := os.ReadFile(filepath.Join("..", "..", "..", "migrations", sellRateMigration))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, string(sql)); err != nil {
+		t.Fatalf("rerun %s: %v", sellRateMigration, err)
+	}
+	cat, err := svc.GetCatalog(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cat.SellRate != 0.5 {
+		t.Fatalf("catalog sellRate %v, want 0.5", cat.SellRate)
+	}
+	if res, err := svc.SellEquipment(ctx, "p1", SellRequest{EquipmentID: buy("normal_helmet_lv10")}); err != nil || res.Amount != 150 {
+		t.Fatalf("sell at 0.5: %+v %v, want 150", res, err)
+	}
+	for _, bad := range []string{"0", "1.5", "lots"} {
+		setRate(bad)
+		if res, err := svc.SellEquipment(ctx, "p1", SellRequest{EquipmentID: buy("normal_helmet_lv10")}); err != nil || res.Amount != 75 {
+			t.Fatalf("rate %q: %+v %v, want the default 75", bad, res, err)
+		}
+	}
+	if _, err := db.Pool.Exec(ctx, `DELETE FROM game_settings WHERE key = 'equipment.sell_rate'`); err != nil {
+		t.Fatal(err)
+	}
+	if cat, err := svc.GetCatalog(ctx); err != nil || cat.SellRate != 0.25 {
+		t.Fatalf("catalog without the setting: %v %v, want 0.25", cat, err)
+	}
+	if res, err := svc.SellEquipment(ctx, "p1", SellRequest{EquipmentID: buy("normal_helmet_lv10")}); err != nil || res.Amount != 75 {
+		t.Fatalf("no setting: %+v %v, want the default 75", res, err)
+	}
+}
+
+// Equipped (so locked), not owned, free (crafted), unknown or rounding-to-0
+// pieces are refused and nothing changes.
+func TestSellEquipmentRefusals(t *testing.T) {
+	svc, db := newEquipmentService(t, 1)
+	h := NewHandler(svc)
+	ctx := context.Background()
+	dbtest.CreatePlayer(t, db, "p1", 10_000, 0)
+	dbtest.CreatePlayer(t, db, "p2", 0, 0)
+	addCharacter(t, db, "p1", "tanko", 10)
+
+	insertPiece := func(itemID, slot, category string) string {
+		t.Helper()
+		var id string
+		if err := db.Pool.QueryRow(ctx, `INSERT INTO player_equipment (player_id, item_id, slot, category)
+			VALUES ('p1', $1, $2, $3) RETURNING equipment_id::text`, itemID, slot, category).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	boots, err := svc.BuyEquipment(ctx, "p1", BuyEquipmentRequest{ItemID: "normal_boots_lv10"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.EquipItem(ctx, "p1", EquipRequest{EquipmentID: boots, CharacterID: "tanko"}); err != nil {
+		t.Fatal(err)
+	}
+	helmet, err := svc.BuyEquipment(ctx, "p1", BuyEquipmentRequest{ItemID: "normal_helmet_lv10"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	crafted := insertPiece("crafted_weapon_silver", "weapon", "crafted")
+	gemID := buyGem(t, svc, db, "p1")
+	if err := svc.SocketGem(ctx, "p1", SocketGemRequest{EquipmentID: crafted, SlotIndex: 1, GemID: gemID}); err != nil {
+		t.Fatal(err)
+	}
+	upgradePiece(t, db, crafted)
+	unknown := insertPiece("retired_item", "armor", "normal")
+	if _, err := db.Pool.Exec(ctx, `UPDATE config_equipment_items SET price_coin = 3 WHERE item_id = 'normal_gloves_lv10'`); err != nil {
+		t.Fatal(err)
+	}
+	cheap, err := svc.BuyEquipment(ctx, "p1", BuyEquipmentRequest{ItemID: "normal_gloves_lv10"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	coinBefore, _ := dbtest.Balance(t, db, "p1")
+	cases := []struct {
+		name, player, id string
+		status           int
+		code             string
+	}{
+		{"equipped (always locked)", "p1", boots, http.StatusConflict, "EQUIP_LOCKED"},
+		{"not owned", "p2", helmet, http.StatusForbidden, "EQUIP_NOT_OWNED"},
+		{"no such piece", "p1", "00000000-0000-0000-0000-000000000000", http.StatusForbidden, "EQUIP_NOT_OWNED"},
+		{"crafted", "p1", crafted, http.StatusBadRequest, "EQUIP_NOT_SELLABLE"},
+		{"no config", "p1", unknown, http.StatusBadRequest, "EQUIP_NOT_SELLABLE"},
+		{"rounds to 0", "p1", cheap, http.StatusBadRequest, "EQUIP_NOT_SELLABLE"},
+	}
+	for _, c := range cases {
+		code, env := callHandler(t, h.Sell, c.player, SellRequest{EquipmentID: c.id})
+		if code != c.status || errorCode(env) != c.code {
+			t.Fatalf("%s: status %d body %v, want %d %s", c.name, code, env, c.status, c.code)
+		}
+	}
+
+	if coin, _ := dbtest.Balance(t, db, "p1"); coin != coinBefore || sellLogs(t, db, "p1")+sellLogs(t, db, "p2") != 0 {
+		t.Fatalf("refused sells credited: coin %d -> %d", coinBefore, coin)
+	}
+	if ownedEquipment(t, db, "p1") != 5 {
+		t.Fatalf("owned %d, want all 5 pieces kept", ownedEquipment(t, db, "p1"))
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM player_equipment WHERE equipment_id = $1 AND gem_slot_1 = $2 AND upgrade_level = 7`, crafted, gemID); got != 1 {
+		t.Fatal("refused crafted sell changed the piece")
+	}
+	if got := stoneCount(t, db, "p1"); len(got) != 0 {
+		t.Fatalf("refused sells refunded stones %v", got)
+	}
+	if on, _ := equipped(t, db, boots); !on {
+		t.Fatal("equipped piece unequipped by a refused sell")
+	}
+}
+
+// Concurrent sells of one piece: one succeeds, the rest see it gone, coin is
+// credited once.
+func TestSellEquipmentConcurrentCreditsOnce(t *testing.T) {
+	svc, db := newEquipmentService(t, 0)
+	ctx := context.Background()
+	dbtest.CreatePlayer(t, db, "p1", 1_000, 0)
+	id, err := svc.BuyEquipment(ctx, "p1", BuyEquipmentRequest{ItemID: "rookie_weapon_lv10"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const n = 5
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, errs[i] = svc.SellEquipment(ctx, "p1", SellRequest{EquipmentID: id})
+		}(i)
+	}
+	wg.Wait()
+	var ok int
+	for _, err := range errs {
+		if err == nil {
+			ok++
+			continue
+		}
+		wantCode(t, err, "EQUIP_NOT_OWNED")
+	}
+	if ok != 1 {
+		t.Fatalf("%d sells succeeded, want 1", ok)
+	}
+	if coin, _ := dbtest.Balance(t, db, "p1"); coin != 625 || sellLogs(t, db, "p1") != 1 || ownedEquipment(t, db, "p1") != 0 {
+		t.Fatalf("coin %d logs %d owned %d, want 625 1 0", coin, sellLogs(t, db, "p1"), ownedEquipment(t, db, "p1"))
+	}
+}
+
+// A piece ever equipped is locked forever: selling it is refused even after
+// unequip, dismantling it still works. A never-equipped piece sells.
+func TestSellRefusesLockedPiece(t *testing.T) {
+	svc, db := newEquipmentService(t, 1)
+	h := NewHandler(svc)
+	ctx := context.Background()
+	dbtest.CreatePlayer(t, db, "p1", 10_000, 0)
+	addCharacter(t, db, "p1", "tanko", 10)
+	buy := func() string {
+		t.Helper()
+		id, err := svc.BuyEquipment(ctx, "p1", BuyEquipmentRequest{ItemID: "normal_helmet_lv10"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+
+	fresh := buy()
+	if res, err := svc.SellEquipment(ctx, "p1", SellRequest{EquipmentID: fresh}); err != nil || res.Amount != 75 {
+		t.Fatalf("sell never-equipped: %+v %v", res, err)
+	}
+
+	worn := buy()
+	if err := svc.EquipItem(ctx, "p1", EquipRequest{EquipmentID: worn, CharacterID: "tanko"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.UnequipItem(ctx, "p1", UnequipRequest{EquipmentID: worn}); err != nil {
+		t.Fatal(err)
+	}
+	items, err := svc.GetPlayerEquipment(ctx, "p1")
+	if err != nil || len(items) != 1 || !items[0].IsLocked || items[0].IsEquipped {
+		t.Fatalf("after unequip %+v %v, want one locked unequipped piece", items, err)
+	}
+	coinBefore, _ := dbtest.Balance(t, db, "p1")
+	code, env := callHandler(t, h.Sell, "p1", SellRequest{EquipmentID: worn})
+	if code != http.StatusConflict || errorCode(env) != "EQUIP_LOCKED" {
+		t.Fatalf("sell locked: status %d body %v", code, env)
+	}
+	if coin, _ := dbtest.Balance(t, db, "p1"); coin != coinBefore || ownedEquipment(t, db, "p1") != 1 || sellLogs(t, db, "p1") != 1 {
+		t.Fatalf("locked sell changed state: coin %d -> %d, owned %d", coinBefore, coin, ownedEquipment(t, db, "p1"))
+	}
+
+	code, env = callHandler(t, h.Dismantle, "p1", DismantleRequest{EquipmentID: worn})
+	if code != http.StatusOK {
+		t.Fatalf("dismantle locked: status %d body %v", code, env)
+	}
+	if ownedEquipment(t, db, "p1") != 0 {
+		t.Fatal("locked piece not dismantled")
+	}
+	if coin, _ := dbtest.Balance(t, db, "p1"); coin != coinBefore {
+		t.Fatalf("dismantle paid coin: %d -> %d", coinBefore, coin)
 	}
 }

@@ -39,6 +39,7 @@ var defaultSettings = []settingDef{
 	{"equipment.milestone_10_bonus", "0.20", "number", "Bonus stat khi trang bị đạt +10 (20%)", "equipment"},
 	{"equipment.milestone_14_bonus", "0.40", "number", "Bonus stat khi trang bị đạt +14 (40%)", "equipment"},
 	{"equipment.milestone_16_bonus", "1.00", "number", "Bonus stat khi trang bị đạt +16 (100%)", "equipment"},
+	{"equipment.sell_rate", "0.25", "number", "Tỉ lệ hoàn tiền khi bán trang bị: nhận floor(giá mua × tỉ lệ), trong (0, 1]", "equipment"},
 }
 
 // SeedAll seeds both game_settings and config tables from YAML files.

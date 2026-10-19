@@ -95,6 +95,7 @@ var (
 	ErrEquipmentItemIDRequired  = AppError{Code: "BAD_REQUEST", Message: "itemId is required", Status: http.StatusBadRequest}
 	ErrIdempotencyKeyTooLong    = AppError{Code: "BAD_REQUEST", Message: "idempotency key is too long", Status: http.StatusBadRequest}
 	ErrEquipmentNotForSale      = AppError{Code: "BAD_REQUEST", Message: "only normal equipment is sold in the shop", Status: http.StatusBadRequest}
+	ErrEquipmentNotSellable     = AppError{Code: "EQUIP_NOT_SELLABLE", Message: "This equipment has no sell price", Status: http.StatusBadRequest}
 	ErrEquipmentEquipped        = AppError{Code: "EQUIP_EQUIPPED", Message: "Equipment is equipped, unequip it first", Status: http.StatusConflict}
 	ErrEquipmentNotEquipped     = AppError{Code: "EQUIP_NOT_EQUIPPED", Message: "Equipment is not equipped", Status: http.StatusConflict}
 	ErrEquipmentLocked          = AppError{Code: "EQUIP_LOCKED", Message: "Equipment is locked and cannot be sold", Status: http.StatusConflict}
