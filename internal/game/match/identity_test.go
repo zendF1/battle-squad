@@ -125,7 +125,7 @@ func fallOf(t *testing.T, s ShotResolved, target string) (dist float64, damage i
 }
 
 // TestDiggingBombDropsTargetIntoFallDamage: Tanko's heavy_bomb on a target hit at the centre
-// carves a crater deep enough (radius 260 px) that the target falls more than the fall damage
+// carves a crater deep enough (radius 187 px) that the target falls more than the fall damage
 // threshold, while his normal shot (104 px) only drops it without fall damage.
 func TestDiggingBombDropsTargetIntoFallDamage(t *testing.T) {
 	useConfigGameData(t)
@@ -167,6 +167,36 @@ func TestDiggingBombDropsTargetIntoFallDamage(t *testing.T) {
 			if blast != want {
 				t.Fatalf("heavy bomb explosion damage %d, want %d", blast, want)
 			}
+		}
+	}
+}
+
+// TestDiggingBombKeepsGroundOnThinMaps: a heavy bomb exploding on the surface anywhere on a
+// built-in map (a direct hit explodes higher, above the target's feet) leaves solid ground
+// under every column of its crater, so one bomb cannot open a hole to the bottom of the map.
+// frozen_peak and grassland_valley have the thinnest ground (deepest valleys).
+func TestDiggingBombKeepsGroundOnThinMaps(t *testing.T) {
+	useConfigGameData(t)
+	r := weaponCraterRadius(gamedata.Data.Weapons["cannon_ball"]) * heavyBombCraterScale
+	for _, mapID := range []string{"frozen_peak", "grassland_valley", "steel_base"} {
+		tr := NewTerrainWithBricks(gamedata.MapConfig{MapID: mapID}, nil)
+		minLeft, atX, thinnest := math.MaxFloat64, 0, math.MaxFloat64
+		for x := 0; x < tr.Width; x++ {
+			cy := tr.GetLandingY(float64(x), 0)
+			thinnest = math.Min(thinnest, float64(tr.Height)-cy)
+			for dx := -int(r); dx <= int(r); dx++ {
+				if c := x + dx; c < 0 || c >= tr.Width {
+					continue
+				}
+				if left := float64(tr.Height) - (cy + math.Sqrt(r*r-float64(dx*dx))); left < minLeft {
+					minLeft, atX = left, x
+				}
+			}
+		}
+		t.Logf("%-16s thinnest ground %.0f px, heavy bomb crater %.1f px leaves at least %.0f px (surface hit at x %d)",
+			mapID, thinnest, r, minLeft, atX)
+		if minLeft < 20 {
+			t.Errorf("%s: a heavy bomb at x %d leaves only %.0f px of ground", mapID, atX, minLeft)
 		}
 	}
 }

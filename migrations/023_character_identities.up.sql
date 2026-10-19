@@ -3,7 +3,7 @@
 -- - config_characters.mobility is now the base move energy per turn (100/80/120/100,
 --   every character had 100 before); role ids renamed.
 -- - weapon terrain_damage now sets the crater: radius = terrain_damage × 0.8 px.
--- - heavy_bomb ×1.1 damage (blast ×2, crater ×2.5 in code), shock_field ×1.3.
+-- - heavy_bomb ×1.1 damage (blast ×2, crater ×1.8 in code), shock_field ×1.3.
 -- Reruns on every deploy: each column only changes while it still holds the old
 -- default, so a rerun is a no-op and admin edits are kept.
 

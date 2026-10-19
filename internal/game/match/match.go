@@ -43,7 +43,7 @@ const (
 	// are these multiples of the weapon's, deep enough to drop a target hit at the centre more
 	// than fallDamageThreshold.
 	heavyBombBlastScale  = 2.0
-	heavyBombCraterScale = 2.5
+	heavyBombCraterScale = 1.8
 )
 
 type Match struct {
