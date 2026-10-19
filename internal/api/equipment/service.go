@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"battle-squad/internal/api/economy"
+	"battle-squad/internal/game/battlestats"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/model"
 
@@ -123,7 +124,14 @@ func (s *Service) GetCatalog(ctx context.Context) (*Catalog, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &Catalog{Items: items, UpgradeRates: rates, SetBonuses: bonuses, Stones: stones, SellRate: s.getSellRate(ctx)}
+	ms, err := battlestats.LoadMilestones(ctx, s.db.Pool)
+	if err != nil {
+		return nil, err
+	}
+	c := &Catalog{Items: items, UpgradeRates: rates, SetBonuses: bonuses, Stones: stones, SellRate: s.getSellRate(ctx),
+		MergeRatePerItem: s.getMergeRatePerItem(ctx), UpgradeMilestones: []UpgradeMilestone{
+			{Level: 6, Bonus: ms.Bonus6}, {Level: 10, Bonus: ms.Bonus10}, {Level: 14, Bonus: ms.Bonus14}, {Level: 16, Bonus: ms.Bonus16},
+		}}
 	if c.Items == nil {
 		c.Items = []EquipmentItemConfig{}
 	}
@@ -223,48 +231,106 @@ func (s *Service) BuyEquipment(ctx context.Context, playerID string, req BuyEqui
 // BuyStones
 // ---------------------------------------------------------------------------
 
-func (s *Service) BuyStones(ctx context.Context, playerID string, req BuyStoneRequest) error {
-	if req.Quantity <= 0 {
-		return model.ErrBadRequest
+// maxStoneBuyQuantity caps one stone buy (the price × quantity product and
+// the player_stones INT column stay far from overflowing).
+const maxStoneBuyQuantity = 999
+
+// BuyStones debits quantity × the stone's price and adds the stones in one
+// transaction. With an idempotencyKey a retry returns the first buy (Replay
+// true) without charging again, and the key used for another level or
+// quantity is ErrIdempotencyKeyReused; a failed attempt records nothing.
+// Without a key every call buys again.
+func (s *Service) BuyStones(ctx context.Context, playerID string, req BuyStoneRequest) (*BuyStonesResult, error) {
+	if req.Quantity <= 0 || req.Quantity > maxStoneBuyQuantity {
+		return nil, model.ErrBadRequest
+	}
+	if len(req.IdempotencyKey) > maxIdempotencyKeyLen {
+		return nil, model.ErrIdempotencyKeyTooLong
 	}
 
+	// Read before the tx: the pool is never queried while a tx holds a connection.
 	cfg, err := s.repo.GetStoneConfig(ctx, req.StoneLevel)
 	if err != nil {
-		return err
-	}
-	if cfg == nil {
-		return model.ErrNotFound
-	}
-	if cfg.Source == "merge_only" {
-		return model.ErrBadRequest
+		return nil, err
 	}
 
 	tx, err := s.db.Pool.Begin(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
-	totalCoin := cfg.PriceCoin * req.Quantity
-	totalGem := cfg.PriceGem * req.Quantity
-
-	if totalCoin > 0 {
-		_, err = s.economyRepo.DebitTx(ctx, tx, playerID, "coin", totalCoin, "buy_stones", fmt.Sprintf("stone_%d", req.StoneLevel), false)
-		if err != nil {
-			return err
+	// Lock the player first so concurrent buys (same key or not) run one at a time
+	coin, gem, found, err := s.repo.LockWalletTx(ctx, tx, playerID)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, model.ErrNotFound
+	}
+	balanceOf := func(currency string) int {
+		if currency == "gem" {
+			return gem
 		}
-	} else if totalGem > 0 {
-		_, err = s.economyRepo.DebitTx(ctx, tx, playerID, "gem", totalGem, "buy_stones", fmt.Sprintf("stone_%d", req.StoneLevel), false)
+		return coin
+	}
+
+	if req.IdempotencyKey != "" {
+		existing, err := s.repo.FindStonePurchaseTx(ctx, tx, playerID, req.IdempotencyKey)
 		if err != nil {
-			return err
+			return nil, err
+		}
+		if existing != nil {
+			if existing.StoneLevel != req.StoneLevel || existing.Quantity != req.Quantity {
+				return nil, model.ErrIdempotencyKeyReused
+			}
+			owned, err := s.repo.StoneQuantityTx(ctx, tx, playerID, req.StoneLevel)
+			if err != nil {
+				return nil, err
+			}
+			return &BuyStonesResult{StoneLevel: existing.StoneLevel, Quantity: existing.Quantity, Currency: existing.Currency,
+				Amount: existing.Amount, Balance: balanceOf(existing.Currency), Owned: owned, Replay: true}, nil
+		}
+	}
+
+	if cfg == nil {
+		return nil, model.ErrNotFound
+	}
+	if cfg.Source == "merge_only" {
+		return nil, model.ErrBadRequest
+	}
+
+	currency, price := StonePrice(cfg)
+	amount := price * req.Quantity
+	balance := balanceOf(currency)
+	if amount > 0 {
+		balance, err = s.economyRepo.DebitTx(ctx, tx, playerID, currency, amount, "buy_stones", fmt.Sprintf("stone_%d", req.StoneLevel), false)
+		if err != nil {
+			return nil, err
 		}
 	}
 
 	if err := s.repo.AddStonesTx(ctx, tx, playerID, req.StoneLevel, req.Quantity); err != nil {
-		return err
+		return nil, err
 	}
 
-	return tx.Commit(ctx)
+	if req.IdempotencyKey != "" {
+		p := stonePurchase{StoneLevel: req.StoneLevel, Quantity: req.Quantity, Currency: currency, Amount: amount}
+		if err := s.repo.CreateStonePurchaseTx(ctx, tx, playerID, req.IdempotencyKey, p); err != nil {
+			return nil, err
+		}
+	}
+
+	owned, err := s.repo.StoneQuantityTx(ctx, tx, playerID, req.StoneLevel)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return &BuyStonesResult{StoneLevel: req.StoneLevel, Quantity: req.Quantity, Currency: currency, Amount: amount,
+		Balance: balance, Owned: owned}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -524,6 +590,11 @@ func (s *Service) UpgradeEquipment(ctx context.Context, playerID string, req Upg
 			return nil, model.ErrNotFound
 		}
 		totalPower += stoneCfg.Power * si.Quantity
+	}
+	// Only zero quantities (or zero-power stones): nothing would be consumed,
+	// and the roll must not fail the piece back to its safe zone for free.
+	if totalPower <= 0 {
+		return nil, model.ErrEquipmentNoStones
 	}
 
 	percent := float64(totalPower) * 100.0 / float64(rateConfig.UpgradeCost)

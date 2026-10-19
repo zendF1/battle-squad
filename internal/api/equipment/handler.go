@@ -367,12 +367,13 @@ func (h *Handler) BuyStones(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.BuyStones(r.Context(), playerID, req); err != nil {
+	result, err := h.service.BuyStones(r.Context(), playerID, req)
+	if err != nil {
 		handleServiceError(w, r, err)
 		return
 	}
 
-	model.WriteOK(w, nil)
+	writeJSON(w, http.StatusOK, result)
 }
 
 // ---------------------------------------------------------------------------

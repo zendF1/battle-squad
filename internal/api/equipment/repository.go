@@ -155,6 +155,50 @@ func (r *Repository) CreateEquipmentPurchaseTx(ctx context.Context, tx pgx.Tx, p
 	return err
 }
 
+// LockWalletTx locks the player's profile until the transaction ends and
+// returns its balances, so stone buys (and their idempotency lookups) run one
+// at a time per player. found is false when the profile does not exist.
+func (r *Repository) LockWalletTx(ctx context.Context, tx pgx.Tx, playerID string) (coin, gem int, found bool, err error) {
+	err = tx.QueryRow(ctx, `SELECT coin, gem FROM player_profiles WHERE player_id = $1 FOR UPDATE`, playerID).Scan(&coin, &gem)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, 0, false, nil
+	}
+	return coin, gem, err == nil, err
+}
+
+// FindStonePurchaseTx returns the stone buy committed under this key, or nil.
+func (r *Repository) FindStonePurchaseTx(ctx context.Context, tx pgx.Tx, playerID, idempotencyKey string) (*stonePurchase, error) {
+	var p stonePurchase
+	err := tx.QueryRow(ctx,
+		`SELECT stone_level, quantity, price_currency, price_amount FROM stone_purchases WHERE player_id = $1 AND idempotency_key = $2`,
+		playerID, idempotencyKey).Scan(&p.StoneLevel, &p.Quantity, &p.Currency, &p.Amount)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (r *Repository) CreateStonePurchaseTx(ctx context.Context, tx pgx.Tx, playerID, idempotencyKey string, p stonePurchase) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO stone_purchases (player_id, idempotency_key, stone_level, quantity, price_currency, price_amount)
+		VALUES ($1, $2, $3, $4, $5, $6)`,
+		playerID, idempotencyKey, p.StoneLevel, p.Quantity, p.Currency, p.Amount)
+	return err
+}
+
+// StoneQuantityTx is how many stones of a level the player owns (0 for none).
+func (r *Repository) StoneQuantityTx(ctx context.Context, tx pgx.Tx, playerID string, stoneLevel int) (int, error) {
+	var n int
+	err := tx.QueryRow(ctx, `SELECT quantity FROM player_stones WHERE player_id = $1 AND stone_level = $2`, playerID, stoneLevel).Scan(&n)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil
+	}
+	return n, err
+}
+
 func (r *Repository) UnequipItemTx(ctx context.Context, tx pgx.Tx, equipmentID string) (int64, error) {
 	query := `
 		UPDATE player_equipment

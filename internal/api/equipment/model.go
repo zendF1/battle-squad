@@ -186,6 +186,9 @@ type BuyEquipmentRequest struct {
 type BuyStoneRequest struct {
 	StoneLevel int `json:"stoneLevel"`
 	Quantity   int `json:"quantity"`
+	// IdempotencyKey (optional, ≤ 64): a retry with the same key, level and
+	// quantity returns the first purchase without charging again.
+	IdempotencyKey string `json:"idempotencyKey"`
 }
 
 type BuyGemRequest struct {
@@ -225,6 +228,19 @@ type Catalog struct {
 	Stones       []StoneConfig         `json:"stones"`
 	// SellRate: selling a piece pays floor(price × sellRate) of its currency.
 	SellRate float64 `json:"sellRate"`
+	// MergeRatePerItem: each stone or gem put into a merge adds this many
+	// percent of success (game_settings equipment.merge_rate_per_item).
+	MergeRatePerItem float64 `json:"mergeRatePerItem"`
+	// UpgradeMilestones: the extra stat multiplier reached at each milestone
+	// level (+6, +10, +14, +16), as battlestats applies it.
+	UpgradeMilestones []UpgradeMilestone `json:"upgradeMilestones"`
+}
+
+// UpgradeMilestone is one milestone bonus: from Level on, item stats are
+// multiplied by a further +Bonus (0.10 = +10%).
+type UpgradeMilestone struct {
+	Level int     `json:"level"`
+	Bonus float64 `json:"bonus"`
 }
 
 // SellResult is the POST /player/equipment/sell data: the amount of currency
@@ -235,6 +251,28 @@ type SellResult struct {
 	Amount   int          `json:"amount"`
 	Balance  int          `json:"balance"`
 	Stones   []StoneInput `json:"stones"`
+}
+
+// BuyStonesResult is the POST /shop/stones/buy data: what was bought, what it
+// cost, the new balance of that currency and the stones of that level now
+// owned. Replay is true when the idempotency key had already bought it (no
+// new charge).
+type BuyStonesResult struct {
+	StoneLevel int    `json:"stoneLevel"`
+	Quantity   int    `json:"quantity"`
+	Currency   string `json:"currency"`
+	Amount     int    `json:"amount"`
+	Balance    int    `json:"balance"`
+	Owned      int    `json:"owned"`
+	Replay     bool   `json:"replay"`
+}
+
+// stonePurchase is a committed stone buy recorded under its idempotency key.
+type stonePurchase struct {
+	StoneLevel int
+	Quantity   int
+	Currency   string
+	Amount     int
 }
 
 // BuyEquipmentResult is the POST /shop/equipment/buy data.

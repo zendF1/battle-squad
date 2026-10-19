@@ -767,3 +767,21 @@ func TestItemPrice(t *testing.T) {
 		}
 	}
 }
+
+func TestStonePrice(t *testing.T) {
+	tests := []struct {
+		cfg      StoneConfig
+		currency string
+		amount   int
+	}{
+		{StoneConfig{PriceCoin: 250}, "coin", 250},
+		{StoneConfig{PriceCoin: 100, PriceGem: 5}, "coin", 100},
+		{StoneConfig{PriceGem: 50}, "gem", 50},
+		{StoneConfig{Source: "merge_only"}, "", 0},
+	}
+	for _, tt := range tests {
+		if c, a := StonePrice(&tt.cfg); c != tt.currency || a != tt.amount {
+			t.Errorf("StonePrice(%+v) = %s %d, want %s %d", tt.cfg, c, a, tt.currency, tt.amount)
+		}
+	}
+}

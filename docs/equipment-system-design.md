@@ -291,10 +291,12 @@ Khi đạt các mốc nâng cấp, chỉ số trang bị được cộng thêm %
 
 | Mốc | Bonus chỉ số | Hiệu ứng |
 |------|-------------|-----------|
-| +6 | +10% tổng stat | Tên item hiển thị màu xanh lá |
-| +10 | +20% tổng stat | Tên item hiển thị màu xanh dương |
-| +14 | +40% tổng stat | Tên item hiển thị màu tím |
-| +16 | +100% tổng stat | Tên item hiển thị màu đỏ/vàng (legendary) |
+| +6 → +9 | +10% tổng stat | Hào quang + vòng nền **xanh da trời**, tên item cùng màu |
+| +10 → +13 | +20% tổng stat | Hào quang + vòng nền **cam**, tên item cùng màu |
+| +14 → +15 | +40% tổng stat | Hào quang + vòng nền **tím**, tên item cùng màu |
+| +16 | +100% tổng stat | Hào quang + vòng nền **đỏ** (cao nhất, mạnh nhất, nhiều tia/lấp lánh nhất), tên item cùng màu |
+
+Dưới +6: không hào quang, hiển thị bình thường. Hào quang hiện ở mọi chỗ có icon trang bị (Túi đồ, popup, màn Nâng cấp, ô trang bị Nhân vật, hàng trang bị Prep); nâng cấp thành công vượt mốc có hiệu ứng bùng nổ màu mới. Bonus cấu hình được (game_settings `equipment.milestone_<N>_bonus`) và client đọc qua `upgradeMilestones` của `/equipment/catalog`.
 
 ### Quy tắc thất bại (Safezone)
 
@@ -887,7 +889,7 @@ CREATE TABLE IF NOT EXISTS config_stones (
 GET    /player/equipment                    -- Danh sách trang bị sở hữu
 POST   /player/equipment/equip              -- Mặc trang bị {equipmentId, characterId}
 POST   /player/equipment/unequip            -- Tháo trang bị {equipmentId}
-POST   /player/equipment/upgrade            -- Nâng cấp {equipmentId, stoneId}
+POST   /player/equipment/upgrade            -- Nâng cấp {equipmentId, stones: [{stoneLevel, quantity}]}
 POST   /player/equipment/dismantle          -- Tách trang bị {equipmentId}
 POST   /player/equipment/sell               -- Bán trang bị unlock {equipmentId} → {currency, amount, balance, stones}
 POST   /player/equipment/socket             -- Khảm ngọc {equipmentId, slotIndex, gemId}
@@ -907,7 +909,7 @@ POST   /crafting/craft                      -- Chế tạo {recipeId}
 GET    /shop/equipment?characterId=xxx      -- Shop trang bị: đồ dùng chung + vũ khí của nhân vật
 POST   /shop/equipment/buy                  -- Mua trang bị {itemId}
 GET    /shop/stones                         -- Shop đá nâng cấp
-POST   /shop/stones/buy                     -- Mua đá {stoneLevel, quantity}
+POST   /shop/stones/buy                     -- Mua đá {stoneLevel, quantity, idempotencyKey?}
 GET    /shop/gems                           -- Shop ngọc
 POST   /shop/gems/buy                       -- Mua ngọc {gemType, gemLevel, quantity}
 GET    /shop/materials                      -- Shop nguyên liệu (gem)

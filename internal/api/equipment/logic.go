@@ -130,6 +130,18 @@ func ItemPrice(cfg *EquipmentItemConfig) (currency string, amount int) {
 	return "", 0
 }
 
+// StonePrice is what one stone costs: priceCoin, else priceGem; amount 0 means
+// free.
+func StonePrice(cfg *StoneConfig) (currency string, amount int) {
+	if cfg.PriceCoin > 0 {
+		return "coin", cfg.PriceCoin
+	}
+	if cfg.PriceGem > 0 {
+		return "gem", cfg.PriceGem
+	}
+	return "", 0
+}
+
 // CalculateSellRefund is floor(price × rate). The epsilon keeps products that
 // are whole in decimal (100 × 0.29) from flooring one below.
 func CalculateSellRefund(price int, rate float64) int {
