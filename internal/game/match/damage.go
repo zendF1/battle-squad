@@ -19,10 +19,24 @@ func ReduceByDefense(raw float64, defense int) float64 {
 	return raw * k / (k + float64(defense))
 }
 
-// craterRadius is the terrain an explosion carves: the blast radius grown by the
+// craterPxPerTerrainDamage converts a weapon's terrain damage to the radius (px) of the
+// crater its explosion carves: Rookie's 50 carves 40 px, the size of his blast.
+const craterPxPerTerrainDamage = 0.8
+
+// weaponCraterRadius is the crater a weapon's explosion carves, before skills, fragile
+// terrain and the shooter's terrain damage bonus: terrainDamage × craterPxPerTerrainDamage,
+// or the blast radius for a weapon configured without terrain damage.
+func weaponCraterRadius(w gamedata.WeaponConfig) float64 {
+	if w.TerrainDamage <= 0 {
+		return float64(w.ExplosionRadius)
+	}
+	return float64(w.TerrainDamage) * craterPxPerTerrainDamage
+}
+
+// craterRadius is the terrain an explosion carves: the projectile's crater grown by the
 // shooter's terrain damage bonus. Damage falloff keeps the blast radius.
-func craterRadius(shooter *BattlePlayerState, blastRadius float64) float64 {
-	return blastRadius * (1 + float64(shooter.TerrainDamageBonus)/100)
+func craterRadius(shooter *BattlePlayerState, crater float64) float64 {
+	return crater * (1 + float64(shooter.TerrainDamageBonus)/100)
 }
 
 // skillPowerFactor scales the shooter's skill damage and healing.

@@ -468,7 +468,7 @@ Client message → CompositeWSHandler
 | Event | Payload | Mô tả |
 |-------|---------|-------|
 | `MatchStarted` | `{matchId, players, turnOrder, wind, mapId}` | Trận bắt đầu |
-| `TurnStarted` | `{currentPlayerId, turnIndex, wind, timeLeft}` | Lượt mới |
+| `TurnStarted` | `{currentPlayerId, turnIndex, wind, moveEnergy, maxMoveEnergy, skillEnergy}` | Lượt mới; `moveEnergy` là năng lượng của người tới lượt (đã trừ net / freeze), `maxMoveEnergy` là mức đầy của họ |
 | `TurnTimerTick` | `{timeLeft}` | Đếm ngược (mỗi 1s) |
 | `PlayerMoved` | `{playerId, position, moveEnergy, seq?}` | Player di chuyển; có `seq` khi trả lời `Move` có `seq` |
 | `PlayerAiming` | `{playerId, angle, durationMs}` | Player đang ngắm trước khi bắn. `angle` cùng quy ước với `Shoot.angle` và là đúng góc sẽ bắn (phát cố tình trượt thì là góc trượt); `ShotResolved` của player đó tới sau khoảng `durationMs`. Không gửi power. Hiện chỉ gửi cho bot; nếu lượt đổi (timeout) trong lúc ngắm thì không có phát bắn |
@@ -492,7 +492,7 @@ Client message → CompositeWSHandler
 
 `duration` là lúc animation cuối cùng kết thúc; server kết thúc lượt sau `duration + 1.2s`.
 
-**Player trong `players`** (`BattlePlayerState`, cùng shape trong `MatchStarted`, `MatchStateSync`, `ItemUsed`): `{playerId, displayName, teamId, characterId, weaponItemId, hp, maxHp, defense, position{x,y}, moveEnergy, items[], statusEffects[], isAlive, isBot, damageBonus, critChance, moveEnergyBonus, skillPowerBonus, terrainDamageBonus, skillEnergy, damageDealt, killCount, shotsFired, shotsHit}`. `weaponItemId` là `item_id` của vũ khí nhân vật đang mặc lúc vào trận (VD `rookie_weapon_lv30`, `crafted_weapon_gold`, `normal_weapon_lv10`), `""` khi không mặc vũ khí và với bot. Room đọc nó cùng câu query equipment khi tính chỉ số (`battlestats.LoadLoadouts`), không tốn thêm gì mỗi phát bắn. Chỉ dùng để client vẽ súng đang cầm; không ảnh hưởng gameplay.
+**Player trong `players`** (`BattlePlayerState`, cùng shape trong `MatchStarted`, `MatchStateSync`, `ItemUsed`): `{playerId, displayName, teamId, characterId, weaponItemId, hp, maxHp, defense, position{x,y}, moveEnergy, maxMoveEnergy, items[], statusEffects[], isAlive, isBot, damageBonus, critChance, moveEnergyBonus, skillPowerBonus, terrainDamageBonus, skillEnergy, damageDealt, killCount, shotsFired, shotsHit}`. `weaponItemId` là `item_id` của vũ khí nhân vật đang mặc lúc vào trận (VD `rookie_weapon_lv30`, `crafted_weapon_gold`, `normal_weapon_lv10`), `""` khi không mặc vũ khí và với bot. Room đọc nó cùng câu query equipment khi tính chỉ số (`battlestats.LoadLoadouts`), không tốn thêm gì mỗi phát bắn. Chỉ dùng để client vẽ súng đang cầm; không ảnh hưởng gameplay. `maxMoveEnergy` là năng lượng di chuyển nạp lại đầu mỗi lượt của player: năng lượng gốc của nhân vật (`config_characters.mobility`) + `moveEnergyBonus` (điểm, trang bị); client dùng nó làm mức đầy của thanh năng lượng.
 
 ---
 
@@ -525,7 +525,7 @@ Room (waiting) → Host StartMatch → Match goroutine spawns
 startTurn()
   1. Tick status effects (decrement duration, remove expired)
   2. Apply terrain damage (lava: 75 HP/turn)
-  3. Reset move energy = 100
+  3. Reset move energy = maxMoveEnergy (gốc nhân vật 100/80/120/100 + moveEnergyBonus)
   4. Update wind (random power + direction, trừ khi WindStopper active)
   5. Broadcast TurnStarted
   6. Nếu bot → delay 1–2.5s (botTurnStartMin/MaxDelay) → botStep → DecideAction
@@ -583,6 +583,11 @@ Explosion damage:
   finalDamage = rawDamage * (K / (K + playerDefense))   // K = game_settings combat.defense_k, mặc định 600
   crit: ×1.5 với xác suất critChance%
 
+Crater (khoét terrain, không ảnh hưởng damage):
+  craterRadius = weapon.terrainDamage × 0.8 px      // terrainDamage ≤ 0 → explosionRadius
+               × skill (heavy_bomb ×2.5) × fragile ×2 × (1 + terrainDamageBonus/100)
+  ProjectileResult.craterRadius = trước terrainDamageBonus; explode.radius = cuối cùng
+
 Fall damage (không qua defense):
   threshold = 150px
   if fallDistance > threshold:
@@ -609,13 +614,13 @@ Các số khác đã đổi:
 | `statMultipliers` hp / damage / defense / mobility / skill_power / terrain_damage | 50/5/5/3/5/3 → **2/5/1/1/1/1** | `character_progression` (021 chỉ đổi khi object còn đúng mặc định cũ), seed 006, `character.DefaultStatMultipliers`. skill_power / terrain_damage là % mỗi điểm (1 = 1%) |
 | K defense | 100 → **600** | `combat.defense_k` (021 + admin `SeedSettings`), `gamedata.DefaultDefenseK` |
 | Medkit | +30 → **+450** HP | `config_items.value` của `medkit` (game server giờ đọc value, mặc định 450), `items.yaml` |
-| Healing Bloom | 30 → **450** HP trước skill power | `match.skillHealAmount` |
+| Healing Bloom | 30 → **450** HP trước skill power (023: **650**) | `match.skillHealAmount` |
 | Lava đầu lượt | 5 → **75** HP | `match.lavaDamage` |
 | Fall damage | 0,25 → **3,75** HP/px quá 150px | `match.fallDamageMultiplier` |
 | HP mặc định nhân vật không có trong game data | 100 → **1.500** | `battlestats.defaultHP` |
 | EXP thưởng theo damage gây ra | 1 EXP / 20 damage → **1 EXP / 300 damage** | `match.damagePerBonusExp` (một trận gây ≈15× damage hơn trước) |
 
-Không đổi: `air_strike` value 30 (không code nào đọc), `drill_bomb` 50 (px xuyên), `spider_net` cap 50 move energy, `power_shot` ×1.5, `damageMultiplier` skill (1.25 / 1.3 / 0.9), `fall.damage_per_pixel` / `fall.damage_threshold` trong `game_settings` (không được đọc: fall damage dùng hằng số trong `damage.go`).
+Không đổi: `air_strike` value 30 (không code nào đọc), `drill_bomb` 50 (px xuyên), `spider_net` cap 50 move energy, `power_shot` ×1.5, `damageMultiplier` skill (1.25 / 1.3 / 0.9; 023 đổi, xem bên dưới), `fall.damage_per_pixel` / `fall.damage_threshold` trong `game_settings` (không được đọc: fall damage dùng hằng số trong `damage.go`).
 
 Kiểm tra bằng `TestBalanceHitsToKill` (`internal/game/room/balance_integration_test.go`, cần `TEST_POSTGRES_DSN`): chạy mọi migration, catalog thật, `configs/*.yaml`, `getActualStats` của room và `CalculateExplosionDamage`. Rookie bắn Rookie cùng build, trúng trực tiếp, không gió, không crit:
 
@@ -632,6 +637,46 @@ Kiểm tra bằng `TestBalanceHitsToKill` (`internal/game/room/balance_integrati
 
 Cộng điểm nghiêng về damage: build damage Lv80 hạ Rookie không đồ trong 2 phát và build HP Lv80 trong 3 phát (1.658 / 808); build HP chịu 4 phát của Rookie không đồ (đã chấp nhận).
 
+### Nhân vật (bản sắc, migration 023)
+
+Mỗi nhân vật có một thế mạnh riêng. `migrations/023_character_identities` (chạy lại mỗi deploy; mỗi cột chỉ đổi khi còn giữ giá trị cũ, nên sửa trên admin được giữ) và `configs/*.yaml`:
+
+| | Rookie — Cân bằng | Tanko — Phá địa hình | Spark — Sát thương | Flora — Bền bỉ |
+|---|---|---|---|---|
+| Role id | `balanced` | `heavy_gunner` → `demolisher` | `controller` → `striker` | `support` → `sustain` |
+| HP | 1.500 | 1.950 → **1.650** | 1.350 → **1.250** | 1.425 → **1.900** |
+| Damage vũ khí (cũng là `config_characters.damage`) | 480 | 600 → **420** | 440 → **620** | 360 → **380** |
+| Defense | 50 | 80 → **60** | 40 → **30** | 50 → **90** |
+| Bán kính nổ (damage) | 40 | 50 → **60** | 35 → **30** | 40 |
+| Terrain damage vũ khí (cũng là `config_characters.terrain_damage`) | 50 | 85 → **130** | 30 → **25** | 30 |
+| Bán kính hố (= terrain damage × 0,8) | 40 | 40 → **104** | 35 → **20** | 40 → **24** |
+| Gió / nặng | 1,0 / 1,0 | 0,5 / 1,5 | 1,2 → **1,3** / 0,8 | 1,0 / 0,9 |
+| Năng lượng di chuyển gốc (`config_characters.mobility`) | 100 | **80** | **120** | 100 |
+| Skill | Triple Shot ×1,25 ×3 | Heavy Bomb (bom đào): ×1,3 → **×1,1**, nổ ×1,5 → **×2**, hố **×2,5** | Shock Field ×0,9 → **×1,3** + lưới | Healing Bloom 450 → **650** HP |
+
+- **Năng lượng di chuyển**: trước đây mọi nhân vật 100 (`mobility` 70/40/75/65 chỉ để hiển thị). Giờ `config_characters.mobility` là năng lượng gốc mỗi lượt (`gamedata.BaseMoveEnergy`, ≤ 0 hoặc nhân vật lạ → 100). `battlestats.Base` mang nó trong `Stats.MoveEnergy`; điểm và trang bị cộng vào `MoveEnergyBonus`; `Stats.TurnMoveEnergy()` = tổng. Room đặt `BattlePlayerState.moveEnergy = maxMoveEnergy` khi vào trận, `startTurn` nạp lại `maxMoveEnergy` (state cũ thiếu field → tính lại từ config + bonus). `GET /player/characters` `baseStats.*.moveEnergy` và `stats.moveEnergy` báo đúng số này.
+- **Hố**: `terrain_damage` của vũ khí trước đây không được đọc (hố = bán kính nổ). Giờ hố = `terrain_damage × 0,8` px (`match.craterPxPerTerrainDamage`; 50 → 40 px nên hố của Rookie không đổi), tách khỏi bán kính damage. Hố phẳng (bắn xuống đất bằng, `TestCraterDepthByCharacter`): Rookie sâu 41 px, Tanko 105, Spark 21, Flora 25.
+- **Bom đào của Tanko** (`single_large_bomb`, hằng số `match.heavyBombBlastScale` 2 và `heavyBombCraterScale` 2,5): nổ 120 px, hố 260 px. Trúng thẳng một Rookie trên đất bằng (`TestDiggingBombDropsTargetIntoFallDamage`): 426 damage nổ, mục tiêu rơi 239 px (quá ngưỡng 150 px) → 334 damage rơi. Phát thường của Tanko (hố 104 px) chỉ làm mục tiêu tụt 82 px, không mất máu rơi. Người bắn đứng trong hố cũng rơi theo.
+- **Spark** `shock_field` `damageMultiplier` 0,9 → 1,3 (config); lưới giữ nguyên. **Flora** `match.skillHealAmount` 450 → 650.
+
+Số phát hạ (trúng thẳng, không gió, không crit; `TestIdentityHitsToKillNoGear` trong `match`, `TestCharacterHitsToKillMatrix` trong `room` với DB): hàng = người bắn, cột = người chịu.
+
+| Không đồ | Rookie | Tanko | Spark | Flora |
+|---|---|---|---|---|
+| Rookie | 4 | 4 | 3 | 5 |
+| Tanko | 4 | 5 | 4 | 6 |
+| Spark | 3 | 3 | 3 | 4 |
+| Flora | 5 | 5 | 4 | 6 |
+
+| Cả hai mặc Dragon +0 (đồ lv40 + vũ khí lv40) | Rookie | Tanko | Spark | Flora |
+|---|---|---|---|---|
+| Rookie | 4 | 5 | 4 | 5 |
+| Tanko | 5 | 5 | 4 | 6 |
+| Spark | 4 | 4 | 3 | 4 |
+| Flora | 5 | 5 | 4 | 6 |
+
+Spark hạ nhanh nhất, Flora trụ lâu nhất, Rookie ở giữa; không đồ thì mọi cặp 3–6 phát. Tanko bắn chậm hạ hơn nhưng bù bằng hố và bom đào. Bot (`evalShot`) dùng bán kính nổ và damage của vũ khí nên bắn được với mọi nhân vật (`TestBotAimsWithEveryCharacter`).
+
 ### Character Stat Bonuses
 
 Khi trận bắt đầu, room đọc `bonus_*` của `player_characters` (nhân vật đang chọn) và nhân với `statMultipliers` trong `game_settings.character_progression` (key thiếu hoặc 0 → mặc định của seed 006). Bot giữ chỉ số gốc của nhân vật; nhân vật chưa sở hữu (DEV_UNLOCK_ALL) cũng vậy. Equipment cộng thêm sau đó — chỉ số equipment cũng là **điểm**, đổi ra chỉ số bằng cùng `statMultipliers` (VD Iron Cap `stat_hp` 20 = 20 điểm HP = +40 max HP); crit là % không qua multiplier.
@@ -641,9 +686,9 @@ Khi trận bắt đầu, room đọc `bonus_*` của `player_characters` (nhân 
 | `bonus_hp` | `hp` | 2 | `maxHp = character.hp + điểm × 2` |
 | `bonus_defense` | `defense` | 1 | `defense = character.defense + điểm × 1` |
 | `bonus_damage` | `damage` | 5 | `damageBonus += điểm × 5`, cộng phẳng vào damage vũ khí (cả weapon lẫn skill) |
-| `bonus_mobility` | `mobility` | 1 | `moveEnergyBonus += điểm × 1`; đầu mỗi lượt `moveEnergy = 100 + moveEnergyBonus` (1 năng lượng / 2px) |
-| `bonus_skill_power` | `skill_power` | 1 | `skillPowerBonus = điểm × 1` (%): damage skill × `(1 + skillPowerBonus/100)`, heal của `healing_bloom` = `round(450 × (1 + skillPowerBonus/100))` |
-| `bonus_terrain_damage` | `terrain_damage` | 1 | `terrainDamageBonus = điểm × 1` (%): bán kính khoét terrain = `explosionRadius × (1 + terrainDamageBonus/100)`; vùng sát thương vẫn dùng `explosionRadius`. `radius` của event `explode` là bán kính khoét |
+| `bonus_mobility` | `mobility` | 1 | `moveEnergyBonus += điểm × 1`; đầu mỗi lượt `moveEnergy = maxMoveEnergy = gốc nhân vật + moveEnergyBonus` (1 năng lượng / 2px) |
+| `bonus_skill_power` | `skill_power` | 1 | `skillPowerBonus = điểm × 1` (%): damage skill × `(1 + skillPowerBonus/100)`, heal của `healing_bloom` = `round(650 × (1 + skillPowerBonus/100))` |
+| `bonus_terrain_damage` | `terrain_damage` | 1 | `terrainDamageBonus = điểm × 1` (%): bán kính khoét terrain = `craterRadius × (1 + terrainDamageBonus/100)` (`craterRadius` = terrain damage vũ khí × 0,8 px, xem Nhân vật); vùng sát thương vẫn dùng `explosionRadius`. `radius` của event `explode` là bán kính khoét |
 
 #### Chỉ số hiển thị (`GET /player/characters`)
 
@@ -654,9 +699,9 @@ Room (`getActualStats` → `newBattlePlayer`) và API cùng tính bằng package
   "characters": [{
     "characterId": "tanko", "level": 3, "statPoints": 2, "bonusHp": 2, "bonusMobility": 1, "...": "...",
     "stats": {
-      "maxHp": 1998, "defense": 82, "damageBonus": 55, "moveEnergy": 101,
-      "skillPowerBonus": 0, "terrainDamageBonus": 0, "critChance": 2.2, "weaponDamage": 600,
-      "base":          {"maxHp": 1950, "defense": 80, "damageBonus": 0,  "moveEnergy": 100, "skillPowerBonus": 0, "terrainDamageBonus": 0},
+      "maxHp": 1698, "defense": 62, "damageBonus": 55, "moveEnergy": 81,
+      "skillPowerBonus": 0, "terrainDamageBonus": 0, "critChance": 2.2, "weaponDamage": 420,
+      "base":          {"maxHp": 1650, "defense": 60, "damageBonus": 0,  "moveEnergy": 80,  "skillPowerBonus": 0, "terrainDamageBonus": 0},
       "fromPoints":    {"maxHp": 4,    "defense": 0,  "damageBonus": 0,  "moveEnergy": 1,   "skillPowerBonus": 0, "terrainDamageBonus": 0},
       "fromEquipment": {"maxHp": 44,   "defense": 2,  "damageBonus": 55, "moveEnergy": 0,   "skillPowerBonus": 0, "terrainDamageBonus": 0, "critChance": 2.2},
       "equipmentPoints": {"hp": 22, "damage": 11, "defense": 2, "mobility": 0, "crit": 2.2}
@@ -665,13 +710,13 @@ Room (`getActualStats` → `newBattlePlayer`) và API cùng tính bằng package
   "resetStatsCost": {"currency": "coin", "amount": 500},
   "baseStats": {
     "rookie": {"maxHp": 1500, "defense": 50, "damageBonus": 0, "moveEnergy": 100, "skillPowerBonus": 0, "terrainDamageBonus": 0, "weaponDamage": 480},
-    "tanko":  {"maxHp": 1950, "defense": 80, "damageBonus": 0, "moveEnergy": 100, "skillPowerBonus": 0, "terrainDamageBonus": 0, "weaponDamage": 600}
+    "tanko":  {"maxHp": 1650, "defense": 60, "damageBonus": 0, "moveEnergy": 80,  "skillPowerBonus": 0, "terrainDamageBonus": 0, "weaponDamage": 420}
   },
   "statMultipliers": {"hp": 2, "damage": 5, "mobility": 1, "defense": 1, "skillPower": 1, "terrainDamage": 1}
 }
 ```
 
-- `stats` (tổng) = `base + fromPoints + fromEquipment` từng key. `fromEquipment` là chỉ số đã đổi; `equipmentPoints` là số điểm equipment trước khi đổi (để client hiện "Máu +22 điểm (+44)"). Ở tổng và `base`, `moveEnergy` là năng lượng mỗi lượt (`100 + bonus`); ở `fromPoints`/`fromEquipment` là phần cộng thêm. `skillPowerBonus`, `terrainDamageBonus` là %; `damageBonus` cộng phẳng vào `weaponDamage` (damage vũ khí của nhân vật).
+- `stats` (tổng) = `base + fromPoints + fromEquipment` từng key. `fromEquipment` là chỉ số đã đổi; `equipmentPoints` là số điểm equipment trước khi đổi (để client hiện "Máu +22 điểm (+44)"). Ở tổng và `base`, `moveEnergy` là năng lượng mỗi lượt (gốc nhân vật `config_characters.mobility` + bonus); ở `fromPoints`/`fromEquipment` là phần cộng thêm. `skillPowerBonus`, `terrainDamageBonus` là %; `damageBonus` cộng phẳng vào `weaponDamage` (damage vũ khí của nhân vật).
 - `critChance` (%) chỉ có khi khác 0 (chỉ equipment/gem/set cho crit); số thực, client tự làm tròn.
 - `baseStats`: mọi nhân vật trong game data (kể cả chưa sở hữu), không điểm, không equipment — cũng là chỉ số của bot.
 - `statMultipliers`: giá trị một điểm, đã điền mặc định cho key thiếu/0 — client dùng để xem trước khi cộng điểm.

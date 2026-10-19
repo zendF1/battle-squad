@@ -20,7 +20,7 @@ type CharacterConfig struct {
 	Role          string `yaml:"role"`
 	HP            int    `yaml:"hp"`
 	Damage        int    `yaml:"damage"`
-	Mobility      int    `yaml:"mobility"`
+	Mobility      int    `yaml:"mobility"` // base move energy per turn, see BaseMoveEnergy
 	Defense       int    `yaml:"defense"`
 	SkillPower    int    `yaml:"skillPower"`
 	TerrainDamage int    `yaml:"terrainDamage"`
@@ -143,6 +143,21 @@ type PhysicsConfig struct {
 
 var Data *GameData
 var Physics *PhysicsConfig
+
+// DefaultMoveEnergy is the base move energy per turn of a character missing
+// from the game data or configured with mobility <= 0.
+const DefaultMoveEnergy = 100
+
+// BaseMoveEnergy is a character's move energy per turn before stat points and
+// equipment: its config mobility, or DefaultMoveEnergy.
+func BaseMoveEnergy(characterID string) int {
+	if Data != nil {
+		if c, ok := Data.Characters[characterID]; ok && c.Mobility > 0 {
+			return c.Mobility
+		}
+	}
+	return DefaultMoveEnergy
+}
 
 // SettingDefenseK is the game_settings key of PhysicsConfig.DefenseK.
 const SettingDefenseK = "combat.defense_k"

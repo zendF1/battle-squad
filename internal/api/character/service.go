@@ -94,7 +94,7 @@ func allBaseStats() map[string]BaseStats {
 		return out
 	}
 	for id := range gamedata.Data.Characters {
-		out[id] = BaseStats{StatValues: statValues(battlestats.Base(id), true), WeaponDamage: battlestats.WeaponDamage(id)}
+		out[id] = BaseStats{StatValues: statValues(battlestats.Base(id)), WeaponDamage: battlestats.WeaponDamage(id)}
 	}
 	return out
 }

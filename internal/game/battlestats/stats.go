@@ -11,9 +11,6 @@ import (
 	"battle-squad/internal/game/gamedata"
 )
 
-// BaseMoveEnergy is the move energy every player gets each turn before bonuses.
-const BaseMoveEnergy = 100
-
 // Default base stats for a character missing from the game data.
 const (
 	defaultHP      = 1500
@@ -25,7 +22,8 @@ type Stats struct {
 	HP                 int
 	Defense            int
 	DamageBonus        int     // flat, added to weapon damage
-	MoveEnergyBonus    int     // flat, added to BaseMoveEnergy each turn
+	MoveEnergy         int     // the character's base move energy per turn (gamedata.BaseMoveEnergy); only Base sets it
+	MoveEnergyBonus    int     // flat, added to MoveEnergy each turn
 	CritChance         float64 // percent
 	SkillPowerBonus    int     // percent, scales skill damage and healing
 	TerrainDamageBonus int     // percent, grows the crater radius
@@ -37,11 +35,18 @@ func (s Stats) Add(o Stats) Stats {
 		HP:                 s.HP + o.HP,
 		Defense:            s.Defense + o.Defense,
 		DamageBonus:        s.DamageBonus + o.DamageBonus,
+		MoveEnergy:         s.MoveEnergy + o.MoveEnergy,
 		MoveEnergyBonus:    s.MoveEnergyBonus + o.MoveEnergyBonus,
 		CritChance:         s.CritChance + o.CritChance,
 		SkillPowerBonus:    s.SkillPowerBonus + o.SkillPowerBonus,
 		TerrainDamageBonus: s.TerrainDamageBonus + o.TerrainDamageBonus,
 	}
+}
+
+// TurnMoveEnergy is the move energy a player with these stats gets each turn:
+// the base plus the bonuses.
+func (s Stats) TurnMoveEnergy() int {
+	return s.MoveEnergy + s.MoveEnergyBonus
 }
 
 // Points are the points a player allocated to a character
@@ -61,9 +66,9 @@ type Multipliers struct {
 	TerrainDamage int `json:"terrainDamage"`
 }
 
-// Base returns a character's config HP and defense with no bonuses.
+// Base returns a character's config HP, defense and move energy with no bonuses.
 func Base(characterID string) Stats {
-	s := Stats{HP: defaultHP, Defense: defaultDefense}
+	s := Stats{HP: defaultHP, Defense: defaultDefense, MoveEnergy: gamedata.BaseMoveEnergy(characterID)}
 	if gamedata.Data != nil {
 		if c, ok := gamedata.Data.Characters[characterID]; ok {
 			s.HP, s.Defense = c.HP, c.Defense

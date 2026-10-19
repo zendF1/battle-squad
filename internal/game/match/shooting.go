@@ -81,10 +81,11 @@ func SimulateProjectile(
 	windForceX := float64(wind.Direction) * wind.Power * windScale * weapon.WindInfluence
 
 	result := &ProjectileResult{
-		ProjectileID:     generateProjectileID(),
-		OwnerPlayerID:    ownerID,
-		ExplosionRadius:  float64(weapon.ExplosionRadius),
-		Path:             []ProjectileStep{},
+		ProjectileID:    generateProjectileID(),
+		OwnerPlayerID:   ownerID,
+		ExplosionRadius: float64(weapon.ExplosionRadius),
+		CraterRadius:    weaponCraterRadius(weapon),
+		Path:            []ProjectileStep{},
 	}
 
 	t := 0.0

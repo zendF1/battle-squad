@@ -79,8 +79,8 @@ func TestSkillPowerBonusScalesHeal(t *testing.T) {
 
 	send(m, clients[cur], "Shoot", ShootAction{Angle: 60, Power: 20, ActionMode: "skill"})
 	s := shotResolved(t, clients[cur])
-	if heals := eventsOf(s, "heal", cur); len(heals) != 1 || heals[0].Amount != 675 || p.HP != 975 {
-		t.Fatalf("heal events %+v, hp=%d; want 450 * 1.5 = 675", heals, p.HP)
+	if heals := eventsOf(s, "heal", cur); len(heals) != 1 || heals[0].Amount != 975 || p.HP != 1275 {
+		t.Fatalf("heal events %+v, hp=%d; want 650 * 1.5 = 975", heals, p.HP)
 	}
 }
 

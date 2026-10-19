@@ -26,8 +26,9 @@ type BattlePlayerState struct {
 	Defense         int            `json:"defense"`
 	Position        Vector2        `json:"position"`
 	MoveEnergy      int            `json:"moveEnergy"`
-	Items           []string       `json:"items"` // Consumables remaining
-	UsedItems       []string       `json:"-"`     // Consumables spent this match (reservations to consume)
+	MaxMoveEnergy   int            `json:"maxMoveEnergy"` // refilled each turn: the character's base move energy + MoveEnergyBonus
+	Items           []string       `json:"items"`         // Consumables remaining
+	UsedItems       []string       `json:"-"`             // Consumables spent this match (reservations to consume)
 	StatusEffects   []StatusEffect `json:"statusEffects"`
 	IsAlive         bool           `json:"isAlive"`
 	IsBot           bool           `json:"isBot"`
@@ -101,7 +102,11 @@ type ProjectileResult struct {
 	Path            []ProjectileStep `json:"path"`
 	HitPlayerID     string           `json:"hitPlayerId,omitempty"` // empty if missed or hit terrain
 	ExplosionPoint  *Vector2         `json:"explosionPoint,omitempty"`
-	ExplosionRadius float64          `json:"explosionRadius"`
+	ExplosionRadius float64          `json:"explosionRadius"` // blast radius: damage falls off to 0 at it
+	// CraterRadius is the crater the explosion carves before the shooter's terrain damage
+	// bonus (the explode event's radius includes it): weaponCraterRadius, scaled by skills
+	// and fragile terrain.
+	CraterRadius float64 `json:"craterRadius"`
 }
 
 // ShotEvent is one entry of a ShotResolved timeline. T is seconds since the shot was fired;

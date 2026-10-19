@@ -11,7 +11,7 @@ func withGameData(t *testing.T) {
 	t.Helper()
 	prev := gamedata.Data
 	gamedata.Data = &gamedata.GameData{
-		Characters: map[string]gamedata.CharacterConfig{"tanko": {CharacterID: "tanko", HP: 1950, Defense: 80, WeaponID: "cannon_ball"}},
+		Characters: map[string]gamedata.CharacterConfig{"tanko": {CharacterID: "tanko", HP: 1950, Defense: 80, Mobility: 80, WeaponID: "cannon_ball"}},
 		Weapons:    map[string]gamedata.WeaponConfig{"cannon_ball": {WeaponID: "cannon_ball", Damage: 600}},
 	}
 	t.Cleanup(func() { gamedata.Data = prev })
@@ -19,10 +19,10 @@ func withGameData(t *testing.T) {
 
 func TestBaseAndWeaponDamage(t *testing.T) {
 	withGameData(t)
-	if got := Base("tanko"); got != (Stats{HP: 1950, Defense: 80}) {
+	if got := Base("tanko"); got != (Stats{HP: 1950, Defense: 80, MoveEnergy: 80}) {
 		t.Fatalf("tanko base %+v", got)
 	}
-	if got := Base("ghost"); got != (Stats{HP: 1500, Defense: 50}) {
+	if got := Base("ghost"); got != (Stats{HP: 1500, Defense: 50, MoveEnergy: gamedata.DefaultMoveEnergy}) {
 		t.Fatalf("unknown character base %+v", got)
 	}
 	if WeaponDamage("tanko") != 600 || WeaponDamage("ghost") != 0 {
@@ -125,7 +125,10 @@ func TestComputeSumsParts(t *testing.T) {
 	equip := EquipmentPoints{HP: 3, Defense: 4, Damage: 6, Mobility: 2, Crit: 1.5}
 	b := Compute("tanko", Points{HP: 2, Mobility: 1}, Multipliers{HP: 50, Mobility: 3, Damage: 5, Defense: 5}, equip)
 	wantEquip := Stats{HP: 150, Defense: 20, DamageBonus: 30, MoveEnergyBonus: 6, CritChance: 1.5}
-	want := Stats{HP: 1950 + 100 + 150, Defense: 80 + 20, DamageBonus: 30, MoveEnergyBonus: 3 + 6, CritChance: 1.5}
+	want := Stats{HP: 1950 + 100 + 150, Defense: 80 + 20, DamageBonus: 30, MoveEnergy: 80, MoveEnergyBonus: 3 + 6, CritChance: 1.5}
+	if b.Total.TurnMoveEnergy() != 89 {
+		t.Fatalf("turn move energy %d, want 80 + 9", b.Total.TurnMoveEnergy())
+	}
 	if b.Total != want || b.Base != Base("tanko") || b.FromEquipment != wantEquip || b.EquipmentPoints != equip ||
 		b.FromPoints != (Stats{HP: 100, MoveEnergyBonus: 3}) {
 		t.Fatalf("breakdown %+v", b)

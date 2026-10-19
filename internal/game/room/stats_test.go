@@ -44,11 +44,11 @@ func TestAddStatPointsDefaultsMissingMultipliers(t *testing.T) {
 
 func TestNewBattlePlayerCarriesStats(t *testing.T) {
 	p := RoomPlayer{PlayerID: "p1", DisplayName: "P", TeamID: 2, CharacterID: "tanko", Items: []string{"medkit"}}
-	s := battleStats{HP: 180, Defense: 60, DamageBonus: 10, MoveEnergyBonus: 9, CritChance: 2, SkillPowerBonus: 15, TerrainDamageBonus: 6}
+	s := battleStats{HP: 180, Defense: 60, DamageBonus: 10, MoveEnergy: 80, MoveEnergyBonus: 9, CritChance: 2, SkillPowerBonus: 15, TerrainDamageBonus: 6}
 	bp := newBattlePlayer(p, match.Vector2{X: 5, Y: 6}, s, "tanko_weapon_lv30", false)
 
 	if bp.HP != 180 || bp.MaxHP != 180 || bp.Defense != 60 || bp.DamageBonus != 10 ||
-		bp.MoveEnergy != 109 || bp.MoveEnergyBonus != 9 || bp.CritChance != 2 ||
+		bp.MoveEnergy != 89 || bp.MaxMoveEnergy != 89 || bp.MoveEnergyBonus != 9 || bp.CritChance != 2 ||
 		bp.SkillPowerBonus != 15 || bp.TerrainDamageBonus != 6 {
 		t.Fatalf("stats not carried: %+v", bp)
 	}
@@ -89,7 +89,7 @@ func TestGetActualStatsAppliesAllStatPoints(t *testing.T) {
 
 	// migrations/006 seed: hp 2, damage 5, mobility 1, defense 1, skill_power 1, terrain_damage 1
 	got, weapon := r.getActualStats("p1", "tanko")
-	want := battleStats{HP: 1952, Defense: 84, DamageBonus: 10, MoveEnergyBonus: 3, SkillPowerBonus: 5, TerrainDamageBonus: 6}
+	want := battleStats{HP: 1952, Defense: 84, DamageBonus: 10, MoveEnergy: gamedata.DefaultMoveEnergy, MoveEnergyBonus: 3, SkillPowerBonus: 5, TerrainDamageBonus: 6}
 	if got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}

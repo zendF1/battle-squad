@@ -207,7 +207,7 @@ func TestHealSkillSendsHealEvent(t *testing.T) {
 	s := shotResolved(t, clients[cur])
 
 	heals := eventsOf(s, "heal", cur)
-	if len(heals) != 1 || heals[0].Amount != 450 || *heals[0].HP != 1200 || p.HP != 1200 {
+	if len(heals) != 1 || heals[0].Amount != 650 || *heals[0].HP != 1400 || p.HP != 1400 {
 		t.Fatalf("heal events %+v, hp=%d", heals, p.HP)
 	}
 	if st := eventsOf(s, "status", cur); len(st) != 1 || st[0].EffectID != "heal" || st[0].Turns != 1 {

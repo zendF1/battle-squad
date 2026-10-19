@@ -3,7 +3,7 @@
   role: balanced
   hp: 1500
   damage: 480
-  mobility: 70
+  mobility: 100
   defense: 50
   skillPower: 50
   terrainDamage: 50
@@ -13,37 +13,37 @@
 
 - characterId: tanko
   name: Tanko
-  role: heavy_gunner
-  hp: 1950
-  damage: 600
-  mobility: 40
-  defense: 80
+  role: demolisher
+  hp: 1650
+  damage: 420
+  mobility: 80
+  defense: 60
   skillPower: 65
-  terrainDamage: 80
+  terrainDamage: 130
   difficulty: 2
   weaponId: cannon_ball
   skillId: heavy_bomb
 
 - characterId: spark
   name: Spark
-  role: controller
-  hp: 1350
-  damage: 440
-  mobility: 75
-  defense: 40
+  role: striker
+  hp: 1250
+  damage: 620
+  mobility: 120
+  defense: 30
   skillPower: 80
-  terrainDamage: 40
+  terrainDamage: 25
   difficulty: 2
   weaponId: electric_orb
   skillId: shock_field
 
 - characterId: flora
   name: Flora
-  role: support
-  hp: 1425
-  damage: 360
-  mobility: 65
-  defense: 50
+  role: sustain
+  hp: 1900
+  damage: 380
+  mobility: 100
+  defense: 90
   skillPower: 85
   terrainDamage: 30
   difficulty: 1

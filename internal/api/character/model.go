@@ -35,9 +35,10 @@ func (c PlayerCharacter) Points() battlestats.Points {
 	}
 }
 
-// StatValues are battle stats as the client shows them. In a total moveEnergy
-// is the per-turn energy (100 + bonuses); in a part (fromPoints,
-// fromEquipment) every field is what that part adds.
+// StatValues are battle stats as the client shows them. In a total (and in
+// base) moveEnergy is the per-turn energy (the character's base move energy +
+// bonuses); in a part (fromPoints, fromEquipment) every field is what that
+// part adds.
 type StatValues struct {
 	MaxHP              int     `json:"maxHp"`
 	Defense            int     `json:"defense"`
@@ -67,14 +68,11 @@ type CharacterStats struct {
 	EquipmentPoints battlestats.EquipmentPoints `json:"equipmentPoints"`
 }
 
-// statValues converts battle stats; total adds BaseMoveEnergy to the move energy.
-func statValues(s battlestats.Stats, total bool) StatValues {
-	moveEnergy := s.MoveEnergyBonus
-	if total {
-		moveEnergy += battlestats.BaseMoveEnergy
-	}
+// statValues converts battle stats; only Base carries the base move energy, so
+// a part's moveEnergy is just what it adds.
+func statValues(s battlestats.Stats) StatValues {
 	return StatValues{
-		MaxHP: s.HP, Defense: s.Defense, DamageBonus: s.DamageBonus, MoveEnergy: moveEnergy,
+		MaxHP: s.HP, Defense: s.Defense, DamageBonus: s.DamageBonus, MoveEnergy: s.TurnMoveEnergy(),
 		SkillPowerBonus: s.SkillPowerBonus, TerrainDamageBonus: s.TerrainDamageBonus, CritChance: s.CritChance,
 	}
 }
@@ -82,11 +80,11 @@ func statValues(s battlestats.Stats, total bool) StatValues {
 // newCharacterStats converts a battlestats breakdown.
 func newCharacterStats(characterID string, b battlestats.Breakdown) *CharacterStats {
 	return &CharacterStats{
-		StatValues:      statValues(b.Total, true),
+		StatValues:      statValues(b.Total),
 		WeaponDamage:    battlestats.WeaponDamage(characterID),
-		Base:            statValues(b.Base, true),
-		FromPoints:      statValues(b.FromPoints, false),
-		FromEquipment:   statValues(b.FromEquipment, false),
+		Base:            statValues(b.Base),
+		FromPoints:      statValues(b.FromPoints),
+		FromEquipment:   statValues(b.FromEquipment),
 		EquipmentPoints: b.EquipmentPoints,
 	}
 }

@@ -35,9 +35,15 @@ const (
 	// context because the match context is usually already cancelled by then.
 	reservationReleaseTimeout = 5 * time.Second
 
-	skillHealAmount   = 450.0 // healing_bloom heal before the skill power bonus
+	skillHealAmount   = 650.0 // healing_bloom heal before the skill power bonus
 	defaultMedkitHeal = 450.0 // medkit heal when config_items has no value
 	lavaDamage        = 75    // HP lost at the start of a turn on lava (ignores defense)
+
+	// heavy_bomb (single_large_bomb), Tanko's digging bomb: the blast radius and the crater
+	// are these multiples of the weapon's, deep enough to drop a target hit at the centre more
+	// than fallDamageThreshold.
+	heavyBombBlastScale  = 2.0
+	heavyBombCraterScale = 2.5
 )
 
 type Match struct {
@@ -414,6 +420,16 @@ func (m *Match) handleEvent(ev matchEvent) {
 	}
 }
 
+// turnMoveEnergy is the move energy p gets at the start of each turn: MaxMoveEnergy, or, for
+// a state built without it (tests, a snapshot from before it existed), the character's base
+// move energy + MoveEnergyBonus, which is then stored in MaxMoveEnergy.
+func turnMoveEnergy(p *BattlePlayerState) int {
+	if p.MaxMoveEnergy <= 0 {
+		p.MaxMoveEnergy = gamedata.BaseMoveEnergy(p.CharacterID) + p.MoveEnergyBonus
+	}
+	return p.MaxMoveEnergy
+}
+
 func (m *Match) startTurn(ctx context.Context) {
 	m.State.TurnTimeLeft = 20
 	m.turnSeq++
@@ -421,8 +437,8 @@ func (m *Match) startTurn(ctx context.Context) {
 	clear(m.lastMoveSeq) // a new turn starts a new replay on the mover's client
 
 	player := m.State.Players[m.State.CurrentPlayerID]
-	player.MoveEnergy = 100 + player.MoveEnergyBonus // Reset move energy to full
-	ApplyTurnStartEffects(player)                    // net / freeze limit this turn's movement
+	player.MoveEnergy = turnMoveEnergy(player) // Reset move energy to full
+	ApplyTurnStartEffects(player)              // net / freeze limit this turn's movement
 
 	// Skill energy is incremented at end of turn, not start
 
@@ -470,6 +486,7 @@ func (m *Match) startTurn(ctx context.Context) {
 		"currentPlayerId": m.State.CurrentPlayerID,
 		"wind":            m.State.Wind,
 		"moveEnergy":      player.MoveEnergy,
+		"maxMoveEnergy":   player.MaxMoveEnergy,
 		"skillEnergy":     skillEnergy,
 	})
 	m.broadcast(ws.Message{
@@ -763,9 +780,10 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 	// 2. Resolve explosion, damage and falls
 	tl := &shotTimeline{}
 	if result.ExplosionPoint != nil {
-		// Fragile terrain: double the explosion radius
+		// Fragile terrain: double the explosion radius and the crater
 		if m.Terrain.GetTerrainTypeAt(result.ExplosionPoint.X, result.ExplosionPoint.Y) == "fragile" {
 			result.ExplosionRadius *= 2
+			result.CraterRadius *= 2
 		}
 
 		baseDamage := float64(weaponConfig.Damage+player.DamageBonus) * damageFactor
@@ -835,25 +853,27 @@ func (m *Match) shootSkill(ctx context.Context, player *BattlePlayerState, actio
 	damageFactor *= skillConfig.DamageMultiplier * skillPowerFactor(player)
 	baseDamage := float64(weaponConfig.Damage+player.DamageBonus) * damageFactor
 
-	// Build list of (angle, explosionRadius) pairs per projectile
+	// Build list of (angle, blast radius, crater radius) per projectile
 	type shotParams struct {
 		angle  float64
 		radius float64
+		crater float64
 	}
 	var shots []shotParams
+	blast, crater := float64(weaponConfig.ExplosionRadius), weaponCraterRadius(weaponConfig)
 
 	switch skillConfig.EffectType {
 	case "multi_projectile":
 		// triple_shot: fire 3 projectiles at angle-10, angle, angle+10
 		for _, offset := range []float64{-10, 0, 10} {
-			shots = append(shots, shotParams{angle: action.Angle + offset, radius: float64(weaponConfig.ExplosionRadius)})
+			shots = append(shots, shotParams{angle: action.Angle + offset, radius: blast, crater: crater})
 		}
 	case "single_large_bomb":
-		// heavy_bomb: single projectile, explosion radius * 1.5
-		shots = append(shots, shotParams{angle: action.Angle, radius: float64(weaponConfig.ExplosionRadius) * 1.5})
+		// heavy_bomb: one digging bomb, blast and crater scaled up
+		shots = append(shots, shotParams{angle: action.Angle, radius: blast * heavyBombBlastScale, crater: crater * heavyBombCraterScale})
 	default:
 		// shock_field and any other types: single normal projectile
-		shots = append(shots, shotParams{angle: action.Angle, radius: float64(weaponConfig.ExplosionRadius)})
+		shots = append(shots, shotParams{angle: action.Angle, radius: blast, crater: crater})
 	}
 
 	pierce := drillPierce(player)
@@ -874,6 +894,7 @@ func (m *Match) shootSkill(ctx context.Context, player *BattlePlayerState, actio
 		)
 		r.SkillID = skillID
 		r.ExplosionRadius = s.radius
+		r.CraterRadius = s.crater
 		shot.Projectiles = append(shot.Projectiles, r)
 
 		// Track shot fired for each projectile in the skill
@@ -968,6 +989,7 @@ func (m *Match) shootTeleport(ctx context.Context, player *BattlePlayerState, ac
 		0, // no drilling
 	)
 	result.ExplosionRadius = 0
+	result.CraterRadius = 0
 
 	player.ShotsFired++
 	consumeItem(player, itemIdx)

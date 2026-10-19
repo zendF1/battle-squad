@@ -139,3 +139,81 @@ func TestBalanceHitsToKill(t *testing.T) {
 		})
 	}
 }
+
+// identityCharacters are the four characters of configs/characters.yaml.
+var identityCharacters = []string{"rookie", "tanko", "spark", "flora"}
+
+// Character identities, hits to kill attacker × defender (direct hits, no wind,
+// no crit) with no gear and with both wearing Dragon +0 (the lv40 set and the
+// character's lv40 weapon): Spark kills fastest, Flora survives longest,
+// Rookie in between; with no gear every matchup takes 3..8 hits.
+func TestCharacterHitsToKillMatrix(t *testing.T) {
+	db := dbtest.NewSchema(t, 0, allMigrations(t)...)
+	prev := gamedata.Data
+	_, self, _, _ := runtime.Caller(0)
+	if err := gamedata.LoadGameData(filepath.Join(filepath.Dir(self), "..", "..", "..", "configs")); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { gamedata.Data = prev })
+
+	r := &Room{db: db}
+	for gi, gear := range []struct {
+		name    string
+		level   int // 0 = no gear
+		inRange bool
+	}{{"no gear", 0, true}, {"Dragon +0", 40, false}} {
+		t.Run(gear.name, func(t *testing.T) {
+			stats := map[string]battlestats.Stats{}
+			for _, c := range identityCharacters {
+				playerID := fmt.Sprintf("id%d_%s", gi, c)
+				dbtest.CreatePlayer(t, db, playerID, 0, 0)
+				if _, err := db.Pool.Exec(context.Background(),
+					`INSERT INTO player_characters (player_id, character_id) VALUES ($1, $2)`, playerID, c); err != nil {
+					t.Fatal(err)
+				}
+				if gear.level > 0 {
+					equipCatalogItem(t, db, playerID, c, fmt.Sprintf("%s_weapon_lv%d", c, gear.level), 0)
+					for _, s := range []string{"armor", "helmet", "pants", "boots", "gloves"} {
+						equipCatalogItem(t, db, playerID, c, fmt.Sprintf("normal_%s_lv%d", s, gear.level), 0)
+					}
+				}
+				stats[c], _ = r.getActualStats(playerID, c)
+				t.Logf("%-6s HP %5d DEF %3d damage %4d move energy %3d", c, stats[c].HP, stats[c].Defense,
+					battlestats.WeaponDamage(c)+stats[c].DamageBonus, stats[c].TurnMoveEnergy())
+			}
+
+			hits := map[string]map[string]int{}
+			row, col := map[string]int{}, map[string]int{}
+			t.Logf("%-8s %7s %7s %7s %7s", "atk\\def", "rookie", "tanko", "spark", "flora")
+			for _, a := range identityCharacters {
+				hits[a] = map[string]int{}
+				for _, d := range identityCharacters {
+					h := int(math.Ceil(float64(stats[d].HP) / float64(directHit(a, stats[a], stats[d].Defense))))
+					hits[a][d] = h
+					row[a] += h
+					col[d] += h
+					if gear.inRange && (h < 3 || h > 8) {
+						t.Errorf("%s kills %s in %d hits, want 3..8", a, d, h)
+					}
+				}
+				t.Logf("%-8s %7d %7d %7d %7d", a, hits[a]["rookie"], hits[a]["tanko"], hits[a]["spark"], hits[a]["flora"])
+			}
+			for _, d := range identityCharacters {
+				for _, a := range identityCharacters {
+					if hits["spark"][d] > hits[a][d] {
+						t.Errorf("%s kills %s in %d, faster than Spark's %d", a, d, hits[a][d], hits["spark"][d])
+					}
+					if hits[a]["flora"] < hits[a][d] {
+						t.Errorf("%s lasts %d hits from %s, longer than Flora's %d", d, hits[a][d], a, hits[a]["flora"])
+					}
+				}
+			}
+			if !(row["spark"] < row["rookie"] && row["rookie"] < row["flora"]) {
+				t.Errorf("hits dealt: Spark %d, Rookie %d, Flora %d; want Rookie in between", row["spark"], row["rookie"], row["flora"])
+			}
+			if !(col["spark"] < col["rookie"] && col["rookie"] < col["flora"]) {
+				t.Errorf("hits survived: Spark %d, Rookie %d, Flora %d; want Rookie in between", col["spark"], col["rookie"], col["flora"])
+			}
+		})
+	}
+}

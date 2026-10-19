@@ -77,7 +77,7 @@ func hurtPlayer(p *BattlePlayerState, damage int) bool {
 // applies splash damage to the shooter's enemies. It returns the enemies the blast damaged.
 func (m *Match) explodeProjectile(shooter *BattlePlayerState, r *ProjectileResult, baseDamage float64, tl *shotTimeline) []*BattlePlayerState {
 	t := flightEnd(r)
-	crater := craterRadius(shooter, r.ExplosionRadius)
+	crater := craterRadius(shooter, r.CraterRadius)
 	m.Terrain.DestroyCircle(r.ExplosionPoint.X, r.ExplosionPoint.Y, crater)
 	tl.add(ShotEvent{
 		T: t, Type: "explode", ProjectileID: r.ProjectileID,

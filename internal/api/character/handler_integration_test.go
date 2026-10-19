@@ -77,8 +77,8 @@ func TestGetCharactersJSONIncludesStats(t *testing.T) {
 	prev := gamedata.Data
 	gamedata.Data = &gamedata.GameData{
 		Characters: map[string]gamedata.CharacterConfig{
-			"tanko": {CharacterID: "tanko", HP: 1950, Defense: 80, WeaponID: "cannon_ball"},
-			"spark": {CharacterID: "spark", HP: 1350, Defense: 40, WeaponID: "electric_orb"},
+			"tanko": {CharacterID: "tanko", HP: 1950, Defense: 80, Mobility: 80, WeaponID: "cannon_ball"},
+			"spark": {CharacterID: "spark", HP: 1350, Defense: 40, Mobility: 120, WeaponID: "electric_orb"},
 		},
 		Weapons: map[string]gamedata.WeaponConfig{"cannon_ball": {Damage: 600}, "electric_orb": {Damage: 440}},
 	}
@@ -111,7 +111,7 @@ func TestGetCharactersJSONIncludesStats(t *testing.T) {
 	}
 	s := d.Characters[0].Stats
 	// migrations/006 seed: hp 2, skill_power 1 per point
-	if s["maxHp"] != 1954.0 || s["defense"] != 80.0 || s["moveEnergy"] != 100.0 || s["skillPowerBonus"] != 1.0 ||
+	if s["maxHp"] != 1954.0 || s["defense"] != 80.0 || s["moveEnergy"] != 80.0 || s["skillPowerBonus"] != 1.0 ||
 		s["weaponDamage"] != 600.0 || s["damageBonus"] != 0.0 || s["terrainDamageBonus"] != 0.0 {
 		t.Fatalf("stats %v", s)
 	}
@@ -121,10 +121,10 @@ func TestGetCharactersJSONIncludesStats(t *testing.T) {
 	fp, _ := s["fromPoints"].(map[string]any)
 	fe, _ := s["fromEquipment"].(map[string]any)
 	base, _ := s["base"].(map[string]any)
-	if fp["maxHp"] != 4.0 || fp["moveEnergy"] != 0.0 || fe["maxHp"] != 0.0 || base["maxHp"] != 1950.0 || base["moveEnergy"] != 100.0 {
+	if fp["maxHp"] != 4.0 || fp["moveEnergy"] != 0.0 || fe["maxHp"] != 0.0 || base["maxHp"] != 1950.0 || base["moveEnergy"] != 80.0 {
 		t.Fatalf("parts base %v fromPoints %v fromEquipment %v", base, fp, fe)
 	}
-	if b := d.BaseStats["spark"]; len(d.BaseStats) != 2 || b["maxHp"] != 1350.0 || b["defense"] != 40.0 || b["moveEnergy"] != 100.0 || b["weaponDamage"] != 440.0 {
+	if b := d.BaseStats["spark"]; len(d.BaseStats) != 2 || b["maxHp"] != 1350.0 || b["defense"] != 40.0 || b["moveEnergy"] != 120.0 || b["weaponDamage"] != 440.0 {
 		t.Fatalf("baseStats %v", d.BaseStats)
 	}
 	want := map[string]int{"hp": 2, "damage": 5, "mobility": 1, "defense": 1, "skillPower": 1, "terrainDamage": 1}

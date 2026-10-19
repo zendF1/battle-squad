@@ -9,25 +9,25 @@
 
 - weaponId: cannon_ball
   name: Cannon Ball
-  damage: 600
-  explosionRadius: 50
-  terrainDamage: 85
+  damage: 420
+  explosionRadius: 60
+  terrainDamage: 130
   projectileWeight: 1.5
   windInfluence: 0.5
   multiHit: 1
 
 - weaponId: electric_orb
   name: Electric Orb
-  damage: 440
-  explosionRadius: 35
-  terrainDamage: 30
+  damage: 620
+  explosionRadius: 30
+  terrainDamage: 25
   projectileWeight: 0.8
-  windInfluence: 1.2
+  windInfluence: 1.3
   multiHit: 1
 
 - weaponId: seed_bomb
   name: Seed Bomb
-  damage: 360
+  damage: 380
   explosionRadius: 40
   terrainDamage: 30
   projectileWeight: 0.9

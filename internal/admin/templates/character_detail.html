@@ -26,12 +26,13 @@
         <div class="form-group">
             <label>Vai trò</label>
             <select name="role">
-                <option value="dps" {{if eq .Character.Role "dps"}}selected{{end}}>DPS - Tấn công</option>
-                <option value="tank" {{if eq .Character.Role "tank"}}selected{{end}}>Tank - Phòng thủ</option>
-                <option value="support" {{if eq .Character.Role "support"}}selected{{end}}>Support - Hỗ trợ</option>
-                <option value="assassin" {{if eq .Character.Role "assassin"}}selected{{end}}>Assassin - Sát thủ</option>
+                <option value="balanced" {{if eq .Character.Role "balanced"}}selected{{end}}>Balanced - Cân bằng</option>
+                <option value="demolisher" {{if eq .Character.Role "demolisher"}}selected{{end}}>Demolisher - Phá địa hình</option>
+                <option value="striker" {{if eq .Character.Role "striker"}}selected{{end}}>Striker - Sát thương</option>
+                <option value="sustain" {{if eq .Character.Role "sustain"}}selected{{end}}>Sustain - Bền bỉ</option>
+                {{if not (or (eq .Character.Role "balanced") (eq .Character.Role "demolisher") (eq .Character.Role "striker") (eq .Character.Role "sustain"))}}<option value="{{.Character.Role}}" selected>{{.Character.Role}}</option>{{end}}
             </select>
-            <div class="desc">Vai trò ảnh hưởng đến chỉ số ngẫu nhiên khi tạo trang bị</div>
+            <div class="desc">Chỉ để hiển thị; client có nhãn riêng cho từng nhân vật</div>
         </div>
         <div class="form-group">
             <label>HP (Máu)</label>
@@ -41,12 +42,12 @@
         <div class="form-group">
             <label>Damage (Sát thương)</label>
             <input type="number" name="damage" value="{{.Character.Damage}}" step="1">
-            <div class="desc">Chỉ số sát thương cơ bản, ảnh hưởng đến lượng damage gây ra</div>
+            <div class="desc">Chỉ để hiển thị: đạn gây sát thương của vũ khí (Weapons → damage)</div>
         </div>
         <div class="form-group">
             <label>Mobility (Di chuyển)</label>
             <input type="number" name="mobility" value="{{.Character.Mobility}}" step="1">
-            <div class="desc">Năng lượng di chuyển mỗi lượt. Cao = đi được xa hơn</div>
+            <div class="desc">Năng lượng di chuyển cơ bản mỗi lượt (1 năng lượng = 2 px), cộng thêm điểm và trang bị. ≤ 0 = 100</div>
         </div>
         <div class="form-group">
             <label>Defense (Phòng thủ)</label>
@@ -61,7 +62,7 @@
         <div class="form-group">
             <label>Terrain Damage (Phá địa hình)</label>
             <input type="number" name="terrain_damage" value="{{.Character.TerrainDamage}}" step="1">
-            <div class="desc">Bán kính phá hủy địa hình khi đạn nổ. Cao = phá nhiều đất hơn</div>
+            <div class="desc">Chỉ để hiển thị: hố nổ lấy từ vũ khí (bán kính = terrain damage của vũ khí × 0,8 px)</div>
         </div>
         <div class="form-group">
             <label>Difficulty (Độ khó)</label>
