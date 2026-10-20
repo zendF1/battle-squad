@@ -217,13 +217,18 @@ Khi mặc đủ 6 món cùng tier (Bạc/Vàng/Titan/Kim cương), nhận bonus 
 ### Công thức tỷ lệ nâng cấp (theo mô hình NSO)
 
 ```
-percent = (tổng_power_đá_bỏ_vào × 100) / upgrade_cost[current_level]
+cost = upgrade_cost[current_level] × (3 nếu là vũ khí, 1 với món khác)
+percent = (tổng_power_đá_bỏ_vào × 100) / cost
 
 if percent > max_percent[current_level]:
     percent = max_percent[current_level]
 
+if nâng cấp cẩn thận: percent = min(percent × (1 + careful_bonus_percent / 100), 100)   -- làm tròn 2 số lẻ
+
 Thành công nếu: random(0..100) < percent
 ```
+
+**Vũ khí tốn đá gấp 3:** món ở slot `weapon` cần `upgrade_cost × 3` power cho cùng một tỷ lệ (game_settings `equipment.weapon_upgrade_cost_multiplier`, mặc định 3, giá trị < 1 / sai → 3). Max % và quay về khi thất bại giữ nguyên; giá kim cương và bonus của nâng cấp cẩn thận **không** đổi theo slot. Client đọc `weaponUpgradeCostMultiplier` của `/equipment/catalog`.
 
 **Player tự quyết tỷ lệ:** bỏ nhiều đá = tỷ lệ cao (nhưng cap), bỏ ít đá = tỷ lệ thấp nhưng tiết kiệm.
 
@@ -268,6 +273,36 @@ Thành công nếu: random(0..100) < percent
 | +15 → +16 | 200,000 | 10% | 1× đá cấp 11 | **Quay về +14** |
 
 > Cost và Max % đều **cấu hình được từ Admin Dashboard** (`config_upgrade_rates`).
+> Cột "Đá min để max" là cho giáp / mũ / giày / găng / nhẫn… Vũ khí cần gấp 3 power: VD +8 → +9 cần 3,600 × 45% = 1,620 power (3× đá cấp 7), +13 → +14 cần 30,000 power để đạt 20% (2× đá cấp 10).
+
+### Nâng cấp cẩn thận
+
+Tùy chọn khi nâng cấp (`careful: true`): trả thêm kim cương để **nhân** tỷ lệ thành công lên `(1 + bonus / 100)` — bonus là % tương đối, không phải điểm % cộng thêm.
+
+- Vẫn phải bỏ đá như thường (không đá → `EQUIP_NO_STONES`). Tỷ lệ cuối = `min(tỷ lệ đá × (1 + bonus/100), 100)`, làm tròn 2 số lẻ; tỷ lệ đá đã bị cap bởi Max % → mức trần mới = Max % × (1 + bonus/100).
+- Kim cương bị trừ dù thành công hay thất bại; quy tắc thất bại (safezone) không đổi.
+- Bonus và giá theo bậc: cột `careful_bonus_percent` và `careful_gem_cost` của `config_upgrade_rates` (sửa ở Admin → Upgrade Rates; một trong hai = 0 → bậc đó không có nâng cấp cẩn thận, server trả `EQUIP_CAREFUL_UNAVAILABLE`). Vũ khí dùng cùng bonus và giá (×3 chỉ áp cho đá).
+
+| Bậc | Bonus | Trần mới (Max % × bonus) |
+|---|---|---|
+| +0 → +1 … +9 → +10 | +30% (×1,3) | 80% → 100%, …, 40% → 52% |
+| +10 → +11 … +13 → +14 | +40% (×1,4) | 35% → 49%, …, 20% → 28% |
+| +14 → +15, +15 → +16 | +50% (×1,5) | 15% → 22,5%, 10% → 15% |
+
+| Bậc | +0→1 | +1→2 | +2→3 | +3→4 | +4→5 | +5→6 | +6→7 | +7→8 | +8→9 | +9→10 | +10→11 | +11→12 | +12→13 | +13→14 | +14→15 | +15→16 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Kim cương | 2 | 2 | 3 | 5 | 5 | 10 | 10 | 10 | 15 | 20 | 30 | 60 | 80 | 120 | 180 | 250 |
+
+Căn cứ giá: 1 kim cương ≈ 100 coin (gói đổi coin), 1 nhân vật 300 kim cương, một bộ đá đủ max % ở +13→+14 ≈ 800 kim cương.
+
+```
++9 → +10 (cost 3,000, max 40%), bỏ đủ đá:      40% × 1,3 = 52%, trả 20 kim cương
++13 → +14 (cost 50,000, max 20%), bỏ 2× đá cấp 9 (13,122 power):
+  Thường:     13,122 × 100 / 50,000 = 26% → cap 20%
+  Cẩn thận:   20% × 1,4 = 28%, trả 120 kim cương
++15 → +16 (max 10%):                            10% × 1,5 = 15%, trả 250 kim cương
+Chưa tới cap: +13 → +14 với 5,000 power = 10% → cẩn thận 14%
+```
 
 ### Ví dụ nâng cấp
 
@@ -848,6 +883,8 @@ CREATE TABLE IF NOT EXISTS config_upgrade_rates (
     upgrade_cost    INT NOT NULL,           -- power cost (tổng power đá cần bỏ vào)
     max_percent     NUMERIC(5,2) NOT NULL,  -- % tỷ lệ tối đa (cap)
     fail_reset_to   SMALLINT NOT NULL,      -- quay về level nào khi fail
+    careful_gem_cost INT NOT NULL DEFAULT 0, -- giá kim cương nâng cấp cẩn thận (0 = không có), migration 025
+    careful_bonus_percent NUMERIC(5,2) NOT NULL DEFAULT 0, -- cẩn thận nhân tỷ lệ × (1 + x/100) (0 = không có), migration 025
     PRIMARY KEY (from_level, to_level)
 );
 
@@ -890,7 +927,8 @@ CREATE TABLE IF NOT EXISTS config_stones (
 GET    /player/equipment                    -- Danh sách trang bị sở hữu
 POST   /player/equipment/equip              -- Mặc trang bị {equipmentId, characterId}
 POST   /player/equipment/unequip            -- Tháo trang bị {equipmentId}
-POST   /player/equipment/upgrade            -- Nâng cấp {equipmentId, stones: [{stoneLevel, quantity}]}
+POST   /player/equipment/upgrade            -- Nâng cấp {equipmentId, stones: [{stoneLevel, quantity}], careful?, expectedLevel?}
+                                            --   → {success, newLevel, percent, equipmentId, careful, gemSpent, gemBalance?}
 POST   /player/equipment/dismantle          -- Tách trang bị {equipmentId}
 POST   /player/equipment/sell               -- Bán trang bị unlock {equipmentId} → {currency, amount, balance, stones}
 POST   /player/equipment/socket             -- Khảm ngọc {equipmentId, slotIndex, gemId}

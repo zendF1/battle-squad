@@ -26,13 +26,14 @@ const (
 	designLevelsMigration = "019_equipment_design_levels.up.sql"
 	gunNamesMigration     = "020_gun_weapon_names.up.sql"
 	sellRateMigration     = "022_equipment_sell_rate.up.sql"
+	carefulMigration      = "025_careful_upgrade.up.sql"
 )
 
 var equipmentMigrations = []string{
 	"001_init_schema.up.sql", "004_admin_config_tables.up.sql", "006_character_progression.up.sql",
 	"010_equipment_system.up.sql", "011_equipment_slot_unique.up.sql",
 	catalogMigration, "017_equipment_purchase_idempotency.up.sql", designLevelsMigration, gunNamesMigration,
-	sellRateMigration,
+	sellRateMigration, carefulMigration,
 }
 
 // newEquipmentService builds the schema with the default catalog. maxConns 1

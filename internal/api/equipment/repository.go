@@ -618,13 +618,13 @@ func (r *Repository) queryEquipmentItemConfigs(ctx context.Context, query string
 
 func (r *Repository) GetUpgradeRate(ctx context.Context, fromLevel int) (*UpgradeRateConfig, error) {
 	query := `
-		SELECT from_level, to_level, upgrade_cost, max_percent, fail_reset_to
+		SELECT from_level, to_level, upgrade_cost, max_percent, fail_reset_to, careful_gem_cost, careful_bonus_percent
 		FROM config_upgrade_rates
 		WHERE from_level = $1
 	`
 	var c UpgradeRateConfig
 	err := r.db.Pool.QueryRow(ctx, query, fromLevel).Scan(
-		&c.FromLevel, &c.ToLevel, &c.UpgradeCost, &c.MaxPercent, &c.FailResetTo,
+		&c.FromLevel, &c.ToLevel, &c.UpgradeCost, &c.MaxPercent, &c.FailResetTo, &c.CarefulGemCost, &c.CarefulBonusPercent,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -637,7 +637,7 @@ func (r *Repository) GetUpgradeRate(ctx context.Context, fromLevel int) (*Upgrad
 
 func (r *Repository) GetAllUpgradeRates(ctx context.Context) ([]UpgradeRateConfig, error) {
 	query := `
-		SELECT from_level, to_level, upgrade_cost, max_percent, fail_reset_to
+		SELECT from_level, to_level, upgrade_cost, max_percent, fail_reset_to, careful_gem_cost, careful_bonus_percent
 		FROM config_upgrade_rates
 		ORDER BY from_level ASC
 	`
@@ -650,7 +650,7 @@ func (r *Repository) GetAllUpgradeRates(ctx context.Context) ([]UpgradeRateConfi
 	var result []UpgradeRateConfig
 	for rows.Next() {
 		var c UpgradeRateConfig
-		if err := rows.Scan(&c.FromLevel, &c.ToLevel, &c.UpgradeCost, &c.MaxPercent, &c.FailResetTo); err != nil {
+		if err := rows.Scan(&c.FromLevel, &c.ToLevel, &c.UpgradeCost, &c.MaxPercent, &c.FailResetTo, &c.CarefulGemCost, &c.CarefulBonusPercent); err != nil {
 			return nil, err
 		}
 		result = append(result, c)

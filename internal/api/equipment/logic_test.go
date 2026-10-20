@@ -785,3 +785,57 @@ func TestStonePrice(t *testing.T) {
 		}
 	}
 }
+
+func TestCalculateFinalUpgradePercent(t *testing.T) {
+	tests := []struct {
+		name                 string
+		power, cost          int
+		mult, maxPct         float64
+		careful              bool
+		bonus                float64
+		wantStone, wantFinal float64
+	}{
+		{"+13→+14 capped stones", 13122, 50000, 1, 20, false, 40, 20, 20},
+		{"+13→+14 careful ×1.4 after the cap", 13122, 50000, 1, 20, true, 40, 20, 28},
+		{"+9→+10 careful ×1.3", 999999, 3000, 1, 40, true, 30, 40, 52},
+		{"+15→+16 careful ×1.5", 999999, 200000, 1, 10, true, 50, 10, 15},
+		{"careful below the cap", 5000, 50000, 1, 20, true, 40, 10, 14},
+		{"rounded to 2 decimals", 6, 18, 1, 68, true, 30, 100.0 / 3, 43.33},
+		{"capped at 100", 100, 1, 1, 80, true, 30, 80, 100},
+		{"weapon ×3", 729, 1200, 3, 45, false, 30, 20.25, 20.25},
+		{"armor same stones", 729, 1200, 1, 45, false, 30, 45, 45},
+		{"weapon ×3 careful", 486, 1200, 3, 45, true, 30, 13.5, 17.55},
+		{"multiplier < 1 treated as 1", 729, 1200, 0.5, 45, false, 30, 45, 45},
+		{"careful with bonus 0", 5000, 50000, 1, 20, true, 0, 10, 10},
+		{"zero cost", 100, 0, 1, 45, true, 30, 0, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stone, final := CalculateFinalUpgradePercent(tt.power, tt.cost, tt.mult, tt.maxPct, tt.careful, tt.bonus)
+			if math.Abs(stone-tt.wantStone) > 1e-9 || final != tt.wantFinal {
+				t.Fatalf("got %v / %v, want %v / %v", stone, final, tt.wantStone, tt.wantFinal)
+			}
+		})
+	}
+}
+
+func TestParseWeaponUpgradeCostMultiplier(t *testing.T) {
+	for raw, want := range map[string]float64{
+		"3": 3, "1": 1, "2.5": 2.5, "0.5": 3, "0": 3, "-1": 3, "x": 3, "": 3, "NaN": 3, "Inf": 3,
+	} {
+		if got := ParseWeaponUpgradeCostMultiplier(raw); got != want {
+			t.Errorf("ParseWeaponUpgradeCostMultiplier(%q) = %v, want %v", raw, got, want)
+		}
+	}
+}
+
+func TestUpgradeCostMultiplier(t *testing.T) {
+	if UpgradeCostMultiplier("weapon", 3) != 3 {
+		t.Fatal("weapon should use the multiplier")
+	}
+	for _, slot := range []string{"armor", "helmet", "boots", "gloves", "ring", ""} {
+		if UpgradeCostMultiplier(slot, 3) != 1 {
+			t.Fatalf("%s should be ×1", slot)
+		}
+	}
+}

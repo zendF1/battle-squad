@@ -22,6 +22,9 @@ type Service struct {
 	repo        *Repository
 	economyRepo *economy.Repository
 	db          *database.PostgresDB
+	// roll returns the upgrade roll in [0, 1); success is roll×100 < percent.
+	// Tests replace it to force an outcome.
+	roll func() float64
 }
 
 func NewService(repo *Repository, economyRepo *economy.Repository, db *database.PostgresDB) *Service {
@@ -29,6 +32,7 @@ func NewService(repo *Repository, economyRepo *economy.Repository, db *database.
 		repo:        repo,
 		economyRepo: economyRepo,
 		db:          db,
+		roll:        rand.Float64,
 	}
 }
 
@@ -60,6 +64,22 @@ func (s *Service) getSellRate(ctx context.Context) float64 {
 		return DefaultSellRate
 	}
 	return ParseSellRate(val)
+}
+
+// getSetting reads one game_settings value; ok is false when it is missing.
+func (s *Service) getSetting(ctx context.Context, key string) (string, bool) {
+	var val string
+	if err := s.db.Pool.QueryRow(ctx, `SELECT value FROM game_settings WHERE key = $1`, key).Scan(&val); err != nil {
+		return "", false
+	}
+	return val, true
+}
+
+// getWeaponUpgradeCostMultiplier reads
+// "equipment.weapon_upgrade_cost_multiplier" (ParseWeaponUpgradeCostMultiplier).
+func (s *Service) getWeaponUpgradeCostMultiplier(ctx context.Context) float64 {
+	val, _ := s.getSetting(ctx, "equipment.weapon_upgrade_cost_multiplier")
+	return ParseWeaponUpgradeCostMultiplier(val)
 }
 
 // ---------------------------------------------------------------------------
@@ -131,7 +151,9 @@ func (s *Service) GetCatalog(ctx context.Context) (*Catalog, error) {
 	c := &Catalog{Items: items, UpgradeRates: rates, SetBonuses: bonuses, Stones: stones, SellRate: s.getSellRate(ctx),
 		MergeRatePerItem: s.getMergeRatePerItem(ctx), UpgradeMilestones: []UpgradeMilestone{
 			{Level: 6, Bonus: ms.Bonus6}, {Level: 10, Bonus: ms.Bonus10}, {Level: 14, Bonus: ms.Bonus14}, {Level: 16, Bonus: ms.Bonus16},
-		}}
+		},
+		WeaponUpgradeCostMultiplier: s.getWeaponUpgradeCostMultiplier(ctx),
+	}
 	if c.Items == nil {
 		c.Items = []EquipmentItemConfig{}
 	}
@@ -553,6 +575,13 @@ func (s *Service) UnequipItem(ctx context.Context, playerID string, req UnequipR
 // UpgradeEquipment
 // ---------------------------------------------------------------------------
 
+// UpgradeEquipment consumes the stones and rolls one step. The percent is
+// CalculateFinalUpgradePercent: weapons need weapon_upgrade_cost_multiplier ×
+// upgradeCost power; careful multiplies the capped stone percent by
+// (1 + careful_bonus_percent / 100) and costs the step's careful_gem_cost gem,
+// paid on success and on failure. A refused
+// attempt (EQUIP_MODIFIED, not enough stones or gems, careful unavailable)
+// changes nothing. Locks go equipment → profile → stones, like SellEquipment.
 func (s *Service) UpgradeEquipment(ctx context.Context, playerID string, req UpgradeRequest) (*UpgradeResult, error) {
 	equip, err := s.repo.GetPlayerEquipmentByID(ctx, playerID, req.EquipmentID)
 	if err != nil {
@@ -560,6 +589,11 @@ func (s *Service) UpgradeEquipment(ctx context.Context, playerID string, req Upg
 	}
 	if equip == nil {
 		return nil, model.ErrEquipmentNotOwned
+	}
+	// The client saw another level (e.g. a retry of an attempt that already
+	// rolled): refuse before charging anything.
+	if req.ExpectedLevel != nil && *req.ExpectedLevel != equip.UpgradeLevel {
+		return nil, model.ErrEquipmentModified
 	}
 	if equip.UpgradeLevel >= 16 {
 		return nil, model.ErrEquipmentMaxUpgrade
@@ -597,10 +631,17 @@ func (s *Service) UpgradeEquipment(ctx context.Context, playerID string, req Upg
 		return nil, model.ErrEquipmentNoStones
 	}
 
-	percent := float64(totalPower) * 100.0 / float64(rateConfig.UpgradeCost)
-	if percent > rateConfig.MaxPercent {
-		percent = rateConfig.MaxPercent
+	gemCost := 0
+	carefulBonus := 0.0
+	if req.Careful {
+		if rateConfig.CarefulGemCost <= 0 || rateConfig.CarefulBonusPercent <= 0 {
+			return nil, model.ErrCarefulUnavailable
+		}
+		gemCost = rateConfig.CarefulGemCost
+		carefulBonus = rateConfig.CarefulBonusPercent
 	}
+	costMultiplier := UpgradeCostMultiplier(equip.Slot, s.getWeaponUpgradeCostMultiplier(ctx))
+	_, percent := CalculateFinalUpgradePercent(totalPower, rateConfig.UpgradeCost, costMultiplier, rateConfig.MaxPercent, req.Careful, carefulBonus)
 
 	tx, err := s.db.Pool.Begin(ctx)
 	if err != nil {
@@ -621,6 +662,25 @@ func (s *Service) UpgradeEquipment(ctx context.Context, playerID string, req Upg
 		return nil, model.ErrEquipmentModified
 	}
 
+	var gemBalance *int
+	if req.Careful {
+		_, gem, found, err := s.repo.LockWalletTx(ctx, tx, playerID)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			return nil, model.ErrNotFound
+		}
+		if gem < gemCost {
+			return nil, model.ErrInsufficientBalance
+		}
+		balance, err := s.economyRepo.DebitTx(ctx, tx, playerID, "gem", gemCost, "careful_upgrade", req.EquipmentID, false)
+		if err != nil {
+			return nil, err
+		}
+		gemBalance = &balance
+	}
+
 	// Deduct all stones
 	for _, si := range req.Stones {
 		if si.Quantity <= 0 {
@@ -632,7 +692,7 @@ func (s *Service) UpgradeEquipment(ctx context.Context, playerID string, req Upg
 	}
 
 	// Roll for success
-	success := rand.Float64()*100 < percent
+	success := s.roll()*100 < percent
 
 	var newLevel int
 	if success {
@@ -658,6 +718,9 @@ func (s *Service) UpgradeEquipment(ctx context.Context, playerID string, req Upg
 		NewLevel:    newLevel,
 		Percent:     percent,
 		EquipmentID: req.EquipmentID,
+		Careful:     req.Careful,
+		GemSpent:    gemCost,
+		GemBalance:  gemBalance,
 	}, nil
 }
 

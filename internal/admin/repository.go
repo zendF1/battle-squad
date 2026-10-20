@@ -1009,7 +1009,7 @@ func (r *Repository) DeleteEquipmentItem(ctx context.Context, itemID string) err
 // GetAllUpgradeRates returns all rows from config_upgrade_rates ordered by from_level.
 func (r *Repository) GetAllUpgradeRates(ctx context.Context) ([]map[string]interface{}, error) {
 	rows, err := r.db.Pool.Query(ctx,
-		`SELECT from_level, to_level, upgrade_cost, max_percent, fail_reset_to
+		`SELECT from_level, to_level, upgrade_cost, max_percent, fail_reset_to, careful_gem_cost, careful_bonus_percent
 		 FROM config_upgrade_rates ORDER BY from_level, to_level`)
 	if err != nil {
 		return nil, fmt.Errorf("query upgrade rates: %w", err)
@@ -1018,9 +1018,9 @@ func (r *Repository) GetAllUpgradeRates(ctx context.Context) ([]map[string]inter
 
 	var results []map[string]interface{}
 	for rows.Next() {
-		var fromLevel, toLevel, cost, failReset int
-		var maxPct float64
-		if err := rows.Scan(&fromLevel, &toLevel, &cost, &maxPct, &failReset); err != nil {
+		var fromLevel, toLevel, cost, failReset, carefulGem int
+		var maxPct, carefulBonus float64
+		if err := rows.Scan(&fromLevel, &toLevel, &cost, &maxPct, &failReset, &carefulGem, &carefulBonus); err != nil {
 			return nil, fmt.Errorf("scan upgrade rate: %w", err)
 		}
 		results = append(results, map[string]interface{}{
@@ -1029,20 +1029,25 @@ func (r *Repository) GetAllUpgradeRates(ctx context.Context) ([]map[string]inter
 			"Cost":      cost,
 			"MaxPct":    maxPct,
 			"FailReset": failReset,
+			"CarefulGem": carefulGem,
+			"CarefulBonus": carefulBonus,
 		})
 	}
 	return results, rows.Err()
 }
 
 // UpsertUpgradeRate inserts or updates a config_upgrade_rates row.
-func (r *Repository) UpsertUpgradeRate(ctx context.Context, from, to, cost int, maxPct float64, failReset int) error {
+// carefulGem / carefulBonus are the careful-upgrade gem price and relative
+// bonus percent (either 0 = careful not offered for the step).
+func (r *Repository) UpsertUpgradeRate(ctx context.Context, from, to, cost int, maxPct float64, failReset, carefulGem int, carefulBonus float64) error {
 	_, err := r.db.Pool.Exec(ctx,
-		`INSERT INTO config_upgrade_rates (from_level, to_level, upgrade_cost, max_percent, fail_reset_to)
-		 VALUES ($1,$2,$3,$4,$5)
+		`INSERT INTO config_upgrade_rates (from_level, to_level, upgrade_cost, max_percent, fail_reset_to, careful_gem_cost, careful_bonus_percent)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7)
 		 ON CONFLICT (from_level, to_level) DO UPDATE SET
 		   upgrade_cost=EXCLUDED.upgrade_cost, max_percent=EXCLUDED.max_percent,
-		   fail_reset_to=EXCLUDED.fail_reset_to`,
-		from, to, cost, maxPct, failReset)
+		   fail_reset_to=EXCLUDED.fail_reset_to, careful_gem_cost=EXCLUDED.careful_gem_cost,
+		   careful_bonus_percent=EXCLUDED.careful_bonus_percent`,
+		from, to, cost, maxPct, failReset, carefulGem, carefulBonus)
 	if err != nil {
 		return fmt.Errorf("upsert upgrade rate %d->%d: %w", from, to, err)
 	}

@@ -105,6 +105,7 @@ var (
 	ErrCharacterNotOwned        = AppError{Code: "CHARACTER_NOT_FOUND", Message: "Character not found or not owned by this player", Status: http.StatusNotFound}
 	ErrEquipmentMaxUpgrade      = AppError{Code: "EQUIP_MAX_UPGRADE", Message: "Equipment is already at max upgrade level", Status: http.StatusBadRequest}
 	ErrEquipmentNoStones        = AppError{Code: "EQUIP_NO_STONES", Message: "No upgrade stones provided", Status: http.StatusBadRequest}
+	ErrCarefulUnavailable       = AppError{Code: "EQUIP_CAREFUL_UNAVAILABLE", Message: "Careful upgrade is not offered for this level", Status: http.StatusBadRequest}
 	ErrInsufficientStones       = AppError{Code: "EQUIP_INSUFFICIENT_STONES", Message: "Not enough upgrade stones", Status: http.StatusBadRequest}
 	ErrInsufficientMaterials    = AppError{Code: "EQUIP_INSUFFICIENT_MATERIALS", Message: "Not enough crafting materials", Status: http.StatusBadRequest}
 	ErrGemSlotInvalid           = AppError{Code: "EQUIP_GEM_SLOT_INVALID", Message: "Invalid gem slot index", Status: http.StatusBadRequest}

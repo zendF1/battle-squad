@@ -40,6 +40,7 @@ var defaultSettings = []settingDef{
 	{"equipment.milestone_14_bonus", "0.40", "number", "Bonus stat khi trang bị đạt +14 (40%)", "equipment"},
 	{"equipment.milestone_16_bonus", "1.00", "number", "Bonus stat khi trang bị đạt +16 (100%)", "equipment"},
 	{"equipment.sell_rate", "0.25", "number", "Tỉ lệ hoàn tiền khi bán trang bị: nhận floor(giá mua × tỉ lệ), trong (0, 1]", "equipment"},
+	{"equipment.weapon_upgrade_cost_multiplier", "3", "number", "Vũ khí cần upgrade_cost × hệ số này sức mạnh đá (>= 1)", "equipment"},
 }
 
 // SeedAll seeds both game_settings and config tables from YAML files.
@@ -228,30 +229,32 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 		upgradeCost int
 		maxPercent  float64
 		failResetTo int
+		carefulGem  int     // careful-upgrade gem price, as migrations/025
+		carefulPct  float64 // careful-upgrade relative bonus %, as migrations/025
 	}
 	upgradeRates := []upgradeRate{
-		{0, 1, 1, 80, 0},
-		{1, 2, 2, 76, 1},
-		{2, 3, 6, 72, 2},
-		{3, 4, 18, 68, 3},
-		{4, 5, 40, 64, 4},
-		{5, 6, 80, 60, 5},
-		{6, 7, 180, 56, 6},
-		{7, 8, 500, 52, 6},
-		{8, 9, 1200, 45, 6},
-		{9, 10, 3000, 40, 6},
-		{10, 11, 6000, 35, 10},
-		{11, 12, 15000, 30, 10},
-		{12, 13, 25000, 25, 10},
-		{13, 14, 50000, 20, 10},
-		{14, 15, 80000, 15, 14},
-		{15, 16, 200000, 10, 14},
+		{0, 1, 1, 80, 0, 2, 30},
+		{1, 2, 2, 76, 1, 2, 30},
+		{2, 3, 6, 72, 2, 3, 30},
+		{3, 4, 18, 68, 3, 5, 30},
+		{4, 5, 40, 64, 4, 5, 30},
+		{5, 6, 80, 60, 5, 10, 30},
+		{6, 7, 180, 56, 6, 10, 30},
+		{7, 8, 500, 52, 6, 10, 30},
+		{8, 9, 1200, 45, 6, 15, 30},
+		{9, 10, 3000, 40, 6, 20, 30},
+		{10, 11, 6000, 35, 10, 30, 40},
+		{11, 12, 15000, 30, 10, 60, 40},
+		{12, 13, 25000, 25, 10, 80, 40},
+		{13, 14, 50000, 20, 10, 120, 40},
+		{14, 15, 80000, 15, 14, 180, 50},
+		{15, 16, 200000, 10, 14, 250, 50},
 	}
-	upgradeRateQuery := `INSERT INTO config_upgrade_rates (from_level, to_level, upgrade_cost, max_percent, fail_reset_to)
-		VALUES ($1, $2, $3, $4, $5)
+	upgradeRateQuery := `INSERT INTO config_upgrade_rates (from_level, to_level, upgrade_cost, max_percent, fail_reset_to, careful_gem_cost, careful_bonus_percent)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (from_level, to_level) DO NOTHING`
 	for _, r := range upgradeRates {
-		if _, err := db.Pool.Exec(ctx, upgradeRateQuery, r.fromLevel, r.toLevel, r.upgradeCost, r.maxPercent, r.failResetTo); err != nil {
+		if _, err := db.Pool.Exec(ctx, upgradeRateQuery, r.fromLevel, r.toLevel, r.upgradeCost, r.maxPercent, r.failResetTo, r.carefulGem, r.carefulPct); err != nil {
 			return fmt.Errorf("insert upgrade rate %d->%d: %w", r.fromLevel, r.toLevel, err)
 		}
 	}

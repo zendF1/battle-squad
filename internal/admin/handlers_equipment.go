@@ -387,6 +387,8 @@ func (s *Server) handleUpgradeRateSave(w http.ResponseWriter, r *http.Request) {
 		formInt(r, "upgrade_cost"),
 		formFloat(r, "max_percent"),
 		formInt(r, "fail_reset_to"),
+		max(formInt(r, "careful_gem_cost"), 0),
+		min(max(formFloat(r, "careful_bonus_percent"), 0), 999),
 	)
 	if err != nil {
 		observability.Log.Error().Err(err).Msg("failed to upsert upgrade rate")

@@ -30,6 +30,58 @@ func CalculateUpgradePercent(totalPower, upgradeCost int, maxPercent float64) fl
 	return percent
 }
 
+// DefaultWeaponUpgradeCostMultiplier is the weapon stone-cost multiplier used
+// when game_settings "equipment.weapon_upgrade_cost_multiplier" is missing or
+// invalid.
+const DefaultWeaponUpgradeCostMultiplier = 3.0
+
+// ParseWeaponUpgradeCostMultiplier reads
+// "equipment.weapon_upgrade_cost_multiplier": a finite number >= 1, else
+// DefaultWeaponUpgradeCostMultiplier.
+func ParseWeaponUpgradeCostMultiplier(raw string) float64 {
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil || math.IsNaN(v) || math.IsInf(v, 0) || v < 1 {
+		return DefaultWeaponUpgradeCostMultiplier
+	}
+	return v
+}
+
+// UpgradeCostMultiplier is how many times the step's upgradeCost a piece in
+// slot needs: weaponMultiplier for weapons, 1 for everything else.
+func UpgradeCostMultiplier(slot string, weaponMultiplier float64) float64 {
+	if slot == "weapon" && weaponMultiplier >= 1 {
+		return weaponMultiplier
+	}
+	return 1
+}
+
+// CalculateFinalUpgradePercent is the percent an attempt rolls against:
+// stonePercent = min(totalPower × 100 / (upgradeCost × costMultiplier),
+// maxPercent); careful multiplies it by (1 + carefulBonus / 100), rounded to
+// 2 decimals and capped at 100 (+13→+14: 20% × 1.4 = 28%).
+func CalculateFinalUpgradePercent(totalPower, upgradeCost int, costMultiplier, maxPercent float64, careful bool, carefulBonus float64) (stonePercent, finalPercent float64) {
+	if costMultiplier < 1 {
+		costMultiplier = 1
+	}
+	if upgradeCost > 0 {
+		stonePercent = float64(totalPower) * 100.0 / (float64(upgradeCost) * costMultiplier)
+		if stonePercent > maxPercent {
+			stonePercent = maxPercent
+		}
+		if stonePercent < 0 {
+			stonePercent = 0
+		}
+	}
+	finalPercent = stonePercent
+	if careful && carefulBonus > 0 {
+		finalPercent = math.Round(stonePercent*(1+carefulBonus/100)*100) / 100
+	}
+	if finalPercent > 100 {
+		finalPercent = 100
+	}
+	return stonePercent, finalPercent
+}
+
 // CalculateUpgradeMultiplier returns the stat multiplier for a given upgrade level.
 // Formula: 1 + level*0.02 + milestone bonuses
 // Milestones: level>=6 +0.10, level>=10 +0.20, level>=14 +0.40, level>=16 +1.00

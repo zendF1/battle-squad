@@ -70,6 +70,11 @@ type UpgradeRateConfig struct {
 	UpgradeCost int     `json:"upgradeCost"`
 	MaxPercent  float64 `json:"maxPercent"`
 	FailResetTo int     `json:"failResetTo"`
+	// CarefulGemCost: gems a careful upgrade of this step costs.
+	CarefulGemCost int `json:"carefulGemCost"`
+	// CarefulBonusPercent: a careful upgrade multiplies the stone percent by
+	// (1 + this / 100). Careful is offered only when both are > 0.
+	CarefulBonusPercent float64 `json:"carefulBonusPercent"`
 }
 
 type StoneConfig struct {
@@ -150,6 +155,13 @@ type UnequipRequest struct {
 type UpgradeRequest struct {
 	EquipmentID string       `json:"equipmentId"`
 	Stones      []StoneInput `json:"stones"`
+	// Careful (optional): also pay the step's carefulGemCost gem to multiply
+	// the stone percent by (1 + carefulBonusPercent / 100).
+	Careful bool `json:"careful"`
+	// ExpectedLevel (optional): the upgrade level the client saw; another
+	// current level is EQUIP_MODIFIED and nothing is charged, so a blind
+	// retry after a lost response does not roll the next step.
+	ExpectedLevel *int `json:"expectedLevel,omitempty"`
 }
 
 type StoneInput struct {
@@ -234,6 +246,9 @@ type Catalog struct {
 	// UpgradeMilestones: the extra stat multiplier reached at each milestone
 	// level (+6, +10, +14, +16), as battlestats applies it.
 	UpgradeMilestones []UpgradeMilestone `json:"upgradeMilestones"`
+	// WeaponUpgradeCostMultiplier: weapons need upgradeCost × this much stone
+	// power (other slots × 1); maxPercent and failResetTo are unchanged.
+	WeaponUpgradeCostMultiplier float64 `json:"weaponUpgradeCostMultiplier"`
 }
 
 // UpgradeMilestone is one milestone bonus: from Level on, item stats are
@@ -286,11 +301,18 @@ type equipmentPurchase struct {
 	EquipmentID string
 }
 
+// UpgradeResult is the POST /player/equipment/upgrade data. Percent is the
+// final percent rolled against (careful bonus included). GemSpent is the
+// careful price paid (0 when not careful) and GemBalance the gem balance
+// after it, present only when careful.
 type UpgradeResult struct {
 	Success     bool    `json:"success"`
 	NewLevel    int     `json:"newLevel"`
 	Percent     float64 `json:"percent"`
 	EquipmentID string  `json:"equipmentId"`
+	Careful     bool    `json:"careful"`
+	GemSpent    int     `json:"gemSpent"`
+	GemBalance  *int    `json:"gemBalance,omitempty"`
 }
 
 type MergeResult struct {
