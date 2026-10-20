@@ -35,15 +35,8 @@ const (
 	// context because the match context is usually already cancelled by then.
 	reservationReleaseTimeout = 5 * time.Second
 
-	skillHealAmount   = 650.0 // healing_bloom heal before the skill power bonus
 	defaultMedkitHeal = 450.0 // medkit heal when config_items has no value
 	lavaDamage        = 75    // HP lost at the start of a turn on lava (ignores defense)
-
-	// heavy_bomb (single_large_bomb), Tanko's digging bomb: the blast radius and the crater
-	// are these multiples of the weapon's, deep enough to drop a target hit at the centre more
-	// than fallDamageThreshold.
-	heavyBombBlastScale  = 2.0
-	heavyBombCraterScale = 1.8
 )
 
 type Match struct {
@@ -127,6 +120,7 @@ func NewMatch(
 	for _, idx := range indices {
 		p := players[idx]
 		p.Items = append([]string(nil), p.Items...) // don't share the room's backing array
+		p.SkillRank = WeaponSkillRank(p.WeaponItemID)
 		mPlayers[p.PlayerID] = p
 		turnOrder = append(turnOrder, p.PlayerID)
 	}
@@ -453,31 +447,24 @@ func (m *Match) startTurn(ctx context.Context) {
 
 	player := m.State.Players[m.State.CurrentPlayerID]
 	player.MoveEnergy = turnMoveEnergy(player) // Reset move energy to full
-	ApplyTurnStartEffects(player)              // net / freeze limit this turn's movement
+	ApplyTurnStartEffects(player)              // net / root / stun / freeze limit this turn's movement
 
 	// Skill energy is incremented at end of turn, not start
 
-	// Lava terrain: the current player takes lavaDamage at the start of their turn
-	terrainType := m.Terrain.GetTerrainTypeAt(player.Position.X, player.Position.Y)
-	if terrainType == "lava" {
-		player.HP -= lavaDamage
-		if player.HP <= 0 {
-			player.HP = 0
-			player.IsAlive = false
+	// Damage at the start of the turn: lava under the feet, then burn. Shield absorbs first;
+	// a player it kills loses the turn.
+	if m.Terrain.GetTerrainTypeAt(player.Position.X, player.Position.Y) == "lava" {
+		m.turnStartDamage(player, lavaDamage, "lava")
+	}
+	if player.IsAlive && HasEffect(player, "burn") {
+		m.turnStartDamage(player, int(math.Round(float64(player.MaxHP)*burnMaxHPPercent/100)), "burn")
+	}
+	if !player.IsAlive {
+		m.checkWinCondition(ctx)
+		if m.State.Status == "in_progress" {
+			m.endTurn(ctx)
 		}
-		lavaPayload, _ := json.Marshal([]map[string]interface{}{
-			{
-				"playerId": player.PlayerID,
-				"damage":   lavaDamage,
-				"hp":       player.HP,
-				"isAlive":  player.IsAlive,
-				"type":     "lava",
-			},
-		})
-		m.broadcast(ws.Message{
-			Event: "PlayerDamaged",
-			Data:  lavaPayload,
-		})
+		return
 	}
 
 	// Update wind: direction (-1 to 1), power (0 to 4)
@@ -496,18 +483,29 @@ func (m *Match) startTurn(ctx context.Context) {
 	for id, p := range m.State.Players {
 		skillEnergy[id] = p.SkillEnergy
 	}
-	payload, _ := json.Marshal(map[string]interface{}{
+	started := map[string]interface{}{
 		"turnIndex":       m.State.TurnIndex,
 		"currentPlayerId": m.State.CurrentPlayerID,
 		"wind":            m.State.Wind,
 		"moveEnergy":      player.MoveEnergy,
 		"maxMoveEnergy":   player.MaxMoveEnergy,
 		"skillEnergy":     skillEnergy,
-	})
+	}
+	skip := skipsTurn(player)
+	if skip != "" {
+		started["skipped"] = skip
+	}
+	payload, _ := json.Marshal(started)
 	m.broadcast(ws.Message{
 		Event: "TurnStarted",
 		Data:  payload,
 	})
+
+	// Stunned or frozen: the whole turn is lost; the server ends it after a short pause
+	if skip != "" {
+		m.resolveTurnAfter(ctx, skipTurnDelay, m.endTurn)
+		return
+	}
 
 	if player.IsBot {
 		observability.Log.Info().
@@ -523,13 +521,10 @@ func (m *Match) startTurn(ctx context.Context) {
 }
 
 func (m *Match) endTurn(ctx context.Context) {
-	// Add skill energy to current player (+20 per turn, max 100)
+	// Add skill energy to current player (+skillEnergyPerTurn per turn, max skillEnergyMax)
 	currentPlayer := m.State.Players[m.State.CurrentPlayerID]
 	if currentPlayer != nil && currentPlayer.IsAlive {
-		currentPlayer.SkillEnergy += 20
-		if currentPlayer.SkillEnergy > 100 {
-			currentPlayer.SkillEnergy = 100
-		}
+		addSkillEnergy(currentPlayer, skillEnergyPerTurn)
 	}
 
 	// Effects count down at the end of their target's turn; global ones every turn
@@ -635,7 +630,7 @@ func (m *Match) processMove(ctx context.Context, client *ws.Client, action MoveA
 	}
 
 	player := m.State.Players[m.State.CurrentPlayerID]
-	if !player.IsAlive || !isFinite(action.TargetX) || HasEffect(player, "freeze") {
+	if !player.IsAlive || !isFinite(action.TargetX) || !canMove(player) {
 		return
 	}
 
@@ -706,8 +701,8 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 		return
 	}
 
-	// freeze_bomb: frozen players cannot shoot, they can only EndTurn
-	if HasEffect(player, "freeze") {
+	// Stunned / frozen players lose the turn (the server ends it)
+	if skipsTurn(player) != "" {
 		return
 	}
 
@@ -823,118 +818,6 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 	m.finishShot(ctx, shot, tl)
 }
 
-// shootSkill fires the character's skill. Most skills launch projectiles; healing_bloom heals
-// the shooter instead.
-func (m *Match) shootSkill(ctx context.Context, player *BattlePlayerState, action ShootAction, skillID string, weaponConfig gamedata.WeaponConfig) {
-	skillConfig, skillExists := gamedata.Data.Skills[skillID]
-	if !skillExists {
-		return
-	}
-
-	// Reject if not enough skill energy
-	if player.SkillEnergy < 100 {
-		return
-	}
-
-	shot := &ShotResolved{ShooterID: player.PlayerID, ActionMode: "skill", SkillID: skillID}
-	tl := &shotTimeline{}
-
-	// healing_bloom: no projectile — just heal self and end turn
-	if skillConfig.EffectType == "heal" {
-		before := player.HP
-		player.HP += int(math.Round(skillHealAmount * skillPowerFactor(player)))
-		if player.HP > player.MaxHP {
-			player.HP = player.MaxHP
-		}
-		tl.add(ShotEvent{Type: "heal", PlayerID: player.PlayerID, Amount: player.HP - before, HP: intPtr(player.HP)})
-		if skillConfig.StatusEffectID != "" {
-			applyShotStatus(tl, 0, player, player, skillConfig.StatusEffectID, 1)
-		}
-		player.SkillEnergy = 0
-
-		m.broadcastShot(shot, tl)
-		m.checkWinCondition(ctx)
-		if m.State.Status == "in_progress" {
-			m.endTurn(ctx)
-		}
-		return
-	}
-
-	// Calculate base damage factor (power_shot item still applies)
-	damageFactor := 1.0
-	if HasEffect(player, "power_shot") {
-		damageFactor = 1.5
-	}
-	damageFactor *= skillConfig.DamageMultiplier * skillPowerFactor(player)
-	baseDamage := float64(weaponConfig.Damage+player.DamageBonus) * damageFactor
-
-	// Build list of (angle, blast radius, crater radius) per projectile
-	type shotParams struct {
-		angle  float64
-		radius float64
-		crater float64
-	}
-	var shots []shotParams
-	blast, crater := float64(weaponConfig.ExplosionRadius), weaponCraterRadius(weaponConfig)
-
-	switch skillConfig.EffectType {
-	case "multi_projectile":
-		// triple_shot: fire 3 projectiles at angle-10, angle, angle+10
-		for _, offset := range []float64{-10, 0, 10} {
-			shots = append(shots, shotParams{angle: action.Angle + offset, radius: blast, crater: crater})
-		}
-	case "single_large_bomb":
-		// heavy_bomb: one digging bomb, blast and crater scaled up
-		shots = append(shots, shotParams{angle: action.Angle, radius: blast * heavyBombBlastScale, crater: crater * heavyBombCraterScale})
-	default:
-		// shock_field and any other types: single normal projectile
-		shots = append(shots, shotParams{angle: action.Angle, radius: blast, crater: crater})
-	}
-
-	pierce := drillPierce(player)
-
-	// Projectiles are resolved in firing order; each sees the craters of the ones before it.
-	for _, s := range shots {
-		r := SimulateProjectile(
-			player.PlayerID,
-			player.TeamID,
-			shotOrigin(m.Terrain, player),
-			s.angle,
-			action.Power,
-			weaponConfig,
-			m.State.Wind,
-			m.Terrain,
-			m.State.Players,
-			pierce,
-		)
-		r.SkillID = skillID
-		r.ExplosionRadius = s.radius
-		r.CraterRadius = s.crater
-		shot.Projectiles = append(shot.Projectiles, r)
-
-		// Track shot fired for each projectile in the skill
-		player.ShotsFired++
-
-		if r.ExplosionPoint == nil {
-			continue
-		}
-		m.explodeProjectile(player, r, baseDamage, tl)
-
-		// shock_field: apply "net" status to hit player
-		if skillConfig.EffectType == "debuff" && skillConfig.StatusEffectID != "" && r.HitPlayerID != "" {
-			if target, ok := m.State.Players[r.HitPlayerID]; ok && target.IsAlive {
-				applyShotStatus(tl, flightEnd(r), player, target, skillConfig.StatusEffectID, 1)
-			}
-		}
-
-		m.settleFalls(player, flightEnd(r), tl)
-	}
-
-	// Reset skill energy after use
-	player.SkillEnergy = 0
-	m.finishShot(ctx, shot, tl)
-}
-
 func (m *Match) processUseItem(ctx context.Context, client *ws.Client, action UseItemAction) {
 	if client != nil && client.PlayerID != m.State.CurrentPlayerID {
 		return
@@ -943,7 +826,7 @@ func (m *Match) processUseItem(ctx context.Context, client *ws.Client, action Us
 	log := observability.FromContext(ctx)
 
 	player := m.State.Players[m.State.CurrentPlayerID]
-	if !player.IsAlive {
+	if !player.IsAlive || skipsTurn(player) != "" {
 		return
 	}
 	// Teleport is fired as a projectile (Shoot with actionMode "item") so it follows
@@ -979,6 +862,9 @@ func (m *Match) broadcastItemUsed(playerID, itemID string) {
 // shootTeleport fires the teleport projectile and moves the player to its landing
 // point once the flight animation has played, then ends the turn.
 func (m *Match) shootTeleport(ctx context.Context, player *BattlePlayerState, action ShootAction, weaponConfig gamedata.WeaponConfig) {
+	if !canMove(player) {
+		return // rooted: no teleport
+	}
 	itemIdx := -1
 	for i, it := range player.Items {
 		if it == "teleport" {
@@ -1189,6 +1075,23 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 		m.signalDone()
 		m.cancel()
 	}
+}
+
+// turnStartDamage takes damage from the current player at the start of its turn (lava, burn;
+// no defense, shield first) and sends PlayerDamaged [{playerId, damage, hp, shield, isAlive,
+// type}].
+func (m *Match) turnStartDamage(p *BattlePlayerState, damage int, kind string) {
+	hurtPlayer(p, damage)
+	payload, _ := json.Marshal([]map[string]interface{}{{
+		"playerId": p.PlayerID,
+		"damage":   damage,
+		"hp":       p.HP,
+		"shield":   p.Shield,
+		"isAlive":  p.IsAlive,
+		"type":     kind,
+	}})
+	m.broadcast(ws.Message{Event: "PlayerDamaged", Data: payload})
+	m.el.Log("PlayerDamaged", p.PlayerID, json.RawMessage(payload))
 }
 
 func (m *Match) updateWind() {

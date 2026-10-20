@@ -1,33 +1,43 @@
+# Character skills. Ids are kept from the first design (clients and admin key on them); the
+# effect types and every number are described in internal/game/match/skill_tuning.go.
+# projectileCount is informational (rank 0); damageMultiplier scales the whole skill's damage
+# (bloom heals a percent of max HP and ignores it).
 - skillId: triple_shot
   characterId: rookie
-  name: Triple Shot
+  name: Mưa tên lửa
   cooldownTurn: 2
-  effectType: multi_projectile
-  projectileCount: 3
-  damageMultiplier: 1.25
+  effectType: missile_rain
+  projectileCount: 6
+  statusEffectId: burn
+  damageMultiplier: 1.0
+  description: "Bắn pháo hiệu; tên lửa rơi xuống quanh chỗ nó đáp (6 quả, +2 mỗi cấp súng), mỗi quả 35% sát thương; địch trúng bị bỏng: mất 10% máu tối đa đầu lượt sau."
 
 - skillId: heavy_bomb
   characterId: tanko
-  name: Heavy Bomb
+  name: Bom liên hoàn
   cooldownTurn: 3
-  effectType: single_large_bomb
-  projectileCount: 1
-  damageMultiplier: 1.1
+  effectType: bomb_chain
+  projectileCount: 3
+  statusEffectId: root
+  damageMultiplier: 1.0
+  description: "Bắn liên tiếp bom lớn cùng một đường bay (3 quả, +1 mỗi cấp súng), đào sâu một hố; tổng 180% sát thương (+15% mỗi cấp); địch trúng bị cầm chân lượt sau."
 
 - skillId: shock_field
   characterId: spark
-  name: Shock Field
+  name: Tia laze
   cooldownTurn: 3
-  effectType: debuff
+  effectType: laser
   projectileCount: 1
-  statusEffectId: net
-  damageMultiplier: 1.3
+  statusEffectId: stun
+  damageMultiplier: 1.0
+  description: "Tia thẳng xuyên địa hình tới mép bản đồ, trúng mọi địch trên đường: 150% sát thương (+10% mỗi cấp súng), mỗi địch sau giảm 20%; địch trúng bị choáng, mất lượt sau."
 
 - skillId: healing_bloom
   characterId: flora
-  name: Healing Bloom
+  name: Hoa hồi xuân
   cooldownTurn: 3
-  effectType: heal
+  effectType: bloom
   projectileCount: 1
-  statusEffectId: heal
-  damageMultiplier: 0.0
+  statusEffectId: ""
+  damageMultiplier: 1.0
+  description: "Hồi máu cả đội theo máu tối đa: Flora 40%, đồng đội 30% (+5% mỗi cấp súng); máu dư thành khiên (tối đa 50% máu); giải mọi hiệu ứng xấu."

@@ -5,7 +5,6 @@ import (
 	"math"
 	"testing"
 
-	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/game/ws"
 )
 
@@ -158,63 +157,6 @@ func TestFallEventsMatchLandingTime(t *testing.T) {
 		if d.Cause == "fall" && math.Abs(d.T-(f.T+f.Duration)) > 1e-9 {
 			t.Fatalf("fall damage at %v, want landing time %v", d.T, f.T+f.Duration)
 		}
-	}
-}
-
-func TestSkillMultiProjectileShot(t *testing.T) {
-	m, clients := newFlowMatch(t)
-	gamedata.Data.Characters["c1"] = gamedata.CharacterConfig{CharacterID: "c1", WeaponID: "w1", SkillID: "triple"}
-	gamedata.Data.Skills["triple"] = gamedata.SkillConfig{SkillID: "triple", EffectType: "multi_projectile", DamageMultiplier: 1}
-	cur := m.State.CurrentPlayerID
-	m.State.Players[cur].SkillEnergy = 100
-	groundPlayers(m, clients)
-
-	send(m, clients[cur], "Shoot", ShootAction{Angle: 60, Power: 20, ActionMode: "skill"})
-	s := shotResolved(t, clients[cur])
-	assertTimeline(t, s)
-
-	if s.ActionMode != "skill" || s.SkillID != "triple" || s.SkillEnergy != 0 {
-		t.Fatalf("unexpected skill header: %+v", s)
-	}
-	if len(s.Projectiles) != 3 {
-		t.Fatalf("got %d projectiles, want 3", len(s.Projectiles))
-	}
-	seen := map[string]bool{}
-	for _, e := range eventsOf(s, "explode", "") {
-		seen[e.ProjectileID] = true
-	}
-	for _, p := range s.Projectiles {
-		if p.SkillID != "triple" {
-			t.Fatalf("projectile %s missing skill id", p.ProjectileID)
-		}
-		if p.ExplosionPoint != nil && !seen[p.ProjectileID] {
-			t.Fatalf("projectile %s exploded without an explode event", p.ProjectileID)
-		}
-	}
-}
-
-func TestHealSkillSendsHealEvent(t *testing.T) {
-	m, clients := newFlowMatch(t)
-	gamedata.Data.Characters["c1"] = gamedata.CharacterConfig{CharacterID: "c1", WeaponID: "w1", SkillID: "bloom"}
-	gamedata.Data.Skills["bloom"] = gamedata.SkillConfig{SkillID: "bloom", EffectType: "heal", StatusEffectID: "heal"}
-	cur := m.State.CurrentPlayerID
-	p := m.State.Players[cur]
-	p.SkillEnergy = 100
-	p.HP = 750
-	groundPlayers(m, clients)
-
-	send(m, clients[cur], "Shoot", ShootAction{Angle: 60, Power: 20, ActionMode: "skill"})
-	s := shotResolved(t, clients[cur])
-
-	heals := eventsOf(s, "heal", cur)
-	if len(heals) != 1 || heals[0].Amount != 650 || *heals[0].HP != 1400 || p.HP != 1400 {
-		t.Fatalf("heal events %+v, hp=%d", heals, p.HP)
-	}
-	if st := eventsOf(s, "status", cur); len(st) != 1 || st[0].EffectID != "heal" || st[0].Turns != 1 {
-		t.Fatalf("status events %+v", st)
-	}
-	if len(s.Projectiles) != 0 {
-		t.Fatalf("heal skill fired projectiles: %+v", s.Projectiles)
 	}
 }
 

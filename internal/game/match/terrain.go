@@ -193,7 +193,17 @@ func (t *Terrain) IsSolid(x, y float64) bool {
 }
 
 func (t *Terrain) DestroyCircle(cx, cy float64, radius float64) bool {
+	return t.DestroyCircleAbove(cx, cy, radius, 0)
+}
+
+// DestroyCircleAbove is DestroyCircle keeping every row y >= floorY (floorY <= 0: none kept),
+// so a crater never opens the bottom of the map (the bomb chain).
+func (t *Terrain) DestroyCircleAbove(cx, cy float64, radius float64, floorY float64) bool {
 	t.Version++
+	maxY := t.Height
+	if floorY > 0 && int(math.Ceil(floorY)) < maxY {
+		maxY = int(math.Ceil(floorY))
+	}
 
 	icx := int(math.Round(cx))
 	icy := int(math.Round(cy))
@@ -201,7 +211,7 @@ func (t *Terrain) DestroyCircle(cx, cy float64, radius float64) bool {
 
 	destroyedAny := false
 	for y := icy - ir; y <= icy+ir; y++ {
-		if y < 0 || y >= t.Height {
+		if y < 0 || y >= maxY {
 			continue
 		}
 		for x := icx - ir; x <= icx+ir; x++ {

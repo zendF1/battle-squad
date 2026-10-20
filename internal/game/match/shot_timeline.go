@@ -13,6 +13,9 @@ import (
 type shotTimeline struct {
 	events []ShotEvent
 	end    float64
+	// landing is when each player's last fall of the shot ends: a later fall of the same
+	// player starts then, so falls play in order (bomb chain).
+	landing map[string]float64
 }
 
 func (tl *shotTimeline) add(e ShotEvent) {
@@ -62,8 +65,14 @@ func (m *Match) playersByID() []*BattlePlayerState {
 	return ps
 }
 
-// hurtPlayer subtracts damage from p, clamping at 0, and reports whether it killed p.
+// hurtPlayer subtracts damage from p, the shield first, clamping HP at 0, and reports whether
+// it killed p.
 func hurtPlayer(p *BattlePlayerState, damage int) bool {
+	if p.Shield > 0 && damage > 0 {
+		absorbed := min(p.Shield, damage)
+		p.Shield -= absorbed
+		damage -= absorbed
+	}
 	p.HP -= damage
 	if p.HP > 0 {
 		return false
@@ -73,15 +82,67 @@ func hurtPlayer(p *BattlePlayerState, damage int) bool {
 	return true
 }
 
+// killPlayer kills p outright (out of the map): HP and shield to 0. It returns what p lost.
+func killPlayer(p *BattlePlayerState) int {
+	lost := p.HP + p.Shield
+	p.HP, p.Shield = 0, 0
+	p.IsAlive = false
+	return lost
+}
+
+// damageEvent is the damage event for p after a hit that took amount; it carries the shield
+// when p had one before the hit (shieldBefore > 0).
+func damageEvent(t float64, p *BattlePlayerState, amount, shieldBefore int, cause string) ShotEvent {
+	e := ShotEvent{T: t, Type: "damage", PlayerID: p.PlayerID, Amount: amount, HP: intPtr(p.HP), Cause: cause}
+	if shieldBefore > 0 {
+		e.Shield = intPtr(p.Shield)
+	}
+	return e
+}
+
+// skillCap limits the damage a whole skill deals one target (missile rain, bomb chain).
+type skillCap struct {
+	limit func(p *BattlePlayerState) int
+	dealt map[string]int
+}
+
+func newSkillCap(limit func(p *BattlePlayerState) int) *skillCap {
+	return &skillCap{limit: limit, dealt: map[string]int{}}
+}
+
+// clamp returns how much of damage p may still take and counts it as dealt.
+func (c *skillCap) clamp(p *BattlePlayerState, damage int) int {
+	if c == nil {
+		return damage
+	}
+	left := c.limit(p) - c.dealt[p.PlayerID]
+	if damage > left {
+		damage = max(left, 0)
+	}
+	c.dealt[p.PlayerID] += damage
+	return damage
+}
+
+// capOfBase is a skillCap limit of factor × base damage, reduced by the target's defense.
+func capOfBase(base float64) func(p *BattlePlayerState) int {
+	return func(p *BattlePlayerState) int { return int(math.Round(ReduceByDefense(base, p.Defense))) }
+}
+
 // explodeProjectile resolves r's explosion at the end of its flight: it carves the crater and
 // applies splash damage to the shooter's enemies. It returns the enemies the blast damaged.
 func (m *Match) explodeProjectile(shooter *BattlePlayerState, r *ProjectileResult, baseDamage float64, tl *shotTimeline) []*BattlePlayerState {
+	return m.explodeCapped(shooter, r, baseDamage, tl, nil)
+}
+
+// explodeCapped is explodeProjectile with the damage each target takes limited by limit (nil:
+// none); the crater keeps the rows y >= r.floorY when set.
+func (m *Match) explodeCapped(shooter *BattlePlayerState, r *ProjectileResult, baseDamage float64, tl *shotTimeline, limit *skillCap) []*BattlePlayerState {
 	t := flightEnd(r)
 	crater := craterRadius(shooter, r.CraterRadius)
-	m.Terrain.DestroyCircle(r.ExplosionPoint.X, r.ExplosionPoint.Y, crater)
+	m.Terrain.DestroyCircleAbove(r.ExplosionPoint.X, r.ExplosionPoint.Y, crater, r.floorY)
 	tl.add(ShotEvent{
 		T: t, Type: "explode", ProjectileID: r.ProjectileID,
-		Position: vecPtr(*r.ExplosionPoint), Radius: crater, TerrainVersion: m.Terrain.Version,
+		Position: vecPtr(*r.ExplosionPoint), Radius: crater, Floor: r.floorY, TerrainVersion: m.Terrain.Version,
 	})
 
 	var hit []*BattlePlayerState
@@ -99,10 +160,12 @@ func (m *Match) explodeProjectile(shooter *BattlePlayerState, r *ProjectileResul
 
 		damage := CalculateExplosionDamage(p.Position, explosionCenter, baseDamage, r.ExplosionRadius, p.Defense)
 		damage, critical := ApplyCritical(damage, shooter.CritChance)
+		damage = limit.clamp(p, damage)
 		if damage <= 0 {
 			continue
 		}
 
+		shieldBefore := p.Shield
 		killed := hurtPlayer(p, damage)
 		hit = append(hit, p)
 		shooter.DamageDealt += damage
@@ -111,10 +174,9 @@ func (m *Match) explodeProjectile(shooter *BattlePlayerState, r *ProjectileResul
 			shooter.KillCount++
 		}
 
-		tl.add(ShotEvent{
-			T: t, Type: "damage", PlayerID: p.PlayerID, ProjectileID: r.ProjectileID,
-			Amount: damage, HP: intPtr(p.HP), Critical: critical, Cause: "explosion",
-		})
+		e := damageEvent(t, p, damage, shieldBefore, "explosion")
+		e.ProjectileID, e.Critical = r.ProjectileID, critical
+		tl.add(e)
 		if killed {
 			tl.add(ShotEvent{T: t, Type: "die", PlayerID: p.PlayerID, Cause: "explosion"})
 		}
@@ -123,7 +185,8 @@ func (m *Match) explodeProjectile(shooter *BattlePlayerState, r *ProjectileResul
 }
 
 // settleFalls drops every living player onto the terrain left by an explosion at time t,
-// applying fall damage on landing. Falling off the map kills instantly.
+// applying fall damage on landing. Falling off the map kills instantly. A player still falling
+// from an earlier explosion of the shot falls again once it has landed.
 func (m *Match) settleFalls(shooter *BattlePlayerState, t float64, tl *shotTimeline) {
 	for _, p := range m.playersByID() {
 		if !p.IsAlive {
@@ -138,21 +201,27 @@ func (m *Match) settleFalls(shooter *BattlePlayerState, t float64, tl *shotTimel
 		distance := landY - from.Y
 		p.Position.Y = landY
 		fall := fallDuration(distance)
-		landed := t + fall
-		tl.add(ShotEvent{T: t, Type: "fall", PlayerID: p.PlayerID, From: vecPtr(from), To: vecPtr(p.Position), Duration: fall})
+		start := max(t, tl.landing[p.PlayerID])
+		landed := start + fall
+		if tl.landing == nil {
+			tl.landing = map[string]float64{}
+		}
+		tl.landing[p.PlayerID] = landed
+		tl.add(ShotEvent{T: start, Type: "fall", PlayerID: p.PlayerID, From: vecPtr(from), To: vecPtr(p.Position), Duration: fall})
 
 		if landY >= float64(m.Terrain.Height) {
-			remainingHP := p.HP
-			hurtPlayer(p, remainingHP)
+			shieldBefore := p.Shield
+			lost := killPlayer(p)
 			shooter.KillCount++
-			tl.add(ShotEvent{T: landed, Type: "damage", PlayerID: p.PlayerID, Amount: remainingHP, HP: intPtr(0), Cause: "out_of_map"})
+			tl.add(damageEvent(landed, p, lost, shieldBefore, "out_of_map"))
 			tl.add(ShotEvent{T: landed, Type: "die", PlayerID: p.PlayerID, Cause: "out_of_map"})
 			continue
 		}
 
 		if damage := CalculateFallDamage(distance); damage > 0 {
+			shieldBefore := p.Shield
 			killed := hurtPlayer(p, damage)
-			tl.add(ShotEvent{T: landed, Type: "damage", PlayerID: p.PlayerID, Amount: damage, HP: intPtr(p.HP), Cause: "fall"})
+			tl.add(damageEvent(landed, p, damage, shieldBefore, "fall"))
 			if killed {
 				tl.add(ShotEvent{T: landed, Type: "die", PlayerID: p.PlayerID, Cause: "fall"})
 			}
@@ -171,6 +240,29 @@ func applyShotStatus(tl *shotTimeline, t float64, source, target *BattlePlayerSt
 	tl.add(ShotEvent{T: t, Type: "status", PlayerID: target.PlayerID, EffectID: effectID, Turns: turns})
 }
 
+// grantHitEnergy gives skillEnergyOnHit, once for the whole shot, to every living enemy of the
+// shooter the shot took HP or shield from.
+func (m *Match) grantHitEnergy(shooter *BattlePlayerState, tl *shotTimeline) {
+	hit := map[string]bool{}
+	for _, e := range tl.events {
+		if e.Type == "damage" && e.Amount > 0 {
+			hit[e.PlayerID] = true
+		}
+	}
+	for id := range hit {
+		p, ok := m.State.Players[id]
+		if !ok || !p.IsAlive || p.TeamID == shooter.TeamID {
+			continue
+		}
+		addSkillEnergy(p, skillEnergyOnHit)
+	}
+}
+
+// addSkillEnergy adds n skill energy to p, capped at skillEnergyMax.
+func addSkillEnergy(p *BattlePlayerState, n int) {
+	p.SkillEnergy = min(p.SkillEnergy+n, skillEnergyMax)
+}
+
 // broadcastShot finalizes shot from tl and sends it to every client.
 func (m *Match) broadcastShot(shot *ShotResolved, tl *shotTimeline) {
 	if shot.Projectiles == nil {
@@ -179,13 +271,18 @@ func (m *Match) broadcastShot(shot *ShotResolved, tl *shotTimeline) {
 	for _, r := range shot.Projectiles {
 		tl.reach(flightEnd(r))
 	}
+	shooter := m.State.Players[shot.ShooterID]
+	m.grantHitEnergy(shooter, tl)
 	shot.Events = tl.sorted()
 	if shot.Events == nil {
 		shot.Events = []ShotEvent{}
 	}
 	shot.Duration = tl.end
-	shooter := m.State.Players[shot.ShooterID]
 	shot.SkillEnergy = shooter.SkillEnergy
+	shot.SkillEnergies = make(map[string]int, len(m.State.Players))
+	for id, p := range m.State.Players {
+		shot.SkillEnergies[id] = p.SkillEnergy
+	}
 	shooter.ShotTurns++
 
 	payload, _ := json.Marshal(shot)

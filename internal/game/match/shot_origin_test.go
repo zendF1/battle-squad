@@ -71,8 +71,8 @@ func TestShotStartsAtBodyCentre(t *testing.T) {
 
 func TestSkillShotsStartAtBodyCentre(t *testing.T) {
 	m, clients := newFlowMatch(t)
-	gamedata.Data.Characters["c1"] = gamedata.CharacterConfig{CharacterID: "c1", WeaponID: "w1", SkillID: "triple"}
-	gamedata.Data.Skills["triple"] = gamedata.SkillConfig{SkillID: "triple", EffectType: "multi_projectile", DamageMultiplier: 1}
+	gamedata.Data.Characters["c1"] = gamedata.CharacterConfig{CharacterID: "c1", WeaponID: "w1", SkillID: "chain"}
+	gamedata.Data.Skills["chain"] = gamedata.SkillConfig{SkillID: "chain", EffectType: effectBombChain, DamageMultiplier: 1}
 	cur := m.State.CurrentPlayerID
 	shooter := m.State.Players[cur]
 	shooter.SkillEnergy = 100
@@ -86,7 +86,7 @@ func TestSkillShotsStartAtBodyCentre(t *testing.T) {
 	}
 	for i, p := range s.Projectiles {
 		if got := p.Path[0].Position; got != want {
-			t.Fatalf("skill projectile %d starts at %v, want %v", i, got, want)
+			t.Fatalf("bomb %d starts at %v, want %v", i, got, want)
 		}
 	}
 }

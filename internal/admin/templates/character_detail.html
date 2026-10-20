@@ -90,7 +90,7 @@
 
 <div class="card">
     <h2 style="margin-bottom:4px;font-size:18px;color:#1a1a2e;">Cấu hình kỹ năng (Skill)</h2>
-    <p style="margin-bottom:16px;font-size:13px;color:#888;">Kỹ năng đặc biệt của nhân vật. Cần 100 điểm nộ để sử dụng (+20 mỗi lượt).</p>
+    <p style="margin-bottom:16px;font-size:13px;color:#888;">Kỹ năng đặc biệt của nhân vật. Cần 100 điểm nộ để sử dụng (+20 cuối mỗi lượt của mình, +10 khi bị địch đánh trúng). Số lượng / % theo cấp súng nằm trong code (internal/game/match/skill_tuning.go).</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;">
         <div class="form-group">
             <label>Skill ID</label>
@@ -106,29 +106,31 @@
             <label>Loại hiệu ứng</label>
             <input type="text" name="effect_type" value="{{.Skill.EffectType}}" readonly style="background:#f0f0f0;color:#888">
             <div class="desc">
-                {{if eq .Skill.EffectType "multi_projectile"}}Bắn nhiều viên đạn cùng lúc
-                {{else if eq .Skill.EffectType "single_large_bomb"}}Bắn 1 viên đạn nổ lớn
-                {{else if eq .Skill.EffectType "debuff"}}Gây hiệu ứng bất lợi cho địch
-                {{else if eq .Skill.EffectType "heal"}}Hồi máu cho bản thân
+                {{if eq .Skill.EffectType "missile_rain"}}Mưa tên lửa: pháo hiệu, tên lửa rơi quanh chỗ đáp, gây bỏng
+                {{else if eq .Skill.EffectType "bomb_chain"}}Bom liên hoàn: nhiều bom cùng đường bay đào sâu, cầm chân
+                {{else if eq .Skill.EffectType "laser"}}Tia laze: tia thẳng xuyên địa hình, choáng
+                {{else if eq .Skill.EffectType "bloom"}}Hoa hồi xuân: hồi máu cả đội theo % máu tối đa, máu dư thành khiên, giải hiệu ứng xấu
                 {{else}}Loại hiệu ứng kỹ năng{{end}}
             </div>
         </div>
         <div class="form-group">
             <label>Số viên đạn</label>
             <input type="number" name="projectile_count" value="{{.Skill.ProjectileCount}}" step="1">
-            <div class="desc">Số lượng đạn bắn ra khi dùng kỹ năng. VD: Triple Shot = 3</div>
+            <div class="desc">Chỉ để tham khảo (cấp súng 0); số thật tính theo cấp súng trong code</div>
         </div>
         <div class="form-group">
             <label>Hệ số sát thương</label>
             <input type="number" name="damage_multiplier" value="{{.Skill.DamageMultiplier}}" step="0.05">
-            <div class="desc">Nhân với sát thương vũ khí. VD: 1.25 = mỗi viên đạn gây 125% damage</div>
+            <div class="desc">Nhân với toàn bộ sát thương kỹ năng (mặc định 1.0; ≤ 0 tính là 1). Hoa hồi xuân không dùng</div>
         </div>
         <div class="form-group">
             <label>Status Effect ID</label>
             <input type="text" name="status_effect_id" value="{{.Skill.StatusEffectID}}" readonly style="background:#f0f0f0;color:#888">
             <div class="desc">
-                {{if eq .Skill.StatusEffectID "net"}}Làm chậm di chuyển của địch
-                {{else if eq .Skill.StatusEffectID "heal"}}Hồi máu qua các lượt
+                {{if eq .Skill.StatusEffectID "burn"}}Bỏng: mất 10% máu tối đa đầu lượt sau
+                {{else if eq .Skill.StatusEffectID "root"}}Cầm chân: lượt sau không di chuyển / dịch chuyển
+                {{else if eq .Skill.StatusEffectID "stun"}}Choáng: mất trọn lượt sau
+                {{else if eq .Skill.StatusEffectID "net"}}Làm chậm di chuyển của địch
                 {{else if .Skill.StatusEffectID}}Hiệu ứng: {{.Skill.StatusEffectID}}
                 {{else}}Không có hiệu ứng đặc biệt{{end}}
             </div>

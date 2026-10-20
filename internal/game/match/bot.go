@@ -202,6 +202,12 @@ func (b *BotBrain) DecideAction(m *Match, bot *BattlePlayerState, turn botTurnSt
 		return nil
 	}
 
+	if bot.SkillEnergy >= skillEnergyMax {
+		if act, ok := b.skillAction(m, bot, weapon, now); ok {
+			return act
+		}
+	}
+
 	best := b.bestShot(m, bot, bot.Position, weapon)
 
 	// Every trajectory is blocked or falls short: look for a better spot first

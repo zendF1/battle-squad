@@ -174,13 +174,13 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 
 	// Seed skills
 	skillQuery := `INSERT INTO config_skills
-		(skill_id, character_id, name, cooldown_turn, effect_type, projectile_count, status_effect_id, damage_multiplier)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		(skill_id, character_id, name, cooldown_turn, effect_type, projectile_count, status_effect_id, damage_multiplier, description)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (skill_id) DO NOTHING`
 	for _, s := range data.Skills {
 		if _, err := db.Pool.Exec(ctx, skillQuery,
 			s.SkillID, s.CharacterID, s.Name, s.CooldownTurn, s.EffectType,
-			s.ProjectileCount, s.StatusEffectID, s.DamageMultiplier,
+			s.ProjectileCount, s.StatusEffectID, s.DamageMultiplier, s.Description,
 		); err != nil {
 			return fmt.Errorf("insert skill %s: %w", s.SkillID, err)
 		}

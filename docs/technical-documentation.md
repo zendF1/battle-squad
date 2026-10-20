@@ -479,31 +479,38 @@ Client message → CompositeWSHandler
 | Event | Payload | Mô tả |
 |-------|---------|-------|
 | `MatchStarted` | `{matchId, players, turnOrder, wind, mapId}` | Trận bắt đầu |
-| `TurnStarted` | `{currentPlayerId, turnIndex, wind, moveEnergy, maxMoveEnergy, skillEnergy}` | Lượt mới; `moveEnergy` là năng lượng của người tới lượt (đã trừ net / freeze), `maxMoveEnergy` là mức đầy của họ |
+| `TurnStarted` | `{currentPlayerId, turnIndex, wind, moveEnergy, maxMoveEnergy, skillEnergy, skipped?}` | Lượt mới; `moveEnergy` là năng lượng của người tới lượt (đã trừ net / root / stun / freeze), `maxMoveEnergy` là mức đầy của họ. `skipped` (`"stun"` / `"freeze"`, chỉ có khi bị) = người tới lượt mất trọn lượt: server bỏ mọi Move/Shoot/UseItem và tự kết thúc lượt sau 2 s (`skipTurnDelay`) |
 | `TurnTimerTick` | `{timeLeft}` | Đếm ngược (mỗi 1s) |
 | `PlayerMoved` | `{playerId, position, moveEnergy, seq?}` | Player di chuyển; có `seq` khi trả lời `Move` có `seq` |
 | `PlayerAiming` | `{playerId, angle, durationMs}` | Player đang ngắm trước khi bắn. `angle` cùng quy ước với `Shoot.angle` và là đúng góc sẽ bắn (phát cố tình trượt thì là góc trượt); `ShotResolved` của player đó tới sau khoảng `durationMs`. Không gửi power. Hiện chỉ gửi cho bot; nếu lượt đổi (timeout) trong lúc ngắm thì không có phát bắn |
-| `ShotResolved` | `{shooterId, actionMode, skillId?, itemId?, skillEnergy, projectiles[], events[], duration}` | Toàn bộ kết quả một lượt bắn (weapon, skill, teleport) |
+| `ShotResolved` | `{shooterId, actionMode, skillId?, itemId?, skillEnergy, skillEnergies, projectiles[], events[], duration}` | Toàn bộ kết quả một lượt bắn (weapon, skill, teleport). `skillEnergy` = năng lượng skill của người bắn sau phát bắn; `skillEnergies` = `{playerId: energy}` của mọi player sau phát bắn (người bị địch đánh trúng +10, xem Kỹ năng) |
 | `ItemUsed` | `{playerId, itemId, players, wind}` | Item bị tiêu hao |
-| `PlayerDamaged` | `[{playerId, damage, hp, isAlive, type}]` | Damage ngoài phát bắn (lava đầu lượt) |
+| `PlayerDamaged` | `[{playerId, damage, hp, shield, isAlive, type}]` | Damage đầu lượt của người tới lượt, ngoài phát bắn: `type` `lava` (75) hoặc `burn` (10% máu tối đa). Không qua defense, khiên chịu trước (`shield` = khiên còn lại). Gửi trước `TurnStarted`; nếu chết thì không có `TurnStarted` cho họ: server kiểm tra thắng thua rồi chuyển lượt |
 | `MatchEnded` | `{winningTeam, rewards}` | Trận kết thúc |
 | `MatchStateSync` | `MatchState` + `terrain` + `lastMoveSeq` | Full sync trả lời `Reconnect`. `lastMoveSeq`: `seq` của `Move` cuối cùng của người gửi `Reconnect` mà match loop đã nhận trong lượt hiện tại, kể cả `Move` bị bỏ (rate limit, đang resolve, không hợp lệ); `0` nếu chưa có hoặc không phải lượt của họ; reset khi lượt mới bắt đầu. Snapshot đã phản ánh mọi `Move` có `seq <= lastMoveSeq` |
 
-**`ShotResolved`:** server tính xong toàn bộ phát bắn và state đã cập nhật trước khi gửi; client chỉ phát lại. `projectiles[]` là đường bay (`path[]` với `time`) của từng viên đạn. `events[]` sắp theo `t` (giây kể từ lúc bắn):
+**`ShotResolved`:** server tính xong toàn bộ phát bắn và state đã cập nhật trước khi gửi; client chỉ phát lại. `projectiles[]` là đường bay (`path[]` với `time`) của từng viên đạn; `time` luôn tính từ lúc bắn, nên viên phóng trễ (bom liên hoàn, tên lửa) có `path[0].time = launchDelay > 0` và client chỉ hiện nó từ lúc đó. Mỗi projectile: `{projectileId, ownerPlayerId, skillId?, kind?, launchDelay?, path[], hitPlayerId?, explosionPoint?, explosionRadius, craterRadius}`; `kind` (chỉ với skill): `flare` (pháo hiệu, đáp không nổ), `missile` (tên lửa rơi từ đỉnh map), `bomb` (bom liên hoàn), `seed` (hạt của Hoa hồi xuân, đáp lên đồng đội `hitPlayerId`, không nổ); thiếu = đạn thường. `events[]` sắp theo `t` (giây kể từ lúc bắn):
 
 | `type` | Trường | Ghi chú |
 |--------|--------|---------|
-| `explode` | `projectileId, position, radius, terrainVersion` | Khoét terrain tại `t` (cuối đường bay) |
-| `damage` | `playerId, amount, hp, cause, projectileId?, critical?` | `cause`: `explosion`, `fall`, `out_of_map` |
-| `heal` | `playerId, amount, hp` | |
-| `status` | `playerId, effectId, turns` | |
-| `fall` | `playerId, from, to, duration` | Rơi từ `t` đến `t + duration`; damage rơi nằm ở mốc chạm đất |
+| `explode` | `projectileId, position, radius, terrainVersion, floor?` | Khoét terrain tại `t` (cuối đường bay). `floor` > 0: không khoét các hàng `y >= floor` (bom liên hoàn giữ đáy map) |
+| `damage` | `playerId, amount, hp, cause, projectileId?, critical?, shield?` | `cause`: `explosion`, `laser`, `fall`, `out_of_map`. `amount` = máu + khiên mất; `shield` (khiên còn lại) chỉ có khi player có khiên trước cú đánh |
+| `heal` | `playerId, amount, hp` | `amount` = máu thực hồi (có thể 0 khi đầy máu) |
+| `shield` | `playerId, amount, shield` | Khiên nhận thêm / khiên sau đó (tối đa 50% máu tối đa) |
+| `status` | `playerId, effectId, turns` | Hiệu ứng được gắn (`burn`, `root`, `stun`, `net`, `freeze`) |
+| `cleanse` | `playerId, effectIds[]` | Hiệu ứng xấu bị gỡ |
+| `fall` | `playerId, from, to, duration` | Rơi từ `t` đến `t + duration`; damage rơi nằm ở mốc chạm đất. Một player rơi nhiều lần trong cùng phát bắn thì lần sau bắt đầu khi lần trước chạm đất |
 | `die` | `playerId, cause` | |
 | `teleport` | `playerId, from, to` | |
+| `flare` | `projectileId, position` | Pháo hiệu đáp (Mưa tên lửa): khói đỏ, không damage, không hố |
+| `rain` | `position, radius, count` | Tên lửa bắt đầu rơi: quanh `position.x` ± `radius`, `count` quả |
+| `beam` | `playerId, from, to, duration` | Tia laze từ `from` đến mép map `to`, hiện `duration` giây; xuyên địa hình, không khoét |
+
+Client thiếu field mới (hoặc server cũ) vẫn chạy: field vắng = mặc định (`kind` rỗng = đạn thường, `launchDelay` 0, `shield` không đổi, `floor` 0 = khoét cả hình tròn).
 
 `duration` là lúc animation cuối cùng kết thúc; server kết thúc lượt sau `duration + 1.2s`.
 
-**Player trong `players`** (`BattlePlayerState`, cùng shape trong `MatchStarted`, `MatchStateSync`, `ItemUsed`): `{playerId, displayName, teamId, characterId, weaponItemId, weaponUpgradeLevel, title?, hp, maxHp, defense, position{x,y}, moveEnergy, maxMoveEnergy, items[], statusEffects[], isAlive, isBot, damageBonus, critChance, moveEnergyBonus, skillPowerBonus, terrainDamageBonus, skillEnergy, damageDealt, killCount, shotsFired, shotsHit}`. `weaponItemId` là `item_id` của vũ khí nhân vật đang mặc lúc vào trận (VD `rookie_weapon_lv30`, `crafted_weapon_gold`, `normal_weapon_lv10`), `""` khi không mặc vũ khí và với bot. Room đọc nó cùng câu query equipment khi tính chỉ số (`battlestats.LoadLoadouts`), không tốn thêm gì mỗi phát bắn. Chỉ dùng để client vẽ súng đang cầm; không ảnh hưởng gameplay. `weaponUpgradeLevel` là cấp nâng cấp (`player_equipment.upgrade_level`, 0..16) của vũ khí đó, đọc cùng câu query; `0` khi không mặc vũ khí và với bot. Chỉ để client vẽ hào quang sau lưng (vũ khí +14: tím, +16: đỏ); client cũ bỏ qua, client mới thiếu field coi là 0. `title` là danh hiệu người chơi đang đeo lúc vào trận, `{id, name, rarity}` (rarity `blue`/`orange`/`purple`/`red`), chỉ khi danh hiệu còn sở hữu và đang bật; không có field khi không đeo và với bot. Room đọc nó lúc tính chỉ số (`battlestats.LoadEquippedTitle`, cả khi chơi nhân vật chưa sở hữu); chỉ để client vẽ biển danh hiệu, không ảnh hưởng gameplay. `maxMoveEnergy` là năng lượng di chuyển nạp lại đầu mỗi lượt của player: năng lượng gốc của nhân vật (`config_characters.mobility`) + `moveEnergyBonus` (điểm, trang bị); client dùng nó làm mức đầy của thanh năng lượng.
+**Player trong `players`** (`BattlePlayerState`, cùng shape trong `MatchStarted`, `MatchStateSync`, `ItemUsed`): `{playerId, displayName, teamId, characterId, weaponItemId, weaponUpgradeLevel, title?, hp, maxHp, shield, defense, position{x,y}, moveEnergy, maxMoveEnergy, items[], statusEffects[], isAlive, isBot, damageBonus, critChance, moveEnergyBonus, skillPowerBonus, terrainDamageBonus, skillEnergy, skillRank, damageDealt, killCount, shotsFired, shotsHit}`. `shield` là khiên hiện có (chịu damage trước máu, tối đa 50% `maxHp`, mất khi vỡ hoặc hết trận). `skillRank` là cấp súng dùng cho skill (`WeaponSkillRank(weaponItemId)`, 0..4, xem Kỹ năng). `weaponItemId` là `item_id` của vũ khí nhân vật đang mặc lúc vào trận (VD `rookie_weapon_lv30`, `crafted_weapon_gold`, `normal_weapon_lv10`), `""` khi không mặc vũ khí và với bot. Room đọc nó cùng câu query equipment khi tính chỉ số (`battlestats.LoadLoadouts`), không tốn thêm gì mỗi phát bắn. Chỉ dùng để client vẽ súng đang cầm; không ảnh hưởng gameplay. `weaponUpgradeLevel` là cấp nâng cấp (`player_equipment.upgrade_level`, 0..16) của vũ khí đó, đọc cùng câu query; `0` khi không mặc vũ khí và với bot. Chỉ để client vẽ hào quang sau lưng (vũ khí +14: tím, +16: đỏ); client cũ bỏ qua, client mới thiếu field coi là 0. `title` là danh hiệu người chơi đang đeo lúc vào trận, `{id, name, rarity}` (rarity `blue`/`orange`/`purple`/`red`), chỉ khi danh hiệu còn sở hữu và đang bật; không có field khi không đeo và với bot. Room đọc nó lúc tính chỉ số (`battlestats.LoadEquippedTitle`, cả khi chơi nhân vật chưa sở hữu); chỉ để client vẽ biển danh hiệu, không ảnh hưởng gameplay. `maxMoveEnergy` là năng lượng di chuyển nạp lại đầu mỗi lượt của player: năng lượng gốc của nhân vật (`config_characters.mobility`) + `moveEnergyBonus` (điểm, trang bị); client dùng nó làm mức đầy của thanh năng lượng.
 
 ---
 
@@ -534,11 +541,14 @@ Room (waiting) → Host StartMatch → Match goroutine spawns
 
 ```
 startTurn()
-  1. Tick status effects (decrement duration, remove expired)
-  2. Apply terrain damage (lava: 75 HP/turn)
-  3. Reset move energy = maxMoveEnergy (gốc nhân vật 100/80/120/100 + moveEnergyBonus)
+  1. Reset move energy = maxMoveEnergy (gốc nhân vật 100/80/120/100 + moveEnergyBonus);
+     net cap 50, root / stun / freeze → 0
+  2. Damage đầu lượt (PlayerDamaged): lava 75, rồi burn 10% máu tối đa; khiên chịu trước.
+     Chết → checkWinCondition, rồi chuyển lượt (không TurnStarted cho người chết)
+  3. (Status effects giảm 1 lượt ở endTurn, cuối lượt của chính người đó)
   4. Update wind (random power + direction, trừ khi WindStopper active)
-  5. Broadcast TurnStarted
+  5. Broadcast TurnStarted; stun / freeze → `skipped`, khoá lượt, tự endTurn sau 2s
+     (không lên lịch bot)
   6. Nếu bot → delay 1–2.5s (botTurnStartMin/MaxDelay) → botStep → DecideAction
      - Medkit / Move: xử lý ngay, botStep tiếp sau botFollowUpDelay 1.5s
      - Shoot: broadcast PlayerAiming {playerId, angle, durationMs}, bắn sau 1.2–2.4s
@@ -590,13 +600,13 @@ Explosion damage:
   if distance >= explosionRadius → 0 damage
   multiplier = 1.0 - (distance / explosionRadius)  // linear falloff
   rawDamage = (weaponDamage + shooter.damageBonus) * itemFactor * multiplier
-    // itemFactor: power_shot ×1.5; skill: × skill.damageMultiplier × (1 + skillPowerBonus/100)
+    // itemFactor: power_shot ×1.5; skill: base = × skill.damageMultiplier × (1 + skillPowerBonus/100), xem Kỹ năng
   finalDamage = rawDamage * (K / (K + playerDefense))   // K = game_settings combat.defense_k, mặc định 600
   crit: ×1.5 với xác suất critChance%
 
 Crater (khoét terrain, không ảnh hưởng damage):
   craterRadius = weapon.terrainDamage × 0.8 px      // terrainDamage ≤ 0 → explosionRadius
-               × skill (heavy_bomb ×1.8) × fragile ×2 × (1 + terrainDamageBonus/100)
+               × skill (xem Kỹ năng) × fragile ×2 (đạn thường) × (1 + terrainDamageBonus/100)
   ProjectileResult.craterRadius = trước terrainDamageBonus; explode.radius = cuối cùng
 
 Fall damage (không qua defense):
@@ -625,7 +635,7 @@ Các số khác đã đổi:
 | `statMultipliers` hp / damage / defense / mobility / skill_power / terrain_damage | 50/5/5/3/5/3 → **2/5/1/1/1/1** | `character_progression` (021 chỉ đổi khi object còn đúng mặc định cũ), seed 006, `character.DefaultStatMultipliers`. skill_power / terrain_damage là % mỗi điểm (1 = 1%) |
 | K defense | 100 → **600** | `combat.defense_k` (021 + admin `SeedSettings`), `gamedata.DefaultDefenseK` |
 | Medkit | +30 → **+450** HP | `config_items.value` của `medkit` (game server giờ đọc value, mặc định 450), `items.yaml` |
-| Healing Bloom | 30 → **450** HP trước skill power (023: **650**) | `match.skillHealAmount` |
+| Healing Bloom | 30 → **450** HP trước skill power (023: **650**; 028 thay bằng Hoa hồi xuân theo % máu) | `match.skillHealAmount` (đã bỏ) |
 | Lava đầu lượt | 5 → **75** HP | `match.lavaDamage` |
 | Fall damage | 0,25 → **3,75** HP/px quá 150px | `match.fallDamageMultiplier` |
 | HP mặc định nhân vật không có trong game data | 100 → **1.500** | `battlestats.defaultHP` |
@@ -663,11 +673,11 @@ Mỗi nhân vật có một thế mạnh riêng. `migrations/023_character_ident
 | Bán kính hố (= terrain damage × 0,8) | 40 | 40 → **104** | 35 → **20** | 40 → **24** |
 | Gió / nặng | 1,0 / 1,0 | 0,5 / 1,5 | 1,2 → **1,3** / 0,8 | 1,0 / 0,9 |
 | Năng lượng di chuyển gốc (`config_characters.mobility`) | 100 | **80** | **120** | 100 |
-| Skill | Triple Shot ×1,25 ×3 | Heavy Bomb (bom đào): ×1,3 → **×1,1**, nổ ×1,5 → **×2**, hố **×1,8** | Shock Field ×0,9 → **×1,3** + lưới | Healing Bloom 450 → **650** HP |
+| Skill (028 thay cả bốn, xem Kỹ năng) | Triple Shot ×1,25 ×3 | Heavy Bomb (bom đào): ×1,3 → **×1,1**, nổ ×1,5 → **×2**, hố **×1,8** | Shock Field ×0,9 → **×1,3** + lưới | Healing Bloom 450 → **650** HP |
 
 - **Năng lượng di chuyển**: trước đây mọi nhân vật 100 (`mobility` 70/40/75/65 chỉ để hiển thị). Giờ `config_characters.mobility` là năng lượng gốc mỗi lượt (`gamedata.BaseMoveEnergy`, ≤ 0 hoặc nhân vật lạ → 100). `battlestats.Base` mang nó trong `Stats.MoveEnergy`; điểm và trang bị cộng vào `MoveEnergyBonus`; `Stats.TurnMoveEnergy()` = tổng. Room đặt `BattlePlayerState.moveEnergy = maxMoveEnergy` khi vào trận, `startTurn` nạp lại `maxMoveEnergy` (state cũ thiếu field → tính lại từ config + bonus). `GET /player/characters` `baseStats.*.moveEnergy` và `stats.moveEnergy` báo đúng số này.
 - **Hố**: `terrain_damage` của vũ khí trước đây không được đọc (hố = bán kính nổ). Giờ hố = `terrain_damage × 0,8` px (`match.craterPxPerTerrainDamage`; 50 → 40 px nên hố của Rookie không đổi), tách khỏi bán kính damage. Hố phẳng (bắn xuống đất bằng, `TestCraterDepthByCharacter`): Rookie sâu 41 px, Tanko 105, Spark 21, Flora 25.
-- **Bom đào của Tanko** (`single_large_bomb`, hằng số `match.heavyBombBlastScale` 2 và `heavyBombCraterScale` 1,8): nổ 120 px, hố 187 px (rộng ~374 px). Trúng thẳng một Rookie trên đất bằng (`TestDiggingBombDropsTargetIntoFallDamage`): 426 damage nổ, mục tiêu rơi 166 px (vừa quá ngưỡng 150 px) → 60 damage rơi. Phát thường của Tanko (hố 104 px) chỉ làm mục tiêu tụt 82 px, không mất máu rơi. Người bắn / đồng đội đứng trong hố cũng rơi theo. Trên frozen_peak (đất mỏng nhất ~233 px ở đáy thung lũng) một quả nổ ngay mặt đất ở bất kỳ đâu vẫn chừa ≥ 46 px đất dưới mọi cột của hố (`TestDiggingBombKeepsGroundOnThinMaps`; grassland_valley ~234 px → ≥ 47 px, steel_base 300 px → ≥ 113 px), nên một phát không thủng xuống đáy map; nhiều phát chồng lên cùng chỗ thì vẫn có thể.
+- **Bom đào của Tanko** (thiết kế cũ, 028 thay bằng Bom liên hoàn; `single_large_bomb`, hằng số `match.heavyBombBlastScale` 2 và `heavyBombCraterScale` 1,8): nổ 120 px, hố 187 px (rộng ~374 px). Trúng thẳng một Rookie trên đất bằng (`TestDiggingBombDropsTargetIntoFallDamage`): 426 damage nổ, mục tiêu rơi 166 px (vừa quá ngưỡng 150 px) → 60 damage rơi. Phát thường của Tanko (hố 104 px) chỉ làm mục tiêu tụt 82 px, không mất máu rơi. Người bắn / đồng đội đứng trong hố cũng rơi theo. Trên frozen_peak (đất mỏng nhất ~233 px ở đáy thung lũng) một quả nổ ngay mặt đất ở bất kỳ đâu vẫn chừa ≥ 46 px đất dưới mọi cột của hố (`TestDiggingBombKeepsGroundOnThinMaps`; grassland_valley ~234 px → ≥ 47 px, steel_base 300 px → ≥ 113 px), nên một phát không thủng xuống đáy map; nhiều phát chồng lên cùng chỗ thì vẫn có thể.
 - **Spark** `shock_field` `damageMultiplier` 0,9 → 1,3 (config); lưới giữ nguyên. **Flora** `match.skillHealAmount` 450 → 650.
 
 Số phát hạ (trúng thẳng, không gió, không crit; `TestIdentityHitsToKillNoGear` trong `match`, `TestCharacterHitsToKillMatrix` trong `room` với DB): hàng = người bắn, cột = người chịu.
@@ -698,7 +708,7 @@ Khi trận bắt đầu, room đọc `bonus_*` của `player_characters` (nhân 
 | `bonus_defense` | `defense` | 1 | `defense = character.defense + điểm × 1` |
 | `bonus_damage` | `damage` | 5 | `damageBonus += điểm × 5`, cộng phẳng vào damage vũ khí (cả weapon lẫn skill) |
 | `bonus_mobility` | `mobility` | 1 | `moveEnergyBonus += điểm × 1`; đầu mỗi lượt `moveEnergy = maxMoveEnergy = gốc nhân vật + moveEnergyBonus` (1 năng lượng / 2px) |
-| `bonus_skill_power` | `skill_power` | 1 | `skillPowerBonus = điểm × 1` (%): damage skill × `(1 + skillPowerBonus/100)`, heal của `healing_bloom` = `round(650 × (1 + skillPowerBonus/100))` |
+| `bonus_skill_power` | `skill_power` | 1 | `skillPowerBonus = điểm × 1` (%): damage skill × `(1 + skillPowerBonus/100)` (Mưa tên lửa, Bom liên hoàn, Tia laze); Hoa hồi xuân hồi theo % máu tối đa, không nhân |
 | `bonus_terrain_damage` | `terrain_damage` | 1 | `terrainDamageBonus = điểm × 1` (%): bán kính khoét terrain = `craterRadius × (1 + terrainDamageBonus/100)` (`craterRadius` = terrain damage vũ khí × 0,8 px, xem Nhân vật); vùng sát thương vẫn dùng `explosionRadius`. `radius` của event `explode` là bán kính khoét |
 
 #### Chỉ số hiển thị (`GET /player/characters`)
@@ -769,6 +779,37 @@ Methods: `IsSolid(x,y)`, `DestroyCircle(cx,cy,radius)`, `GetLandingY(x,maxY)`, `
 | `spider_net` | Target MoveEnergy cap 50 |
 | `freeze_bomb` | Target MoveEnergy = 0 |
 | `air_strike` | Đạn rơi từ trên xuống tại tọa độ X |
+
+**Hiệu ứng trên player** (`statusEffects[]`, `durationTurn` N = N lượt tới của người bị; giảm 1 ở cuối lượt của chính họ, gắn lại thì làm mới, không cộng dồn):
+
+| Effect | Tác dụng |
+|--------|----------|
+| `net` | MoveEnergy tối đa 50 |
+| `freeze` | Mất trọn lượt như `stun` (trước đây chỉ không di chuyển / bắn, phải chờ hết giờ) |
+| `burn` | Đầu lượt mất 10% máu tối đa (`burnMaxHPPercent`), khiên chịu trước, có thể chết |
+| `root` | MoveEnergy 0, Move và teleport bị từ chối; vẫn bắn, dùng item, dùng skill |
+| `stun` | Mất trọn lượt: không Move / Shoot / UseItem; TurnStarted `skipped`, server tự kết thúc lượt sau 2 s |
+| Khiên (`shield`, không phải effect) | Chịu mọi damage trước máu (nổ, laze, rơi, lava, burn); tối đa 50% máu tối đa (`shieldCapPercent`); hết khi vỡ hoặc hết trận |
+
+`Cleanse` (Hoa hồi xuân) gỡ `burn`, `root`, `stun`, `net`, `freeze`; giữ hiệu ứng tốt của chính người đó (`power_shot`, ...).
+
+### Kỹ năng (skills, migration 028)
+
+Skill theo **nhân vật** (`config_characters.skill_id`), dùng bằng `Shoot {actionMode: "skill"}` khi đủ 100 năng lượng. Năng lượng: +20 cuối mỗi lượt của mình, **+10 khi bị địch đánh trúng** (mất máu hoặc khiên vì hành động của địch; một lần cho mỗi hành động, dù 14 tên lửa trúng; burn, tự gây và người chết không được; tối đa 100). Id giữ nguyên (client/admin dùng), `effect_type` chọn cách giải (`skillResolvers`, mỗi skill một file `internal/game/match/skill_*.go`, số liệu ở đầu file đó; số dùng chung ở `skill_tuning.go`). Migration `028_skill_redesign` (chạy lại mỗi deploy, chỉ đổi dòng còn effect type cũ, nên sửa trên admin được giữ) và `configs/skills.yaml` / admin seed.
+
+**Cấp súng** (`skillRank`, `WeaponSkillRank`): theo tier của vũ khí đang mặc, không theo +nâng cấp. Không vũ khí / bot 0, `*_lv10` Sắt 1, `*_lv20` Thép 2, `*_lv30` Mithril 3, `*_lv40` Rồng 4; súng chế tạo (Blaster, mặc được cho mọi nhân vật, skill vẫn theo nhân vật) Bạc 2, Vàng 3, Titan 4, Kim cương 4.
+
+**base** = (damage vũ khí + `damageBonus`) × power_shot 1,5 × `damage_multiplier` (1,0; ≤ 0 tính là 1) × (1 + `skillPowerBonus`/100).
+
+| Skill | Rookie — Mưa tên lửa (`triple_shot`, `missile_rain`) | Tanko — Bom liên hoàn (`heavy_bomb`, `bomb_chain`) | Spark — Tia laze (`shock_field`, `laser`) | Flora — Hoa hồi xuân (`healing_bloom`, `bloom`) |
+|---|---|---|---|---|
+| Bắn | Pháo hiệu như phát thường (gió, trọng lực); đáp: khói đỏ, không damage / hố; bay khỏi map → mất skill | 3 + cấp bom lớn cùng đường bay, cách 0,3 s; bom sau bay tới tâm hố đầu (≤ 40 px) thì cắm thẳng xuống hố | Tia thẳng từ tâm thân theo góc ngắm tới mép map, xuyên địa hình; bỏ qua lực | Không ngắm; hạt bay lên rồi rơi xuống mọi đồng đội còn sống (cả Flora) sau 1,1 s |
+| Số lượng | 0,5 s sau khi đáp: 6 + 2×cấp tên lửa rơi thẳng (không gió) từ đỉnh map, cách 0,1 s, rải ± (90 + 15×cấp) px quanh điểm đáp (seed theo trận + lượt); giải theo thứ tự chạm đất | 3 / 4 / 5 / 6 / 7 | 1 tia | 1 hạt / đồng đội |
+| Damage | Mỗi quả 0,35 × base (nổ 0,7 × bán kính vũ khí, hố 0,6 ×); tổng mỗi mục tiêu ≤ 2 × base (trước defense) | Tổng (1,8 + 0,15×cấp) × base chia đều; tổng mỗi mục tiêu ≤ tổng đó; nổ 1,3 ×, hố 1,4 × rồi ×0,85 mỗi quả; không khoét 48 px đáy map | Địch gần nhất (1,5 + 0,1×cấp) × base, mỗi địch sau ×0,8; không hố, không văng, không rơi; không trúng đồng đội | Hồi theo máu tối đa: Flora (40 + 5×cấp)%, đồng đội (30 + 5×cấp)%; không nhân skill power; dư thành khiên (≤ 50% máu tối đa) |
+| Hiệu ứng | `burn` 1 lượt lên mọi địch trúng | `root` 1 lượt | `stun` 1 lượt | Gỡ hiệu ứng xấu mọi đồng đội |
+| Bot | Ngắm như phát thường tốt nhất (trượt theo hit chance) | như Rookie | Góc trúng nhiều địch nhất (ưu tiên 2) | Khi máu mình < 60%, đồng đội < 50% hoặc đồng đội dính hiệu ứng xấu |
+
+Đơn giản hoá: bom liên hoàn và tên lửa được giải tuần tự lúc server nhận phát bắn, vị trí rơi cập nhật ngay; một quả có thể trúng mục tiêu khi client còn đang vẽ nó rơi. Nguồn bắn của bom liên hoàn giữ nguyên dù người bắn rơi vào hố của mình. `projectile_count` / `status_effect_id` trong `config_skills` chỉ để hiển thị.
 
 ### Reward System
 

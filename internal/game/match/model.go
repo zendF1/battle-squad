@@ -8,7 +8,7 @@ type Vector2 struct {
 }
 
 type StatusEffect struct {
-	EffectID       string  `json:"effectId"` // freeze, net, heal, wind_stop
+	EffectID       string  `json:"effectId"` // freeze, net, burn, root, stun, wind_stop, shot modifiers (power_shot...)
 	TargetPlayerID string  `json:"targetPlayerId"`
 	DurationTurn   int     `json:"durationTurn"`
 	Value          float64 `json:"value"`
@@ -23,37 +23,43 @@ type TitleInfo struct {
 }
 
 type BattlePlayerState struct {
-	PlayerID           string         `json:"playerId"`
-	DisplayName        string         `json:"displayName"`
-	TeamID             int            `json:"teamId"`
-	CharacterID        string         `json:"characterId"`
-	WeaponItemID       string         `json:"weaponItemId"`       // equipped weapon's item id, "" = none (bots); clients draw that gun
-	WeaponUpgradeLevel int            `json:"weaponUpgradeLevel"` // equipped weapon's upgrade level, 0 = none (bots); clients draw the +14 / +16 back aura
-	Title              *TitleInfo     `json:"title,omitempty"`    // equipped title (active, owned); omitted for none and bots. Cosmetic
-	HP                 int            `json:"hp"`
-	MaxHP              int            `json:"maxHp"`
-	Defense            int            `json:"defense"`
-	Position           Vector2        `json:"position"`
-	MoveEnergy         int            `json:"moveEnergy"`
-	MaxMoveEnergy      int            `json:"maxMoveEnergy"` // refilled each turn: the character's base move energy + MoveEnergyBonus
-	Items              []string       `json:"items"`         // Consumables remaining
-	UsedItems          []string       `json:"-"`             // Consumables spent this match (reservations to consume)
-	StatusEffects      []StatusEffect `json:"statusEffects"`
-	IsAlive            bool           `json:"isAlive"`
-	IsBot              bool           `json:"isBot"`
-	IsIdle             bool           `json:"-"` // bot that only ends its turn (tutorial target)
-	DamageBonus        int            `json:"damageBonus"`
-	CritChance         float64        `json:"critChance"`
-	MoveEnergyBonus    int            `json:"moveEnergyBonus"`
+	PlayerID           string     `json:"playerId"`
+	DisplayName        string     `json:"displayName"`
+	TeamID             int        `json:"teamId"`
+	CharacterID        string     `json:"characterId"`
+	WeaponItemID       string     `json:"weaponItemId"`       // equipped weapon's item id, "" = none (bots); clients draw that gun
+	WeaponUpgradeLevel int        `json:"weaponUpgradeLevel"` // equipped weapon's upgrade level, 0 = none (bots); clients draw the +14 / +16 back aura
+	Title              *TitleInfo `json:"title,omitempty"`    // equipped title (active, owned); omitted for none and bots. Cosmetic
+	HP                 int        `json:"hp"`
+	MaxHP              int        `json:"maxHp"`
+	// Shield absorbs damage before HP (Flora's bloom overflow), at most shieldCapPercent of
+	// MaxHP; it lasts until broken or the match ends.
+	Shield          int            `json:"shield"`
+	Defense         int            `json:"defense"`
+	Position        Vector2        `json:"position"`
+	MoveEnergy      int            `json:"moveEnergy"`
+	MaxMoveEnergy   int            `json:"maxMoveEnergy"` // refilled each turn: the character's base move energy + MoveEnergyBonus
+	Items           []string       `json:"items"`         // Consumables remaining
+	UsedItems       []string       `json:"-"`             // Consumables spent this match (reservations to consume)
+	StatusEffects   []StatusEffect `json:"statusEffects"`
+	IsAlive         bool           `json:"isAlive"`
+	IsBot           bool           `json:"isBot"`
+	IsIdle          bool           `json:"-"` // bot that only ends its turn (tutorial target)
+	DamageBonus     int            `json:"damageBonus"`
+	CritChance      float64        `json:"critChance"`
+	MoveEnergyBonus int            `json:"moveEnergyBonus"`
 	// SkillPowerBonus is a percent added to skill damage and healing.
 	SkillPowerBonus int `json:"skillPowerBonus"`
 	// TerrainDamageBonus is a percent added to the crater radius of this player's explosions.
 	TerrainDamageBonus int `json:"terrainDamageBonus"`
 	SkillEnergy        int `json:"skillEnergy"` // 0-100, skill usable at 100
-	DamageDealt        int `json:"damageDealt"`
-	KillCount          int `json:"killCount"`
-	ShotsFired         int `json:"shotsFired"`
-	ShotsHit           int `json:"shotsHit"`
+	// SkillRank is the equipped weapon's tier rank (WeaponSkillRank: basic 0 .. dragon 4,
+	// crafted silver 2 / gold 3 / titan 4 / diamond 4), set by NewMatch; it scales the skill.
+	SkillRank   int `json:"skillRank"`
+	DamageDealt int `json:"damageDealt"`
+	KillCount   int `json:"killCount"`
+	ShotsFired  int `json:"shotsFired"`
+	ShotsHit    int `json:"shotsHit"`
 	// ShotTurns counts this player's resolved actions (a shot, a skill or a teleport: one per
 	// turn); Left is set when the player left the match. Both decide whether the match counts
 	// for milestones (see milestoneCounts).
@@ -121,40 +127,56 @@ type ProjectileResult struct {
 	// bonus (the explode event's radius includes it): weaponCraterRadius, scaled by skills
 	// and fragile terrain.
 	CraterRadius float64 `json:"craterRadius"`
+	// Kind is what a skill projectile is: flare (missile rain signal, lands without exploding),
+	// missile (falls from the top of the map), bomb (bomb chain), seed (bloom, lands on an ally
+	// without exploding); "" for a normal shot.
+	Kind string `json:"kind,omitempty"`
+	// LaunchDelay is when the projectile leaves (s since the shot), the time of its first path
+	// sample: path times are always seconds since the shot was fired.
+	LaunchDelay float64 `json:"launchDelay,omitempty"`
+	// floorY > 0 keeps the rows y >= floorY when the explosion carves its crater (bomb chain).
+	floorY float64
 }
 
 // ShotEvent is one entry of a ShotResolved timeline. T is seconds since the shot was fired;
 // fields not relevant to Type are omitted.
 type ShotEvent struct {
 	T              float64  `json:"t"`
-	Type           string   `json:"type"` // explode, damage, heal, status, fall, die, teleport
+	Type           string   `json:"type"` // explode, damage, heal, shield, status, cleanse, fall, die, teleport, flare, rain, beam
 	PlayerID       string   `json:"playerId,omitempty"`
 	ProjectileID   string   `json:"projectileId,omitempty"`
-	Position       *Vector2 `json:"position,omitempty"`       // explode
-	Radius         float64  `json:"radius,omitempty"`         // explode
+	Position       *Vector2 `json:"position,omitempty"`       // explode, flare, rain (the flare point)
+	Radius         float64  `json:"radius,omitempty"`         // explode; rain: half the spread of the drop columns
+	Floor          float64  `json:"floor,omitempty"`          // explode: rows y >= floor are not carved (0: the whole circle)
 	TerrainVersion uint64   `json:"terrainVersion,omitempty"` // explode: terrain version after the crater
-	Amount         int      `json:"amount,omitempty"`         // damage, heal
+	Amount         int      `json:"amount,omitempty"`         // damage (HP + shield lost), heal (HP gained), shield (shield gained)
 	HP             *int     `json:"hp,omitempty"`             // damage, heal: HP after the change
+	Shield         *int     `json:"shield,omitempty"`         // damage (when the player had a shield), shield: shield after the change
 	Critical       bool     `json:"critical,omitempty"`       // damage
-	Cause          string   `json:"cause,omitempty"`          // damage, die: explosion, fall, out_of_map
+	Cause          string   `json:"cause,omitempty"`          // damage, die: explosion, laser, fall, out_of_map
 	EffectID       string   `json:"effectId,omitempty"`       // status
+	EffectIDs      []string `json:"effectIds,omitempty"`      // cleanse: the effects removed
 	Turns          int      `json:"turns,omitempty"`          // status
-	From           *Vector2 `json:"from,omitempty"`           // fall, teleport
-	To             *Vector2 `json:"to,omitempty"`             // fall, teleport
-	Duration       float64  `json:"duration,omitempty"`       // fall: seconds until landing
+	Count          int      `json:"count,omitempty"`          // rain: missiles falling
+	From           *Vector2 `json:"from,omitempty"`           // fall, teleport, beam
+	To             *Vector2 `json:"to,omitempty"`             // fall, teleport, beam
+	Duration       float64  `json:"duration,omitempty"`       // fall: seconds until landing; beam: seconds the beam shows
 }
 
 // ShotResolved is the single message describing a whole shot: every projectile's flight plus
 // the time-ordered effects. The server state already reflects the outcome; clients replay it.
 type ShotResolved struct {
-	ShooterID   string              `json:"shooterId"`
-	ActionMode  string              `json:"actionMode"` // weapon, skill, item
-	SkillID     string              `json:"skillId,omitempty"`
-	ItemID      string              `json:"itemId,omitempty"`
-	SkillEnergy int                 `json:"skillEnergy"` // shooter's skill energy after the shot
-	Projectiles []*ProjectileResult `json:"projectiles"`
-	Events      []ShotEvent         `json:"events"`
-	Duration    float64             `json:"duration"` // seconds until the last flight or event ends
+	ShooterID   string `json:"shooterId"`
+	ActionMode  string `json:"actionMode"` // weapon, skill, item
+	SkillID     string `json:"skillId,omitempty"`
+	ItemID      string `json:"itemId,omitempty"`
+	SkillEnergy int    `json:"skillEnergy"` // shooter's skill energy after the shot
+	// SkillEnergies is every player's skill energy after the shot (players hit by an enemy
+	// gain skillEnergyOnHit once per shot).
+	SkillEnergies map[string]int      `json:"skillEnergies"`
+	Projectiles   []*ProjectileResult `json:"projectiles"`
+	Events        []ShotEvent         `json:"events"`
+	Duration      float64             `json:"duration"` // seconds until the last flight or event ends
 }
 
 // PlayerAiming is broadcast while a player aims, before its shot. Angle uses the

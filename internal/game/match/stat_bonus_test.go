@@ -66,10 +66,11 @@ func TestSkillPowerBonusScalesSkillDamage(t *testing.T) {
 	}
 }
 
-func TestSkillPowerBonusScalesHeal(t *testing.T) {
+// TestBloomIgnoresSkillPower: bloom heals a percent of max HP, not scaled by skill power.
+func TestBloomIgnoresSkillPower(t *testing.T) {
 	m, clients := newFlowMatch(t)
 	gamedata.Data.Characters["c1"] = gamedata.CharacterConfig{CharacterID: "c1", WeaponID: "w1", SkillID: "bloom"}
-	gamedata.Data.Skills["bloom"] = gamedata.SkillConfig{SkillID: "bloom", EffectType: "heal"}
+	gamedata.Data.Skills["bloom"] = gamedata.SkillConfig{SkillID: "bloom", EffectType: effectBloom}
 	cur := m.State.CurrentPlayerID
 	p := m.State.Players[cur]
 	p.SkillEnergy = 100
@@ -77,10 +78,10 @@ func TestSkillPowerBonusScalesHeal(t *testing.T) {
 	p.HP = 300
 	groundPlayers(m, clients)
 
-	send(m, clients[cur], "Shoot", ShootAction{Angle: 60, Power: 20, ActionMode: "skill"})
+	send(m, clients[cur], "Shoot", ShootAction{Angle: 90, Power: 50, ActionMode: "skill"})
 	s := shotResolved(t, clients[cur])
-	if heals := eventsOf(s, "heal", cur); len(heals) != 1 || heals[0].Amount != 975 || p.HP != 1275 {
-		t.Fatalf("heal events %+v, hp=%d; want 650 * 1.5 = 975", heals, p.HP)
+	if heals := eventsOf(s, "heal", cur); len(heals) != 1 || heals[0].Amount != 600 || p.HP != 900 {
+		t.Fatalf("heal events %+v, hp=%d; want 40%% of 1500 = 600", heals, p.HP)
 	}
 }
 

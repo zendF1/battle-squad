@@ -49,6 +49,7 @@ type SkillConfig struct {
 	ProjectileCount  int     `yaml:"projectileCount"`
 	StatusEffectID   string  `yaml:"statusEffectId,omitempty"`
 	DamageMultiplier float64 `yaml:"damageMultiplier"`
+	Description      string  `yaml:"description,omitempty"` // shown to players (admin seed); the game server does not read it
 }
 
 type ItemConfig struct {
