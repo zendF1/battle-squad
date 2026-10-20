@@ -291,12 +291,13 @@ Khi đạt các mốc nâng cấp, chỉ số trang bị được cộng thêm %
 
 | Mốc | Bonus chỉ số | Hiệu ứng |
 |------|-------------|-----------|
+| +1 → +5 | Không bonus mốc (chỉ +2%/cấp) | Viền hào quang **xanh lá** (#2EE66B) mảnh, nhẹ nhất (một vệt chạy chậm), tên item cùng màu — không phải mốc |
 | +6 → +9 | +10% tổng stat | Hào quang + vòng nền **xanh da trời**, tên item cùng màu |
 | +10 → +13 | +20% tổng stat | Hào quang + vòng nền **cam**, tên item cùng màu |
 | +14 → +15 | +40% tổng stat | Hào quang + vòng nền **tím**, tên item cùng màu |
 | +16 | +100% tổng stat | Hào quang + vòng nền **đỏ** (cao nhất, mạnh nhất, nhiều tia/lấp lánh nhất), tên item cùng màu |
 
-Dưới +6: không hào quang, hiển thị bình thường. Hào quang hiện ở mọi chỗ có icon trang bị (Túi đồ, popup, màn Nâng cấp, ô trang bị Nhân vật, hàng trang bị Prep); nâng cấp thành công vượt mốc có hiệu ứng bùng nổ màu mới. Bonus cấu hình được (game_settings `equipment.milestone_<N>_bonus`) và client đọc qua `upgradeMilestones` của `/equipment/catalog`.
++0: không hào quang, hiển thị bình thường. Mốc bonus chỉ có +6 / +10 / +14 / +16 (popup "Mốc nâng cấp" liệt kê 4 mốc này); +1 → +5 chỉ đổi màu. Hào quang hiện ở mọi chỗ có icon trang bị (Túi đồ, popup, màn Nâng cấp, ô trang bị Nhân vật, hàng trang bị Prep); nâng cấp thành công vượt mốc có hiệu ứng bùng nổ màu mới. Bonus cấu hình được (game_settings `equipment.milestone_<N>_bonus`) và client đọc qua `upgradeMilestones` của `/equipment/catalog`.
 
 ### Quy tắc thất bại (Safezone)
 
