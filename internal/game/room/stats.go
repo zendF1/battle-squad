@@ -24,15 +24,24 @@ func addStatPoints(s battleStats, pts statPoints, cfg character.ProgressionConfi
 	return s.Add(battlestats.FromPoints(pts, cfg.Multipliers()))
 }
 
+// equippedWeapon is the weapon a character brings into a match: its item id
+// ("" = none, e.g. bots) and upgrade level (0 = none). Cosmetic: clients draw
+// the gun and the +14 / +16 back aura.
+type equippedWeapon struct {
+	ItemID       string
+	UpgradeLevel int
+}
+
 // newBattlePlayer builds a player's match state from the room entry, stats and
-// the item id of the equipped weapon ("" = none, e.g. bots).
-func newBattlePlayer(p RoomPlayer, spawn match.Vector2, s battleStats, weaponItemID string, isBot bool) *match.BattlePlayerState {
+// the equipped weapon.
+func newBattlePlayer(p RoomPlayer, spawn match.Vector2, s battleStats, weapon equippedWeapon, isBot bool) *match.BattlePlayerState {
 	return &match.BattlePlayerState{
 		PlayerID:           p.PlayerID,
 		DisplayName:        p.DisplayName,
 		TeamID:             p.TeamID,
 		CharacterID:        p.CharacterID,
-		WeaponItemID:       weaponItemID,
+		WeaponItemID:       weapon.ItemID,
+		WeaponUpgradeLevel: weapon.UpgradeLevel,
 		HP:                 s.HP,
 		MaxHP:              s.HP,
 		Defense:            s.Defense,

@@ -116,10 +116,12 @@ func LoadSetBonuses(ctx context.Context, q Querier) (map[string][]SetBonus, erro
 }
 
 // Loadout is what a character wears into battle: the points of its equipped
-// items and the item id of its weapon ("" = none).
+// items, the item id of its weapon ("" = none) and that weapon's upgrade
+// level (0 = none).
 type Loadout struct {
-	Points       EquipmentPoints
-	WeaponItemID string
+	Points             EquipmentPoints
+	WeaponItemID       string
+	WeaponUpgradeLevel int
 }
 
 // WeaponItemID returns the item id of the equipped weapon, "" when none.
@@ -130,6 +132,17 @@ func WeaponItemID(items []EquippedItem) string {
 		}
 	}
 	return ""
+}
+
+// WeaponUpgradeLevel returns the upgrade level of the equipped weapon, 0 when
+// none.
+func WeaponUpgradeLevel(items []EquippedItem) int {
+	for _, it := range items {
+		if it.Slot == "weapon" {
+			return it.UpgradeLevel
+		}
+	}
+	return 0
 }
 
 // LoadLoadouts returns the loadout of each character the player has items
@@ -152,7 +165,8 @@ func LoadLoadouts(ctx context.Context, q Querier, playerID, characterID string) 
 		return nil, err
 	}
 	for charID, items := range equipped {
-		out[charID] = Loadout{Points: SumEquipment(items, setBonuses, ms), WeaponItemID: WeaponItemID(items)}
+		out[charID] = Loadout{Points: SumEquipment(items, setBonuses, ms), WeaponItemID: WeaponItemID(items),
+			WeaponUpgradeLevel: WeaponUpgradeLevel(items)}
 	}
 	return out, nil
 }

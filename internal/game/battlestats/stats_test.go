@@ -135,6 +135,16 @@ func TestComputeSumsParts(t *testing.T) {
 	}
 }
 
+func TestWeaponUpgradeLevel(t *testing.T) {
+	items := []EquippedItem{{ItemID: "normal_helmet_lv10", Slot: "helmet", UpgradeLevel: 15}, {ItemID: "crafted_weapon_gold", Slot: "weapon", UpgradeLevel: 14}}
+	if got := WeaponUpgradeLevel(items); got != 14 {
+		t.Fatalf("got %d", got)
+	}
+	if got := WeaponUpgradeLevel(items[:1]); got != 0 {
+		t.Fatalf("no weapon: got %d", got)
+	}
+}
+
 func TestWeaponItemID(t *testing.T) {
 	items := []EquippedItem{{ItemID: "normal_helmet_lv10", Slot: "helmet"}, {ItemID: "crafted_weapon_gold", Slot: "weapon"}}
 	if got := WeaponItemID(items); got != "crafted_weapon_gold" {

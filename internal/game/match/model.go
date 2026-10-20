@@ -16,26 +16,27 @@ type StatusEffect struct {
 }
 
 type BattlePlayerState struct {
-	PlayerID        string         `json:"playerId"`
-	DisplayName     string         `json:"displayName"`
-	TeamID          int            `json:"teamId"`
-	CharacterID     string         `json:"characterId"`
-	WeaponItemID    string         `json:"weaponItemId"` // equipped weapon's item id, "" = none (bots); clients draw that gun
-	HP              int            `json:"hp"`
-	MaxHP           int            `json:"maxHp"`
-	Defense         int            `json:"defense"`
-	Position        Vector2        `json:"position"`
-	MoveEnergy      int            `json:"moveEnergy"`
-	MaxMoveEnergy   int            `json:"maxMoveEnergy"` // refilled each turn: the character's base move energy + MoveEnergyBonus
-	Items           []string       `json:"items"`         // Consumables remaining
-	UsedItems       []string       `json:"-"`             // Consumables spent this match (reservations to consume)
-	StatusEffects   []StatusEffect `json:"statusEffects"`
-	IsAlive         bool           `json:"isAlive"`
-	IsBot           bool           `json:"isBot"`
-	IsIdle          bool           `json:"-"` // bot that only ends its turn (tutorial target)
-	DamageBonus     int            `json:"damageBonus"`
-	CritChance      float64        `json:"critChance"`
-	MoveEnergyBonus int            `json:"moveEnergyBonus"`
+	PlayerID           string         `json:"playerId"`
+	DisplayName        string         `json:"displayName"`
+	TeamID             int            `json:"teamId"`
+	CharacterID        string         `json:"characterId"`
+	WeaponItemID       string         `json:"weaponItemId"`       // equipped weapon's item id, "" = none (bots); clients draw that gun
+	WeaponUpgradeLevel int            `json:"weaponUpgradeLevel"` // equipped weapon's upgrade level, 0 = none (bots); clients draw the +14 / +16 back aura
+	HP                 int            `json:"hp"`
+	MaxHP              int            `json:"maxHp"`
+	Defense            int            `json:"defense"`
+	Position           Vector2        `json:"position"`
+	MoveEnergy         int            `json:"moveEnergy"`
+	MaxMoveEnergy      int            `json:"maxMoveEnergy"` // refilled each turn: the character's base move energy + MoveEnergyBonus
+	Items              []string       `json:"items"`         // Consumables remaining
+	UsedItems          []string       `json:"-"`             // Consumables spent this match (reservations to consume)
+	StatusEffects      []StatusEffect `json:"statusEffects"`
+	IsAlive            bool           `json:"isAlive"`
+	IsBot              bool           `json:"isBot"`
+	IsIdle             bool           `json:"-"` // bot that only ends its turn (tutorial target)
+	DamageBonus        int            `json:"damageBonus"`
+	CritChance         float64        `json:"critChance"`
+	MoveEnergyBonus    int            `json:"moveEnergyBonus"`
 	// SkillPowerBonus is a percent added to skill damage and healing.
 	SkillPowerBonus int `json:"skillPowerBonus"`
 	// TerrainDamageBonus is a percent added to the crater radius of this player's explosions.
