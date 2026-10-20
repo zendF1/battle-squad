@@ -10,23 +10,30 @@ import (
 // Missile rain (Rookie, skill triple_shot, effect missile_rain): a flare fired like a normal
 // shot; rainDelay s after it lands, rainBaseCount + rainCountPerRank × rank missiles fall
 // straight down rainInterval s apart, over the flare point ± (rainSpreadBase +
-// rainSpreadPerRank × rank) px, at columns from the match + turn seed (skillRNG). Each
-// missile: rainDamage × base, blast rainBlast × the weapon's, crater rainCrater ×; the whole
-// rain deals one target at most rainCap × base (before defense). Every enemy damaged burns.
+// rainSpreadPerRank × rank) px, denser near it (rainFocus), at columns from the match + turn
+// seed (skillRNG). Each missile: rainDamage × base, blast rainBlast × the weapon's, crater
+// rainCrater ×; the whole rain deals one target at most rainCap × base (before defense).
+// Every enemy damaged burns.
 const (
 	rainBaseCount     = 6
 	rainCountPerRank  = 2
 	rainSpreadBase    = 90.0
 	rainSpreadPerRank = 15.0
-	rainDelay         = 0.5
-	rainInterval      = 0.1
-	rainStartY        = -60.0 // missiles start above the top of the map
-	rainDropPower     = 50.0  // initial downward speed: power × 6 px/s
-	rainDamage        = 0.35
-	rainBlast         = 0.7
-	rainCrater        = 0.6
-	rainCap           = 2.0
-	burnTurns         = 1
+	// rainFocus packs the columns toward the flare: column offset = spread × |v|^rainFocus for
+	// v spread evenly over -1..1, so half of them fall within ± spread / 4. With 1 (even over
+	// the spread) a well placed flare dealt its target ~0.65 × base at any rank (2 of the 14
+	// missiles hit); with 2 it is ~1.0 × base at rank 0 up to ~1.7 × base at rank 4 on
+	// grassland_valley (TestMissileRainOnRealMap), the rest still covers ~100 px around.
+	rainFocus     = 2.0
+	rainDelay     = 0.5
+	rainInterval  = 0.1
+	rainStartY    = -60.0 // missiles start above the top of the map
+	rainDropPower = 120.0 // initial downward speed: power × 6 px/s (~0.7 s down to the ground)
+	rainDamage    = 0.35
+	rainBlast     = 0.7
+	rainCrater    = 0.6
+	rainCap       = 2.0
+	burnTurns     = 1
 )
 
 func init() {
@@ -37,13 +44,14 @@ func init() {
 func rainCount(rank int) int      { return rainBaseCount + rainCountPerRank*rank }
 func rainSpread(rank int) float64 { return rainSpreadBase + rainSpreadPerRank*float64(rank) }
 
-// rainColumns returns n drop columns over center ± spread: one per equal slice of the spread,
-// jittered inside it, clamped to the map, in a random falling order.
+// rainColumns returns n drop columns over center ± spread: one per equal slice of -1..1,
+// jittered inside it, pulled toward the center by rainFocus (offset spread × |v|^rainFocus),
+// clamped to the map, in a random falling order.
 func rainColumns(rng *rand.Rand, n int, center, spread float64, width int) []float64 {
 	xs := make([]float64, n)
-	slice := 2 * spread / float64(n)
 	for i := range xs {
-		x := center - spread + slice*(float64(i)+rng.Float64())
+		v := -1 + 2*(float64(i)+rng.Float64())/float64(n)
+		x := center + math.Copysign(math.Pow(math.Abs(v), rainFocus), v)*spread
 		xs[i] = math.Max(2, math.Min(float64(width)-2, x))
 	}
 	rng.Shuffle(n, func(i, j int) { xs[i], xs[j] = xs[j], xs[i] })
