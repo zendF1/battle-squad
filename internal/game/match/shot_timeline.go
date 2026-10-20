@@ -184,7 +184,9 @@ func (m *Match) broadcastShot(shot *ShotResolved, tl *shotTimeline) {
 		shot.Events = []ShotEvent{}
 	}
 	shot.Duration = tl.end
-	shot.SkillEnergy = m.State.Players[shot.ShooterID].SkillEnergy
+	shooter := m.State.Players[shot.ShooterID]
+	shot.SkillEnergy = shooter.SkillEnergy
+	shooter.ShotTurns++
 
 	payload, _ := json.Marshal(shot)
 	m.broadcast(ws.Message{Event: "ShotResolved", Data: payload})

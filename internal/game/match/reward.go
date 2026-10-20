@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"battle-squad/internal/api/economy"
+	"battle-squad/internal/api/milestone"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
 
@@ -40,6 +41,8 @@ type PlayerStats struct {
 	Accuracy    float64
 	IsWinner    bool
 	IsDraw      bool
+	// Counts: the match counts for this player's milestone counters (Match.milestoneCounts)
+	Counts bool
 }
 
 type RewardResult struct {
@@ -227,6 +230,12 @@ func ProcessMatchRewards(
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write match history: %w", err)
+		}
+
+		if p.Counts {
+			if err := milestone.RecordMatchTx(ctx, tx, p.PlayerID, p.CharacterID, p.IsWinner); err != nil {
+				return nil, fmt.Errorf("failed to count match for milestones: %w", err)
+			}
 		}
 
 		// Update character EXP and level
@@ -436,8 +445,16 @@ func updatePlayerRank(ctx context.Context, tx pgx.Tx, playerID string, ratingCha
 		`
 		_, err = tx.Exec(ctx, queryUpdate, rating, tier, division, wins, losses, draws, winStreak, highestTier, playerID, seasonID)
 	}
+	if err != nil {
+		return 0, "", 0, err
+	}
 
-	return rating, tier, division, err
+	// Lifetime peaks for the rank milestones (separate from the season's highest_tier)
+	if err := milestone.RecordRankTx(ctx, tx, playerID, highestTier, rating); err != nil {
+		return 0, "", 0, err
+	}
+
+	return rating, tier, division, nil
 }
 
 func getTierAndDivision(rating int) (string, int) {

@@ -95,6 +95,7 @@ internal/
 │   ├── iap/              In-app purchase, receipt verification
 │   ├── giftcode/         Gift code redemption
 │   ├── mission/          Daily missions, achievements, claim rewards
+│   ├── milestone/        Mốc thưởng: one-time progress rewards, stat counters
 │   ├── rank/             Elo rating, leaderboard, seasons, season rewards
 │   ├── moderation/       Player reports, ban/unban (admin only)
 │   ├── appconfig/        Version policy, remote config
@@ -337,7 +338,11 @@ Giá normal (coin) — weapon (mỗi nhân vật) 500/1500/4000/10000, armor 400
 |--------|------|---------|-------|
 | GET | `/missions/daily` | GetDailyMissions | Nhiệm vụ hàng ngày + tiến độ |
 | GET | `/missions/achievements` | GetAchievements | Thành tích + tiến độ |
-| POST | `/missions/claim` | ClaimReward | Nhận thưởng nhiệm vụ |
+| POST | `/missions/claim` | ClaimReward | Nhận thưởng nhiệm vụ (không nhận được mốc thưởng) |
+| GET | `/milestones` | List | Mốc thưởng: `{tracks:[{track, nodes:[{id, track, target, required, progress, state, rewards:{coin, gem, items}, description}]}], claimableCount}` — xem §7 Mốc thưởng |
+| GET | `/milestones/summary` | Summary | `{claimableCount}` cho badge ở sảnh |
+| POST | `/milestones/claim` | Claim | `{id}` → `{claimed:[id], rewards, coin, gem, stones:[{stoneLevel, quantity}], claimableCount}`; đã nhận `MILESTONE_ALREADY_CLAIMED` 409, chưa đạt `MILESTONE_NOT_REACHED` 400, không có `NOT_FOUND` |
+| POST | `/milestones/claim-all` | ClaimAll | Nhận mọi mốc đang nhận được trong 1 tx, cùng dạng kết quả (rewards cộng dồn); không có gì → `claimed: []` |
 | GET | `/rank/me` | GetRankMe | Rating, tier, division của mình |
 | GET | `/rank/leaderboard?page=&limit=` | GetLeaderboard | Bảng xếp hạng (default: page=1, limit=20) |
 | GET | `/rank/seasons/current` | GetCurrentSeason | Mùa giải hiện tại |
@@ -784,6 +789,30 @@ EXP vào cả profile và nhân vật đang chơi (`player_characters.exp`, cộ
 
 ≈90 EXP/trận là trung bình thắng/thua (50/80) + ~4.500 damage (+15) + ~0,5 kill. Level 80 cao hơn level yêu cầu lớn nhất của trang bị (75). Admin thêm/bớt level ở `/api/config/character-levels`; level tối đa là level cuối bảng.
 
+### Mốc thưởng (milestones, migration 026)
+
+Thưởng một lần cho mỗi tài khoản khi đạt mốc tiến độ; không reset, người chơi tự bấm nhận. Mỗi mốc là một dòng `missions` với `type = 'milestone'` (`track`, `target`, `required_value`, `sort_order`, `description`, `reward_coin`, `reward_gem`, `reward_items`); đã nhận = dòng `mission_progress` có `is_claimed` (`current_value` = tiến độ lúc nhận). `/missions/*` không thấy các dòng này.
+
+| Track | Target | Tiến độ | Mốc |
+|-------|--------|---------|-----|
+| `character` | `char_level` | Level cao nhất trong các nhân vật của người chơi (`player_characters`) | 5, 10, …, 80 |
+| `upgrade` | `upgrade_peak` | Level cao nhất một món từng đạt (counter, hoặc món hiện có nếu cao hơn); bán món hay thất bại tụt cấp không làm giảm | +3 +6 +10 +12 +14 +16 |
+| `upgrade` | `weapon_upgrade_peak` | Như trên, chỉ vũ khí; mô tả "Mở khoá hào quang tím/đỏ sau lưng" | +14 +16 |
+| `upgrade` | `set_level:N` | Số slot (0–6) nhiều nhất mà một nhân vật đang mặc ở ≥ +N; cần 6; kiểm tra trạng thái hiện tại, nhận rồi là xong | +3 +6 +10 +14 +16 |
+| `combat` | `matches` / `wins` | Số trận / số trận thắng được tính | 10/50/100/300/1000 · 5/25/100/500 |
+| `combat` | `char_wins` | Số trận thắng được tính nhiều nhất với một nhân vật | 10/50/200 |
+| `rank` | `rank_peak` | Tier cao nhất từng đạt (bronze 1 … master 6), riêng với thưởng mùa | Bạc 2, Vàng 3, Bạch kim 4, Kim cương 5, Cao thủ 6 |
+
+Thưởng: `reward_coin`, `reward_gem`, `reward_items` = `[{"kind":"stone","level":L,"qty":Q}]` (`player_stones`) hoặc `{"kind":"item","id":...,"qty":Q}` (`inventory_items`, source `milestone_reward`). Coin/gem ghi `economy_transactions` source `milestone_reward`, `ref_id` = id mốc. Mốc có target lạ hoặc kind chưa hỗ trợ (vd. `{"kind":"title","id":"..."}` trước khi có danh hiệu) không được trả về và không nhận được — điểm mở rộng: `supportedRewardKinds` (`milestone/model.go`) + một case trong `Repository.GrantItemTx`. Giá trị seed ở `milestone.Defaults`; admin `SeedMilestones` ghi giống migration 026 (`ON CONFLICT DO NOTHING`).
+
+**Counter** (`player_stat_counters (player_id, counter, value)`): `matches`, `wins`, `char_wins:<characterId>` (+1 lúc kết thúc trận, trong tx thưởng trận), `rank_peak`, `rating_peak` (GREATEST mỗi lần ghi rating, từ `highest_tier` của mùa — dòng rank mới bắt đầu ở silver, nên trận có rating đầu tiên đã đạt mốc Bạc), `upgrade_peak`, `weapon_upgrade_peak` (GREATEST khi cường hoá thành công, trong tx cường hoá). Level nhân vật và set tính lúc đọc.
+
+**Trận được tính** (`Match.CountsForMilestones` + `milestoneCounts`): trận ghép (`ranked_2v2`, kể cả có bot) và QuickPlay đấu với máy AI (`bot: "ai"`); không tính phòng tự tạo (`CreateRoom` pvp_1v1/pvp_2v2) và Luyện tập (bia đứng yên). Với từng người: không rời trận (`Leave` → `Left`), là người thật, và đã thực hiện ≥ 3 lượt hành động (`ShotTurns`: mỗi ShotResolved của họ — bắn, skill, teleport). Thua/hoà vẫn tính trận.
+
+**Claim**: một tx — khoá `player_profiles` (mỗi lần một claim của người chơi), đọc mốc, cờ đã nhận và tiến độ qua tx (không dùng Pool), ghi claim bằng `INSERT … ON CONFLICT DO UPDATE … WHERE is_claimed = FALSE` (0 dòng → `MILESTONE_ALREADY_CLAIMED`), cộng coin/gem, đá, item. Client gặp `MILESTONE_ALREADY_CLAIMED` thì coi như xong và tải lại.
+
+**Backfill (một lần, khi bảng counter được tạo)**: upgrade peaks từ level hiện tại + `equipment_upgrade_log` thành công của món còn giữ; `rank_peak`/`rating_peak` từ mọi dòng `player_ranks`; matches/wins/char_wins từ `match_histories` có `MatchStarted` trong `match_event_logs`: `ranked_2v2` hoặc `pvp_1v1` có bot không phải "Target Bot", và người chơi có ≥ 3 `ShotResolved`; nhân vật lấy từ `MatchStarted`. Rời trận không lưu nên không lọc được; trận không còn event log không được tính. Chạy lại 026 không đếm lại.
+
 **Rating (chỉ ranked):**
 - `pvp_1v1`: cố định +25/-20
 - `ranked_2v2`: Elo formula `K * (actual - expected)`, K=32, điều chỉnh theo chênh lệch rating. Trận có bot: rating change × `botRatingModifier` (default 0.5)
@@ -894,6 +923,8 @@ State-based decision making, difficulty theo rank tier:
 | `inventory_items` | `(player_id, item_id)` | Items đang có |
 | `inventory_reservations` | `reservation_id` | Items reserved cho trận đấu |
 | `economy_transactions` | `transaction_id` | Ledger coin/gem |
+| `missions` / `mission_progress` | `mission_id` / `(player_id, mission_id)` | Nhiệm vụ; mốc thưởng là `type = 'milestone'`, đã nhận = `is_claimed` |
+| `player_stat_counters` | `(player_id, counter)` | Counter cho mốc thưởng (trận, thắng, thắng theo nhân vật, đỉnh cường hoá, đỉnh rank) |
 
 ### Equipment
 
@@ -993,6 +1024,8 @@ State-based decision making, difficulty theo rank tier:
 | `EQUIP_GEM_NOT_OWNED` | 403 | Không sở hữu ngọc (hoặc ngọc đang khảm) |
 | `MERGE_MIN_COUNT` / `MERGE_MAX_COUNT` / `MERGE_MAX_LEVEL` | 400 | Ghép cần 2–4 viên, chưa tới cấp tối đa |
 | `CRAFT_RECIPE_NOT_FOUND` | 404 | Công thức không tồn tại hoặc đã tắt |
+| `MILESTONE_ALREADY_CLAIMED` | 409 | Mốc thưởng đã nhận |
+| `MILESTONE_NOT_REACHED` | 400 | Mốc thưởng chưa đạt |
 | `METHOD_NOT_ALLOWED` | 405 | Sai HTTP method |
 | `MATCH_NOT_YOUR_TURN` | 403 | Chưa đến lượt |
 | `MATCH_ALREADY_SHOT` | 409 | Đã bắn rồi |

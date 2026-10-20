@@ -61,7 +61,7 @@ func (r *Repository) GetMissionProgress(ctx context.Context, playerID, missionID
 		       COALESCE(p.current_value, 0) as current_value, COALESCE(p.is_claimed, FALSE) as is_claimed
 		FROM missions m
 		LEFT JOIN mission_progress p ON m.mission_id = p.mission_id AND p.player_id = $1
-		WHERE m.mission_id = $2
+		WHERE m.mission_id = $2 AND m.type <> 'milestone'
 	`
 	var p MissionProgress
 	p.PlayerID = playerID
@@ -89,7 +89,7 @@ func (r *Repository) GetMissionProgressTx(ctx context.Context, tx pgx.Tx, player
 		       COALESCE(p.current_value, 0) as current_value, COALESCE(p.is_claimed, FALSE) as is_claimed
 		FROM missions m
 		LEFT JOIN mission_progress p ON m.mission_id = p.mission_id AND p.player_id = $1
-		WHERE m.mission_id = $2
+		WHERE m.mission_id = $2 AND m.type <> 'milestone'
 		FOR UPDATE OF p
 	`
 	var p MissionProgress

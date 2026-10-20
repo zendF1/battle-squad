@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"battle-squad/internal/api/milestone"
 	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
@@ -54,6 +55,33 @@ func SeedAll(ctx context.Context, db *database.PostgresDB, configDir string) err
 	if err := SeedEquipmentConfig(ctx, db); err != nil {
 		return fmt.Errorf("seed equipment config: %w", err)
 	}
+	if err := SeedMilestones(ctx, db); err != nil {
+		return fmt.Errorf("seed milestones: %w", err)
+	}
+	return nil
+}
+
+// SeedMilestones inserts the default milestones (milestone.Defaults, as migrations/026) into
+// missions with type 'milestone'. ON CONFLICT DO NOTHING keeps edited rows.
+func SeedMilestones(ctx context.Context, db *database.PostgresDB) error {
+	query := `INSERT INTO missions (mission_id, type, track, target, required_value, sort_order, reward_coin, reward_gem, reward_items, description)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
+		ON CONFLICT (mission_id) DO NOTHING`
+	for _, d := range milestone.Defaults {
+		items := d.Items
+		if items == nil {
+			items = []milestone.RewardItem{}
+		}
+		raw, err := json.Marshal(items)
+		if err != nil {
+			return err
+		}
+		if _, err := db.Pool.Exec(ctx, query, d.ID, milestone.MissionType, d.Track, d.Target, d.Required, d.SortOrder,
+			d.Coin, d.Gem, string(raw), d.Description); err != nil {
+			return fmt.Errorf("insert milestone %s: %w", d.ID, err)
+		}
+	}
+	observability.Log.Info().Int("count", len(milestone.Defaults)).Msg("seeded milestones")
 	return nil
 }
 

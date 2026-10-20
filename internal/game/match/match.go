@@ -77,6 +77,21 @@ type Match struct {
 	// reservationsSettled: rewards or a no-contest release already settled the
 	// reservations, so Run's exit has nothing to release.
 	reservationsSettled bool
+
+	// CountsForMilestones: the room set this match up as one that counts for milestones
+	// (matchmaking, or quick play against the AI bot); custom rooms and the idle practice
+	// target do not.
+	CountsForMilestones bool
+}
+
+// milestoneMinShotTurns is how many actions (shots, skills, teleports) a player must have
+// resolved for a counted match to count for them.
+const milestoneMinShotTurns = 3
+
+// milestoneCounts reports whether the ended match counts for p's milestone counters: a
+// counting match, a human who did not leave and resolved at least milestoneMinShotTurns actions.
+func (m *Match) milestoneCounts(p *BattlePlayerState) bool {
+	return m.CountsForMilestones && !p.IsBot && !p.Left && p.ShotTurns >= milestoneMinShotTurns
 }
 
 // Stop cancels the match context, causing the Run loop to exit.
@@ -1079,6 +1094,9 @@ func (m *Match) processLeave(ctx context.Context, client *ws.Client) {
 	delete(m.Clients, client.PlayerID)
 	// Kill player's character in match since they abandoned
 	if player, ok := m.State.Players[client.PlayerID]; ok {
+		if m.State.Status != "ended" {
+			player.Left = true
+		}
 		player.IsAlive = false
 		player.HP = 0
 	}
@@ -1129,6 +1147,7 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 				Accuracy:    calculateAccuracy(p.ShotsFired, p.ShotsHit),
 				IsWinner:    isWinner,
 				IsDraw:      winningTeam == 0,
+				Counts:      m.milestoneCounts(p),
 			}
 		}
 

@@ -46,6 +46,11 @@ type BattlePlayerState struct {
 	KillCount          int `json:"killCount"`
 	ShotsFired         int `json:"shotsFired"`
 	ShotsHit           int `json:"shotsHit"`
+	// ShotTurns counts this player's resolved actions (a shot, a skill or a teleport: one per
+	// turn); Left is set when the player left the match. Both decide whether the match counts
+	// for milestones (see milestoneCounts).
+	ShotTurns int  `json:"-"`
+	Left      bool `json:"-"`
 }
 
 type WindState struct {

@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"battle-squad/internal/api/economy"
+	"battle-squad/internal/api/milestone"
 	"battle-squad/internal/game/battlestats"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/model"
@@ -707,6 +708,13 @@ func (s *Service) UpgradeEquipment(ctx context.Context, playerID string, req Upg
 
 	if err := s.repo.InsertUpgradeLogTx(ctx, tx, req.EquipmentID, equip.UpgradeLevel, newLevel, req.Stones, totalPower, success); err != nil {
 		return nil, err
+	}
+
+	// Milestone peaks: a later fail reset or sale does not lower them
+	if success {
+		if err := milestone.RecordUpgradeTx(ctx, tx, playerID, equip.Slot, newLevel); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {

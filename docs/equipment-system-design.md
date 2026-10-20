@@ -394,6 +394,9 @@ Ví dụ: Vũ khí base DMG 50, nâng lên +10
 | Thắng match Ranked | 2 → 4 | Tùy tier ranking |
 | Phó bản (tương lai) | 3 → 6 | Tùy độ khó phó bản |
 | Ghép đá | 2 → 12 | 4 viên cùng cấp → 1 viên cấp trên |
+| Mốc thưởng | 3 → 11 | Một lần mỗi mốc: cấp nhân vật, cường hoá (+3…+16, cả bộ +3…+16), số trận/thắng, rank cao nhất — `technical-documentation.md` §7 Mốc thưởng |
+
+Mốc cường hoá cho đá theo cấp đạt được: +3 đá 3×5 · +6 đá 6×3 + 20 gem · +10 đá 8×2 + 50 gem · +12 đá 9×1 · +14 đá 10×1 + 150 gem · +16 đá 11×1 + 500 gem; vũ khí +14 / +16 thêm 100 / 300 gem (mở hào quang tím / đỏ sau lưng); cả bộ 6 món trên một nhân vật ở ≥ +3 đá 5×3 · +6 đá 7×2 + 50 gem · +10 đá 9×2 + 150 gem · +14 đá 10×2 + 300 gem · +16 đá 11×2 + 1000 gem. "Đạt" là lần đầu một món lên cấp đó bằng cường hoá thành công; bán hay tụt cấp sau đó không mất mốc.
 
 ### Cách dùng đá khi nâng cấp
 

@@ -114,4 +114,7 @@ var (
 	ErrMergeMaxCount            = AppError{Code: "MERGE_MAX_COUNT", Message: "Maximum 4 items for merging", Status: http.StatusBadRequest}
 	ErrMergeMaxLevel            = AppError{Code: "MERGE_MAX_LEVEL", Message: "Already at maximum level, cannot merge further", Status: http.StatusBadRequest}
 	ErrRecipeNotFound           = AppError{Code: "CRAFT_RECIPE_NOT_FOUND", Message: "Crafting recipe not found", Status: http.StatusNotFound}
+
+	ErrMilestoneAlreadyClaimed = AppError{Code: "MILESTONE_ALREADY_CLAIMED", Message: "This milestone reward was already claimed", Status: http.StatusConflict}
+	ErrMilestoneNotReached     = AppError{Code: "MILESTONE_NOT_REACHED", Message: "This milestone is not reached yet", Status: http.StatusBadRequest}
 )
