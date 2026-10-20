@@ -12,14 +12,17 @@ import (
 // power ignored); it hits every enemy whose body is within laserHalfWidth + the player hit
 // radius of it, nearest first: (laserFirstBase + laserFirstPerRank × rank) × base, each next
 // one × laserDecay of the previous. Every enemy hit is stunned.
+// Timeline: the gun charges for laserChargeTime, then the beam (event at laserChargeTime, shown
+// laserBeamTime s) sweeps out from the muzzle at laserSweepSpeed; each enemy is hit when its
+// front reaches them (the client draws the same sweep).
 const (
 	laserHalfWidth    = 10.0
 	laserFirstBase    = 1.5
 	laserFirstPerRank = 0.1
 	laserDecay        = 0.8
-	laserBeamTime     = 0.6  // s the beam shows (the beam event's duration)
-	laserHitDelay     = 0.12 // s after the shot of the first hit
-	laserHitGap       = 0.05 // s between hits, nearest first
+	laserChargeTime   = 0.3    // s the gun charges before the beam (the beam event's t)
+	laserBeamTime     = 0.6    // s the beam shows (the beam event's duration)
+	laserSweepSpeed   = 6000.0 // px/s the beam's front travels from the muzzle
 	stunTurns         = 1
 )
 
@@ -50,10 +53,16 @@ func beamEnd(origin, dir Vector2, width, height int) Vector2 {
 	return Vector2{X: origin.X + dir.X*s, Y: origin.Y + dir.Y*s}
 }
 
+// laserHit is an enemy the beam crosses and how far along the beam (px from the origin).
+type laserHit struct {
+	p *BattlePlayerState
+	s float64
+}
+
 // laserHits returns the living enemies of shooter whose body the beam from origin to end
 // crosses (within laserHalfWidth + the player hit radius of it), nearest to origin first.
 // Terrain does not stop the beam.
-func laserHits(players map[string]*BattlePlayerState, shooter *BattlePlayerState, origin, end Vector2) []*BattlePlayerState {
+func laserHits(players map[string]*BattlePlayerState, shooter *BattlePlayerState, origin, end Vector2) []laserHit {
 	_, _, _, hitRadius, _, _ := getPhysics()
 	dx, dy := end.X-origin.X, end.Y-origin.Y
 	length := math.Hypot(dx, dy)
@@ -62,11 +71,7 @@ func laserHits(players map[string]*BattlePlayerState, shooter *BattlePlayerState
 	}
 	ux, uy := dx/length, dy/length
 	reach := laserHalfWidth + hitRadius
-	type hit struct {
-		p *BattlePlayerState
-		s float64
-	}
-	var hits []hit
+	var hits []laserHit
 	for _, p := range players {
 		if !p.IsAlive || p.TeamID == shooter.TeamID {
 			continue
@@ -79,7 +84,7 @@ func laserHits(players map[string]*BattlePlayerState, shooter *BattlePlayerState
 		if math.Abs(cx*uy-cy*ux) > reach { // off the beam
 			continue
 		}
-		hits = append(hits, hit{p, s})
+		hits = append(hits, laserHit{p, s})
 	}
 	sort.Slice(hits, func(i, j int) bool {
 		if hits[i].s != hits[j].s {
@@ -87,26 +92,27 @@ func laserHits(players map[string]*BattlePlayerState, shooter *BattlePlayerState
 		}
 		return hits[i].p.PlayerID < hits[j].p.PlayerID
 	})
-	out := make([]*BattlePlayerState, len(hits))
-	for i, h := range hits {
-		out[i] = h.p
-	}
-	return out
+	return hits
+}
+
+// laserHitTime is when the beam's front reaches a body s px along it (s since the shot).
+func laserHitTime(s float64) float64 {
+	return laserChargeTime + math.Max(s, 0)/laserSweepSpeed
 }
 
 // laser: the beam from the shot origin along the aim to the map edge. No gravity, wind,
 // terrain, crater, knockback or falls; power is ignored. The nearest enemy takes laserFirst ×
-// base, each next one laserDecay × the previous; every enemy hit is stunned.
+// base, each next one laserDecay × the previous (also past a kill); every enemy hit is stunned.
 func resolveLaser(m *Match, s *skillShot) {
 	player, action, base, tl := s.Player, s.Action, s.Base, s.TL
 	player.ShotsFired++
 	origin := shotOrigin(m.Terrain, player)
 	end := beamEnd(origin, angleDir(action.Angle), m.Terrain.Width, m.Terrain.Height)
-	tl.add(ShotEvent{T: 0, Type: "beam", PlayerID: player.PlayerID, From: vecPtr(origin), To: vecPtr(end), Duration: laserBeamTime})
+	tl.add(ShotEvent{T: laserChargeTime, Type: "beam", PlayerID: player.PlayerID, From: vecPtr(origin), To: vecPtr(end), Duration: laserBeamTime})
 
 	raw := laserFirst(player.SkillRank) * base
-	for k, p := range laserHits(m.State.Players, player, origin, end) {
-		t := laserHitDelay + laserHitGap*float64(k)
+	for _, h := range laserHits(m.State.Players, player, origin, end) {
+		p, t := h.p, laserHitTime(h.s)
 		damage := int(math.Round(ReduceByDefense(raw, p.Defense)))
 		damage, critical := ApplyCritical(damage, player.CritChance)
 		raw *= laserDecay
