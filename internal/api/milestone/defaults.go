@@ -19,6 +19,19 @@ func stone(level, qty int) []RewardItem {
 	return []RewardItem{{Kind: RewardKindStone, Level: level, Qty: qty}}
 }
 
+// TitleRewards maps a seeded milestone to the title it grants (title.Defaults, migrations/027):
+// its reward_items ends with {"kind":"title","id":...}.
+var TitleRewards = map[string]string{
+	"ms_char_lv_40":   "veteran",
+	"ms_upgrade_10":   "smith",
+	"ms_wins_0100":    "sharpshooter",
+	"ms_matches_1000": "old_hand",
+	"ms_set_14":       "elite_armor",
+	"ms_char_lv_80":   "battle_master",
+	"ms_upgrade_16":   "legend_smith",
+	"ms_rank_master":  "grandmaster",
+}
+
 // Defaults lists the seeded milestones, all account-wide.
 var Defaults = func() []Default {
 	var out []Default
@@ -102,6 +115,12 @@ var Defaults = func() []Default {
 	for _, r := range ranks {
 		add(Default{ID: "ms_rank_" + r.tier, Track: TrackRank, Target: TargetRankPeak, Required: TierOrder(r.tier),
 			SortOrder: TierOrder(r.tier), Coin: r.coin, Gem: r.gem, Items: r.items})
+	}
+
+	for i := range out {
+		if id, ok := TitleRewards[out[i].ID]; ok {
+			out[i].Items = append(append([]RewardItem{}, out[i].Items...), RewardItem{Kind: RewardKindTitle, ID: id})
+		}
 	}
 	return out
 }()

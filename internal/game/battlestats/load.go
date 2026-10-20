@@ -2,6 +2,7 @@ package battlestats
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -143,6 +144,30 @@ func WeaponUpgradeLevel(items []EquippedItem) int {
 		}
 	}
 	return 0
+}
+
+// EquippedTitle is the title a player wears (config_titles id, name, rarity).
+type EquippedTitle struct {
+	ID, Name, Rarity string
+}
+
+// LoadEquippedTitle returns the player's equipped title when it is active and owned
+// (player_profiles.equipped_title_id → player_titles → config_titles), nil otherwise.
+func LoadEquippedTitle(ctx context.Context, q Querier, playerID string) (*EquippedTitle, error) {
+	var t EquippedTitle
+	err := q.QueryRow(ctx, `
+		SELECT t.title_id, t.name, t.rarity
+		FROM player_profiles p
+		JOIN player_titles pt ON pt.player_id = p.player_id AND pt.title_id = p.equipped_title_id
+		JOIN config_titles t ON t.title_id = pt.title_id AND t.is_active = TRUE
+		WHERE p.player_id = $1`, playerID).Scan(&t.ID, &t.Name, &t.Rarity)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
 }
 
 // LoadLoadouts returns the loadout of each character the player has items

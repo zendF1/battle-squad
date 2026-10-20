@@ -77,6 +77,8 @@ func TestStateAndSupported(t *testing.T) {
 		{Target: TargetWins, Required: 1},
 		{Target: "set_level:6", Required: 6, Rewards: Rewards{Items: []RewardItem{{Kind: "stone", Level: 12, Qty: 1}}}},
 		{Target: TargetMatches, Required: 1, Rewards: Rewards{Items: []RewardItem{{Kind: "item", ID: "medkit", Qty: 2}}}},
+		// A title item filled from its active config_titles row; titles carry no qty
+		{Target: TargetWins, Required: 1, Rewards: Rewards{Items: []RewardItem{{Kind: "stone", Level: 8, Qty: 1}, {Kind: "title", ID: "veteran", Name: "Chiến binh kỳ cựu", Rarity: "blue"}}}},
 	}
 	for _, m := range ok {
 		if !Supported(m) {
@@ -86,7 +88,10 @@ func TestStateAndSupported(t *testing.T) {
 	bad := []Milestone{
 		{Target: "nope", Required: 1},
 		{Target: TargetWins, Required: 0},
+		// A title id with no active config_titles row: the repository leaves the name empty
 		{Target: TargetWins, Required: 1, Rewards: Rewards{Items: []RewardItem{{Kind: "title", ID: "veteran", Qty: 1}}}},
+		{Target: TargetWins, Required: 1, Rewards: Rewards{Items: []RewardItem{{Kind: "title", Name: "X", Rarity: "red"}}}},
+		{Target: TargetWins, Required: 1, Rewards: Rewards{Items: []RewardItem{{Kind: "badge", ID: "x", Qty: 1}}}},
 		{Target: TargetWins, Required: 1, Rewards: Rewards{Items: []RewardItem{{Kind: "stone", Level: 13, Qty: 1}}}},
 		{Target: TargetWins, Required: 1, Rewards: Rewards{Items: []RewardItem{{Kind: "stone", Level: 3, Qty: 0}}}},
 		{Target: TargetWins, Required: 1, Rewards: Rewards{Items: []RewardItem{{Kind: "item", Qty: 1}}}},
@@ -153,13 +158,35 @@ func TestDefaults(t *testing.T) {
 		}
 		seen[d.ID] = true
 		perTrack[d.Track]++
-		m := Milestone{ID: d.ID, Track: d.Track, Target: d.Target, Required: d.Required, Rewards: Rewards{Coin: d.Coin, Gem: d.Gem, Items: d.Items}}
+		items := append([]RewardItem{}, d.Items...)
+		titles := 0
+		for i := range items {
+			if items[i].Kind == RewardKindTitle {
+				titles++
+				if items[i].ID != TitleRewards[d.ID] {
+					t.Errorf("%s grants title %s, want %s", d.ID, items[i].ID, TitleRewards[d.ID])
+				}
+				items[i].Name, items[i].Rarity = "name", "blue" // as Repository.Milestones fills them
+			}
+		}
+		if _, ok := TitleRewards[d.ID]; (titles == 1) != ok || titles > 1 {
+			t.Errorf("%s: %d title items", d.ID, titles)
+		}
+		m := Milestone{ID: d.ID, Track: d.Track, Target: d.Target, Required: d.Required, Rewards: Rewards{Coin: d.Coin, Gem: d.Gem, Items: items}}
 		if !Supported(m) {
 			t.Errorf("%s not supported", d.ID)
 		}
 		if d.Coin == 0 && d.Gem == 0 && len(d.Items) == 0 {
 			t.Errorf("%s has no reward", d.ID)
 		}
+	}
+	for id := range TitleRewards {
+		if !seen[id] {
+			t.Errorf("title milestone %s is not a default", id)
+		}
+	}
+	if len(TitleRewards) != 8 {
+		t.Errorf("%d title milestones", len(TitleRewards))
 	}
 	if len(Defaults) != 46 || perTrack[TrackCharacter] != 16 || perTrack[TrackUpgrade] != 13 || perTrack[TrackCombat] != 12 || perTrack[TrackRank] != 5 {
 		t.Fatalf("defaults %d %v", len(Defaults), perTrack)

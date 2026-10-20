@@ -57,6 +57,7 @@ func (h *Handler) ResetData(w http.ResponseWriter, r *http.Request) {
 		"gift_code_redemptions",
 		"player_reports",
 		"account_bans",
+		"player_titles",
 		"player_profiles",
 		"auth_identities",
 		"accounts",

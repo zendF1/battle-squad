@@ -12,6 +12,15 @@ type PlayerProfile struct {
 	Gem         int       `json:"gem"`
 	CreatedAt   time.Time `json:"createdAt"`
 	LastLoginAt time.Time `json:"lastLoginAt"`
+	// EquippedTitle is the title the player wears (active and owned), null when none.
+	EquippedTitle *EquippedTitle `json:"equippedTitle"`
+}
+
+// EquippedTitle is a title plate: id, Vietnamese name and rarity (blue, orange, purple, red).
+type EquippedTitle struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Rarity string `json:"rarity"`
 }
 
 // MaxDisplayNameLength is the longest display name, in characters (runes).

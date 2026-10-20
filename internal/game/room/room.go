@@ -41,13 +41,21 @@ type Room struct {
 }
 
 // getActualStats adds the player's allocated stat points and equipment to the
-// character's base stats, and returns the weapon the character has equipped
-// (item id "" = none; clients draw that gun and its +14 / +16 back aura). A character the player does
-// not own gets base stats and no weapon. GET /player/characters reports the
-// same numbers through battlestats.
-func (r *Room) getActualStats(playerID, characterID string) (battleStats, equippedWeapon) {
+// character's base stats, and returns the cosmetics: the weapon the character
+// has equipped (item id "" = none; clients draw that gun and its +14 / +16
+// back aura) and the player's equipped title (nil = none). A character the
+// player does not own gets base stats and no weapon, the title still shows.
+// GET /player/characters reports the same numbers through battlestats.
+func (r *Room) getActualStats(playerID, characterID string) (battleStats, cosmetics) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	var look cosmetics
+	if t, err := battlestats.LoadEquippedTitle(ctx, r.db.Pool, playerID); err != nil {
+		observability.Log.Warn().Err(err).Str("playerId", playerID).Msg("failed to load equipped title; playing without title")
+	} else if t != nil {
+		look.Title = &match.TitleInfo{ID: t.ID, Name: t.Name, Rarity: t.Rarity}
+	}
 
 	var pts statPoints
 	err := r.db.Pool.QueryRow(ctx,
@@ -55,7 +63,7 @@ func (r *Room) getActualStats(playerID, characterID string) (battleStats, equipp
 		 FROM player_characters WHERE player_id = $1 AND character_id = $2`,
 		playerID, characterID).Scan(&pts.HP, &pts.Damage, &pts.Mobility, &pts.Defense, &pts.SkillPower, &pts.TerrainDamage)
 	if err != nil {
-		return baseStats(characterID), equippedWeapon{}
+		return baseStats(characterID), look
 	}
 
 	var cfgVal string
@@ -69,8 +77,8 @@ func (r *Room) getActualStats(playerID, characterID string) (battleStats, equipp
 		observability.Log.Warn().Err(err).Str("playerId", playerID).Msg("failed to load equipment stats; playing without equipment")
 	}
 	l := loadouts[characterID]
-	return battlestats.Compute(characterID, pts, character.LoadProgressionConfig(cfgVal).Multipliers(), l.Points).Total,
-		equippedWeapon{ItemID: l.WeaponItemID, UpgradeLevel: l.WeaponUpgradeLevel}
+	look.WeaponItemID, look.WeaponUpgradeLevel = l.WeaponItemID, l.WeaponUpgradeLevel
+	return battlestats.Compute(characterID, pts, character.LoadProgressionConfig(cfgVal).Multipliers(), l.Points).Total, look
 }
 
 func NewRoom(roomID string, initialState RoomState, hub *Hub, db *database.PostgresDB) *Room {
@@ -514,8 +522,8 @@ func (r *Room) processStartMatch(client *ws.Client) {
 			team1Idx++
 		}
 
-		stats, weapon := r.getActualStats(p.PlayerID, p.CharacterID)
-		matchPlayers = append(matchPlayers, newBattlePlayer(p, spawnPos, stats, weapon, false))
+		stats, look := r.getActualStats(p.PlayerID, p.CharacterID)
+		matchPlayers = append(matchPlayers, newBattlePlayer(p, spawnPos, stats, look, false))
 	}
 
 	// Instantiate match engine
@@ -595,11 +603,11 @@ func (r *Room) processStartTutorial(client *ws.Client, payload QuickPlayPayload)
 		}
 
 		isBot := p.PlayerID[:4] == "bot_"
-		stats, weapon := baseStats(p.CharacterID), equippedWeapon{}
+		stats, look := baseStats(p.CharacterID), cosmetics{}
 		if !isBot {
-			stats, weapon = r.getActualStats(p.PlayerID, p.CharacterID)
+			stats, look = r.getActualStats(p.PlayerID, p.CharacterID)
 		}
-		bp := newBattlePlayer(p, spawnPos, stats, weapon, isBot)
+		bp := newBattlePlayer(p, spawnPos, stats, look, isBot)
 		bp.IsIdle = isBot && !aiBot
 		matchPlayers = append(matchPlayers, bp)
 	}
@@ -677,11 +685,11 @@ func (r *Room) startRankedMatch(matchID string, botTierConfig matchmaker.BotTier
 		}
 
 		isBot := len(p.PlayerID) >= 4 && p.PlayerID[:4] == "bot_"
-		stats, weapon := baseStats(p.CharacterID), equippedWeapon{}
+		stats, look := baseStats(p.CharacterID), cosmetics{}
 		if !isBot {
-			stats, weapon = r.getActualStats(p.PlayerID, p.CharacterID)
+			stats, look = r.getActualStats(p.PlayerID, p.CharacterID)
 		}
-		matchPlayers = append(matchPlayers, newBattlePlayer(p, spawnPos, stats, weapon, isBot))
+		matchPlayers = append(matchPlayers, newBattlePlayer(p, spawnPos, stats, look, isBot))
 	}
 
 	// Collect per-team ratings for Elo calculation

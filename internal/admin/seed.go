@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"battle-squad/internal/api/milestone"
+	"battle-squad/internal/api/title"
 	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
@@ -55,14 +56,32 @@ func SeedAll(ctx context.Context, db *database.PostgresDB, configDir string) err
 	if err := SeedEquipmentConfig(ctx, db); err != nil {
 		return fmt.Errorf("seed equipment config: %w", err)
 	}
+	if err := SeedTitles(ctx, db); err != nil {
+		return fmt.Errorf("seed titles: %w", err)
+	}
 	if err := SeedMilestones(ctx, db); err != nil {
 		return fmt.Errorf("seed milestones: %w", err)
 	}
 	return nil
 }
 
+// SeedTitles inserts the default titles (title.Defaults, as migrations/027) into
+// config_titles. ON CONFLICT DO NOTHING keeps edited rows.
+func SeedTitles(ctx context.Context, db *database.PostgresDB) error {
+	query := `INSERT INTO config_titles (title_id, name, rarity, sort_order, description) VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (title_id) DO NOTHING`
+	for _, d := range title.Defaults {
+		if _, err := db.Pool.Exec(ctx, query, d.ID, d.Name, d.Rarity, d.SortOrder, d.Description); err != nil {
+			return fmt.Errorf("insert title %s: %w", d.ID, err)
+		}
+	}
+	observability.Log.Info().Int("count", len(title.Defaults)).Msg("seeded titles")
+	return nil
+}
+
 // SeedMilestones inserts the default milestones (milestone.Defaults, as migrations/026) into
-// missions with type 'milestone'. ON CONFLICT DO NOTHING keeps edited rows.
+// missions with type 'milestone'. ON CONFLICT DO NOTHING keeps edited rows; a row seeded
+// before titles gets its title item (milestone.TitleRewards) appended, as migrations/027.
 func SeedMilestones(ctx context.Context, db *database.PostgresDB) error {
 	query := `INSERT INTO missions (mission_id, type, track, target, required_value, sort_order, reward_coin, reward_gem, reward_items, description)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
@@ -79,6 +98,19 @@ func SeedMilestones(ctx context.Context, db *database.PostgresDB) error {
 		if _, err := db.Pool.Exec(ctx, query, d.ID, milestone.MissionType, d.Track, d.Target, d.Required, d.SortOrder,
 			d.Coin, d.Gem, string(raw), d.Description); err != nil {
 			return fmt.Errorf("insert milestone %s: %w", d.ID, err)
+		}
+	}
+	appendTitle := `UPDATE missions
+		SET reward_items = (CASE WHEN jsonb_typeof(reward_items) = 'array' THEN reward_items ELSE '[]'::jsonb END) || $2::jsonb
+		WHERE mission_id = $1
+		  AND NOT (CASE WHEN jsonb_typeof(reward_items) = 'array' THEN reward_items ELSE '[]'::jsonb END) @> $2::jsonb`
+	for id, titleID := range milestone.TitleRewards {
+		raw, err := json.Marshal([]milestone.RewardItem{{Kind: milestone.RewardKindTitle, ID: titleID}})
+		if err != nil {
+			return err
+		}
+		if _, err := db.Pool.Exec(ctx, appendTitle, id, string(raw)); err != nil {
+			return fmt.Errorf("attach title %s to milestone %s: %w", titleID, id, err)
 		}
 	}
 	observability.Log.Info().Int("count", len(milestone.Defaults)).Msg("seeded milestones")

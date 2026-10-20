@@ -45,7 +45,8 @@ func TestAddStatPointsDefaultsMissingMultipliers(t *testing.T) {
 func TestNewBattlePlayerCarriesStats(t *testing.T) {
 	p := RoomPlayer{PlayerID: "p1", DisplayName: "P", TeamID: 2, CharacterID: "tanko", Items: []string{"medkit"}}
 	s := battleStats{HP: 180, Defense: 60, DamageBonus: 10, MoveEnergy: 80, MoveEnergyBonus: 9, CritChance: 2, SkillPowerBonus: 15, TerrainDamageBonus: 6}
-	bp := newBattlePlayer(p, match.Vector2{X: 5, Y: 6}, s, equippedWeapon{ItemID: "tanko_weapon_lv30", UpgradeLevel: 14}, false)
+	bp := newBattlePlayer(p, match.Vector2{X: 5, Y: 6}, s, cosmetics{WeaponItemID: "tanko_weapon_lv30", WeaponUpgradeLevel: 14,
+		Title: &match.TitleInfo{ID: "smith", Name: "Thợ rèn lành nghề", Rarity: "blue"}}, false)
 
 	if bp.HP != 180 || bp.MaxHP != 180 || bp.Defense != 60 || bp.DamageBonus != 10 ||
 		bp.MoveEnergy != 89 || bp.MaxMoveEnergy != 89 || bp.MoveEnergyBonus != 9 || bp.CritChance != 2 ||
@@ -66,20 +67,26 @@ func TestNewBattlePlayerCarriesStats(t *testing.T) {
 	if !strings.Contains(string(raw), `"weaponItemId":"tanko_weapon_lv30"`) || !strings.Contains(string(raw), `"weaponUpgradeLevel":14`) {
 		t.Fatalf("weaponItemId / weaponUpgradeLevel not serialised: %s", raw)
 	}
+	if !strings.Contains(string(raw), `"weaponUpgradeLevel":14,"title":{"id":"smith","name":"Thợ rèn lành nghề","rarity":"blue"},"hp"`) {
+		t.Fatalf("title not serialised after weaponUpgradeLevel: %s", raw)
+	}
 	// A bot (no weapon) still sends the field as 0
-	raw, err = json.Marshal(newBattlePlayer(RoomPlayer{PlayerID: "bot_1", CharacterID: "rookie"}, match.Vector2{}, baseStats("rookie"), equippedWeapon{}, true))
+	raw, err = json.Marshal(newBattlePlayer(RoomPlayer{PlayerID: "bot_1", CharacterID: "rookie"}, match.Vector2{}, baseStats("rookie"), cosmetics{}, true))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(raw), `"weaponItemId":""`) || !strings.Contains(string(raw), `"weaponUpgradeLevel":0`) {
 		t.Fatalf("bot weapon fields: %s", raw)
 	}
+	if strings.Contains(string(raw), `"title"`) {
+		t.Fatalf("a bot (no title) must omit the field: %s", raw)
+	}
 }
 
 func TestGetActualStatsAppliesAllStatPoints(t *testing.T) {
 	db := dbtest.NewSchema(t, 0,
 		"001_init_schema.up.sql", "004_admin_config_tables.up.sql", "006_character_progression.up.sql",
-		"010_equipment_system.up.sql", "011_equipment_slot_unique.up.sql")
+		"010_equipment_system.up.sql", "011_equipment_slot_unique.up.sql", "027_titles.up.sql")
 	prev := gamedata.Data
 	gamedata.Data = &gamedata.GameData{Characters: map[string]gamedata.CharacterConfig{
 		"tanko": {CharacterID: "tanko", HP: 1950, Defense: 80},
@@ -101,12 +108,12 @@ func TestGetActualStatsAppliesAllStatPoints(t *testing.T) {
 	if got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
-	if weapon != (equippedWeapon{}) {
+	if weapon != (cosmetics{}) {
 		t.Fatalf("no weapon equipped, got %+v", weapon)
 	}
 
 	// A character the player does not own keeps its base stats
-	if got, weapon := r.getActualStats("p1", "spark"); got != baseStats("spark") || weapon != (equippedWeapon{}) {
+	if got, weapon := r.getActualStats("p1", "spark"); got != baseStats("spark") || weapon != (cosmetics{}) {
 		t.Fatalf("unowned character got %+v, %+v", got, weapon)
 	}
 }
@@ -117,7 +124,7 @@ func TestGetActualStatsAppliesAllStatPoints(t *testing.T) {
 func TestGetActualStatsReturnsEquippedWeapon(t *testing.T) {
 	db := dbtest.NewSchema(t, 0,
 		"001_init_schema.up.sql", "004_admin_config_tables.up.sql", "006_character_progression.up.sql",
-		"010_equipment_system.up.sql", "011_equipment_slot_unique.up.sql")
+		"010_equipment_system.up.sql", "011_equipment_slot_unique.up.sql", "027_titles.up.sql")
 	ctx := context.Background()
 	dbtest.CreatePlayer(t, db, "p1", 0, 0)
 	if _, err := db.Pool.Exec(ctx, `
@@ -135,13 +142,53 @@ func TestGetActualStatsReturnsEquippedWeapon(t *testing.T) {
 	r := &Room{db: db}
 
 	s, weapon := r.getActualStats("p1", "tanko")
-	if weapon != (equippedWeapon{ItemID: "tanko_weapon_lv30", UpgradeLevel: 16}) {
+	if weapon != (cosmetics{WeaponItemID: "tanko_weapon_lv30", WeaponUpgradeLevel: 16}) {
 		t.Fatalf("tanko weapon %+v, want tanko_weapon_lv30 +16", weapon)
 	}
 	if s.DamageBonus == 0 || s.HP <= baseStats("tanko").HP {
 		t.Fatalf("equipment stats not applied: %+v", s)
 	}
-	if _, weapon := r.getActualStats("p1", "rookie"); weapon != (equippedWeapon{}) {
+	if _, weapon := r.getActualStats("p1", "rookie"); weapon != (cosmetics{}) {
 		t.Fatalf("rookie wears no weapon (one is owned, not equipped), got %+v", weapon)
+	}
+}
+
+// The player's equipped title comes back with the stats when it is owned and
+// active, also on a character the player does not own; otherwise none.
+func TestGetActualStatsReturnsEquippedTitle(t *testing.T) {
+	db := dbtest.NewSchema(t, 0,
+		"001_init_schema.up.sql", "004_admin_config_tables.up.sql", "006_character_progression.up.sql",
+		"010_equipment_system.up.sql", "011_equipment_slot_unique.up.sql", "027_titles.up.sql")
+	ctx := context.Background()
+	dbtest.CreatePlayer(t, db, "p1", 0, 0)
+	dbtest.CreatePlayer(t, db, "p2", 0, 0)
+	exec := func(sql string) {
+		t.Helper()
+		if _, err := db.Pool.Exec(ctx, sql); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec(`INSERT INTO player_characters (player_id, character_id) VALUES ('p1', 'tanko');
+		INSERT INTO player_titles (player_id, title_id) VALUES ('p1', 'smith');
+		UPDATE player_profiles SET equipped_title_id = 'smith' WHERE player_id = 'p1';
+		UPDATE player_profiles SET equipped_title_id = 'veteran' WHERE player_id = 'p2'`) // p2 does not own it
+	r := &Room{db: db}
+
+	want := &match.TitleInfo{ID: "smith", Name: "Thợ rèn lành nghề", Rarity: "blue"}
+	for _, char := range []string{"tanko", "spark"} {
+		if _, look := r.getActualStats("p1", char); look.Title == nil || *look.Title != *want {
+			t.Fatalf("%s: title %+v, want %+v", char, look.Title, want)
+		}
+	}
+	if _, look := r.getActualStats("p2", "tanko"); look.Title != nil {
+		t.Fatalf("not owned: title %+v", look.Title)
+	}
+	exec(`UPDATE config_titles SET is_active = FALSE WHERE title_id = 'smith'`)
+	if _, look := r.getActualStats("p1", "tanko"); look.Title != nil {
+		t.Fatalf("inactive: title %+v", look.Title)
+	}
+	exec(`UPDATE config_titles SET is_active = TRUE WHERE title_id = 'smith'; UPDATE player_profiles SET equipped_title_id = NULL WHERE player_id = 'p1'`)
+	if _, look := r.getActualStats("p1", "tanko"); look.Title != nil {
+		t.Fatalf("unequipped: title %+v", look.Title)
 	}
 }

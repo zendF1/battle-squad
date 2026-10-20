@@ -45,14 +45,14 @@ const (
 const SlotCount = 6
 
 // Reward item kinds the server can grant. A milestone whose reward_items holds another kind
-// (e.g. a future {"kind":"title","id":"..."}) is not served and cannot be claimed until its
-// kind is added here and in grantItemTx.
+// is not served and cannot be claimed until its kind is added here and in GrantItemTx.
 const (
 	RewardKindStone = "stone" // {"kind":"stone","level":L,"qty":Q} → player_stones
 	RewardKindItem  = "item"  // {"kind":"item","id":"medkit","qty":Q} → inventory_items
+	RewardKindTitle = "title" // {"kind":"title","id":"veteran"} → player_titles (no qty; owned once)
 )
 
-var supportedRewardKinds = map[string]bool{RewardKindStone: true, RewardKindItem: true}
+var supportedRewardKinds = map[string]bool{RewardKindStone: true, RewardKindItem: true, RewardKindTitle: true}
 
 // Node states.
 const (
@@ -61,12 +61,17 @@ const (
 	StateLocked    = "locked"
 )
 
-// RewardItem is one entry of missions.reward_items.
+// RewardItem is one entry of missions.reward_items. Name and Rarity are not stored: the
+// server fills them for a title item from its active config_titles row (Repository.Milestones),
+// so clients draw the title plate with no extra lookup; a title item without one is not
+// supported.
 type RewardItem struct {
-	Kind  string `json:"kind"`
-	Level int    `json:"level,omitempty"` // stone level
-	ID    string `json:"id,omitempty"`    // item id (and a future title id)
-	Qty   int    `json:"qty,omitempty"`
+	Kind   string `json:"kind"`
+	Level  int    `json:"level,omitempty"`  // stone level
+	ID     string `json:"id,omitempty"`     // item id or title id
+	Qty    int    `json:"qty,omitempty"`    // stone / item quantity; titles have none
+	Name   string `json:"name,omitempty"`   // title name (config_titles.name)
+	Rarity string `json:"rarity,omitempty"` // title rarity: blue, orange, purple, red
 }
 
 type Rewards struct {

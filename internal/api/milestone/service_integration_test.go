@@ -218,9 +218,9 @@ func TestClaimRefusalsChangeNothing(t *testing.T) {
 	_, err = svc.Claim(ctx, "ghost", "ms_matches_0010")
 	wantCode(t, err, "NOT_FOUND")
 
-	// A reward kind the server cannot grant yet (a future title) is not served nor claimable
+	// A title item whose id is no config_titles row is not served nor claimable
 	exec(t, db, `INSERT INTO missions (mission_id, type, track, target, required_value, reward_items)
-		VALUES ('ms_title_test', 'milestone', 'combat', 'matches', 1, '[{"kind":"title","id":"veteran"}]')`)
+		VALUES ('ms_title_test', 'milestone', 'combat', 'matches', 1, '[{"kind":"title","id":"no_such_title"}]')`)
 	_, err = svc.Claim(ctx, "p1", "ms_title_test")
 	wantCode(t, err, "NOT_FOUND")
 	res, err := svc.ClaimAll(ctx, "p1")

@@ -1329,7 +1329,7 @@ func (r *Repository) ResetAllData(ctx context.Context) error {
 		"season_reward_claims", "player_ranks", "inventory_reservations", "inventory_items",
 		"player_characters", "economy_transactions", "payment_transactions", "shop_purchases",
 		"mission_progress", "player_stat_counters", "gift_code_redemptions", "player_reports", "account_bans",
-		"player_profiles", "auth_identities", "accounts",
+		"player_titles", "player_profiles", "auth_identities", "accounts",
 	}
 
 	for _, table := range tables {

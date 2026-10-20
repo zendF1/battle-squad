@@ -20,12 +20,17 @@ func NewRepository(db *database.PostgresDB) *Repository {
 }
 
 func (r *Repository) GetProfile(ctx context.Context, playerID string) (*PlayerProfile, error) {
+	// The equipped title counts only while it is owned and active
 	query := `
-		SELECT player_id, account_id, display_name, level, exp, coin, gem, created_at, last_login_at
-		FROM player_profiles
-		WHERE player_id = $1
+		SELECT p.player_id, p.account_id, p.display_name, p.level, p.exp, p.coin, p.gem, p.created_at, p.last_login_at,
+		       t.title_id, t.name, t.rarity
+		FROM player_profiles p
+		LEFT JOIN player_titles pt ON pt.player_id = p.player_id AND pt.title_id = p.equipped_title_id
+		LEFT JOIN config_titles t ON t.title_id = pt.title_id AND t.is_active = TRUE
+		WHERE p.player_id = $1
 	`
 	var p PlayerProfile
+	var titleID, titleName, titleRarity *string
 	err := r.db.Pool.QueryRow(ctx, query, playerID).Scan(
 		&p.PlayerID,
 		&p.AccountID,
@@ -36,12 +41,18 @@ func (r *Repository) GetProfile(ctx context.Context, playerID string) (*PlayerPr
 		&p.Gem,
 		&p.CreatedAt,
 		&p.LastLoginAt,
+		&titleID,
+		&titleName,
+		&titleRarity,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err
+	}
+	if titleID != nil && titleName != nil && titleRarity != nil {
+		p.EquippedTitle = &EquippedTitle{ID: *titleID, Name: *titleName, Rarity: *titleRarity}
 	}
 	return &p, nil
 }

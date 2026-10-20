@@ -25,6 +25,7 @@ import (
 	"battle-squad/internal/api/rank"
 	"battle-squad/internal/api/rooms"
 	"battle-squad/internal/api/shop"
+	"battle-squad/internal/api/title"
 	"battle-squad/internal/game/gamedata"
 	sharedAuth "battle-squad/internal/shared/auth"
 	"battle-squad/internal/shared/config"
@@ -121,6 +122,8 @@ func main() {
 	playerService := player.NewService(playerRepo)
 	playerHandler := player.NewHandler(playerService)
 
+	titleHandler := title.NewHandler(title.NewService(title.NewRepository(db), db))
+
 	appconfigService := appconfig.NewService(db, cfg)
 	appconfigHandler := appconfig.NewHandler(appconfigService)
 
@@ -193,6 +196,9 @@ func main() {
 		r.Post("/account/deletion/request", playerHandler.RequestAccountDeletion)
 		r.Post("/account/deletion/cancel", playerHandler.CancelAccountDeletion)
 		r.Get("/account/deletion/status", playerHandler.GetAccountDeletionStatus)
+
+		r.Get("/player/titles", titleHandler.List)
+		r.Post("/player/titles/equip", titleHandler.Equip)
 
 		r.Get("/player/inventory", inventoryHandler.GetInventory)
 

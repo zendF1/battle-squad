@@ -15,6 +15,13 @@ type StatusEffect struct {
 	SourcePlayerID string  `json:"sourcePlayerId"`
 }
 
+// TitleInfo is the title a player wears into a match (config_titles); clients draw the plate.
+type TitleInfo struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Rarity string `json:"rarity"`
+}
+
 type BattlePlayerState struct {
 	PlayerID           string         `json:"playerId"`
 	DisplayName        string         `json:"displayName"`
@@ -22,6 +29,7 @@ type BattlePlayerState struct {
 	CharacterID        string         `json:"characterId"`
 	WeaponItemID       string         `json:"weaponItemId"`       // equipped weapon's item id, "" = none (bots); clients draw that gun
 	WeaponUpgradeLevel int            `json:"weaponUpgradeLevel"` // equipped weapon's upgrade level, 0 = none (bots); clients draw the +14 / +16 back aura
+	Title              *TitleInfo     `json:"title,omitempty"`    // equipped title (active, owned); omitted for none and bots. Cosmetic
 	HP                 int            `json:"hp"`
 	MaxHP              int            `json:"maxHp"`
 	Defense            int            `json:"defense"`

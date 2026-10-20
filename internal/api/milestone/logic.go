@@ -48,13 +48,23 @@ func knownTarget(target string) bool {
 }
 
 // Supported: the server can compute the milestone's progress and grant every reward. Others
-// are not served and cannot be claimed (e.g. a title reward before titles exist).
+// are not served and cannot be claimed (e.g. a title item whose id is not an active
+// config_titles row: Repository.Milestones leaves its Name empty).
 func Supported(m Milestone) bool {
 	if !knownTarget(m.Target) || m.Required <= 0 {
 		return false
 	}
 	for _, it := range m.Rewards.Items {
-		if !supportedRewardKinds[it.Kind] || it.Qty <= 0 {
+		if !supportedRewardKinds[it.Kind] {
+			return false
+		}
+		if it.Kind == RewardKindTitle {
+			if it.ID == "" || it.Name == "" {
+				return false
+			}
+			continue
+		}
+		if it.Qty <= 0 {
 			return false
 		}
 		if it.Kind == RewardKindStone && (it.Level < 1 || it.Level > 12) {

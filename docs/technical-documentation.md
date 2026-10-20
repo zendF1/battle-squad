@@ -96,6 +96,7 @@ internal/
 │   ├── giftcode/         Gift code redemption
 │   ├── mission/          Daily missions, achievements, claim rewards
 │   ├── milestone/        Mốc thưởng: one-time progress rewards, stat counters
+│   ├── title/            Danh hiệu: owned titles, equip
 │   ├── rank/             Elo rating, leaderboard, seasons, season rewards
 │   ├── moderation/       Player reports, ban/unban (admin only)
 │   ├── appconfig/        Version policy, remote config
@@ -175,7 +176,7 @@ Mọi response REST (trừ `/healthz`, `/readyz`, `/livez`, `/metrics`) đều c
 
 | Method | Path | Handler | Mô tả |
 |--------|------|---------|-------|
-| GET | `/player/profile` | GetProfile | Lấy profile (name, level, coin, gem) |
+| GET | `/player/profile` | GetProfile | Lấy profile (name, level, coin, gem, `equippedTitle: {id, name, rarity} \| null` — danh hiệu đang đeo, null khi không đeo / không còn sở hữu / đã tắt; luôn có field) |
 | PUT | `/player/profile` | UpdateProfile | Đổi display name: body `{"displayName"}`, trim khoảng trắng hai đầu, 1–20 ký tự (đếm rune, không phải byte). Rỗng/quá dài → 400 `PLAYER_UPDATE_FAILED` |
 | POST | `/account/deletion/request` | RequestAccountDeletion | Yêu cầu xóa account (7 ngày grace) |
 | POST | `/account/deletion/cancel` | CancelAccountDeletion | Hủy yêu cầu xóa |
@@ -343,6 +344,8 @@ Giá normal (coin) — weapon (mỗi nhân vật) 500/1500/4000/10000, armor 400
 | GET | `/milestones/summary` | Summary | `{claimableCount}` cho badge ở sảnh |
 | POST | `/milestones/claim` | Claim | `{id}` → `{claimed:[id], rewards, coin, gem, stones:[{stoneLevel, quantity}], claimableCount}`; đã nhận `MILESTONE_ALREADY_CLAIMED` 409, chưa đạt `MILESTONE_NOT_REACHED` 400, không có `NOT_FOUND` |
 | POST | `/milestones/claim-all` | ClaimAll | Nhận mọi mốc đang nhận được trong 1 tx, cùng dạng kết quả (rewards cộng dồn); không có gì → `claimed: []` |
+| GET | `/player/titles` | List | Danh hiệu: `{titles:[{id, name, rarity, description, owned, obtainedAt}], equipped: {id, name, rarity} \| null}` — chỉ danh hiệu đang bật, theo `sort_order` rồi id; `obtainedAt` RFC3339 UTC hoặc null; xem §7 Danh hiệu |
+| POST | `/player/titles/equip` | Equip | `{titleId}` (null / thiếu / `""` = tháo) → `{equipped: {id, name, rarity} \| null}`; chưa sở hữu, không tồn tại hoặc đã tắt `TITLE_NOT_OWNED` 403 (không đổi gì); JSON sai `BAD_REQUEST` |
 | GET | `/rank/me` | GetRankMe | Rating, tier, division của mình |
 | GET | `/rank/leaderboard?page=&limit=` | GetLeaderboard | Bảng xếp hạng (default: page=1, limit=20) |
 | GET | `/rank/seasons/current` | GetCurrentSeason | Mùa giải hiện tại |
@@ -500,7 +503,7 @@ Client message → CompositeWSHandler
 
 `duration` là lúc animation cuối cùng kết thúc; server kết thúc lượt sau `duration + 1.2s`.
 
-**Player trong `players`** (`BattlePlayerState`, cùng shape trong `MatchStarted`, `MatchStateSync`, `ItemUsed`): `{playerId, displayName, teamId, characterId, weaponItemId, weaponUpgradeLevel, hp, maxHp, defense, position{x,y}, moveEnergy, maxMoveEnergy, items[], statusEffects[], isAlive, isBot, damageBonus, critChance, moveEnergyBonus, skillPowerBonus, terrainDamageBonus, skillEnergy, damageDealt, killCount, shotsFired, shotsHit}`. `weaponItemId` là `item_id` của vũ khí nhân vật đang mặc lúc vào trận (VD `rookie_weapon_lv30`, `crafted_weapon_gold`, `normal_weapon_lv10`), `""` khi không mặc vũ khí và với bot. Room đọc nó cùng câu query equipment khi tính chỉ số (`battlestats.LoadLoadouts`), không tốn thêm gì mỗi phát bắn. Chỉ dùng để client vẽ súng đang cầm; không ảnh hưởng gameplay. `weaponUpgradeLevel` là cấp nâng cấp (`player_equipment.upgrade_level`, 0..16) của vũ khí đó, đọc cùng câu query; `0` khi không mặc vũ khí và với bot. Chỉ để client vẽ hào quang sau lưng (vũ khí +14: tím, +16: đỏ); client cũ bỏ qua, client mới thiếu field coi là 0. `maxMoveEnergy` là năng lượng di chuyển nạp lại đầu mỗi lượt của player: năng lượng gốc của nhân vật (`config_characters.mobility`) + `moveEnergyBonus` (điểm, trang bị); client dùng nó làm mức đầy của thanh năng lượng.
+**Player trong `players`** (`BattlePlayerState`, cùng shape trong `MatchStarted`, `MatchStateSync`, `ItemUsed`): `{playerId, displayName, teamId, characterId, weaponItemId, weaponUpgradeLevel, title?, hp, maxHp, defense, position{x,y}, moveEnergy, maxMoveEnergy, items[], statusEffects[], isAlive, isBot, damageBonus, critChance, moveEnergyBonus, skillPowerBonus, terrainDamageBonus, skillEnergy, damageDealt, killCount, shotsFired, shotsHit}`. `weaponItemId` là `item_id` của vũ khí nhân vật đang mặc lúc vào trận (VD `rookie_weapon_lv30`, `crafted_weapon_gold`, `normal_weapon_lv10`), `""` khi không mặc vũ khí và với bot. Room đọc nó cùng câu query equipment khi tính chỉ số (`battlestats.LoadLoadouts`), không tốn thêm gì mỗi phát bắn. Chỉ dùng để client vẽ súng đang cầm; không ảnh hưởng gameplay. `weaponUpgradeLevel` là cấp nâng cấp (`player_equipment.upgrade_level`, 0..16) của vũ khí đó, đọc cùng câu query; `0` khi không mặc vũ khí và với bot. Chỉ để client vẽ hào quang sau lưng (vũ khí +14: tím, +16: đỏ); client cũ bỏ qua, client mới thiếu field coi là 0. `title` là danh hiệu người chơi đang đeo lúc vào trận, `{id, name, rarity}` (rarity `blue`/`orange`/`purple`/`red`), chỉ khi danh hiệu còn sở hữu và đang bật; không có field khi không đeo và với bot. Room đọc nó lúc tính chỉ số (`battlestats.LoadEquippedTitle`, cả khi chơi nhân vật chưa sở hữu); chỉ để client vẽ biển danh hiệu, không ảnh hưởng gameplay. `maxMoveEnergy` là năng lượng di chuyển nạp lại đầu mỗi lượt của player: năng lượng gốc của nhân vật (`config_characters.mobility`) + `moveEnergyBonus` (điểm, trang bị); client dùng nó làm mức đầy của thanh năng lượng.
 
 ---
 
@@ -803,7 +806,7 @@ Thưởng một lần cho mỗi tài khoản khi đạt mốc tiến độ; khô
 | `combat` | `char_wins` | Số trận thắng được tính nhiều nhất với một nhân vật | 10/50/200 |
 | `rank` | `rank_peak` | Tier cao nhất từng đạt (bronze 1 … master 6), riêng với thưởng mùa | Bạc 2, Vàng 3, Bạch kim 4, Kim cương 5, Cao thủ 6 |
 
-Thưởng: `reward_coin`, `reward_gem`, `reward_items` = `[{"kind":"stone","level":L,"qty":Q}]` (`player_stones`) hoặc `{"kind":"item","id":...,"qty":Q}` (`inventory_items`, source `milestone_reward`). Coin/gem ghi `economy_transactions` source `milestone_reward`, `ref_id` = id mốc. Mốc có target lạ hoặc kind chưa hỗ trợ (vd. `{"kind":"title","id":"..."}` trước khi có danh hiệu) không được trả về và không nhận được — điểm mở rộng: `supportedRewardKinds` (`milestone/model.go`) + một case trong `Repository.GrantItemTx`. Giá trị seed ở `milestone.Defaults`; admin `SeedMilestones` ghi giống migration 026 (`ON CONFLICT DO NOTHING`).
+Thưởng: `reward_coin`, `reward_gem`, `reward_items` = `[{"kind":"stone","level":L,"qty":Q}]` (`player_stones`), `{"kind":"item","id":...,"qty":Q}` (`inventory_items`, source `milestone_reward`) hoặc `{"kind":"title","id":...}` (`player_titles`, không có qty; đã sở hữu thì bỏ qua, không lỗi). Khi trả `GET /milestones` và `rewards.items` của claim, item title có thêm `name`, `rarity` lấy từ `config_titles` (không lưu trong `reward_items`). Coin/gem ghi `economy_transactions` source `milestone_reward`, `ref_id` = id mốc. Mốc có target lạ, kind chưa hỗ trợ, hoặc item title có id không phải danh hiệu đang bật không được trả về và không nhận được — điểm mở rộng: `supportedRewardKinds` (`milestone/model.go`) + một case trong `Repository.GrantItemTx`. Giá trị seed ở `milestone.Defaults`; admin `SeedMilestones` ghi giống migration 026 (`ON CONFLICT DO NOTHING`).
 
 **Counter** (`player_stat_counters (player_id, counter, value)`): `matches`, `wins`, `char_wins:<characterId>` (+1 lúc kết thúc trận, trong tx thưởng trận), `rank_peak`, `rating_peak` (GREATEST mỗi lần ghi rating, từ `highest_tier` của mùa — dòng rank mới bắt đầu ở silver, nên trận có rating đầu tiên đã đạt mốc Bạc), `upgrade_peak`, `weapon_upgrade_peak` (GREATEST khi cường hoá thành công, trong tx cường hoá). Level nhân vật và set tính lúc đọc.
 
@@ -812,6 +815,23 @@ Thưởng: `reward_coin`, `reward_gem`, `reward_items` = `[{"kind":"stone","leve
 **Claim**: một tx — khoá `player_profiles` (mỗi lần một claim của người chơi), đọc mốc, cờ đã nhận và tiến độ qua tx (không dùng Pool), ghi claim bằng `INSERT … ON CONFLICT DO UPDATE … WHERE is_claimed = FALSE` (0 dòng → `MILESTONE_ALREADY_CLAIMED`), cộng coin/gem, đá, item. Client gặp `MILESTONE_ALREADY_CLAIMED` thì coi như xong và tải lại.
 
 **Backfill (một lần, khi bảng counter được tạo)**: upgrade peaks từ level hiện tại + `equipment_upgrade_log` thành công của món còn giữ; `rank_peak`/`rating_peak` từ mọi dòng `player_ranks`; matches/wins/char_wins từ `match_histories` có `MatchStarted` trong `match_event_logs`: `ranked_2v2` hoặc `pvp_1v1` có bot không phải "Target Bot", và người chơi có ≥ 3 `ShotResolved`; nhân vật lấy từ `MatchStarted`. Rời trận không lưu nên không lọc được; trận không còn event log không được tính. Chạy lại 026 không đếm lại.
+
+### Danh hiệu (titles, migration 027)
+
+Danh hiệu là biển trang trí, không có chỉ số. Cấu hình ở `config_titles` (`title_id`, `name` tiếng Việt, `rarity` `blue`/`orange`/`purple`/`red`, `sort_order`, `description` = cách đạt, không có tiền tố — client hiện "Đạt: " + description, `is_active`). Sở hữu: `player_titles (player_id, title_id, obtained_at)`, chỉ nhận qua mốc thưởng (item `{"kind":"title","id":...}`). Đang đeo: `player_profiles.equipped_title_id` (FK `ON DELETE SET NULL`); chỉ tính khi còn sở hữu và đang bật — nếu không, mọi chỗ đọc (`/player/titles` equipped, profile `equippedTitle`, `title` trong trận) coi như null.
+
+| title_id | Tên | Rarity | Mốc |
+|----------|-----|--------|-----|
+| `veteran` | Chiến binh kỳ cựu | blue | `ms_char_lv_40` — 1 nhân vật đạt cấp 40 |
+| `smith` | Thợ rèn lành nghề | blue | `ms_upgrade_10` — 1 trang bị đạt +10 |
+| `sharpshooter` | Xạ thủ bách chiến | orange | `ms_wins_0100` — Thắng 100 trận |
+| `old_hand` | Lão làng | orange | `ms_matches_1000` — Chơi 1000 trận |
+| `elite_armor` | Chiến giáp tinh anh | purple | `ms_set_14` — 1 bộ trang bị hoàn chỉnh +14 |
+| `battle_master` | Bậc thầy chiến trường | purple | `ms_char_lv_80` — 1 nhân vật đạt cấp 80 |
+| `legend_smith` | Thợ rèn huyền thoại | red | `ms_upgrade_16` — 1 trang bị đạt +16 |
+| `grandmaster` | Cao thủ | red | `ms_rank_master` — Lần đầu đạt hạng Cao thủ (tier 6) |
+
+**Equip**: một tx — khoá `player_profiles` `FOR UPDATE`, kiểm tra sở hữu + đang bật qua tx, `UPDATE equipped_title_id`, kiểm tra `RowsAffected`. **Migration 027** (chạy lại được): seed 8 danh hiệu `ON CONFLICT DO NOTHING` (giữ chỉnh sửa admin), thêm item title vào cuối `reward_items` của mốc tương ứng nếu chưa có (giữ các item khác), backfill: ai đã nhận (`is_claimed`) mốc có item title thì được danh hiệu đó, `obtained_at` = `updated_at` của claim. Giá trị seed ở `title.Defaults` + `milestone.TitleRewards`; admin `SeedTitles` / `SeedMilestones` ghi giống migration; reset-data xoá `player_titles`.
 
 **Rating (chỉ ranked):**
 - `pvp_1v1`: cố định +25/-20
@@ -912,7 +932,7 @@ State-based decision making, difficulty theo rank tier:
 |-------|-----|-------|
 | `accounts` | `account_id` | Tài khoản (guest/google/apple, role, status) |
 | `auth_identities` | `identity_id` | Login providers (1 account : N identities) |
-| `player_profiles` | `player_id` | Profile (name, level, coin, gem) — **central entity** |
+| `player_profiles` | `player_id` | Profile (name, level, coin, gem, `equipped_title_id`) — **central entity** |
 | `player_loadouts` | `player_id` | Loadout mặc định (character + items) |
 
 ### Economy & Inventory
@@ -925,6 +945,8 @@ State-based decision making, difficulty theo rank tier:
 | `economy_transactions` | `transaction_id` | Ledger coin/gem |
 | `missions` / `mission_progress` | `mission_id` / `(player_id, mission_id)` | Nhiệm vụ; mốc thưởng là `type = 'milestone'`, đã nhận = `is_claimed` |
 | `player_stat_counters` | `(player_id, counter)` | Counter cho mốc thưởng (trận, thắng, thắng theo nhân vật, đỉnh cường hoá, đỉnh rank) |
+| `config_titles` | `title_id` | Danh hiệu: tên, rarity, thứ tự, mô tả cách đạt, bật/tắt |
+| `player_titles` | `(player_id, title_id)` | Danh hiệu người chơi sở hữu, `obtained_at` |
 
 ### Equipment
 
@@ -1026,6 +1048,7 @@ State-based decision making, difficulty theo rank tier:
 | `CRAFT_RECIPE_NOT_FOUND` | 404 | Công thức không tồn tại hoặc đã tắt |
 | `MILESTONE_ALREADY_CLAIMED` | 409 | Mốc thưởng đã nhận |
 | `MILESTONE_NOT_REACHED` | 400 | Mốc thưởng chưa đạt |
+| `TITLE_NOT_OWNED` | 403 | Đeo danh hiệu chưa sở hữu, không tồn tại hoặc đã tắt |
 | `METHOD_NOT_ALLOWED` | 405 | Sai HTTP method |
 | `MATCH_NOT_YOUR_TURN` | 403 | Chưa đến lượt |
 | `MATCH_ALREADY_SHOT` | 409 | Đã bắn rồi |

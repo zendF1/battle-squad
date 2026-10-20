@@ -25,8 +25,61 @@ func NewRepository(db *database.PostgresDB) *Repository {
 	return &Repository{db: db}
 }
 
-// Milestones returns the active milestones with the player's claim flag.
+// Milestones returns the active milestones with the player's claim flag; title items carry
+// the name and rarity of their active config_titles row (none: left empty, so unsupported).
 func (r *Repository) Milestones(ctx context.Context, q querier, playerID string) ([]Milestone, error) {
+	ms, err := r.milestones(ctx, q, playerID)
+	if err != nil {
+		return nil, err
+	}
+	hasTitle := false
+	for _, m := range ms {
+		for _, it := range m.Rewards.Items {
+			hasTitle = hasTitle || it.Kind == RewardKindTitle
+		}
+	}
+	if !hasTitle {
+		return ms, nil
+	}
+	titles, err := activeTitles(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	for i := range ms {
+		for j := range ms[i].Rewards.Items {
+			it := &ms[i].Rewards.Items[j]
+			if it.Kind != RewardKindTitle {
+				continue
+			}
+			t := titles[it.ID]
+			it.Name, it.Rarity, it.Qty = t.Name, t.Rarity, 0
+		}
+	}
+	return ms, nil
+}
+
+type titleInfo struct{ Name, Rarity string }
+
+// activeTitles maps the active config_titles rows by id.
+func activeTitles(ctx context.Context, q querier) (map[string]titleInfo, error) {
+	rows, err := q.Query(ctx, `SELECT title_id, name, rarity FROM config_titles WHERE is_active = TRUE`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]titleInfo{}
+	for rows.Next() {
+		var id string
+		var t titleInfo
+		if err := rows.Scan(&id, &t.Name, &t.Rarity); err != nil {
+			return nil, err
+		}
+		out[id] = t
+	}
+	return out, rows.Err()
+}
+
+func (r *Repository) milestones(ctx context.Context, q querier, playerID string) ([]Milestone, error) {
 	rows, err := q.Query(ctx, `
 		SELECT m.mission_id, m.track, m.target, m.required_value, m.sort_order, m.description,
 		       m.reward_coin, m.reward_gem, m.reward_items, COALESCE(p.is_claimed, FALSE)
@@ -137,7 +190,7 @@ func (r *Repository) InsertClaimTx(ctx context.Context, tx pgx.Tx, playerID, id 
 }
 
 // GrantItemTx grants one reward item. This switch is the extension point for new reward
-// kinds (e.g. "title"): add the kind to supportedRewardKinds and a case here.
+// kinds: add the kind to supportedRewardKinds and a case here.
 func (r *Repository) GrantItemTx(ctx context.Context, tx pgx.Tx, playerID string, it RewardItem) error {
 	switch it.Kind {
 	case RewardKindStone:
@@ -164,6 +217,12 @@ func (r *Repository) GrantItemTx(ctx context.Context, tx pgx.Tx, playerID string
 			return fmt.Errorf("grant item %s: %d rows affected", it.ID, tag.RowsAffected())
 		}
 		return nil
+	case RewardKindTitle:
+		// Owned once: 0 rows (already owned, e.g. granted by another milestone) is fine
+		_, err := tx.Exec(ctx, `
+			INSERT INTO player_titles (player_id, title_id) VALUES ($1, $2)
+			ON CONFLICT (player_id, title_id) DO NOTHING`, playerID, it.ID)
+		return err
 	}
 	return fmt.Errorf("unsupported reward kind %q", it.Kind)
 }

@@ -117,4 +117,6 @@ var (
 
 	ErrMilestoneAlreadyClaimed = AppError{Code: "MILESTONE_ALREADY_CLAIMED", Message: "This milestone reward was already claimed", Status: http.StatusConflict}
 	ErrMilestoneNotReached     = AppError{Code: "MILESTONE_NOT_REACHED", Message: "This milestone is not reached yet", Status: http.StatusBadRequest}
+
+	ErrTitleNotOwned = AppError{Code: "TITLE_NOT_OWNED", Message: "You do not own this title", Status: http.StatusForbidden}
 )
