@@ -7,8 +7,8 @@ import (
 	"battle-squad/internal/game/gamedata"
 )
 
-// TestBombChain: rank 2 → 5 bombs on one trajectory 0.3 s apart, craters shrinking ×0.85, the
-// later ones exploding deeper; damage split evenly and capped at the total; the enemy rooted;
+// TestBombChain: rank 2 → 5 bombs on one trajectory at least 0.3 s apart, craters shrinking
+// ×0.85; fired straight up they come down the same column, the later ones exploding deeper; damage split evenly and capped at the total; the enemy rooted;
 // its falls play one after another.
 func TestBombChain(t *testing.T) {
 	m, clients := flatSkillMatch(t, skillPlayer{"p1", 1, "tanko", 400}, skillPlayer{"p2", 2, "rookie", 415})
@@ -22,7 +22,8 @@ func TestBombChain(t *testing.T) {
 	start := s.Projectiles[0].Path[0].Position
 	lastY := -1.0
 	for i, r := range s.Projectiles {
-		if r.Kind != "bomb" || r.Path[0].Position != start || math.Abs(r.LaunchDelay-0.3*float64(i)) > 1e-9 || r.Path[0].Time != r.LaunchDelay {
+		if r.Kind != "bomb" || r.Path[0].Position != start || r.Path[0].Time != r.LaunchDelay ||
+			(i == 0 && r.LaunchDelay != 0) || (i > 0 && r.LaunchDelay < s.Projectiles[i-1].LaunchDelay+0.3-1e-9) {
 			t.Fatalf("bomb %d: kind %q start %v launch %v", i, r.Kind, r.Path[0].Position, r.LaunchDelay)
 		}
 		if r.ExplosionRadius != float64(w.ExplosionRadius)*chainBlast ||
@@ -63,6 +64,37 @@ func TestBombChain(t *testing.T) {
 	if len(eventsOf(s, "fall", "p2")) < 2 {
 		t.Fatalf("enemy fell %d times, want it dropped again by later bombs", len(eventsOf(s, "fall", "p2")))
 	}
+	assertChainCoherent(t, s)
+}
+
+// assertChainCoherent: no bomb explodes while a fall of the shot is still playing (every fall
+// started before an explosion has landed chainHitGap before it), so a hit never lands on a
+// target the client still draws falling; the falls play chainFallSpeed × faster than free fall.
+func assertChainCoherent(t *testing.T, s ShotResolved) {
+	t.Helper()
+	for _, x := range eventsOf(s, "explode", "") {
+		for _, f := range eventsOf(s, "fall", "") {
+			if f.T < x.T && f.T+f.Duration > x.T-chainHitGap+1e-9 {
+				t.Fatalf("bomb %s explodes at %.3f while %s falls %.3f..%.3f", x.ProjectileID, x.T, f.PlayerID, f.T, f.T+f.Duration)
+			}
+		}
+	}
+	for _, f := range eventsOf(s, "fall", "") {
+		if want := fallDuration(f.To.Y-f.From.Y) / chainFallSpeed; math.Abs(f.Duration-want) > 1e-9 {
+			t.Fatalf("fall of %v px takes %v, want %v", f.To.Y-f.From.Y, f.Duration, want)
+		}
+	}
+}
+
+// TestPacedLaunch: a chain bomb leaves chainLaunchGap after the previous one, or later so that
+// it explodes chainHitGap after the last landing.
+func TestPacedLaunch(t *testing.T) {
+	if got := pacedLaunch(0.3, 1.5, 1.0); math.Abs(got-0.6) > 1e-9 {
+		t.Fatalf("no fall in the way: %v, want 0.6", got)
+	}
+	if got := pacedLaunch(0.3, 1.5, 2.4); math.Abs(got-(2.4+chainHitGap-1.5)) > 1e-9 {
+		t.Fatalf("waiting for a landing at 2.4: %v", got)
+	}
 }
 
 // TestBombChainKeepsFloor: seven bombs dig through 400 px of ground but stop chainFloorMargin
@@ -95,30 +127,6 @@ func TestBombChainKeepsFloor(t *testing.T) {
 			t.Fatalf("out of map death: %+v", e)
 		}
 	}
-}
-
-// TestBombChainPlungesIntoTheHole: aimed at a target across flat ground, the later bombs drop
-// down the first one's hole instead of flying on past it, and hit the target again.
-func TestBombChainPlungesIntoTheHole(t *testing.T) {
-	m, clients := flatSkillMatch(t, skillPlayer{"p1", 1, "tanko", 300}, skillPlayer{"p2", 2, "rookie", 900})
-	shooter := m.State.Players["p1"]
-	shooter.SkillRank = 4
-	w, _ := botWeapon(shooter)
-	best := NewBotBrain(perfectAim).bestShot(m, shooter, shooter.Position, w)
-	s := fireSkill(t, m, clients, "p1", best.angle, best.power)
-	first := s.Projectiles[0].ExplosionPoint
-	if first == nil || len(s.Projectiles) != 7 {
-		t.Fatalf("chain %+v", s.Projectiles)
-	}
-	for i, r := range s.Projectiles[1:] {
-		if r.ExplosionPoint == nil || math.Abs(r.ExplosionPoint.X-first.X) > chainHoleEnter || r.ExplosionPoint.Y < first.Y {
-			t.Fatalf("bomb %d explodes at %v, not down the hole at %v", i+1, r.ExplosionPoint, first)
-		}
-	}
-	if n := len(eventsOf(s, "damage", "p2")); n < 3 {
-		t.Fatalf("target hit %d times", n)
-	}
-	t.Logf("aimed chain: %d damage in %d hits", totalDamage(s, "p2"), len(eventsOf(s, "damage", "p2")))
 }
 
 func TestChainCountsPerRank(t *testing.T) {

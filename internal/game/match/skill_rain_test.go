@@ -118,8 +118,9 @@ func TestMissileRainFlareOffMapDropsNothing(t *testing.T) {
 	}
 }
 
+// (Tanko's bomb chain lobs instead: TestBotBombChainLobs.)
 func TestBotRainAimedLikeItsBestShot(t *testing.T) {
-	for _, char := range []string{"rookie", "tanko"} {
+	for _, char := range []string{"rookie"} {
 		m, bot := botSkillMatch(t, skillPlayer{"b", 1, char, 300}, skillPlayer{"e1", 2, "rookie", 900})
 		brain := NewBotBrain(perfectAim)
 		w, _ := botWeapon(bot)

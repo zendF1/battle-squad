@@ -16,6 +16,26 @@ type shotTimeline struct {
 	// landing is when each player's last fall of the shot ends: a later fall of the same
 	// player starts then, so falls play in order (bomb chain).
 	landing map[string]float64
+	// fallSpeed > 1 plays this shot's falls that many times faster than free fall (bomb chain:
+	// the targets are slammed down the shaft between two bombs); <= 1 is free fall.
+	fallSpeed float64
+}
+
+// fallTime is how long a fall of distance px takes in this shot.
+func (tl *shotTimeline) fallTime(distance float64) float64 {
+	if tl.fallSpeed > 1 {
+		return fallDuration(distance) / tl.fallSpeed
+	}
+	return fallDuration(distance)
+}
+
+// landed is when the last fall of the shot so far ends (0: nobody fell).
+func (tl *shotTimeline) landed() float64 {
+	end := 0.0
+	for _, t := range tl.landing {
+		end = max(end, t)
+	}
+	return end
 }
 
 func (tl *shotTimeline) add(e ShotEvent) {
@@ -200,7 +220,7 @@ func (m *Match) settleFalls(shooter *BattlePlayerState, t float64, tl *shotTimel
 		from := p.Position
 		distance := landY - from.Y
 		p.Position.Y = landY
-		fall := fallDuration(distance)
+		fall := tl.fallTime(distance)
 		start := max(t, tl.landing[p.PlayerID])
 		landed := start + fall
 		if tl.landing == nil {
