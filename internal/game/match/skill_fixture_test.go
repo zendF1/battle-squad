@@ -11,12 +11,13 @@ import (
 )
 
 // skillFixtureCase is one skill fired on a real map: the players and terrain before the shot
-// and the ShotResolved the server sent.
+// and the ShotResolved the server sent, and the terrain after it.
 type skillFixtureCase struct {
 	MapID   string                        `json:"mapId"`
 	Shooter string                        `json:"shooter"`
 	Players map[string]*BattlePlayerState `json:"players"`
 	Terrain TerrainSnapshot               `json:"terrain"`
+	After   TerrainSnapshot               `json:"terrainAfter"` // after the shot's craters
 	Shot    json.RawMessage               `json:"shot"`
 }
 
@@ -77,6 +78,7 @@ func TestExportSkillFixture(t *testing.T) {
 			msg := <-clients[shooter].Send
 			if msg.Event == "ShotResolved" {
 				c.Shot = msg.Data
+				c.After = m.Terrain.Snapshot()
 				return c
 			}
 		}
