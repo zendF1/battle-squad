@@ -31,7 +31,7 @@ func readMigration(t *testing.T, name string) string {
 	return string(sql)
 }
 
-// Migrations 028, 030 then 031 turn the old rows into configs/skills.yaml's (what the admin seed
+// Migrations 028, 030, 031 then 033 turn the old rows into configs/skills.yaml's (what the admin seed
 // inserts on a fresh database), and reruns keep later admin edits.
 func TestSkillRedesignMigrationMatchesSeed(t *testing.T) {
 	ctx := context.Background()
@@ -39,7 +39,7 @@ func TestSkillRedesignMigrationMatchesSeed(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, oldSkillRows); err != nil {
 		t.Fatal(err)
 	}
-	up := readMigration(t, "028_skill_redesign.up.sql") + "\n" + readMigration(t, "030_rain_tune.up.sql") + "\n" + readMigration(t, "031_chain_cap.up.sql")
+	up := readMigration(t, "028_skill_redesign.up.sql") + "\n" + readMigration(t, "030_rain_tune.up.sql") + "\n" + readMigration(t, "031_chain_cap.up.sql") + "\n" + readMigration(t, "033_chain_one_bomb_less.up.sql")
 	for i := 0; i < 2; i++ {
 		if _, err := db.Pool.Exec(ctx, up); err != nil {
 			t.Fatal(err)
@@ -83,8 +83,11 @@ func TestSkillRedesignMigrationMatchesSeed(t *testing.T) {
 		t.Fatalf("admin edit lost: %q %v", name, mult)
 	}
 
-	// 031's down restores 028's chain description, 030's down 028's rain row, 028's down the
-	// first design
+	// 033's down restores 031's chain row, 031's down 028's chain description, 030's down 028's
+	// rain row, 028's down the first design
+	if _, err := db.Pool.Exec(ctx, readMigration(t, "033_chain_one_bomb_less.down.sql")); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Pool.Exec(ctx, readMigration(t, "031_chain_cap.down.sql")); err != nil {
 		t.Fatal(err)
 	}

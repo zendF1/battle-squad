@@ -232,7 +232,9 @@ func (m *Match) settleFalls(shooter *BattlePlayerState, t float64, tl *shotTimel
 		if landY >= float64(m.Terrain.Height) {
 			shieldBefore := p.Shield
 			lost := killPlayer(p)
-			shooter.KillCount++
+			if p.TeamID != shooter.TeamID { // the shooter's own fall (or a teammate's) is no kill
+				shooter.KillCount++
+			}
 			tl.add(damageEvent(landed, p, lost, shieldBefore, "out_of_map"))
 			tl.add(ShotEvent{T: landed, Type: "die", PlayerID: p.PlayerID, Cause: "out_of_map"})
 			continue

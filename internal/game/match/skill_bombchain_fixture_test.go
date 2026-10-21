@@ -149,8 +149,8 @@ func TestBombChainOnRealMap(t *testing.T) {
 			t.Fatalf("%s chain hits %d times for %d, want the cap %d", k, hits[k]["e1"], d, limit)
 		}
 	}
-	if dig := deepestDig(t, cases["vertical"]); dig < 250 {
-		t.Fatalf("the vertical chain digs %v px, want a shaft of ~7 × 40", dig)
+	if dig := deepestDig(t, cases["vertical"]); dig < 210 {
+		t.Fatalf("the vertical chain digs %v px, want a shaft of ~6 × 40", dig)
 	}
 	if out := os.Getenv("BOMBCHAIN_FIXTURE_OUT"); out != "" {
 		data, err := json.MarshalIndent(cases, "", " ")

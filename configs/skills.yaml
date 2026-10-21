@@ -17,10 +17,10 @@
   name: Bom liên hoàn
   cooldownTurn: 3
   effectType: bomb_chain
-  projectileCount: 3
+  projectileCount: 2
   statusEffectId: root
   damageMultiplier: 1.0
-  description: "Bắn liên tiếp bom lớn cùng một đường bay (3 quả, +1 mỗi cấp súng), đào sâu một hố; tổng 180% sát thương (+15% mỗi cấp), mỗi địch nhận tối đa 120% (+15% mỗi cấp); địch trúng bị cầm chân lượt sau."
+  description: "Bắn liên tiếp bom lớn cùng một đường bay (2 quả, +1 mỗi cấp súng), đào sâu một hố; mỗi quả 60% sát thương (34% ở cấp súng 4), mỗi địch nhận tối đa 120% (+15% mỗi cấp); địch trúng bị cầm chân lượt sau."
 
 - skillId: shock_field
   characterId: spark

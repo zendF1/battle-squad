@@ -81,8 +81,8 @@ func TestSkillShotsStartAtBodyCentre(t *testing.T) {
 
 	send(m, clients[cur], "Shoot", ShootAction{Angle: 60, Power: 40, ActionMode: "skill"})
 	s := shotResolved(t, clients[cur])
-	if len(s.Projectiles) != 3 {
-		t.Fatalf("got %d projectiles, want 3", len(s.Projectiles))
+	if len(s.Projectiles) != 2 {
+		t.Fatalf("got %d projectiles, want 2", len(s.Projectiles))
 	}
 	for i, p := range s.Projectiles {
 		if got := p.Path[0].Position; got != want {

@@ -7,8 +7,9 @@ import (
 )
 
 // Bomb chain (Tanko, skill heavy_bomb, effect bomb_chain): chainBaseCount + chainCountPerRank
-// × rank bombs on the same trajectory, at least chainLaunchGap s apart; (chainTotalBase +
-// chainTotalPerRank × rank) × base split evenly over them; one target takes at most
+// × rank bombs on the same trajectory, at least chainLaunchGap s apart; each deals chainEach(rank)
+// × base: (chainTotalBase + chainTotalPerRank × rank) split over one bomb more than it fires
+// (playtest 6 dropped a bomb to weaken the chain, keeping each bomb's damage); one target takes at most
 // (chainCapBase + chainCapPerRank × rank) × base (before defense) from the whole chain.
 // Every bomb flies the normal ballistic path of the shot (nothing steers it): a later one flies
 // on through the craters of the earlier ones and explodes where that same arc now meets the
@@ -25,7 +26,7 @@ import (
 // falls of the shot play chainFallSpeed × faster than free fall (slammed down the shaft), so
 // the bombs keep a quick rhythm; the fall distance (and its damage) is the real one.
 const (
-	chainBaseCount    = 3
+	chainBaseCount    = 2 // playtest 6: was 3
 	chainCountPerRank = 1
 	chainLaunchGap    = 0.1
 	chainTotalBase    = 1.8
@@ -48,6 +49,10 @@ func init() {
 
 func chainCount(rank int) int     { return chainBaseCount + chainCountPerRank*rank }
 func chainTotal(rank int) float64 { return chainTotalBase + chainTotalPerRank*float64(rank) }
+
+// chainEach is one bomb's damage (× base): chainTotal split over chainCount + 1 bombs, the share
+// each had before playtest 6 removed one.
+func chainEach(rank int) float64 { return chainTotal(rank) / float64(chainCount(rank)+1) }
 func chainCap(rank int) float64   { return chainCapBase + chainCapPerRank*float64(rank) }
 
 // bombChain: chainCount bombs on the same trajectory (same origin, angle, power and wind),
@@ -56,7 +61,7 @@ func chainCap(rank int) float64   { return chainCapBase + chainCapPerRank*float6
 func resolveBombChain(m *Match, s *skillShot) {
 	player, action, skillID, weapon, base, shot, tl := s.Player, s.Action, s.Skill.SkillID, s.Weapon, s.Base, s.Shot, s.TL
 	n := chainCount(player.SkillRank)
-	each := chainTotal(player.SkillRank) * base / float64(n)
+	each := chainEach(player.SkillRank) * base
 	limit := newSkillCap(capOfBase(chainCap(player.SkillRank) * base))
 	rooted := map[string]bool{}
 	origin := shotOrigin(m.Terrain, player)

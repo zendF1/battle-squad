@@ -16,8 +16,8 @@ func TestBombChain(t *testing.T) {
 	m.State.Players["p1"].SkillRank = 2
 	enemy := m.State.Players["p2"]
 	s := fireSkill(t, m, clients, "p1", 90, 10)
-	if len(s.Projectiles) != 5 {
-		t.Fatalf("%d bombs, want 5", len(s.Projectiles))
+	if len(s.Projectiles) != 4 {
+		t.Fatalf("%d bombs, want 4", len(s.Projectiles))
 	}
 	w := gamedata.Data.Weapons["cannon_ball"]
 	start := s.Projectiles[0].Path[0].Position
@@ -40,7 +40,7 @@ func TestBombChain(t *testing.T) {
 			t.Fatalf("explode %+v: want the weapon's bowl", e)
 		}
 	}
-	total, limit := chainTotal(2)*float64(w.Damage), chainCap(2)*float64(w.Damage)
+	limit := chainCap(2) * float64(w.Damage)
 	got := totalDamage(s, "p2")
 	var blast int
 	for _, e := range eventsOf(s, "damage", "p2") {
@@ -53,7 +53,7 @@ func TestBombChain(t *testing.T) {
 	if blast <= 0 || blast > capOfBase(limit)(enemy) {
 		t.Fatalf("chain explosion damage %d, cap %d", blast, capOfBase(limit)(enemy))
 	}
-	if first := eventsOf(s, "damage", "p2")[0]; first.Amount > int(math.Round(ReduceByDefense(total/5, enemy.Defense)))+1 {
+	if first := eventsOf(s, "damage", "p2")[0]; first.Amount > int(math.Round(ReduceByDefense(chainEach(2)*float64(w.Damage), enemy.Defense)))+1 {
 		t.Fatalf("one bomb dealt %d, more than its share", first.Amount)
 	}
 	if enemy.IsAlive && (!hasStatus(s, "p2", "root") || !HasEffect(enemy, "root")) {
@@ -138,11 +138,17 @@ func TestBombChainDigsToTheBottom(t *testing.T) {
 	if !out["p2"] || m.State.Players["p2"].IsAlive {
 		t.Fatalf("the enemy over the open column did not fall out: %v", out)
 	}
+	if !out["p1"] {
+		t.Fatalf("the shooter standing on the shaft did not fall out too: %v", out)
+	}
+	if got := m.State.Players["p1"].KillCount; got != 1 {
+		t.Fatalf("shooter kills = %d, want 1 (the enemy; its own fall is no kill)", got)
+	}
 }
 
 func TestChainCountsPerRank(t *testing.T) {
 	for rank := 0; rank <= 4; rank++ {
-		if got, want := chainCount(rank), 3+rank; got != want {
+		if got, want := chainCount(rank), 2+rank; got != want {
 			t.Errorf("chain count rank %d = %d, want %d", rank, got, want)
 		}
 		if got, want := chainTotal(rank), 1.8+0.15*float64(rank); math.Abs(got-want) > 1e-9 {
