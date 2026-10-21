@@ -60,6 +60,8 @@ type BattlePlayerState struct {
 	KillCount   int `json:"killCount"`
 	ShotsFired  int `json:"shotsFired"`
 	ShotsHit    int `json:"shotsHit"`
+	// SkillUses counts the skills this player fired (daily missions).
+	SkillUses int `json:"-"`
 	// ShotTurns counts this player's resolved actions (a shot, a skill or a teleport: one per
 	// turn); Left is set when the player left the match. Both decide whether the match counts
 	// for milestones (see milestoneCounts).

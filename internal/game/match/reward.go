@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"time"
 
 	"battle-squad/internal/api/economy"
 	"battle-squad/internal/api/milestone"
+	"battle-squad/internal/api/mission"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
 
@@ -39,9 +41,13 @@ type PlayerStats struct {
 	Damage      int
 	Kills       int
 	Accuracy    float64
+	ShotsHit    int
+	SkillUses   int // skills fired
+	ItemsUsed   int // items spent
 	IsWinner    bool
 	IsDraw      bool
-	// Counts: the match counts for this player's milestone counters (Match.milestoneCounts)
+	// Counts: the match counts for this player's milestone counters and daily missions
+	// (Match.milestoneCounts)
 	Counts bool
 }
 
@@ -235,6 +241,12 @@ func ProcessMatchRewards(
 		if p.Counts {
 			if err := milestone.RecordMatchTx(ctx, tx, p.PlayerID, p.CharacterID, p.IsWinner); err != nil {
 				return nil, fmt.Errorf("failed to count match for milestones: %w", err)
+			}
+			if err := mission.RecordMatchTx(ctx, tx, p.PlayerID, mission.MatchStats{
+				Won: p.IsWinner, Damage: p.Damage, Kills: p.Kills, ShotsHit: p.ShotsHit,
+				SkillUses: p.SkillUses, ItemsUsed: p.ItemsUsed,
+			}, time.Now()); err != nil {
+				return nil, fmt.Errorf("failed to count match for daily missions: %w", err)
 			}
 		}
 

@@ -53,6 +53,7 @@ func (h *Handler) ResetData(w http.ResponseWriter, r *http.Request) {
 		"payment_transactions",
 		"shop_purchases",
 		"mission_progress",
+		"player_mission_activity",
 		"player_stat_counters",
 		"gift_code_redemptions",
 		"player_reports",

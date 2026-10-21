@@ -94,7 +94,7 @@ internal/
 │   ├── shop/             Shop offers, purchase (idempotent)
 │   ├── iap/              In-app purchase, receipt verification
 │   ├── giftcode/         Gift code redemption
-│   ├── mission/          Daily missions, achievements, claim rewards
+│   ├── mission/          Nhiệm vụ ngày (UTC+7 periods, activity chests), achievements
 │   ├── milestone/        Mốc thưởng: one-time progress rewards, stat counters
 │   ├── title/            Danh hiệu: owned titles, equip
 │   ├── rank/             Elo rating, leaderboard, seasons, season rewards
@@ -337,9 +337,10 @@ Giá normal (coin) — weapon (mỗi nhân vật) 500/1500/4000/10000, armor 400
 
 | Method | Path | Handler | Mô tả |
 |--------|------|---------|-------|
-| GET | `/missions/daily` | GetDailyMissions | Nhiệm vụ hàng ngày + tiến độ |
+| GET | `/missions/daily` | GetDailyMissions | Nhiệm vụ ngày: `DailyState` `{day, dayResetAt, week, weekResetAt, activity, weeklyActivity, missions:[{id, title, target, required, progress, activity, goto, state}], chests:[{id, track, threshold, state, rewards}], weekly:[…]}`; lần gọi đầu trong ngày hoàn thành `daily_login` — xem §7 Nhiệm vụ ngày |
 | GET | `/missions/achievements` | GetAchievements | Thành tích + tiến độ |
-| POST | `/missions/claim` | ClaimReward | Nhận thưởng nhiệm vụ (không nhận được mốc thưởng) |
+| POST | `/missions/claim` | ClaimMission | `{missionId}` → `{activity, state}` (điểm năng động nhận được + `DailyState` mới); chưa xong `MISSION_NOT_DONE` 400, đã nhận `MISSION_ALREADY_CLAIMED` 409, không có (kể cả mốc thưởng) `MISSION_NOT_FOUND` 404 |
+| POST | `/missions/chests/claim` | ClaimChest | `{chestId}` → `{rewards:{coin, gem, items}, state}`; chưa đủ năng động `CHEST_LOCKED` 400, đã nhận kỳ này `CHEST_ALREADY_CLAIMED` 409, không có `CHEST_NOT_FOUND` 404 |
 | GET | `/milestones` | List | Mốc thưởng: `{tracks:[{track, nodes:[{id, track, target, required, progress, state, rewards:{coin, gem, items}, description}]}], claimableCount}` — xem §7 Mốc thưởng |
 | GET | `/milestones/summary` | Summary | `{claimableCount}` cho badge ở sảnh |
 | POST | `/milestones/claim` | Claim | `{id}` → `{claimed:[id], rewards, coin, gem, stones:[{stoneLevel, quantity}], claimableCount}`; đã nhận `MILESTONE_ALREADY_CLAIMED` 409, chưa đạt `MILESTONE_NOT_REACHED` 400, không có `NOT_FOUND` |
@@ -897,6 +898,31 @@ Danh hiệu là biển trang trí, không có chỉ số. Cấu hình ở `confi
 
 **Equip**: một tx — khoá `player_profiles` `FOR UPDATE`, kiểm tra sở hữu + đang bật qua tx, `UPDATE equipped_title_id`, kiểm tra `RowsAffected`. **Migration 027** (chạy lại được): seed 8 danh hiệu `ON CONFLICT DO NOTHING` (giữ chỉnh sửa admin), thêm item title vào cuối `reward_items` của mốc tương ứng nếu chưa có (giữ các item khác), backfill: ai đã nhận (`is_claimed`) mốc có item title thì được danh hiệu đó, `obtained_at` = `updated_at` của claim. Giá trị seed ở `title.Defaults` + `milestone.TitleRewards`; admin `SeedTitles` / `SeedMilestones` ghi giống migration; reset-data xoá `player_titles`.
 
+### Nhiệm vụ ngày (daily missions, migration 034)
+
+Màn "Nhiệm vụ" ở sảnh (`internal/api/mission`). Mỗi nhiệm vụ là một dòng `missions` `type = 'daily'` (`title`, `target`, `required_value`, `activity` = điểm năng động, `goto_screen` → JSON `goto`: `none`/`play`/`equipment`/`shop`, `sort_order`); tiến độ là dòng `mission_progress` có `period` = ngày nó tính. Xong thì người chơi bấm nhận: chỉ được điểm năng động, cộng vào năng động hôm nay **và** tuần này (`player_mission_activity (player_id, track daily|weekly, period, points)`). Rương năng động là dòng `missions` `type = 'mission_chest'` (`track` daily/weekly, `required_value` = ngưỡng, `reward_coin`/`reward_gem`/`reward_items` cùng dạng mốc thưởng); đã nhận = dòng `mission_progress` `is_claimed` với `period` của kỳ nhận.
+
+**Kỳ (UTC+7, offset cố định, không dùng tz database)**: ngày `2026-10-21` bắt đầu 00:00 UTC+7 (17:00 UTC hôm trước); tuần ISO `2026-W43` bắt đầu thứ Hai 00:00 UTC+7. `dayResetAt` / `weekResetAt` là lúc kỳ hiện tại hết, RFC3339 UTC. **Reset lười**: dòng của kỳ cũ đọc là 0 / chưa nhận và bị ghi đè ở lần ghi kế tiếp; không cần worker (`daily_reset` giờ không làm gì — bản cũ xoá tiến độ lúc 00:00 UTC = 07:00 giờ VN).
+
+| id | target | cần | năng động | goto |
+|----|--------|-----|-----------|------|
+| `daily_login` | `login` | 1 | 10 | none |
+| `daily_play_3` | `play_match` | 3 | 20 | play |
+| `daily_win_1` | `win_match` | 1 | 20 | play |
+| `daily_damage_3000` | `damage_dealt` | 3000 | 20 | play |
+| `daily_kill_3` | `enemy_killed` | 3 | 20 | play |
+| `daily_hit_10` | `shots_hit` | 10 | 10 | play |
+| `daily_skill_2` | `skill_used` | 2 | 10 | play |
+| `daily_item_3` | `item_used` | 3 | 10 | play |
+| `daily_upgrade_1` | `upgrade` | 1 | 10 | equipment |
+| `daily_shop_1` | `shop_purchase` | 1 | 10 | shop |
+
+Tổng 140 năng động. Rương ngày: `chest_d20` 300 coin · `chest_d40` 500 coin · `chest_d60` 10 gem · `chest_d80` 500 coin + 2 `medkit` · `chest_d100` 1000 coin + 20 gem. Tuần: `chest_w150` 2000 coin · `chest_w300` 30 gem · `chest_w450` 3 đá cấp 4 · `chest_w600` 3000 coin + 80 gem.
+
+**Tiến độ được ghi ở đâu** (`mission.RecordTx`, upsert một câu lệnh, trong tx của bên gọi): kết thúc trận (`match.ProcessMatchRewards`, cùng tx và cùng điều kiện `Counts` với `milestone.RecordMatchTx`: trận được tính, người thật, không rời trận, ≥ 3 lượt) cộng `play_match` 1, `win_match`, `damage_dealt` (`DamageDealt`), `enemy_killed` (`KillCount`), `shots_hit` (`ShotsHit`), `skill_used` (`SkillUses`, +1 mỗi lần skill bắn đủ năng lượng), `item_used` (số item đã dùng); `upgrade` +1 mỗi lần cường hoá (thành công hay thất bại, `equipment.UpgradeEquipment`); `shop_purchase` +1 mỗi lần mua thành công ở `/shop/purchase`, `/shop/equipment/buy`, `/shop/stones/buy`, `/shop/gems/buy`, `/shop/materials/buy` (replay idempotent không tính; IAP không tính); `login` = `GET /missions/daily` đầu tiên trong ngày (claim cũng ghi). Giá trị lưu không bị cắt; JSON `progress` cắt ở `required`.
+
+**Claim**: một tx — khoá `player_profiles` `FOR UPDATE` (mỗi lần một claim của người chơi), đọc trạng thái qua tx (không dùng Pool), rồi ghi có điều kiện và kiểm tra `RowsAffected`: nhiệm vụ `UPDATE … WHERE period = hôm nay AND is_claimed = FALSE AND current_value >= required_value`, rương `INSERT … ON CONFLICT DO UPDATE … WHERE period <> kỳ này OR is_claimed = FALSE` (0 dòng → `*_ALREADY_CLAIMED`). Coin/gem của rương ghi `economy_transactions` source `mission`, `ref_id` = id rương; item/đá qua `milestone.GrantRewardItemTx` (item source `mission_reward`). Migration 034 chạy lại được (`IF NOT EXISTS`, seed `ON CONFLICT DO NOTHING` — giữ chỉnh sửa của admin).
+
 **Rating (chỉ ranked):**
 - `pvp_1v1`: cố định +25/-20
 - `ranked_2v2`: Elo formula `K * (actual - expected)`, K=32, điều chỉnh theo chênh lệch rating. Trận có bot: rating change × `botRatingModifier` (default 0.5)
@@ -981,7 +1007,7 @@ State-based decision making, difficulty theo rank tier:
 | Job | Interval | Mô tả |
 |-----|----------|-------|
 | BanExpireJob | 5 phút | Expire bans đã hết `ends_at`, reactivate accounts |
-| DailyResetJob | 1 giờ | Reset daily mission progress (1 lần/ngày UTC, Redis dedup) |
+| DailyResetJob | 24 giờ | Không làm gì: nhiệm vụ ngày reset lười theo `period` (§7 Nhiệm vụ ngày) |
 | AccountDeletionJob | 1 giờ | Anonymize + mark deleted cho accounts quá grace period |
 
 ---
@@ -1007,7 +1033,8 @@ State-based decision making, difficulty theo rank tier:
 | `inventory_items` | `(player_id, item_id)` | Items đang có |
 | `inventory_reservations` | `reservation_id` | Items reserved cho trận đấu |
 | `economy_transactions` | `transaction_id` | Ledger coin/gem |
-| `missions` / `mission_progress` | `mission_id` / `(player_id, mission_id)` | Nhiệm vụ; mốc thưởng là `type = 'milestone'`, đã nhận = `is_claimed` |
+| `missions` / `mission_progress` | `mission_id` / `(player_id, mission_id)` | Nhiệm vụ; mốc thưởng là `type = 'milestone'`, nhiệm vụ ngày `daily`, rương năng động `mission_chest`; đã nhận = `is_claimed`, `period` = ngày / tuần ISO (UTC+7) của dòng |
+| `player_mission_activity` | `(player_id, track)` | Điểm năng động ngày / tuần với `period` của nó |
 | `player_stat_counters` | `(player_id, counter)` | Counter cho mốc thưởng (trận, thắng, thắng theo nhân vật, đỉnh cường hoá, đỉnh rank) |
 | `config_titles` | `title_id` | Danh hiệu: tên, rarity, thứ tự, mô tả cách đạt, bật/tắt |
 | `player_titles` | `(player_id, title_id)` | Danh hiệu người chơi sở hữu, `obtained_at` |
@@ -1113,6 +1140,8 @@ State-based decision making, difficulty theo rank tier:
 | `MILESTONE_ALREADY_CLAIMED` | 409 | Mốc thưởng đã nhận |
 | `MILESTONE_NOT_REACHED` | 400 | Mốc thưởng chưa đạt |
 | `TITLE_NOT_OWNED` | 403 | Đeo danh hiệu chưa sở hữu, không tồn tại hoặc đã tắt |
+| `MISSION_NOT_FOUND` / `MISSION_NOT_DONE` / `MISSION_ALREADY_CLAIMED` | 404 / 400 / 409 | Nhận nhiệm vụ ngày không có / chưa xong / đã nhận hôm nay |
+| `CHEST_NOT_FOUND` / `CHEST_LOCKED` / `CHEST_ALREADY_CLAIMED` | 404 / 400 / 409 | Rương năng động không có / chưa đủ năng động / đã nhận kỳ này |
 | `METHOD_NOT_ALLOWED` | 405 | Sai HTTP method |
 | `MATCH_NOT_YOUR_TURN` | 403 | Chưa đến lượt |
 | `MATCH_ALREADY_SHOT` | 409 | Đã bắn rồi |

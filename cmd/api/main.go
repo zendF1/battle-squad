@@ -217,7 +217,8 @@ func main() {
 
 		r.Get("/missions/daily", missionHandler.GetDailyMissions)
 		r.Get("/missions/achievements", missionHandler.GetAchievements)
-		r.Post("/missions/claim", missionHandler.ClaimReward)
+		r.Post("/missions/claim", missionHandler.ClaimMission)
+		r.Post("/missions/chests/claim", missionHandler.ClaimChest)
 
 		r.Get("/milestones", milestoneHandler.List)
 		r.Get("/milestones/summary", milestoneHandler.Summary)

@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"math/rand"
 	"strconv"
+	"time"
 
 	"battle-squad/internal/api/economy"
 	"battle-squad/internal/api/milestone"
+	"battle-squad/internal/api/mission"
 	"battle-squad/internal/game/battlestats"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/model"
@@ -243,6 +245,9 @@ func (s *Service) BuyEquipment(ctx context.Context, playerID string, req BuyEqui
 			return "", err
 		}
 	}
+	if err := mission.RecordShopPurchaseTx(ctx, tx, playerID, time.Now()); err != nil {
+		return "", err
+	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return "", err
@@ -343,6 +348,9 @@ func (s *Service) BuyStones(ctx context.Context, playerID string, req BuyStoneRe
 			return nil, err
 		}
 	}
+	if err := mission.RecordShopPurchaseTx(ctx, tx, playerID, time.Now()); err != nil {
+		return nil, err
+	}
 
 	owned, err := s.repo.StoneQuantityTx(ctx, tx, playerID, req.StoneLevel)
 	if err != nil {
@@ -408,6 +416,9 @@ func (s *Service) BuyGems(ctx context.Context, playerID string, req BuyGemReques
 			return err
 		}
 	}
+	if err := mission.RecordShopPurchaseTx(ctx, tx, playerID, time.Now()); err != nil {
+		return err
+	}
 
 	return tx.Commit(ctx)
 }
@@ -448,6 +459,9 @@ func (s *Service) BuyMaterials(ctx context.Context, playerID string, req BuyMate
 	}
 
 	if err := s.repo.AddMaterialsTx(ctx, tx, playerID, req.MaterialID, req.Quantity); err != nil {
+		return err
+	}
+	if err := mission.RecordShopPurchaseTx(ctx, tx, playerID, time.Now()); err != nil {
 		return err
 	}
 
@@ -715,6 +729,10 @@ func (s *Service) UpgradeEquipment(ctx context.Context, playerID string, req Upg
 		if err := milestone.RecordUpgradeTx(ctx, tx, playerID, equip.Slot, newLevel); err != nil {
 			return nil, err
 		}
+	}
+	// Daily mission: every attempt counts, success or fail
+	if err := mission.RecordUpgradeTx(ctx, tx, playerID, time.Now()); err != nil {
+		return nil, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {

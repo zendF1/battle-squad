@@ -347,7 +347,7 @@ func TestCarefulMigrationIsIdempotent(t *testing.T) {
 // A database that ran an earlier draft of 025 (careful_gem_cost only, other
 // prices) ends at the current prices and bonuses.
 func TestCarefulMigrationUpgradesDraftColumn(t *testing.T) {
-	db := dbtest.NewSchema(t, 1, equipmentMigrations[:len(equipmentMigrations)-2]...) // without 025 and 026
+	db := dbtest.NewSchema(t, 1, equipmentMigrations[:len(equipmentMigrations)-3]...) // without 025, 026 and 034
 	ctx := context.Background()
 	if _, err := db.Pool.Exec(ctx, `ALTER TABLE config_upgrade_rates ADD COLUMN careful_gem_cost INT NOT NULL DEFAULT 0;
 		UPDATE config_upgrade_rates SET careful_gem_cost = 300`); err != nil {

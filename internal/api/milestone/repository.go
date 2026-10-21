@@ -189,9 +189,18 @@ func (r *Repository) InsertClaimTx(ctx context.Context, tx pgx.Tx, playerID, id 
 	return tag.RowsAffected() == 1, nil
 }
 
-// GrantItemTx grants one reward item. This switch is the extension point for new reward
-// kinds: add the kind to supportedRewardKinds and a case here.
+// ItemSource is inventory_items.source of an item granted by a milestone.
+const ItemSource = "milestone_reward"
+
+// GrantItemTx grants one milestone reward item.
 func (r *Repository) GrantItemTx(ctx context.Context, tx pgx.Tx, playerID string, it RewardItem) error {
+	return GrantRewardItemTx(ctx, tx, playerID, it, ItemSource)
+}
+
+// GrantRewardItemTx grants one reward item inside tx; source is inventory_items.source of an
+// item. Milestones and the daily mission chests grant through it. This switch is the
+// extension point for new reward kinds: add the kind to supportedRewardKinds and a case here.
+func GrantRewardItemTx(ctx context.Context, tx pgx.Tx, playerID string, it RewardItem, source string) error {
 	switch it.Kind {
 	case RewardKindStone:
 		tag, err := tx.Exec(ctx, `
@@ -207,9 +216,9 @@ func (r *Repository) GrantItemTx(ctx context.Context, tx pgx.Tx, playerID string
 		return nil
 	case RewardKindItem:
 		tag, err := tx.Exec(ctx, `
-			INSERT INTO inventory_items (player_id, item_id, quantity, source) VALUES ($1, $2, $3, 'milestone_reward')
+			INSERT INTO inventory_items (player_id, item_id, quantity, source) VALUES ($1, $2, $3, $4)
 			ON CONFLICT (player_id, item_id) DO UPDATE SET quantity = inventory_items.quantity + EXCLUDED.quantity`,
-			playerID, it.ID, it.Qty)
+			playerID, it.ID, it.Qty, source)
 		if err != nil {
 			return err
 		}

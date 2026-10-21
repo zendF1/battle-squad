@@ -15,7 +15,6 @@ import (
 	"testing"
 
 	"battle-squad/internal/api/economy"
-	"battle-squad/internal/api/mission"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/database/dbtest"
 	"battle-squad/internal/shared/model"
@@ -239,15 +238,7 @@ func TestClaimRefusalsChangeNothing(t *testing.T) {
 		scalar(t, db, `SELECT COUNT(*) FROM mission_progress`) != 0 || scalar(t, db, `SELECT COUNT(*) FROM economy_transactions`) != 0 {
 		t.Fatal("a refusal changed something")
 	}
-
-	// The old POST /missions/claim does not see milestones
-	exec(t, db, `INSERT INTO mission_progress (player_id, mission_id, current_value) VALUES ('p1', 'ms_wins_0005', 99)`)
-	if err := mission.NewService(mission.NewRepository(db), economy.NewRepository(), db).ClaimReward(ctx, "p1", "ms_wins_0005"); err == nil {
-		t.Fatal("mission claim granted a milestone")
-	}
-	if coin, _ := dbtest.Balance(t, db, "p1"); coin != 0 {
-		t.Fatal("mission claim paid")
-	}
+	// POST /missions/claim does not see milestones: mission's TestClaimMissionRefusals
 }
 
 func TestConcurrentDoubleClaimGrantsOnce(t *testing.T) {

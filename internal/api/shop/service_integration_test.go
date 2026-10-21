@@ -16,7 +16,7 @@ import (
 
 func newShopService(t *testing.T, maxConns int32) (*Service, *database.PostgresDB) {
 	t.Helper()
-	db := dbtest.NewSchema(t, maxConns, "001_init_schema.up.sql", "013_shop_purchase_idempotency.up.sql")
+	db := dbtest.NewSchema(t, maxConns, "001_init_schema.up.sql", "013_shop_purchase_idempotency.up.sql", "034_daily_missions.up.sql")
 	_, err := db.Pool.Exec(context.Background(), `
 		INSERT INTO shop_offers (offer_id, item_id, offer_type, price_currency, price_amount, quantity, limit_per_player) VALUES
 			('medkit_x1', 'medkit', 'item', 'coin', 100, 1, NULL),

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"battle-squad/internal/api/economy"
+	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/shared/database/dbtest"
 )
 
@@ -89,7 +90,8 @@ func TestRewardsRecordMilestoneCounters(t *testing.T) {
 	}
 	// A counted ranked win for p1 (spark), a counted loss for p2, p3 left
 	play("m1", "ranked_2v2",
-		&PlayerStats{PlayerID: "p1", CharacterID: "spark", TeamID: 1, IsWinner: true, Counts: true},
+		&PlayerStats{PlayerID: "p1", CharacterID: "spark", TeamID: 1, IsWinner: true, Counts: true,
+			Damage: 2000, Kills: 1, ShotsHit: 3, SkillUses: 1, ItemsUsed: 2},
 		&PlayerStats{PlayerID: "p2", CharacterID: "tanko", TeamID: 2, Counts: true},
 		&PlayerStats{PlayerID: "p3", CharacterID: "flora", TeamID: 2},
 		&PlayerStats{PlayerID: "bot_x", CharacterID: "rookie", TeamID: 1, IsWinner: true, Counts: true},
@@ -105,6 +107,26 @@ func TestRewardsRecordMilestoneCounters(t *testing.T) {
 	for k, v := range want {
 		if got := value(k[0], k[1]); got != v {
 			t.Errorf("%s %s = %d, want %d", k[0], k[1], got, v)
+		}
+	}
+	// Daily missions count the same matches in the same tx (m2 does not count)
+	daily := func(playerID, missionID string) int {
+		t.Helper()
+		var v int
+		err := db.Pool.QueryRow(ctx, `SELECT COALESCE((SELECT current_value FROM mission_progress WHERE player_id = $1 AND mission_id = $2), 0)`, playerID, missionID).Scan(&v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	wantDaily := map[[2]string]int{
+		{"p1", "daily_play_3"}: 1, {"p1", "daily_win_1"}: 1, {"p1", "daily_damage_3000"}: 2000, {"p1", "daily_kill_3"}: 1,
+		{"p1", "daily_hit_10"}: 3, {"p1", "daily_skill_2"}: 1, {"p1", "daily_item_3"}: 2,
+		{"p2", "daily_play_3"}: 1, {"p2", "daily_win_1"}: 0, {"p3", "daily_play_3"}: 0,
+	}
+	for k, v := range wantDaily {
+		if got := daily(k[0], k[1]); got != v {
+			t.Errorf("daily %s %s = %d, want %d", k[0], k[1], got, v)
 		}
 	}
 	// Rank peaks follow every rating write: p1 rose above 1000, p2 fell to bronze but the
@@ -129,5 +151,22 @@ func TestRewardsRecordMilestoneCounters(t *testing.T) {
 	play("m4", "pvp_1v1", &PlayerStats{PlayerID: "p1", CharacterID: "spark", TeamID: 1})
 	if value("p1", "rank_peak") != 3 || value("p1", "rating_peak") != 1205 {
 		t.Errorf("peaks dropped: %d / %d", value("p1", "rank_peak"), value("p1", "rating_peak"))
+	}
+}
+
+// A fired skill counts for the daily missions; a skill refused for lack of energy does not.
+func TestSkillUsesCounted(t *testing.T) {
+	m, clients := newFlowMatch(t)
+	gamedata.Data.Characters["c1"] = gamedata.CharacterConfig{CharacterID: "c1", WeaponID: "w1", SkillID: "s1"}
+	gamedata.Data.Skills["s1"] = gamedata.SkillConfig{SkillID: "s1"}
+	cur := m.State.CurrentPlayerID
+	send(m, clients[cur], "Shoot", ShootAction{Angle: 90, Power: 10, ActionMode: "skill"})
+	if m.State.Players[cur].SkillUses != 0 {
+		t.Fatal("a refused skill counted")
+	}
+	m.State.Players[cur].SkillEnergy = skillEnergyMax
+	send(m, clients[cur], "Shoot", ShootAction{Angle: 90, Power: 10, ActionMode: "skill"})
+	if m.State.Players[cur].SkillUses != 1 || m.State.Players[cur].SkillEnergy != 0 {
+		t.Fatalf("skill uses %d", m.State.Players[cur].SkillUses)
 	}
 }

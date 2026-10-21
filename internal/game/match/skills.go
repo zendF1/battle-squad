@@ -57,6 +57,7 @@ func (m *Match) shootSkill(ctx context.Context, player *BattlePlayerState, actio
 		resolveSingleProjectile(m, s)
 	}
 	player.SkillEnergy = 0
+	player.SkillUses++
 	m.finishShot(ctx, s.Shot, s.TL)
 }
 

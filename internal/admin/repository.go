@@ -1328,7 +1328,7 @@ func (r *Repository) ResetAllData(ctx context.Context) error {
 		"match_event_logs", "match_recovery_logs", "match_snapshots", "match_histories",
 		"season_reward_claims", "player_ranks", "inventory_reservations", "inventory_items",
 		"player_characters", "economy_transactions", "payment_transactions", "shop_purchases",
-		"mission_progress", "player_stat_counters", "gift_code_redemptions", "player_reports", "account_bans",
+		"mission_progress", "player_mission_activity", "player_stat_counters", "gift_code_redemptions", "player_reports", "account_bans",
 		"player_titles", "player_profiles", "auth_identities", "accounts",
 	}
 

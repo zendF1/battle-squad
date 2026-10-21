@@ -19,7 +19,7 @@ const coinExchangeMigration = "018_coin_exchange_offers.up.sql"
 
 func newCoinExchangeService(t *testing.T) (*Service, *database.PostgresDB) {
 	t.Helper()
-	db := dbtest.NewSchema(t, 0, "001_init_schema.up.sql", "013_shop_purchase_idempotency.up.sql", coinExchangeMigration)
+	db := dbtest.NewSchema(t, 0, "001_init_schema.up.sql", "013_shop_purchase_idempotency.up.sql", "034_daily_missions.up.sql", coinExchangeMigration)
 	return NewService(NewRepository(db), economy.NewRepository(), inventory.NewRepository(db), db), db
 }
 

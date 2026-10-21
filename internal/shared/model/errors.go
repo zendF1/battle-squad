@@ -118,5 +118,12 @@ var (
 	ErrMilestoneAlreadyClaimed = AppError{Code: "MILESTONE_ALREADY_CLAIMED", Message: "This milestone reward was already claimed", Status: http.StatusConflict}
 	ErrMilestoneNotReached     = AppError{Code: "MILESTONE_NOT_REACHED", Message: "This milestone is not reached yet", Status: http.StatusBadRequest}
 
+	ErrMissionNotFound       = AppError{Code: "MISSION_NOT_FOUND", Message: "Mission not found", Status: http.StatusNotFound}
+	ErrMissionNotDone        = AppError{Code: "MISSION_NOT_DONE", Message: "This mission is not completed yet", Status: http.StatusBadRequest}
+	ErrMissionAlreadyClaimed = AppError{Code: "MISSION_ALREADY_CLAIMED", Message: "This mission was already claimed", Status: http.StatusConflict}
+	ErrChestNotFound         = AppError{Code: "CHEST_NOT_FOUND", Message: "Chest not found", Status: http.StatusNotFound}
+	ErrChestLocked           = AppError{Code: "CHEST_LOCKED", Message: "Not enough activity for this chest", Status: http.StatusBadRequest}
+	ErrChestAlreadyClaimed   = AppError{Code: "CHEST_ALREADY_CLAIMED", Message: "This chest was already claimed", Status: http.StatusConflict}
+
 	ErrTitleNotOwned = AppError{Code: "TITLE_NOT_OWNED", Message: "You do not own this title", Status: http.StatusForbidden}
 )

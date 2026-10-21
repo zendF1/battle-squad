@@ -15,7 +15,7 @@ import (
 // admin edits and add nothing.
 func TestDefaultCatalogMigrationIsIdempotent(t *testing.T) {
 	const file = "014_default_shop_catalog.up.sql"
-	db := dbtest.NewSchema(t, 0, "001_init_schema.up.sql", "013_shop_purchase_idempotency.up.sql", file)
+	db := dbtest.NewSchema(t, 0, "001_init_schema.up.sql", "013_shop_purchase_idempotency.up.sql", "034_daily_missions.up.sql", file)
 	ctx := context.Background()
 
 	if _, err := db.Pool.Exec(ctx, `UPDATE shop_offers SET price_amount = 999 WHERE offer_id = 'item_medkit_x3'`); err != nil {

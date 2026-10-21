@@ -10,6 +10,7 @@ import (
 
 	"battle-squad/internal/api/economy"
 	"battle-squad/internal/api/inventory"
+	"battle-squad/internal/api/mission"
 	"battle-squad/internal/shared/database"
 )
 
@@ -162,6 +163,9 @@ func (s *Service) Purchase(ctx context.Context, playerID, offerID, idempotencyKe
 	}
 	if err := s.repo.CreateShopPurchaseTx(ctx, tx, purchase, idempotencyKey); err != nil {
 		return nil, fmt.Errorf("failed to record purchase: %w", err)
+	}
+	if err := mission.RecordShopPurchaseTx(ctx, tx, playerID, now); err != nil {
+		return nil, err
 	}
 
 	// 8. Commit transaction
