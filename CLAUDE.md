@@ -7,7 +7,7 @@ Go turn-based artillery game server: `cmd/api` (REST), `cmd/game` (WebSocket), `
 - API modules: handler → service → repository, types in `model.go`
 - Errors: codes in `internal/shared/model/errors.go` + `model.WriteError()`. Logging in handlers: `observability.FromContext(ctx)`
 - Mutating player resources: lock rows `FOR UPDATE` inside the tx and check `RowsAffected`; never query via `Pool` while holding a tx (pool deadlock)
-- `ratingToTier()` is duplicated in `room/hub.go` and `matchmaker/matchmaker.go` — change both
+- Rank tiers, divisions and seasons live only in `internal/shared/ranked`
 
 ## Migrations
 
