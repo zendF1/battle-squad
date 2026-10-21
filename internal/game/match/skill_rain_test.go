@@ -212,8 +212,8 @@ func rainMapMatch(t *testing.T, id, weapon string, enemies ...skillPlayer) (*Mat
 // TestMissileRainOnRealMap plays the rain on grassland_valley, the flare aimed like the bot's
 // best shot at a Tanko 600 px away with a second one 100 px behind it, over many turns (rain
 // seeds): the aimed target takes ~1.4 × base at rank 0 and ~1.8 × base at rank 4 (cap 2 ×), the
-// one behind still takes some at rank 4, both burn, the missiles fall within ~2.1 s and the
-// whole skill replays in under ~4.5 s.
+// one behind still takes some at rank 4, both burn, the missiles (~0.38 s down each) all fall
+// within ~1.8 s and the whole skill replays in under ~3.9 s.
 func TestMissileRainOnRealMap(t *testing.T) {
 	useConfigGameData(t)
 	const runs = 20
@@ -262,7 +262,7 @@ func TestMissileRainOnRealMap(t *testing.T) {
 		if c.rank == 4 && (behind == 0 || burned <= runs) {
 			t.Fatalf("rank 4: the enemy behind took %d, %d burns", behind, burned)
 		}
-		if longest > 4.5 || rainLongest > 2.3 {
+		if longest > 4.1 || rainLongest > 1.9 {
 			t.Fatalf("rank %d: the skill lasts %.2f s, the rain %.2f s", c.rank, longest, rainLongest)
 		}
 	}

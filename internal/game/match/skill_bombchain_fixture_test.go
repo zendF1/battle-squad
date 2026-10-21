@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"battle-squad/internal/game/battlestats"
+	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/game/ws"
 )
 
@@ -90,7 +91,8 @@ func chainHits(s ShotResolved) (hits, damage map[string]int) {
 // TestBombChainOnRealMap: rank 4 on grassland_valley at a typical distance (600 px). Every bomb
 // flies the shot's own arc: the flat shot hits the target with its first bomb and the rest fly
 // on through the crater; the lobbed one comes down steeply, digs one shaft and hits the
-// target again and again. Every replay is coherent (assertChainCoherent) and nobody leaves the
+// target again and again up to the per-target cap. Every bomb explodes (none flies past
+// MaxFlightSeconds), every replay is coherent (assertChainCoherent) and nobody leaves the
 // map. With BOMBCHAIN_FIXTURE_OUT set it writes the Godot client's fixture
 // (tests/fixtures/skill_bombchain.json: "flat", "lob" one target, "pair" two enemies side by
 // side, lobbed).
@@ -107,7 +109,7 @@ func TestBombChainOnRealMap(t *testing.T) {
 	m, cl = chainFixtureMatch(t, skillPlayer{"e1", 2, "rookie", 1000}, skillPlayer{"e2", 2, "spark", 1070})
 	_, lob2 := chainAims(m)
 	cases["pair"] = fireChainFixture(t, m, cl, lob2.angle, lob2.power)
-	hits := map[string]map[string]int{}
+	hits, damage := map[string]map[string]int{}, map[string]map[string]int{}
 	for _, k := range []string{"flat", "lob", "pair"} {
 		var s ShotResolved
 		_ = json.Unmarshal(cases[k].Shot, &s)
@@ -117,12 +119,24 @@ func TestBombChainOnRealMap(t *testing.T) {
 			}
 		}
 		assertSameArc(t, k, s)
+		for i, r := range s.Projectiles {
+			if r.ExplosionPoint == nil {
+				t.Fatalf("%s: bomb %d vanishes after %.2f s of flight", k, i, flightEnd(r)-r.LaunchDelay)
+			}
+		}
 		h, d := chainHits(s)
-		hits[k] = h
+		hits[k], damage[k] = h, d
 		t.Logf("%s: %d bombs, hits %v, damage %v, %.2f s", k, len(s.Projectiles), h, d, s.Duration)
 	}
 	if hits["lob"]["e1"] < 5 || hits["lob"]["e1"] <= hits["flat"]["e1"] {
 		t.Fatalf("lobbed chain hits %d times, flat %d", hits["lob"]["e1"], hits["flat"]["e1"])
+	}
+	// The lob reaches the per-target cap (1.8 × base at rank 4, after the Rookie's defense).
+	tanko := cases["lob"].Players["tanko"]
+	w, _ := botWeapon(tanko)
+	limit := capOfBase(chainCap(4) * skillBaseDamage(tanko, gamedata.Data.Skills["heavy_bomb"], w))(cases["lob"].Players["e1"])
+	if d := damage["lob"]["e1"]; d > limit || d < limit-1 {
+		t.Fatalf("lobbed chain deals %d, want the cap %d", d, limit)
 	}
 	if out := os.Getenv("BOMBCHAIN_FIXTURE_OUT"); out != "" {
 		data, err := json.MarshalIndent(cases, "", " ")

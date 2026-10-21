@@ -8,9 +8,9 @@ import (
 )
 
 // TestBombChain: rank 2 → 5 bombs on one trajectory at least chainLaunchGap (0.1 s) apart,
-// craters shrinking ×0.85; fired straight up they come down the same column, the later ones
-// exploding deeper; damage split evenly and capped at the total; the enemy rooted; its falls
-// play one after another.
+// every crater the same (chainCrater × the weapon's); fired straight up they come down the same
+// column, the later ones exploding deeper; the total split evenly, one target capped at
+// chainCap × base; the enemy rooted; its falls play one after another.
 func TestBombChain(t *testing.T) {
 	m, clients := flatSkillMatch(t, skillPlayer{"p1", 1, "tanko", 400}, skillPlayer{"p2", 2, "rookie", 415})
 	m.State.Players["p1"].SkillRank = 2
@@ -28,7 +28,7 @@ func TestBombChain(t *testing.T) {
 			t.Fatalf("bomb %d: kind %q start %v launch %v", i, r.Kind, r.Path[0].Position, r.LaunchDelay)
 		}
 		if r.ExplosionRadius != float64(w.ExplosionRadius)*chainBlast ||
-			math.Abs(r.CraterRadius-weaponCraterRadius(w)*1.4*math.Pow(0.85, float64(i))) > 1e-9 {
+			math.Abs(r.CraterRadius-weaponCraterRadius(w)*1.4) > 1e-9 {
 			t.Fatalf("bomb %d blast %v crater %v", i, r.ExplosionRadius, r.CraterRadius)
 		}
 		if r.ExplosionPoint == nil || r.ExplosionPoint.Y < lastY {
@@ -36,7 +36,7 @@ func TestBombChain(t *testing.T) {
 		}
 		lastY = r.ExplosionPoint.Y
 	}
-	total := chainTotal(2) * float64(w.Damage)
+	total, limit := chainTotal(2)*float64(w.Damage), chainCap(2)*float64(w.Damage)
 	got := totalDamage(s, "p2")
 	var blast int
 	for _, e := range eventsOf(s, "damage", "p2") {
@@ -45,9 +45,9 @@ func TestBombChain(t *testing.T) {
 		}
 	}
 	t.Logf("rank 2 chain: %d explosion damage (cap %.0f before defense), %d in all, enemy hp %d, at y %v",
-		blast, total, got, enemy.HP, enemy.Position.Y)
-	if blast <= 0 || blast > capOfBase(total)(enemy) {
-		t.Fatalf("chain explosion damage %d, cap %d", blast, capOfBase(total)(enemy))
+		blast, limit, got, enemy.HP, enemy.Position.Y)
+	if blast <= 0 || blast > capOfBase(limit)(enemy) {
+		t.Fatalf("chain explosion damage %d, cap %d", blast, capOfBase(limit)(enemy))
 	}
 	if first := eventsOf(s, "damage", "p2")[0]; first.Amount > int(math.Round(ReduceByDefense(total/5, enemy.Defense)))+1 {
 		t.Fatalf("one bomb dealt %d, more than its share", first.Amount)
@@ -139,8 +139,8 @@ func TestChainCountsPerRank(t *testing.T) {
 		if got, want := chainTotal(rank), 1.8+0.15*float64(rank); math.Abs(got-want) > 1e-9 {
 			t.Errorf("chain total rank %d = %v, want %v", rank, got, want)
 		}
-	}
-	if s := chainCraterScale(2); math.Abs(s-1.4*0.85*0.85) > 1e-9 {
-		t.Fatalf("third bomb crater scale %v", s)
+		if got, want := chainCap(rank), 1.2+0.15*float64(rank); math.Abs(got-want) > 1e-9 {
+			t.Errorf("chain cap rank %d = %v, want %v", rank, got, want)
+		}
 	}
 }

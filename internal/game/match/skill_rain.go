@@ -29,7 +29,7 @@ const (
 	rainDelay     = 0.5
 	rainInterval  = 0.05
 	rainStartY    = -60.0 // missiles start above the top of the map
-	rainDropPower = 120.0 // initial downward speed: power × 6 px/s (~0.7 s down to the ground)
+	rainDropPower = 250.0 // initial downward speed: power × 6 px/s (~0.38 s down to the ground; was 120, ~0.74 s)
 	rainDamage    = 0.25
 	rainBlast     = 0.7
 	rainCrater    = 0.6

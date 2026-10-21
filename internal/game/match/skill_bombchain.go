@@ -8,14 +8,14 @@ import (
 
 // Bomb chain (Tanko, skill heavy_bomb, effect bomb_chain): chainBaseCount + chainCountPerRank
 // × rank bombs on the same trajectory, at least chainLaunchGap s apart; (chainTotalBase +
-// chainTotalPerRank × rank) × base split evenly over them, which is also the per-target cap.
+// chainTotalPerRank × rank) × base split evenly over them; one target takes at most
+// (chainCapBase + chainCapPerRank × rank) × base (before defense) from the whole chain.
 // Every bomb flies the normal ballistic path of the shot (nothing steers it): a later one flies
 // on through the craters of the earlier ones and explodes where that same arc now meets the
 // terrain or a player, so a steep (lobbed) shot digs one deep shaft and a flat one carves a
-// trench along its arc. Blast chainBlast × the
-// weapon's, crater chainCraterFirst × for the first bomb, each later one × chainCraterDecay of
-// the previous; the craters keep the bottom chainFloorMargin px of the map. Every enemy
-// damaged is rooted.
+// trench along its arc. Blast chainBlast × the weapon's, crater chainCrater × the weapon's
+// for every bomb (the same size, no shrinking); the craters keep the bottom chainFloorMargin
+// px of the map. Every enemy damaged is rooted.
 //
 // Replay coherence: the bombs are resolved one after another on the state the previous ones
 // left (craters, landed positions), so each bomb explodes only once every fall started so far
@@ -28,10 +28,12 @@ const (
 	chainLaunchGap    = 0.1
 	chainTotalBase    = 1.8
 	chainTotalPerRank = 0.15
-	chainBlast        = 1.3
-	chainCraterFirst  = 1.4
-	chainCraterDecay  = 0.85
-	chainFloorMargin  = 48.0
+	// Per-target cap of the whole chain (playtest round 2: was the total, 1.8 + 0.15 × rank).
+	chainCapBase     = 1.2
+	chainCapPerRank  = 0.15
+	chainBlast       = 1.3
+	chainCrater      = 1.4 // every bomb (was 1.4 for the first, then × 0.85 each)
+	chainFloorMargin = 48.0
 	// The shot's falls play chainFallSpeed × faster than free fall; a bomb explodes at least
 	// chainHitGap s after the last fall so far landed.
 	chainFallSpeed = 3.0
@@ -46,15 +48,7 @@ func init() {
 
 func chainCount(rank int) int     { return chainBaseCount + chainCountPerRank*rank }
 func chainTotal(rank int) float64 { return chainTotalBase + chainTotalPerRank*float64(rank) }
-
-// chainCraterScale is bomb i's crater (0-based) as a multiple of the weapon's.
-func chainCraterScale(i int) float64 {
-	s := chainCraterFirst
-	for k := 0; k < i; k++ {
-		s *= chainCraterDecay
-	}
-	return s
-}
+func chainCap(rank int) float64   { return chainCapBase + chainCapPerRank*float64(rank) }
 
 // bombChain: chainCount bombs on the same trajectory (same origin, angle, power and wind),
 // launched at least chainLaunchGap s apart (pacedLaunch) and resolved in order, each on the
@@ -62,8 +56,8 @@ func chainCraterScale(i int) float64 {
 func resolveBombChain(m *Match, s *skillShot) {
 	player, action, skillID, weapon, base, shot, tl := s.Player, s.Action, s.Skill.SkillID, s.Weapon, s.Base, s.Shot, s.TL
 	n := chainCount(player.SkillRank)
-	total := chainTotal(player.SkillRank) * base
-	limit := newSkillCap(capOfBase(total))
+	each := chainTotal(player.SkillRank) * base / float64(n)
+	limit := newSkillCap(capOfBase(chainCap(player.SkillRank) * base))
 	rooted := map[string]bool{}
 	origin := shotOrigin(m.Terrain, player)
 	floor := float64(m.Terrain.Height) - chainFloorMargin
@@ -78,13 +72,13 @@ func resolveBombChain(m *Match, s *skillShot) {
 		delayPath(r, launch)
 		r.SkillID, r.Kind = skillID, "bomb"
 		r.ExplosionRadius = float64(weapon.ExplosionRadius) * chainBlast
-		r.CraterRadius = weaponCraterRadius(weapon) * chainCraterScale(i)
+		r.CraterRadius = weaponCraterRadius(weapon) * chainCrater
 		r.floorY = floor
 		shot.Projectiles = append(shot.Projectiles, r)
 		if r.ExplosionPoint == nil {
 			continue
 		}
-		hit := m.explodeCapped(player, r, total/float64(n), tl, limit)
+		hit := m.explodeCapped(player, r, each, tl, limit)
 		applyOnce(tl, flightEnd(r), player, hit, rooted, "root", rootTurns)
 		m.settleFalls(player, flightEnd(r), tl)
 	}

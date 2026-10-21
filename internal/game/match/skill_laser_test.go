@@ -77,6 +77,9 @@ func TestLaserHitsThroughTerrainInOrder(t *testing.T) {
 	if beams[0].T != laserChargeTime || d1[0].T != laserHitTime(400) || d2[0].T != laserHitTime(800) || d2[0].T > beams[0].T+beams[0].Duration {
 		t.Fatalf("timing: beam %v, hits %v %v", beams[0].T, d1[0].T, d2[0].T)
 	}
+	if got := laserHitTime(1200); math.Abs(got-0.4) > 1e-9 { // 0.3 s charge + 1200 px at 12000 px/s
+		t.Fatalf("a hit 1200 px out at %v s, want 0.4", got)
+	}
 }
 
 func TestLaserMissesOffTheBeam(t *testing.T) {

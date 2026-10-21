@@ -20,9 +20,9 @@ const (
 	laserFirstBase    = 1.5
 	laserFirstPerRank = 0.1
 	laserDecay        = 0.8
-	laserChargeTime   = 0.3    // s the gun charges before the beam (the beam event's t)
-	laserBeamTime     = 0.6    // s the beam shows (the beam event's duration)
-	laserSweepSpeed   = 6000.0 // px/s the beam's front travels from the muzzle
+	laserChargeTime   = 0.3     // s the gun charges before the beam (the beam event's t)
+	laserBeamTime     = 0.6     // s the beam shows (the beam event's duration)
+	laserSweepSpeed   = 12000.0 // px/s the beam's front travels from the muzzle (was 6000)
 	stunTurns         = 1
 )
 
