@@ -101,11 +101,14 @@ func TestCraterDepthByCharacter(t *testing.T) {
 			t.Fatalf("%s: blast radius %v, want %d", id, s.Projectiles[0].ExplosionRadius, w.ExplosionRadius)
 		}
 	}
-	// Half the radius (the bowl, Terrain.CarveBowl; a circle crater was the whole radius: 23 px),
-	// plus how far inside the ground the shell is when it explodes (the segment is sampled every
-	// <= 4 px: 3 px at the faster shells of migration 032, was 1)
-	if depth["rookie"] < 10 || depth["rookie"] > 14 {
-		t.Fatalf("Rookie crater %v px deep, want 10..14 (terrain damage 25, a 20 px bowl)", depth["rookie"])
+	// bowlDepth × the radius (the bowl, Terrain.CarveBowl: 0.72, was 0.5: 13 px; a circle crater
+	// was the whole radius: 23 px), plus how far inside the ground the shell is when it explodes
+	// (the segment is sampled every <= 4 px: 3 px at the faster shells of migration 032, was 1)
+	if depth["rookie"] < 16 || depth["rookie"] > 19 {
+		t.Fatalf("Rookie crater %v px deep, want 16..19 (terrain damage 25, a 20 px bowl)", depth["rookie"])
+	}
+	if depth["tanko"] < 38 || depth["tanko"] > 42 {
+		t.Fatalf("Tanko crater %v px deep, want 38..42 (terrain damage 65, a 52 px bowl)", depth["tanko"])
 	}
 	for _, id := range []string{"rookie", "spark", "flora"} {
 		if depth["tanko"] < 1.8*depth[id] {

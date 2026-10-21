@@ -13,9 +13,11 @@ import (
 // Every bomb flies the normal ballistic path of the shot (nothing steers it): a later one flies
 // on through the craters of the earlier ones and explodes where that same arc now meets the
 // terrain or a player, so a steep (lobbed) shot digs one deep shaft and a flat one carves a
-// trench along its arc. Blast chainBlast × the weapon's, crater chainCrater × the weapon's
-// for every bomb (the same size, no shrinking); the craters keep the bottom chainFloorMargin
-// px of the map. Every enemy damaged is rooted.
+// trench along its arc. Blast chainBlast × the weapon's; every bomb carves the same bowl as a
+// normal shot of the weapon (playtest 5: was a circle 1.4 × the weapon's crater), and nothing
+// caps how deep the chain digs (the bottom 48 px of the map were kept before): a column dug
+// through to the bottom of the map lets a player standing in it fall out (out_of_map). Every
+// enemy damaged is rooted.
 //
 // Replay coherence: the bombs are resolved one after another on the state the previous ones
 // left (craters, landed positions), so each bomb explodes only once every fall started so far
@@ -29,11 +31,9 @@ const (
 	chainTotalBase    = 1.8
 	chainTotalPerRank = 0.15
 	// Per-target cap of the whole chain (playtest round 2: was the total, 1.8 + 0.15 × rank).
-	chainCapBase     = 1.2
-	chainCapPerRank  = 0.15
-	chainBlast       = 1.3
-	chainCrater      = 1.4 // every bomb (was 1.4 for the first, then × 0.85 each)
-	chainFloorMargin = 48.0
+	chainCapBase    = 1.2
+	chainCapPerRank = 0.15
+	chainBlast      = 1.3
 	// The shot's falls play chainFallSpeed × faster than free fall; a bomb explodes at least
 	// chainHitGap s after the last fall so far landed.
 	chainFallSpeed = 3.0
@@ -52,7 +52,7 @@ func chainCap(rank int) float64   { return chainCapBase + chainCapPerRank*float6
 
 // bombChain: chainCount bombs on the same trajectory (same origin, angle, power and wind),
 // launched at least chainLaunchGap s apart (pacedLaunch) and resolved in order, each on the
-// terrain the previous ones left. The craters keep the bottom chainFloorMargin px.
+// terrain the previous ones left, each carving the weapon's own bowl.
 func resolveBombChain(m *Match, s *skillShot) {
 	player, action, skillID, weapon, base, shot, tl := s.Player, s.Action, s.Skill.SkillID, s.Weapon, s.Base, s.Shot, s.TL
 	n := chainCount(player.SkillRank)
@@ -60,7 +60,6 @@ func resolveBombChain(m *Match, s *skillShot) {
 	limit := newSkillCap(capOfBase(chainCap(player.SkillRank) * base))
 	rooted := map[string]bool{}
 	origin := shotOrigin(m.Terrain, player)
-	floor := float64(m.Terrain.Height) - chainFloorMargin
 	pierce := drillPierce(player)
 	tl.fallSpeed = chainFallSpeed
 	launch := 0.0
@@ -72,9 +71,6 @@ func resolveBombChain(m *Match, s *skillShot) {
 		delayPath(r, launch)
 		r.SkillID, r.Kind = skillID, "bomb"
 		r.ExplosionRadius = float64(weapon.ExplosionRadius) * chainBlast
-		r.CraterRadius = weaponCraterRadius(weapon) * chainCrater
-		r.floorY = floor
-		r.crater = CraterCircle // the chain digs its shaft with round craters
 		shot.Projectiles = append(shot.Projectiles, r)
 		if r.ExplosionPoint == nil {
 			continue
@@ -93,7 +89,8 @@ func pacedLaunch(prev, flight, landed float64) float64 {
 }
 
 // The bot's chain: every bomb flies the same arc, so a steep (lobbed) shot keeps hitting a
-// target down one shaft while a flat one carves on past it. The bot lobs (|angle - 90| <=
+// target down one shaft while a flat one may carve on past it (with the weapon's own bowls,
+// playtest 5, a flat shot at 600 px on grassland_valley reaches the cap too). The bot lobs (|angle - 90| <=
 // chainBotLobSpan) when such a shot deals at least chainBotLobKeep of its best shot's damage.
 // A lob whose first bomb flies longer than chainBotMaxFlight() s (chainBotFlightMargin under the
 // simulation's MaxFlightSeconds, 4.5 s) is left out: the later, deeper bombs would pass it and

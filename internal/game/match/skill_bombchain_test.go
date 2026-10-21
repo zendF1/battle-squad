@@ -8,7 +8,7 @@ import (
 )
 
 // TestBombChain: rank 2 → 5 bombs on one trajectory at least chainLaunchGap (0.1 s) apart,
-// every crater the same (chainCrater × the weapon's); fired straight up they come down the same
+// every crater the weapon's own bowl; fired straight up they come down the same
 // column, the later ones exploding deeper; the total split evenly, one target capped at
 // chainCap × base; the enemy rooted; its falls play one after another.
 func TestBombChain(t *testing.T) {
@@ -27,14 +27,18 @@ func TestBombChain(t *testing.T) {
 			(i == 0 && r.LaunchDelay != 0) || (i > 0 && r.LaunchDelay < s.Projectiles[i-1].LaunchDelay+chainLaunchGap-1e-9) {
 			t.Fatalf("bomb %d: kind %q start %v launch %v", i, r.Kind, r.Path[0].Position, r.LaunchDelay)
 		}
-		if r.ExplosionRadius != float64(w.ExplosionRadius)*chainBlast ||
-			math.Abs(r.CraterRadius-weaponCraterRadius(w)*1.4) > 1e-9 {
+		if r.ExplosionRadius != float64(w.ExplosionRadius)*chainBlast || r.CraterRadius != weaponCraterRadius(w) {
 			t.Fatalf("bomb %d blast %v crater %v", i, r.ExplosionRadius, r.CraterRadius)
 		}
 		if r.ExplosionPoint == nil || r.ExplosionPoint.Y < lastY {
 			t.Fatalf("bomb %d explodes at %v, above the previous %v", i, r.ExplosionPoint, lastY)
 		}
 		lastY = r.ExplosionPoint.Y
+	}
+	for _, e := range eventsOf(s, "explode", "") {
+		if e.Crater != CraterBowl || e.Radius != weaponCraterRadius(w) {
+			t.Fatalf("explode %+v: want the weapon's bowl", e)
+		}
 	}
 	total, limit := chainTotal(2)*float64(w.Damage), chainCap(2)*float64(w.Damage)
 	got := totalDamage(s, "p2")
@@ -62,8 +66,10 @@ func TestBombChain(t *testing.T) {
 		}
 		end = f.T + f.Duration
 	}
-	if len(eventsOf(s, "fall", "p2")) < 2 {
-		t.Fatalf("enemy fell %d times, want it dropped again by later bombs", len(eventsOf(s, "fall", "p2")))
+	// The first bomb lands beside the target and drops it into its bowl; the later ones hit
+	// its body (the bowl under the body's centre does not reach its feet)
+	if len(eventsOf(s, "fall", "p2")) < 1 {
+		t.Fatal("the enemy never fell into the hole")
 	}
 	assertChainCoherent(t, s)
 }
@@ -98,36 +104,39 @@ func TestPacedLaunch(t *testing.T) {
 	}
 }
 
-// TestBombChainKeepsFloor: seven bombs (a 220% terrain bonus on cannon_ball's 52 px crater) dig
-// through 400 px of ground but stop chainFloorMargin above the bottom of the map; nobody falls
-// out of it.
-func TestBombChainKeepsFloor(t *testing.T) {
+// TestBombChainDigsToTheBottom: nothing caps how deep the chain digs. Seven bombs (a 220%
+// terrain bonus on cannon_ball's 52 px crater: 166 px bowls) fired straight up dig through all
+// 400 px of ground, the bottom row of the map included; the shell then explodes on the floor
+// under the map (IsSolid) and the players standing over the open column fall out of the map
+// (out_of_map), today's rule for a column with no ground left.
+func TestBombChainDigsToTheBottom(t *testing.T) {
 	m, clients := flatSkillMatch(t, skillPlayer{"p1", 1, "tanko", 400}, skillPlayer{"p2", 2, "rookie", 415})
 	m.State.Players["p1"].SkillRank = 4
 	m.State.Players["p1"].TerrainDamageBonus = 220
 	s := fireSkill(t, m, clients, "p1", 90, 10)
-	floor := float64(m.Terrain.Height) - chainFloorMargin
 	deepest := 0.0
 	for _, e := range eventsOf(s, "explode", "") {
-		if e.Floor != floor {
-			t.Fatalf("explode floor %v, want %v", e.Floor, floor)
+		if e.Crater != CraterBowl {
+			t.Fatalf("explode crater %q", e.Crater)
 		}
-		deepest = math.Max(deepest, e.Position.Y+e.Radius)
+		deepest = math.Max(deepest, e.Position.Y)
 	}
-	if deepest <= floor {
-		t.Fatalf("craters reach %v only; the test needs them past the floor %v", deepest, floor)
+	bottom := m.Terrain.Height - 1
+	if m.Terrain.IsSolid(400, float64(bottom)) {
+		t.Fatalf("the bottom row under the shaft is kept (deepest explosion at %v of %d)", deepest, m.Terrain.Height)
 	}
-	for x := 300; x <= 500; x++ {
-		for y := int(floor); y < m.Terrain.Height; y++ {
-			if !m.Terrain.IsSolid(float64(x), float64(y)) {
-				t.Fatalf("(%d, %d) carved below the floor", x, y)
-			}
-		}
+	if !m.Terrain.IsSolid(400, float64(m.Terrain.Height)) {
+		t.Fatal("below the map is no longer solid floor")
 	}
-	for _, e := range s.Events {
+	out := map[string]bool{}
+	for _, e := range eventsOf(s, "die", "") {
 		if e.Cause == "out_of_map" {
-			t.Fatalf("out of map death: %+v", e)
+			out[e.PlayerID] = true
 		}
+	}
+	t.Logf("deepest explosion y %.0f (map %d px), out of the map: %v", deepest, m.Terrain.Height, out)
+	if !out["p2"] || m.State.Players["p2"].IsAlive {
+		t.Fatalf("the enemy over the open column did not fall out: %v", out)
 	}
 }
 

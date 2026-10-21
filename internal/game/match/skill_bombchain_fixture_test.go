@@ -89,13 +89,17 @@ func chainHits(s ShotResolved) (hits, damage map[string]int) {
 }
 
 // TestBombChainOnRealMap: rank 4 on grassland_valley at a typical distance (600 px). Every bomb
-// flies the shot's own arc: the flat shot hits the target with its first bomb and the rest fly
-// on through the crater; the lobbed one comes down steeply, digs one shaft and hits the
-// target again and again up to the per-target cap. Every bomb explodes (none flies past
-// MaxFlightSeconds), every replay is coherent (assertChainCoherent) and nobody leaves the
-// map. With BOMBCHAIN_FIXTURE_OUT set it writes the Godot client's fixture
+// flies the shot's own arc and carves the weapon's own bowl. The flat shot's first bomb lands
+// beside the target and drops it into its bowl, the rest hit its body; the lobbed one comes
+// down steeply onto the body every time. Both reach the per-target cap (with the circle
+// craters of 1.4 × the weapon's only the lob did: the flat shot's later bombs flew on through
+// the deeper crater). A body hit explodes at the body's centre, so its bowl (~37 px deep)
+// does not reach the feet: the lob leaves the ground as it was. Fired straight up with nobody
+// below ("vertical") the bombs dig one shaft under Tanko, ~40 px a bomb. Every bomb explodes
+// (none flies past MaxFlightSeconds), every replay is coherent (assertChainCoherent) and nobody
+// leaves the map. With BOMBCHAIN_FIXTURE_OUT set it writes the Godot client's fixture
 // (tests/fixtures/skill_bombchain.json: "flat", "lob" one target, "pair" two enemies side by
-// side, lobbed).
+// side, lobbed, "vertical" Tanko's own shaft).
 func TestBombChainOnRealMap(t *testing.T) {
 	cases := map[string]skillFixtureCase{}
 	m, cl := chainFixtureMatch(t, skillPlayer{"e1", 2, "rookie", 1050})
@@ -109,8 +113,10 @@ func TestBombChainOnRealMap(t *testing.T) {
 	m, cl = chainFixtureMatch(t, skillPlayer{"e1", 2, "rookie", 1000}, skillPlayer{"e2", 2, "spark", 1070})
 	_, lob2 := chainAims(m)
 	cases["pair"] = fireChainFixture(t, m, cl, lob2.angle, lob2.power)
+	m, cl = chainFixtureMatch(t, skillPlayer{"e1", 2, "rookie", 1050})
+	cases["vertical"] = fireChainFixture(t, m, cl, 90, 10)
 	hits, damage := map[string]map[string]int{}, map[string]map[string]int{}
-	for _, k := range []string{"flat", "lob", "pair"} {
+	for _, k := range []string{"flat", "lob", "pair", "vertical"} {
 		var s ShotResolved
 		_ = json.Unmarshal(cases[k].Shot, &s)
 		for _, e := range s.Events {
@@ -124,19 +130,27 @@ func TestBombChainOnRealMap(t *testing.T) {
 				t.Fatalf("%s: bomb %d vanishes after %.2f s of flight", k, i, flightEnd(r)-r.LaunchDelay)
 			}
 		}
+		for _, e := range eventsOf(s, "explode", "") {
+			if e.Crater != CraterBowl || math.Abs(e.Radius-weaponCraterRadius(gamedata.Data.Weapons["cannon_ball"])) > 1e-9 {
+				t.Fatalf("%s: explode %+v, want the cannon's own bowl", k, e)
+			}
+		}
 		h, d := chainHits(s)
 		hits[k], damage[k] = h, d
-		t.Logf("%s: %d bombs, hits %v, damage %v, %.2f s", k, len(s.Projectiles), h, d, s.Duration)
+		t.Logf("%s: %d bombs, hits %v, damage %v, %.2f s, deepest dig %.0f px", k, len(s.Projectiles), h, d, s.Duration,
+			deepestDig(t, cases[k]))
 	}
-	if hits["lob"]["e1"] < 5 || hits["lob"]["e1"] <= hits["flat"]["e1"] {
-		t.Fatalf("lobbed chain hits %d times, flat %d", hits["lob"]["e1"], hits["flat"]["e1"])
-	}
-	// The lob reaches the per-target cap (1.8 × base at rank 4, after the Rookie's defense).
+	// Both aims reach the per-target cap (1.8 × base at rank 4, after the Rookie's defense).
 	tanko := cases["lob"].Players["tanko"]
 	w, _ := botWeapon(tanko)
 	limit := capOfBase(chainCap(4) * skillBaseDamage(tanko, gamedata.Data.Skills["heavy_bomb"], w))(cases["lob"].Players["e1"])
-	if d := damage["lob"]["e1"]; d > limit || d < limit-1 {
-		t.Fatalf("lobbed chain deals %d, want the cap %d", d, limit)
+	for _, k := range []string{"flat", "lob"} {
+		if d := damage[k]["e1"]; hits[k]["e1"] < 5 || d > limit || d < limit-1 {
+			t.Fatalf("%s chain hits %d times for %d, want the cap %d", k, hits[k]["e1"], d, limit)
+		}
+	}
+	if dig := deepestDig(t, cases["vertical"]); dig < 250 {
+		t.Fatalf("the vertical chain digs %v px, want a shaft of ~7 × 40", dig)
 	}
 	if out := os.Getenv("BOMBCHAIN_FIXTURE_OUT"); out != "" {
 		data, err := json.MarshalIndent(cases, "", " ")
@@ -147,6 +161,27 @@ func TestBombChainOnRealMap(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+// deepestDig is how deep (px) a chain case dug under the surface it started from: the largest,
+// over the columns, of the lowest carved pixel's depth below that column's first solid pixel.
+func deepestDig(t *testing.T, c skillFixtureCase) float64 {
+	w, h := c.Terrain.Width, c.Terrain.Height
+	before, after := decodeMaskRLE(t, c.Terrain.Solid, w*h), decodeMaskRLE(t, c.After.Solid, w*h)
+	deep := 0
+	for x := 0; x < w; x++ {
+		surface := 0
+		for surface < h && !before[surface*w+x] {
+			surface++
+		}
+		for y := h - 1; y >= surface; y-- {
+			if before[y*w+x] && !after[y*w+x] {
+				deep = max(deep, y-surface+1)
+				break
+			}
+		}
+	}
+	return float64(deep)
 }
 
 // TestBotBombChainLobs: the bot fires its chain on a steep arc when one reaches the enemy.

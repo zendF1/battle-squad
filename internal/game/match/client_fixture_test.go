@@ -15,7 +15,6 @@ type fixtureOp struct {
 	X      float64 `json:"x"`
 	Y      float64 `json:"y"`
 	Radius float64 `json:"radius"`
-	Floor  float64 `json:"floor,omitempty"`
 	Crater string  `json:"crater"` // Terrain.Carve's shape: circle or bowl
 }
 
@@ -123,7 +122,7 @@ func TestExportClientFixture(t *testing.T) {
 	}
 	// Bowls (no rng, so everything drawn after is unchanged): the crater sizes of the game, with
 	// radii that are not exact in binary (a 30% terrain bonus, 0.6 × 20.8), clipped at both
-	// edges, on bedrock, inside a floating block, with a floor, and half-pixel centres.
+	// edges, on bedrock, inside a floating block, down to the bedrock row, and half-pixel centres.
 	for i, r := range []float64{12, 20, 20 * 1.3, 24, 41.6, 52, 0.6 * 20.8, 104} {
 		x := 30 + float64(i)*80
 		ops = append(ops, fixtureOp{X: x, Y: terrain.GetLandingY(x, 0) + 3, Radius: r, Crater: CraterBowl})
@@ -133,12 +132,12 @@ func TestExportClientFixture(t *testing.T) {
 		fixtureOp{X: float64(terrain.Width - 2), Y: terrain.GetLandingY(float64(terrain.Width-2), 0), Radius: 25, Crater: CraterBowl},
 		fixtureOp{X: 480, Y: float64(terrain.Height - 10), Radius: 40, Crater: CraterBowl},
 		fixtureOp{X: 260, Y: 85, Radius: 18, Crater: CraterBowl},
-		fixtureOp{X: 400, Y: float64(terrain.Height - 40), Radius: 52, Floor: float64(terrain.Height - 30), Crater: CraterBowl},
+		fixtureOp{X: 400, Y: float64(terrain.Height - 40), Radius: 52, Crater: CraterBowl}, // down to the bedrock row
 		fixtureOp{X: 200.5, Y: terrain.GetLandingY(200, 0) + 2.5, Radius: 30.5, Crater: CraterBowl},
 		fixtureOp{X: 560.49, Y: terrain.GetLandingY(560, 0) + 1.51, Radius: 33.3, Crater: CraterBowl},
 	)
 	for _, op := range ops {
-		terrain.Carve(op.Crater, op.X, op.Y, op.Radius, op.Floor)
+		terrain.Carve(op.Crater, op.X, op.Y, op.Radius)
 	}
 	after := terrain.Snapshot()
 

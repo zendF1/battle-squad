@@ -138,16 +138,6 @@ func TestSkillCapClampsPerTarget(t *testing.T) {
 	}
 }
 
-func TestDestroyCircleAboveKeepsRows(t *testing.T) {
-	tr := NewTerrainWithBricks(gamedata.MapConfig{MapID: "grassland_valley"}, nil)
-	x := 800.0
-	y := tr.GetLandingY(x, 0)
-	tr.DestroyCircleAbove(x, y, 60, y+20)
-	if tr.IsSolid(x, y+10) || !tr.IsSolid(x, y+20) || !tr.IsSolid(x, y+40) {
-		t.Fatal("rows at or below the floor carved, or rows above kept")
-	}
-}
-
 func TestShieldAbsorbsDamageFirst(t *testing.T) {
 	p := &BattlePlayerState{HP: 1000, Shield: 300, IsAlive: true}
 	if hurtPlayer(p, 200) || p.Shield != 100 || p.HP != 1000 {

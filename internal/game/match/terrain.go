@@ -24,7 +24,7 @@ type Terrain struct {
 	Mask             []uint64
 	DestructibleMask []uint64
 	Zones            []TerrainZone
-	Version          uint64 // incremented by every crater (DestroyCircleAbove, CarveBowl); clients use it to skip operations already in a snapshot
+	Version          uint64 // incremented by every crater (CarveBowl, DestroyCircle); clients use it to skip operations already in a snapshot
 }
 
 func maskSize(width, height int) int {
@@ -192,98 +192,18 @@ func (t *Terrain) IsSolid(x, y float64) bool {
 	return getBit(t.Mask, ix, iy, t.Width)
 }
 
+// DestroyCircle clears the destructible solid pixels within radius of (cx, cy). No explosion
+// carves it any more (every one is a bowl, CarveBowl); it stays for the tests and the client's
+// parity fixture (crater "circle").
 func (t *Terrain) DestroyCircle(cx, cy float64, radius float64) bool {
-	return t.DestroyCircleAbove(cx, cy, radius, 0)
-}
-
-// Crater shapes an explosion carves (the explode event's crater).
-const (
-	CraterBowl   = "bowl"   // CarveBowl: a shallow bowl a player can walk out of (every explosion but the bomb chain)
-	CraterCircle = "circle" // DestroyCircleAbove: the bomb chain's shaft
-)
-
-// bowlCeiling is how far above the impact point, in crater radii, a bowl carves (its flat top).
-// High enough that on an uphill slope up to ~35° the floor meets the surface below it, so the
-// uphill rim leaves no overhang.
-const bowlCeiling = 1.5
-
-// Carve cuts the crater of the given shape (CraterBowl or CraterCircle; "" is CraterBowl).
-func (t *Terrain) Carve(shape string, cx, cy, radius, floorY float64) bool {
-	if shape == CraterCircle {
-		return t.DestroyCircleAbove(cx, cy, radius, floorY)
-	}
-	return t.CarveBowl(cx, cy, radius, floorY)
-}
-
-// CarveBowl clears the destructible solid pixels of a shallow bowl around (cx, cy), keeping
-// every row y >= floorY (floorY <= 0: none kept). With r the crater radius and (dx, dy) a
-// pixel's offset from the rounded centre (y down), a pixel is carved when
-//
-//	dx² + 2·r·dy <= r²   (above the floor: a parabola r/2 under the centre, r to each side at its height)
-//	dy >= -bowlCeiling·r (below the flat top)
-//
-// On flat ground the bowl is r/2 deep (a circle: r) and 2r wide, its walls at most 45° (1:1) at
-// the rim; on a 30° slope the uphill wall rises at most 60° (1.73:1) to meet the surface ~1.73r
-// away. Every pixel step is <= 2 px, under the 3 px a player climbs (WalkTo), so a player in the
-// crater can walk out. Mirrored bit for bit by the client's TerrainMask.carve_bowl.
-func (t *Terrain) CarveBowl(cx, cy, radius, floorY float64) bool {
 	t.Version++
-	if radius <= 0 {
-		return false
-	}
-	maxY := t.Height
-	if floorY > 0 && int(math.Ceil(floorY)) < maxY {
-		maxY = int(math.Ceil(floorY))
-	}
-
-	icx := int(math.Round(cx))
-	icy := int(math.Round(cy))
-	reach := int(math.Ceil(2*radius)) + 1 // |dx| <= 2r: the floor at the top's height
-	top := -bowlCeiling * radius
-	r2 := radius * radius
-
-	destroyedAny := false
-	for y := icy - int(math.Ceil(bowlCeiling*radius)) - 1; y <= icy+int(math.Ceil(radius/2))+1; y++ {
-		if y < 0 || y >= maxY {
-			continue
-		}
-		dy := float64(y - icy)
-		if dy < top {
-			continue
-		}
-		lift := float64(2 * radius * dy) // explicit conversion: no fused multiply-add, so the client matches
-		for x := icx - reach; x <= icx+reach; x++ {
-			if x < 0 || x >= t.Width {
-				continue
-			}
-			dx := x - icx
-			if float64(dx*dx)+lift <= r2 {
-				if getBit(t.Mask, x, y, t.Width) && getBit(t.DestructibleMask, x, y, t.Width) {
-					clearBit(t.Mask, x, y, t.Width)
-					destroyedAny = true
-				}
-			}
-		}
-	}
-	return destroyedAny
-}
-
-// DestroyCircleAbove is DestroyCircle keeping every row y >= floorY (floorY <= 0: none kept),
-// so a crater never opens the bottom of the map (the bomb chain).
-func (t *Terrain) DestroyCircleAbove(cx, cy float64, radius float64, floorY float64) bool {
-	t.Version++
-	maxY := t.Height
-	if floorY > 0 && int(math.Ceil(floorY)) < maxY {
-		maxY = int(math.Ceil(floorY))
-	}
-
 	icx := int(math.Round(cx))
 	icy := int(math.Round(cy))
 	ir := int(math.Round(radius))
 
 	destroyedAny := false
 	for y := icy - ir; y <= icy+ir; y++ {
-		if y < 0 || y >= maxY {
+		if y < 0 || y >= t.Height {
 			continue
 		}
 		for x := icx - ir; x <= icx+ir; x++ {
@@ -302,6 +222,82 @@ func (t *Terrain) DestroyCircleAbove(cx, cy float64, radius float64, floorY floa
 		}
 	}
 
+	return destroyedAny
+}
+
+// Crater shapes (the explode event's crater).
+const (
+	CraterBowl   = "bowl"   // CarveBowl: every explosion, the bomb chain's too
+	CraterCircle = "circle" // DestroyCircle: no explosion carves it now (the bomb chain did before playtest 5)
+)
+
+// bowlCeiling is how far above the impact point, in crater radii, a bowl carves (its flat top).
+// High enough that on an uphill slope up to ~40° the floor meets the surface below it, so the
+// uphill rim leaves no overhang.
+const bowlCeiling = 1.5
+
+// bowlDepth is how deep the bowl's floor lies under the impact point, in crater radii
+// (playtest 5: 0.72, was 0.5). On flat ground, measured from the surface to where a player
+// standing at the impact lands (the shell explodes ~3 px inside the ground): Rookie and Spark
+// (20 px crater) 17 px, Flora (24) 20, Tanko (52) 40 (with 0.5: 13, 15, 29).
+const bowlDepth = 0.72
+
+// Carve cuts the crater of the given shape (CraterBowl or CraterCircle; "" is CraterBowl).
+func (t *Terrain) Carve(shape string, cx, cy, radius float64) bool {
+	if shape == CraterCircle {
+		return t.DestroyCircle(cx, cy, radius)
+	}
+	return t.CarveBowl(cx, cy, radius)
+}
+
+// CarveBowl clears the destructible solid pixels of a bowl around (cx, cy). With r the crater
+// radius, k = bowlDepth and (dx, dy) a pixel's offset from the rounded centre (y down), a
+// pixel is carved when
+//
+//	dx² + (r/k)·dy <= r²  (above the floor: a parabola k·r under the centre, r to each side at its height)
+//	dy >= -bowlCeiling·r  (below the flat top)
+//
+// On flat ground the bowl is k·r deep and 2r wide at the impact's height, its walls at most
+// atan(2k) = 55° (1.44:1) at the rim; on a 30° slope the uphill wall rises at most ~65°
+// (2.1:1) to meet the surface ~1.48r away. Every pixel step is <= 3 px, the climb of a player
+// (WalkTo), so a player in the crater can walk out. Mirrored bit for bit by the client's
+// TerrainMask.carve_bowl.
+func (t *Terrain) CarveBowl(cx, cy, radius float64) bool {
+	t.Version++
+	if radius <= 0 {
+		return false
+	}
+
+	icx := int(math.Round(cx))
+	icy := int(math.Round(cy))
+	reach := int(math.Ceil(2*radius)) + 1 // past where the floor meets the top (r·√(1 + bowlCeiling/k) < 2r)
+	top := -bowlCeiling * radius
+	r2 := radius * radius
+	lean := radius / bowlDepth // r/k: 2r at k = 0.5
+
+	destroyedAny := false
+	for y := icy - int(math.Ceil(bowlCeiling*radius)) - 1; y <= icy+int(math.Ceil(bowlDepth*radius))+1; y++ {
+		if y < 0 || y >= t.Height {
+			continue
+		}
+		dy := float64(y - icy)
+		if dy < top {
+			continue
+		}
+		lift := float64(lean * dy) // explicit conversion: no fused multiply-add, so the client matches
+		for x := icx - reach; x <= icx+reach; x++ {
+			if x < 0 || x >= t.Width {
+				continue
+			}
+			dx := x - icx
+			if float64(dx*dx)+lift <= r2 {
+				if getBit(t.Mask, x, y, t.Width) && getBit(t.DestructibleMask, x, y, t.Width) {
+					clearBit(t.Mask, x, y, t.Width)
+					destroyedAny = true
+				}
+			}
+		}
+	}
 	return destroyedAny
 }
 

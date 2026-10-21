@@ -148,25 +148,21 @@ func capOfBase(base float64) func(p *BattlePlayerState) int {
 	return func(p *BattlePlayerState) int { return int(math.Round(ReduceByDefense(base, p.Defense))) }
 }
 
-// explodeProjectile resolves r's explosion at the end of its flight: it carves the crater (a bowl, or r.crater) and
+// explodeProjectile resolves r's explosion at the end of its flight: it carves the crater (a bowl) and
 // applies splash damage to the shooter's enemies. It returns the enemies the blast damaged.
 func (m *Match) explodeProjectile(shooter *BattlePlayerState, r *ProjectileResult, baseDamage float64, tl *shotTimeline) []*BattlePlayerState {
 	return m.explodeCapped(shooter, r, baseDamage, tl, nil)
 }
 
 // explodeCapped is explodeProjectile with the damage each target takes limited by limit (nil:
-// none); the crater keeps the rows y >= r.floorY when set.
+// none).
 func (m *Match) explodeCapped(shooter *BattlePlayerState, r *ProjectileResult, baseDamage float64, tl *shotTimeline, limit *skillCap) []*BattlePlayerState {
 	t := flightEnd(r)
 	crater := craterRadius(shooter, r.CraterRadius)
-	shape := r.crater
-	if shape == "" {
-		shape = CraterBowl
-	}
-	m.Terrain.Carve(shape, r.ExplosionPoint.X, r.ExplosionPoint.Y, crater, r.floorY)
+	m.Terrain.CarveBowl(r.ExplosionPoint.X, r.ExplosionPoint.Y, crater)
 	tl.add(ShotEvent{
 		T: t, Type: "explode", ProjectileID: r.ProjectileID,
-		Position: vecPtr(*r.ExplosionPoint), Radius: crater, Floor: r.floorY, Crater: shape, TerrainVersion: m.Terrain.Version,
+		Position: vecPtr(*r.ExplosionPoint), Radius: crater, Crater: CraterBowl, TerrainVersion: m.Terrain.Version,
 	})
 
 	var hit []*BattlePlayerState

@@ -58,22 +58,26 @@ func abs(v int) int {
 	return v
 }
 
-// TestCarveBowlShape: dx² + 2·r·dy <= r² under a flat top bowlCeiling·r above the centre.
+// TestCarveBowlShape: dx² + (r/k)·dy <= r² (k = bowlDepth) under a flat top bowlCeiling·r
+// above the centre.
 func TestCarveBowlShape(t *testing.T) {
+	if bowlDepth != 0.72 {
+		t.Fatalf("bowlDepth %v: the cases below are for 0.72", bowlDepth)
+	}
 	tr := solidTerrain(400, 300)
-	if !tr.CarveBowl(200, 150, 20, 0) || tr.Version != 1 {
+	if !tr.CarveBowl(200, 150, 20) || tr.Version != 1 {
 		t.Fatal("nothing carved or the version not bumped")
 	}
 	cases := []struct {
 		x, y   float64
 		carved bool
 	}{
-		{200, 160, true}, {200, 161, false}, // the floor r/2 under the centre
+		{200, 164, true}, {200, 165, false}, // the floor k·r = 14.4 px under the centre
 		{220, 150, true}, {221, 150, false}, // r to each side at the centre's height
-		{210, 157, true}, {210, 158, false}, // 100 + 40·7 = 380 <= 400; 100 + 40·8 = 420
+		{210, 160, true}, {210, 161, false}, // 100 + 27.8·10 = 378 <= 400; 100 + 27.8·11 = 406
 		{200, 120, true}, {200, 119, false}, // the flat top 1.5·r above
-		{240, 120, true}, {241, 120, false}, // the floor meets the top 2r out
-		{230, 140, false}, // 900 - 400 = 500 > 400: outside the floor
+		{235, 120, true}, {236, 120, false}, // the floor meets the top r·√(1 + 1.5/k) = 35.1 px out
+		{230, 140, false}, // 900 - 278 = 622 > 400: outside the floor
 	}
 	for _, c := range cases {
 		if solid := tr.IsSolid(c.x, c.y); solid == c.carved {
@@ -81,46 +85,49 @@ func TestCarveBowlShape(t *testing.T) {
 		}
 	}
 
-	// floorY keeps the rows y >= floorY; a zero radius carves nothing but is still an operation
+	// The bottom row of the map can be carved (nothing keeps a floor); a zero radius carves
+	// nothing but is still an operation
 	tr = solidTerrain(100, 100)
-	tr.CarveBowl(50, 50, 20, 55)
-	if tr.IsSolid(50, 54) || !tr.IsSolid(50, 55) {
-		t.Fatal("rows at or below the floor carved, or rows above kept")
+	tr.CarveBowl(50, 95, 20)
+	if tr.IsSolid(50, 99) || !tr.IsSolid(50, 100) {
+		t.Fatal("the bottom row kept, or below the map not solid")
 	}
-	if tr.CarveBowl(90, 90, 0, 0) || tr.Version != 2 || !tr.IsSolid(90, 90) {
+	if tr.CarveBowl(90, 50, 0) || tr.Version != 2 || !tr.IsSolid(90, 50) {
 		t.Fatal("a zero radius carved, or did not count as an operation")
 	}
 	// Carve dispatches on the shape
 	tr = solidTerrain(100, 100)
-	tr.Carve(CraterCircle, 50, 50, 10, 0)
+	tr.Carve(CraterCircle, 50, 50, 10)
 	if tr.IsSolid(50, 59) || tr.IsSolid(50, 41) {
 		t.Fatal("circle not carved")
 	}
 	tr = solidTerrain(100, 100)
-	tr.Carve("", 50, 50, 10, 0)
-	if tr.IsSolid(50, 55) || !tr.IsSolid(50, 56) {
+	tr.Carve("", 50, 50, 10)
+	if tr.IsSolid(50, 57) || !tr.IsSolid(50, 58) {
 		t.Fatal("the default shape is not the bowl")
 	}
 }
 
-// TestBowlWallsClimbable: on flat ground and 30° slopes every crater (rain 12 px, Rookie 20,
-// Flora 24, Rookie on fragile 40, Tanko 52, Tanko on fragile 104) has no pixel step over 2 px
-// (a player climbs 3), where the circle it replaces had a wall at the rim.
+// TestBowlWallsClimbable: every crater (rain 12 px, Rookie 20, Flora 24, Rookie on fragile 40,
+// Tanko 52, Tanko on fragile 104) has no pixel step over 2 px on flat ground (walls at most
+// atan(2·bowlDepth) = 55°) and none over 3 px, the climb of a player, on 30° slopes (the uphill
+// wall ~65°: a 2.1:1 wall cannot stay under 2 px a column), where the circle it replaces had
+// a wall at the rim.
 func TestBowlWallsClimbable(t *testing.T) {
 	for _, deg := range []float64{0, 30, -30} {
 		for _, r := range []float64{12, 20, 24, 40, 52, 104} {
 			bowl, circle := slopeTerrain(deg), slopeTerrain(deg)
 			x := 800.0
 			y := bowl.GetLandingY(x, 0) + 3 // the shell explodes one sample inside the ground
-			bowl.CarveBowl(x, y, r, 0)
+			bowl.CarveBowl(x, y, r)
 			circle.DestroyCircle(x, y, r)
 			x0, x1 := int(x-3*r), int(x+3*r)
 			bs, cs := maxSurfaceStep(bowl, x0, x1), maxSurfaceStep(circle, x0, x1)
 			depth := bowl.GetLandingY(x, 0) - (y - 3)
 			t.Logf("slope %3.0f° crater %3.0f px: bowl %3.0f px deep under the impact column, steepest step %d px (circle: %3.0f deep, %3d px)",
 				deg, r, depth, bs, circle.GetLandingY(x, 0)-(y-3), cs)
-			if bs > 2 {
-				t.Errorf("slope %v° crater %v: a %d px step", deg, r, bs)
+			if limit := wallStepLimit(deg); bs > limit {
+				t.Errorf("slope %v° crater %v: a %d px step (limit %d)", deg, r, bs, limit)
 			}
 			if deg == 0 && cs <= maxClimbStep {
 				t.Errorf("crater %v: the circle's rim is climbable (%d px): the test proves nothing", r, cs)
@@ -132,15 +139,24 @@ func TestBowlWallsClimbable(t *testing.T) {
 // maxClimbStep is WalkTo's maxClimbPerStep.
 const maxClimbStep = 3
 
-// TestWalkOutOfCrater: Rookie and Tanko fire straight up on flat ground and on 30° slopes
-// (rising either way); the shell falls back at their feet, they sink into their own crater and
+// wallStepLimit is the largest pixel step a bowl may leave on a slope of deg degrees: 2 on flat
+// ground, the 3 px a player climbs on a slope.
+func wallStepLimit(deg float64) int {
+	if deg == 0 {
+		return 2
+	}
+	return maxClimbStep
+}
+
+// TestWalkOutOfCrater: Rookie and Tanko fire straight up on flat ground and on 30° and 35°
+// slopes (rising either way); the shell falls back at their feet, they sink into their own crater and
 // then walk out of it to the left and to the right, each way on one turn's move energy
 // (processMove: 1 energy per 2 px). In the circle crater the same shot used to carve they are
 // stuck.
 func TestWalkOutOfCrater(t *testing.T) {
 	useConfigGameData(t)
 	for _, char := range []string{"rookie", "tanko"} {
-		for _, deg := range []float64{0, 30, -30} {
+		for _, deg := range []float64{0, 30, -30, 35, -35} {
 			m, clients := identityMatch(t, char, 800, "rookie", 1500)
 			m.Terrain = slopeTerrain(deg)
 			for _, p := range m.State.Players {
@@ -189,7 +205,7 @@ func TestWalkOutOfCrater(t *testing.T) {
 					t.Errorf("%s: the circle crater lets the player out too: the comparison proves nothing", char)
 				}
 			}
-			if st := maxSurfaceStep(m.Terrain, int(p.X-3*r), int(p.X+3*r)); st > 2 {
+			if st := maxSurfaceStep(m.Terrain, int(p.X-3*r), int(p.X+3*r)); st > wallStepLimit(deg) {
 				t.Errorf("%s slope %v°: a %d px step", char, deg, st)
 			}
 		}

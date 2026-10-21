@@ -28,13 +28,13 @@ func TestTerrainDamageBonusGrowsCraterOnly(t *testing.T) {
 	if ex[0].Radius != 39 {
 		t.Fatalf("crater radius %v, want 30 * 1.30 = 39", ex[0].Radius)
 	}
-	// The terrain was carved with the crater radius: a bowl 39 / 2 = 19.5 px under the impact
-	// (the weapon's 30 alone: 15) and 39 px to each side at its height
+	// The terrain was carved with the crater radius: a bowl 39 × bowlDepth = 28.1 px under the
+	// impact (the weapon's 30 alone: 21.6) and 39 px to each side at its height
 	p := *ex[0].Position
-	if m.Terrain.IsSolid(p.X, p.Y+18) || m.Terrain.IsSolid(p.X+36, p.Y) || m.Terrain.IsSolid(p.X-36, p.Y) {
+	if m.Terrain.IsSolid(p.X, p.Y+26) || m.Terrain.IsSolid(p.X+36, p.Y) || m.Terrain.IsSolid(p.X-36, p.Y) {
 		t.Fatalf("terrain inside the crater radius is still solid")
 	}
-	if !m.Terrain.IsSolid(p.X, p.Y+21) {
+	if !m.Terrain.IsSolid(p.X, p.Y+30) {
 		t.Fatalf("carved under the bowl's floor")
 	}
 }
