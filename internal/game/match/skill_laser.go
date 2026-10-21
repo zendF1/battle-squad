@@ -63,7 +63,7 @@ type laserHit struct {
 // crosses (within laserHalfWidth + the player hit radius of it), nearest to origin first.
 // Terrain does not stop the beam.
 func laserHits(players map[string]*BattlePlayerState, shooter *BattlePlayerState, origin, end Vector2) []laserHit {
-	_, _, _, hitRadius, _, _ := getPhysics()
+	hitRadius := physics().PlayerHitRadius
 	dx, dy := end.X-origin.X, end.Y-origin.Y
 	length := math.Hypot(dx, dy)
 	if length <= 0 {

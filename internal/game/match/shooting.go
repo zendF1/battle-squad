@@ -16,13 +16,15 @@ func generateProjectileID() string {
 	return "proj-" + hex.EncodeToString(b)
 }
 
-// getPhysics returns physics constants from gamedata.Physics if loaded, otherwise defaults.
-func getPhysics() (timeStep, gravity, windScale, hitRadius, recordStep, maxFlight float64) {
+// defaultPhysics is used while gamedata.Physics is not loaded (tests, the client fixtures).
+var defaultPhysics = gamedata.DefaultPhysics()
+
+// physics returns the loaded physics constants (gamedata.Physics), or gamedata.DefaultPhysics().
+func physics() *gamedata.PhysicsConfig {
 	if gamedata.Physics != nil {
-		return gamedata.Physics.TimeStep, gamedata.Physics.Gravity, gamedata.Physics.WindScale,
-			gamedata.Physics.PlayerHitRadius, gamedata.Physics.PathRecordStep, gamedata.Physics.MaxFlightSeconds
+		return gamedata.Physics
 	}
-	return 0.02, 200.0, 30.0, 24.0, 0.05, 6.0
+	return defaultPhysics
 }
 
 // ShotOriginLift is how far above the feet a shot starts: the body centre, the same point
@@ -62,10 +64,12 @@ func SimulateProjectile(
 	players map[string]*BattlePlayerState,
 	pierceDistance float64, // terrain (px) the projectile may drill through; 0 = none
 ) *ProjectileResult {
-	timeStep, gravity, windScale, hitRadius, recordStep, maxFlight := getPhysics()
+	ph := physics()
+	timeStep, gravity, windScale, hitRadius, recordStep, maxFlight :=
+		ph.TimeStep, ph.Gravity, ph.WindScale, ph.PlayerHitRadius, ph.PathRecordStep, ph.MaxFlightSeconds
 
 	angleRad := angleDeg * math.Pi / 180.0
-	initialSpeed := power * 6.0
+	initialSpeed := power * ph.ProjectileSpeedMultiplier
 
 	velocity := Vector2{
 		X: initialSpeed * math.Cos(angleRad),

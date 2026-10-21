@@ -566,12 +566,12 @@ Player actions trong turn:
 
 ```
 SimulateProjectile(startPos, angle, power, wind, weaponConfig):
-  velocity = power * 6.0 tại angle
-  timeStep = 0.02s
-  gravity = 200.0 px/s²
-  windForce = direction * power * 30.0 * weaponWindInfluence
+  velocity = power * 9.6 tại angle            // physics.projectile_speed_multiplier
+  timeStep = 0.02s                            // physics.time_step
+  gravity = 445.0 px/s²                       // physics.gravity
+  windForce = direction * power * 67.0 * weaponWindInfluence / projectileWeight   // physics.wind_scale
 
-  Loop (max 6 giây):
+  Loop (max 4.5 giây):                        // physics.max_flight_seconds
     velocity.X += windForce * timeStep
     velocity.Y += gravity * timeStep
     position += velocity * timeStep
@@ -583,6 +583,20 @@ SimulateProjectile(startPos, angle, power, wind, weaponConfig):
 
     Record path mỗi 0.05s cho client animation
 ```
+
+Số vật lý đọc từ `game_settings` (`physics.*`, `gamedata.loadPhysicsFromDB`; thiếu dòng nào thì dùng `gamedata.DefaultPhysics()`, cùng giá trị với admin seed). Trước đây loader tìm key không có tiền tố `physics.` nên không bao giờ thấy dòng nào và luôn dùng mặc định; `SimulateProjectile` cũng cố định `power × 6` thay vì đọc `projectile_speed_multiplier`.
+
+Migration `032_faster_shells` (playtest: đạn bay chậm, tầm ngắn; chạy lại mỗi deploy, chỉ đổi dòng còn giá trị cũ): tốc độ power × 6 → **9,6** (×1,6), gravity 200 → **445** (×2,23), wind scale 30 → **67** (×2,23, nên gió vẫn lệch cùng tỉ lệ phát bắn), bay tối đa 6 → **4,5 s**. Cùng power bay xa hơn ~15% (tầm ∝ v²/g), phát bắn tới cùng chỗ mất ~0,67 × thời gian (cùng power: ~0,72 ×); hình dạng đường bay tới cùng điểm không đổi. Bước 0,02 s giữ nguyên: một bước bay tới 19 px (power 100) nhưng đoạn đường vẫn được lấy mẫu mỗi ≤ 4 px nên va chạm (tường mỏng, người chơi) như cũ; điểm nổ vẫn nằm trong đất ≤ 4 px.
+
+| | Trước 032 | Sau 032 |
+|---|---|---|
+| Tầm xa nhất (45°, power 100, đất bằng) | ~1 820 px | ~2 090 px |
+| Power cần để bay hết map 1600 px (45°) | ~94 | ~87 |
+| Phát 600 px ở 45° | power 57, 2,5 s | power 53, 1,66 s |
+| Phát cầu vồng 600 px ở 80° | power 99, 5,9 s | power 92, 3,9 s |
+| Bắn thẳng lên power 100 | đỉnh 900 px, 6,0 s (hết giờ bay khi vừa về) | đỉnh 1 030 px, 4,3 s |
+
+Kéo ngắm vẫn 2 px / power (client), power tối đa 100: ở 45° power ~87 đã bay hết map (trước ~94; trước đó cũng đã vượt map), phần power còn lại dùng cho phát cầu vồng dốc (80° cần ~92 cho 600 px). Rơi (`fall`, `fallDuration` = √(2 × quãng / gravity)) cũng theo gravity nên nhanh hơn: ~0,67 × thời gian, quãng rơi và damage rơi không đổi.
 
 **Shot origin (client contract):** mọi phát bắn (weapon, skill, teleport, và phát ngắm thử để chọn cột air strike) bắt đầu từ tâm thân nhân vật, không phải chân:
 
@@ -676,7 +690,7 @@ Mỗi nhân vật có một thế mạnh riêng. `migrations/023_character_ident
 | Skill (028 thay cả bốn, xem Kỹ năng) | Triple Shot ×1,25 ×3 | Heavy Bomb (bom đào): ×1,3 → **×1,1**, nổ ×1,5 → **×2**, hố **×1,8** | Shock Field ×0,9 → **×1,3** + lưới | Healing Bloom 450 → **650** HP |
 
 - **Năng lượng di chuyển**: trước đây mọi nhân vật 100 (`mobility` 70/40/75/65 chỉ để hiển thị). Giờ `config_characters.mobility` là năng lượng gốc mỗi lượt (`gamedata.BaseMoveEnergy`, ≤ 0 hoặc nhân vật lạ → 100). `battlestats.Base` mang nó trong `Stats.MoveEnergy`; điểm và trang bị cộng vào `MoveEnergyBonus`; `Stats.TurnMoveEnergy()` = tổng. Room đặt `BattlePlayerState.moveEnergy = maxMoveEnergy` khi vào trận, `startTurn` nạp lại `maxMoveEnergy` (state cũ thiếu field → tính lại từ config + bonus). `GET /player/characters` `baseStats.*.moveEnergy` và `stats.moveEnergy` báo đúng số này.
-- **Hố**: `terrain_damage` của vũ khí trước đây không được đọc (hố = bán kính nổ). Giờ hố = `terrain_damage × 0,8` px (`match.craterPxPerTerrainDamage`; 50 → 40 px nên hố của Rookie không đổi), tách khỏi bán kính damage. Hố phẳng (bắn xuống đất bằng, `TestCraterDepthByCharacter`): Rookie sâu 21 px, Tanko 53, Spark 21, Flora 25. `migrations/029_weapon_craters_halved` (sau playtest: Tanko và Rookie phá đất quá nhiều) giảm nửa terrain damage của `basic_rocket` 50 → 25 và `cannon_ball` 130 → 65 (cả bản hiển thị ở `config_characters`), chỉ dòng còn giữ giá trị cũ: hố phát thường và mọi hố skill (bội số của hố vũ khí) đều còn một nửa; damage và bán kính nổ giữ nguyên. Trước 029: Rookie sâu 41 px, Tanko 105.
+- **Hố**: `terrain_damage` của vũ khí trước đây không được đọc (hố = bán kính nổ). Giờ hố = `terrain_damage × 0,8` px (`match.craterPxPerTerrainDamage`; 50 → 40 px nên hố của Rookie không đổi), tách khỏi bán kính damage. Hố phẳng (bắn xuống đất bằng, `TestCraterDepthByCharacter`): Rookie sâu 23 px, Tanko 55, Spark 23, Flora 27 (bán kính hố + ~3 px: đạn đã vào đất một bước lấy mẫu khi nổ; trước 032: 21 / 53 / 21 / 25). `migrations/029_weapon_craters_halved` (sau playtest: Tanko và Rookie phá đất quá nhiều) giảm nửa terrain damage của `basic_rocket` 50 → 25 và `cannon_ball` 130 → 65 (cả bản hiển thị ở `config_characters`), chỉ dòng còn giữ giá trị cũ: hố phát thường và mọi hố skill (bội số của hố vũ khí) đều còn một nửa; damage và bán kính nổ giữ nguyên. Trước 029: Rookie sâu 41 px, Tanko 105.
 - **Bom đào của Tanko** (thiết kế cũ, 028 thay bằng Bom liên hoàn; `single_large_bomb`, hằng số `match.heavyBombBlastScale` 2 và `heavyBombCraterScale` 1,8): nổ 120 px, hố 187 px (rộng ~374 px). Trúng thẳng một Rookie trên đất bằng (`TestDiggingBombDropsTargetIntoFallDamage`): 426 damage nổ, mục tiêu rơi 166 px (vừa quá ngưỡng 150 px) → 60 damage rơi. Phát thường của Tanko (hố 104 px) chỉ làm mục tiêu tụt 82 px, không mất máu rơi. Người bắn / đồng đội đứng trong hố cũng rơi theo. Trên frozen_peak (đất mỏng nhất ~233 px ở đáy thung lũng) một quả nổ ngay mặt đất ở bất kỳ đâu vẫn chừa ≥ 46 px đất dưới mọi cột của hố (`TestDiggingBombKeepsGroundOnThinMaps`; grassland_valley ~234 px → ≥ 47 px, steel_base 300 px → ≥ 113 px), nên một phát không thủng xuống đáy map; nhiều phát chồng lên cùng chỗ thì vẫn có thể.
 - **Spark** `shock_field` `damageMultiplier` 0,9 → 1,3 (config); lưới giữ nguyên. **Flora** `match.skillHealAmount` 450 → 650.
 
@@ -804,12 +818,12 @@ Skill theo **nhân vật** (`config_characters.skill_id`), dùng bằng `Shoot {
 | Skill | Rookie — Mưa tên lửa (`triple_shot`, `missile_rain`) | Tanko — Bom liên hoàn (`heavy_bomb`, `bomb_chain`) | Spark — Tia laze (`shock_field`, `laser`) | Flora — Hoa hồi xuân (`healing_bloom`, `bloom`) |
 |---|---|---|---|---|
 | Bắn | Pháo hiệu như phát thường (gió, trọng lực); đáp: khói đỏ, không damage / hố; bay khỏi map → mất skill | 3 + cấp bom lớn cùng đường bay đạn thường (cùng gốc, góc, lực, gió; không lái), cách ≥ 0,1 s; bom sau bay qua hố của bom trước và nổ ở chỗ đường bay đó chạm địa hình / người chơi: bắn cầu vồng (dốc) đào một giếng sâu trúng mục tiêu nhiều lần, bắn thẳng (thấp) khoét rãnh dọc đường bay, thường chỉ quả đầu trúng | Nạp 0,3 s rồi tia thẳng từ tâm thân theo góc ngắm tới mép map, xuyên địa hình (không giảm damage); bỏ qua lực | Không ngắm; các hạt cùng bay thẳng lên trên Flora ra khỏi đỉnh map (y −140, 0,55 s), sang trên đầu đồng đội ngoài màn hình (0,2 s) rồi rơi thẳng xuống thân (0,65 s): đáp và hồi lúc 1,4 s, mọi đồng đội còn sống (cả Flora); replay kéo thêm 0,9 s cho hiệu ứng nở hoa |
-| Số lượng | 0,5 s sau khi đáp: 12 + 4×cấp tên lửa rơi thẳng (không gió, ~0,38 s tới đất) từ đỉnh map, cách 0,05 s (cấp 4: 28 quả trong ~1,8 s, cả skill ~3,9 s), rải ± (90 + 15×cấp) px quanh điểm đáp, dày ở giữa (độ lệch = khoảng × \|v\|², nửa số quả trong ± 1/4 khoảng; seed theo trận + lượt); giải theo thứ tự chạm đất. Pháo hiệu trúng mục tiêu: ~1,4 × base (cấp 0) tới mức trần (cấp 4, ~1,8 × base sau defense của Tanko), địch cách 100 px dính ~0,55 × base ở cấp 4 | 3 / 4 / 5 / 6 / 7 | 1 tia | 1 hạt / đồng đội |
+| Số lượng | 0,5 s sau khi đáp: 12 + 4×cấp tên lửa rơi thẳng (không gió, bắn xuống 1500 px/s `rainDropSpeed`, ~0,37 s tới đất) từ đỉnh map, cách 0,05 s (cấp 4: 28 quả trong ~1,8 s, cả skill ~3,0 s; trước 032 ~3,9 s), rải ± (90 + 15×cấp) px quanh điểm đáp, dày ở giữa (độ lệch = khoảng × \|v\|², nửa số quả trong ± 1/4 khoảng; seed theo trận + lượt); giải theo thứ tự chạm đất. Pháo hiệu trúng mục tiêu: ~1,4 × base (cấp 0) tới mức trần (cấp 4, ~1,8 × base sau defense của Tanko), địch cách 100 px dính ~0,55 × base ở cấp 4 | 3 / 4 / 5 / 6 / 7 | 1 tia | 1 hạt / đồng đội |
 | Damage | Mỗi quả 0,25 × base (nổ 0,7 × bán kính vũ khí, hố 0,6 × hố vũ khí = 12 px); tổng mỗi mục tiêu ≤ 2 × base (trước defense) | Tổng (1,8 + 0,15×cấp) × base chia đều; tổng mỗi mục tiêu ≤ (1,2 + 0,15×cấp) × base (trước defense; cấp 4: phát cầu vồng trúng 6 / 7 quả là chạm trần); nổ 1,3 ×, hố mọi quả bằng nhau 1,4 × hố vũ khí (73 px); không khoét 48 px đáy map | Địch gần nhất (1,5 + 0,1×cấp) × base, mỗi địch sau ×0,8; không hố, không văng, không rơi; không trúng đồng đội | Hồi theo máu tối đa: Flora (40 + 5×cấp)%, đồng đội (30 + 5×cấp)%; không nhân skill power; dư thành khiên (≤ 50% máu tối đa) |
 | Hiệu ứng | `burn` 1 lượt lên mọi địch trúng | `root` 1 lượt | `stun` 1 lượt | Gỡ hiệu ứng xấu mọi đồng đội |
-| Bot | Ngắm như phát thường tốt nhất (trượt theo hit chance) | Phát dốc nhất (lệch ≤ 30° so với thẳng đứng, bay ≤ 4,5 s) gây ≥ 80% damage của phát tốt nhất, không có thì phát tốt nhất; trượt theo hit chance | Góc trúng nhiều địch nhất (ưu tiên 2) | Khi máu mình < 60%, đồng đội < 50% hoặc đồng đội dính hiệu ứng xấu |
+| Bot | Ngắm như phát thường tốt nhất (trượt theo hit chance) | Phát dốc nhất (lệch ≤ 30° so với thẳng đứng, bay ≤ `MaxFlightSeconds` − 1 s = 3,5 s) gây ≥ 80% damage của phát tốt nhất, không có thì phát tốt nhất; trong các lực tốt như nhau ở một góc, lực mà đường bay (bỏ qua người chơi) chạm đất gần chân địch nhất (`shaftMiss`: giếng đào ngay dưới mục tiêu); trượt theo hit chance | Góc trúng nhiều địch nhất (ưu tiên 2) | Khi máu mình < 60%, đồng đội < 50% hoặc đồng đội dính hiệu ứng xấu |
 
-Đơn giản hoá: bom liên hoàn và tên lửa được giải tuần tự lúc server nhận phát bắn, vị trí rơi cập nhật ngay; tên lửa có thể trúng mục tiêu khi client còn đang vẽ nó rơi. Bom liên hoàn thì không: mọi cú rơi trong chuỗi chạy nhanh ×3 so với rơi tự do (quãng rơi và damage rơi giữ nguyên) và một quả bom chỉ nổ khi mọi cú rơi trước đã chạm đất + 0,08 s (nếu cần, quả sau phóng trễ hơn 0,1 s; ~9% khoảng cách bị kéo dài khi quét các góc bắn trên grassland_valley, phát cầu vồng của bot thì phần lớn). Đường bay vẫn giới hạn `MaxFlightSeconds` (6 s): bắn cầu vồng quá cao (quả đầu bay từ ~5,2 s, chỉ người chơi bắn tay; bot chỉ lob khi ≤ 4,5 s) thì bom sâu nhất có thể hết giờ bay và biến mất (khoảng cách 0,1 s không đổi điều này: giới hạn tính theo đường bay của từng quả). Nguồn bắn của bom liên hoàn giữ nguyên dù người bắn rơi vào hố của mình. `projectile_count` / `status_effect_id` trong `config_skills` chỉ để hiển thị.
+Đơn giản hoá: bom liên hoàn và tên lửa được giải tuần tự lúc server nhận phát bắn, vị trí rơi cập nhật ngay; tên lửa có thể trúng mục tiêu khi client còn đang vẽ nó rơi. Bom liên hoàn thì không: mọi cú rơi trong chuỗi chạy nhanh ×3 so với rơi tự do (quãng rơi và damage rơi giữ nguyên) và một quả bom chỉ nổ khi mọi cú rơi trước đã chạm đất + 0,08 s (nếu cần, quả sau phóng trễ hơn 0,1 s; ~9% khoảng cách bị kéo dài khi quét các góc bắn trên grassland_valley, phát cầu vồng của bot thì phần lớn). Đường bay vẫn giới hạn `MaxFlightSeconds` (4,5 s; trước 032: 6 s): bắn cầu vồng quá cao (quả đầu bay từ ~4,0 s, trước 032 ~5,2 s; chỉ người chơi bắn tay; bot chỉ lob khi ≤ 3,5 s) thì bom sâu nhất có thể hết giờ bay và biến mất (khoảng cách 0,1 s không đổi điều này: giới hạn tính theo đường bay của từng quả). Nguồn bắn của bom liên hoàn giữ nguyên dù người bắn rơi vào hố của mình. `projectile_count` / `status_effect_id` trong `config_skills` chỉ để hiển thị.
 
 ### Reward System
 

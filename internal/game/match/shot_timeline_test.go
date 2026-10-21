@@ -146,7 +146,7 @@ func TestFallEventsMatchLandingTime(t *testing.T) {
 	if *f.From != start || *f.To != shooter.Position {
 		t.Fatalf("fall %v -> %v, want %v -> %v", *f.From, *f.To, start, shooter.Position)
 	}
-	_, gravity, _, _, _, _ := getPhysics()
+	gravity := physics().Gravity
 	if want := math.Sqrt(2 * (f.To.Y - f.From.Y) / gravity); math.Abs(f.Duration-want) > 1e-9 {
 		t.Fatalf("fall duration %v, want %v", f.Duration, want)
 	}
@@ -167,9 +167,14 @@ func TestTeleportShotSendsTeleportEvent(t *testing.T) {
 	p.Items = []string{"teleport"}
 	groundPlayers(m, clients)
 	start := p.Position
+	m.State.Wind = WindState{}
+	angle := 60.0 // towards the middle of the map, so it lands on it
+	if p.Position.X > float64(m.Terrain.Width)/2 {
+		angle = 120
+	}
 
 	item := "teleport"
-	send(m, clients[cur], "Shoot", ShootAction{Angle: 60, Power: 30, ActionMode: "item", ItemID: &item})
+	send(m, clients[cur], "Shoot", ShootAction{Angle: angle, Power: 30, ActionMode: "item", ItemID: &item})
 	s := shotResolved(t, clients[cur])
 	assertTimeline(t, s)
 

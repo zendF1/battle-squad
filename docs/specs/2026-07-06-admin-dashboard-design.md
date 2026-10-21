@@ -143,13 +143,13 @@ Seeded into `game_settings` on first run. Each has a human-readable description 
 
 | Key | Default | Category | Description |
 |-----|---------|----------|-------------|
-| `physics.gravity` | `200` | physics | Lực hấp dẫn kéo đạn xuống. Tăng = đạn rơi nhanh, tầm bắn ngắn |
-| `physics.projectile_speed_multiplier` | `6.0` | physics | Hệ số tốc độ đạn = power × giá trị này. Tăng = đạn bay xa hơn |
-| `physics.wind_scale` | `30.0` | physics | Hệ số ảnh hưởng gió lên đạn. Tăng = gió đẩy đạn lệch nhiều hơn |
+| `physics.gravity` | `445` | physics | Lực hấp dẫn kéo đạn xuống. Tăng = đạn rơi nhanh, tầm bắn ngắn |
+| `physics.projectile_speed_multiplier` | `9.6` | physics | Hệ số tốc độ đạn = power × giá trị này. Tăng = đạn bay xa hơn |
+| `physics.wind_scale` | `67` | physics | Hệ số ảnh hưởng gió lên đạn. Tăng = gió đẩy đạn lệch nhiều hơn |
 | `physics.player_hit_radius` | `24.0` | physics | Bán kính va chạm của player (pixels). Tăng = dễ bắn trúng hơn |
 | `physics.time_step` | `0.02` | physics | Bước thời gian mô phỏng vật lý (giây). Giảm = chính xác hơn, tốn CPU hơn |
 | `physics.path_record_step` | `0.05` | physics | Khoảng thời gian ghi path đạn cho animation client |
-| `physics.max_flight_seconds` | `6.0` | physics | Thời gian bay tối đa của đạn trước khi biến mất |
+| `physics.max_flight_seconds` | `4.5` | physics | Thời gian bay tối đa của đạn trước khi biến mất |
 | `match.turn_time_seconds` | `20` | match | Thời gian mỗi lượt (giây). Hết = tự động kết thúc lượt |
 | `match.idle_timeout_minutes` | `2` | match | Phút không hoạt động trước khi match bị hủy |
 | `move.step_pixels` | `10` | movement | Số pixel di chuyển mỗi tick khi giữ nút move |

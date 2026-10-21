@@ -94,13 +94,49 @@ func pacedLaunch(prev, flight, landed float64) float64 {
 // The bot's chain: every bomb flies the same arc, so a steep (lobbed) shot keeps hitting a
 // target down one shaft while a flat one carves on past it. The bot lobs (|angle - 90| <=
 // chainBotLobSpan) when such a shot deals at least chainBotLobKeep of its best shot's damage.
-// A lob whose first bomb flies longer than chainBotMaxFlight s is left out: the later, deeper
-// bombs would pass the simulation's MaxFlightSeconds (6 s) and vanish in the shaft.
+// A lob whose first bomb flies longer than chainBotMaxFlight() s (chainBotFlightMargin under the
+// simulation's MaxFlightSeconds, 4.5 s) is left out: the later, deeper bombs would pass it and
+// vanish in the shaft. (Before the faster shells of migration 032: 4.5 s of 6 s; the same shot
+// now flies ~0.67 × as long, so the old 1.5 s margin is ~1 s.)
 const (
-	chainBotLobSpan   = 30.0
-	chainBotLobKeep   = 0.8
-	chainBotMaxFlight = 4.5
+	chainBotLobSpan      = 30.0
+	chainBotLobKeep      = 0.8
+	chainBotFlightMargin = 1.0
 )
+
+// chainBotMaxFlight is the longest first flight of the bot's lobbed chain (s): 3.5 s.
+func chainBotMaxFlight() float64 { return physics().MaxFlightSeconds - chainBotFlightMargin }
+
+// shaftMiss is how far (x) from the enemy the shot hits, or else lands nearest, its arc flown
+// without the players meets the terrain: where the later bombs dig the shaft the enemy falls
+// into. A steep shell hits the top of a body wherever its arc passes over it, so the plain
+// score (the explosion's distance to the feet) cannot tell an arc coming down onto the feet
+// from one passing beside them.
+func shaftMiss(m *Match, bot *BattlePlayerState, s shotPlan, weapon gamedata.WeaponConfig) float64 {
+	origin := shotOrigin(m.Terrain, bot)
+	r := SimulateProjectile(bot.PlayerID, bot.TeamID, origin, s.angle, s.power, weapon, m.State.Wind, m.Terrain, m.State.Players, drillPierce(bot))
+	if r.ExplosionPoint == nil {
+		return math.MaxFloat64
+	}
+	target := m.State.Players[r.HitPlayerID]
+	if target == nil {
+		for _, p := range m.State.Players {
+			if p.IsAlive && p.TeamID != bot.TeamID && (target == nil ||
+				math.Hypot(p.Position.X-r.ExplosionPoint.X, p.Position.Y-r.ExplosionPoint.Y) <
+					math.Hypot(target.Position.X-r.ExplosionPoint.X, target.Position.Y-r.ExplosionPoint.Y)) {
+				target = p
+			}
+		}
+	}
+	if target == nil {
+		return math.MaxFloat64
+	}
+	ground := SimulateProjectile(bot.PlayerID, bot.TeamID, origin, s.angle, s.power, weapon, m.State.Wind, m.Terrain, nil, drillPierce(bot))
+	if ground.ExplosionPoint == nil {
+		return math.MaxFloat64
+	}
+	return math.Abs(ground.ExplosionPoint.X - target.Position.X)
+}
 
 // botBombChain: the best lobbed shot at an enemy (lobShot) when it is nearly as good as the
 // best shot, else the best shot; it misses by the bot's hit chance like a normal shot.
@@ -122,9 +158,10 @@ func botBombChain(b *BotBrain, m *Match, bot *BattlePlayerState, weapon gamedata
 }
 
 // lobShot is the bot's steepest good shot: for every steep angle (5..chainBotLobSpan degrees
-// off the vertical, both sides) its best power (a coarse grid, then refined), and among those
+// off the vertical, both sides) its best power (a coarse grid, then refined; of the equally good
+// fine powers the one with the smallest shaftMiss), and among those
 // dealing at least chainBotLobKeep of the best one's damage the angle closest to the vertical
-// (the bombs then dig straight down onto the target), flying at most chainBotMaxFlight s.
+// (the bombs then dig straight down onto the target), flying at most chainBotMaxFlight() s.
 func (b *BotBrain) lobShot(m *Match, bot *BattlePlayerState, weapon gamedata.WeaponConfig) shotPlan {
 	var plans []shotPlan
 	top := 0.0
@@ -140,16 +177,29 @@ func (b *BotBrain) lobShot(m *Match, bot *BattlePlayerState, weapon gamedata.Wea
 				continue
 			}
 			c := best
+			var near []shotPlan // the fine powers around it
 			for dp := -2.0; dp <= 2.0; dp += 0.25 {
 				if power := c.power + dp; power >= botMinPower && power <= maxShotPower {
-					if s := b.evalShot(m, bot, bot.Position, angle, power, weapon); s.betterThan(best) {
+					s := b.evalShot(m, bot, bot.Position, angle, power, weapon)
+					near = append(near, s)
+					if s.betterThan(best) {
 						best = s
 					}
 				}
 			}
+			// As good, the one whose shaft starts nearest the enemy's feet (shaftMiss)
+			pick, pickMiss := best, shaftMiss(m, bot, best, weapon)
+			for _, s := range near {
+				if s.found && s.quality() == best.quality() {
+					if d := shaftMiss(m, bot, s, weapon); d < pickMiss {
+						pick, pickMiss = s, d
+					}
+				}
+			}
+			best = pick
 			r := SimulateProjectile(bot.PlayerID, bot.TeamID, shotOrigin(m.Terrain, bot), best.angle, best.power, weapon,
 				m.State.Wind, m.Terrain, m.State.Players, drillPierce(bot))
-			if flightEnd(r) > chainBotMaxFlight {
+			if flightEnd(r) > chainBotMaxFlight() {
 				continue
 			}
 			plans = append(plans, best)

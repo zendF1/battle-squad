@@ -140,11 +140,11 @@ func TestExportClientFixture(t *testing.T) {
 		walks = append(walks, fixtureWalk{StartX: sx, StartY: sy, TargetX: tx, X: x, Y: y})
 	}
 
-	// Shots use the getPhysics() defaults the client preview assumes.
+	// Shots use the gamedata.DefaultPhysics() the client preview assumes.
 	savedPhysics := gamedata.Physics
 	gamedata.Physics = nil
 	defer func() { gamedata.Physics = savedPhysics }()
-	_, _, windScale, _, _, _ := getPhysics()
+	windScale, speed := physics().WindScale, physics().ProjectileSpeedMultiplier
 	weapon := gamedata.WeaponConfig{ExplosionRadius: 20, ProjectileWeight: 1, WindInfluence: 1}
 	var shots []fixtureShot
 	loweredOrigins := 0 // shots whose origin sits below the body centre (low ceiling or embedded feet)
@@ -159,7 +159,7 @@ func TestExportClientFixture(t *testing.T) {
 		shot := fixtureShot{
 			FeetX: feet.X, FeetY: feet.Y,
 			X: origin.X, Y: origin.Y,
-			VX: power * 6.0 * math.Cos(rad), VY: -power * 6.0 * math.Sin(rad),
+			VX: power * speed * math.Cos(rad), VY: -power * speed * math.Sin(rad),
 			WindForce: float64(wind.Direction) * wind.Power * windScale * weapon.WindInfluence,
 		}
 		if r.ExplosionPoint != nil {

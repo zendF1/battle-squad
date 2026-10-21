@@ -64,7 +64,7 @@ func flightEnd(r *ProjectileResult) float64 {
 
 // fallDuration is the time a body takes to free-fall distance px under the configured gravity.
 func fallDuration(distance float64) float64 {
-	_, gravity, _, _, _, _ := getPhysics()
+	gravity := physics().Gravity
 	if distance <= 0 || gravity <= 0 {
 		return 0
 	}

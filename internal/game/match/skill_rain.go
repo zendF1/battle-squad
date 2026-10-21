@@ -25,11 +25,14 @@ const (
 	// grassland_valley (TestMissileRainOnRealMap), the rest still covers ~100 px around.
 	// (Before the playtest tuning: 6 + 2 × rank missiles of 0.35 × base, 0.1 s apart: ~1.0 ×
 	// base at rank 0, ~1.7 × at rank 4.)
-	rainFocus     = 2.0
-	rainDelay     = 0.5
-	rainInterval  = 0.05
-	rainStartY    = -60.0 // missiles start above the top of the map
-	rainDropPower = 250.0 // initial downward speed: power × 6 px/s (~0.38 s down to the ground; was 120, ~0.74 s)
+	rainFocus    = 2.0
+	rainDelay    = 0.5
+	rainInterval = 0.05
+	rainStartY   = -60.0 // missiles start above the top of the map
+	// rainDropSpeed is the missiles' initial downward speed (px/s; fired at power rainDropSpeed /
+	// ProjectileSpeedMultiplier): ~0.37 s down to the ground (was power 120 × 6, ~0.74 s; then
+	// power 250 × 6 = 1500 px/s, kept as a speed through the faster shells of migration 032).
+	rainDropSpeed = 1500.0
 	rainDamage    = 0.25
 	rainBlast     = 0.7
 	rainCrater    = 0.6
@@ -41,6 +44,9 @@ func init() {
 	registerSkill(effectMissileRain, resolveMissileRain)
 	registerBotSkill(effectMissileRain, botMissileRain)
 }
+
+// rainDropPower is the power that fires a missile down at rainDropSpeed.
+func rainDropPower() float64 { return rainDropSpeed / physics().ProjectileSpeedMultiplier }
 
 func rainCount(rank int) int      { return rainBaseCount + rainCountPerRank*rank }
 func rainSpread(rank int) float64 { return rainSpreadBase + rainSpreadPerRank*float64(rank) }
@@ -93,7 +99,7 @@ func resolveMissileRain(m *Match, s *skillShot) {
 		pick, bestEnd := -1, math.MaxFloat64
 		var best *ProjectileResult
 		for i, k := range left {
-			r := SimulateProjectile(player.PlayerID, player.TeamID, Vector2{X: xs[k], Y: rainStartY}, 270, rainDropPower,
+			r := SimulateProjectile(player.PlayerID, player.TeamID, Vector2{X: xs[k], Y: rainStartY}, 270, rainDropPower(),
 				drop, WindState{}, m.Terrain, m.State.Players, 0)
 			if end := launch(k) + flightEnd(r); end < bestEnd {
 				pick, best, bestEnd = i, r, end

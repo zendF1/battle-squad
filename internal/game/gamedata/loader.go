@@ -145,6 +145,30 @@ type PhysicsConfig struct {
 var Data *GameData
 var Physics *PhysicsConfig
 
+// DefaultPhysics is the physics used when a game_settings row is missing (and by the match when
+// Physics is not loaded). The shell physics (playtest round 3, migration 032_faster_shells):
+// speed power × 9.6 px/s (was 6), gravity 445 px/s² (was 200), wind W × 67 × influence /
+// weight px/s² (was 30), at most 4.5 s of flight (was 6). The Godot client mirrors them
+// (match/aim/trajectory_predictor.gd, aim_aid.gd).
+func DefaultPhysics() *PhysicsConfig {
+	return &PhysicsConfig{
+		Gravity:                   445.0,
+		ProjectileSpeedMultiplier: 9.6,
+		WindScale:                 67.0,
+		PlayerHitRadius:           24.0,
+		TimeStep:                  0.02,
+		PathRecordStep:            0.05,
+		MaxFlightSeconds:          4.5,
+		TurnTimeSeconds:           20,
+		IdleTimeoutMinutes:        2,
+		MoveStepPixels:            2,
+		MoveEnergyCostPer2px:      1.0,
+		FallDamageThreshold:       50.0,
+		FallDamagePerPixel:        0.5,
+		DefenseK:                  DefaultDefenseK,
+	}
+}
+
 // DefaultMoveEnergy is the base move energy per turn of a character missing
 // from the game data or configured with mobility <= 0.
 const DefaultMoveEnergy = 100
@@ -437,7 +461,7 @@ func LoadGameDataFromDB(db *database.PostgresDB) error {
 }
 
 // loadPhysicsFromDB reads game_settings rows and maps them to PhysicsConfig.
-// Uses sensible defaults if a key is not found in the table.
+// Uses DefaultPhysics() for a key not found in the table.
 func loadPhysicsFromDB(ctx context.Context, db *database.PostgresDB) (*PhysicsConfig, error) {
 	settings := make(map[string]string)
 
@@ -457,55 +481,39 @@ func loadPhysicsFromDB(ctx context.Context, db *database.PostgresDB) (*PhysicsCo
 		return nil, fmt.Errorf("error iterating game_settings: %w", err)
 	}
 
-	p := &PhysicsConfig{
-		// Defaults
-		Gravity:                   200.0,
-		ProjectileSpeedMultiplier: 6.0,
-		WindScale:                 30.0,
-		PlayerHitRadius:           24.0,
-		TimeStep:                  0.02,
-		PathRecordStep:            0.05,
-		MaxFlightSeconds:          6.0,
-		TurnTimeSeconds:           20,
-		IdleTimeoutMinutes:        2,
-		MoveStepPixels:            2,
-		MoveEnergyCostPer2px:      1.0,
-		FallDamageThreshold:       50.0,
-		FallDamagePerPixel:        0.5,
-		DefenseK:                  DefaultDefenseK,
-	}
+	p := DefaultPhysics()
 
-	if v, ok := settings["gravity"]; ok {
+	if v, ok := physicsSetting(settings, "gravity"); ok {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			p.Gravity = f
 		}
 	}
-	if v, ok := settings["projectile_speed_multiplier"]; ok {
+	if v, ok := physicsSetting(settings, "projectile_speed_multiplier"); ok {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			p.ProjectileSpeedMultiplier = f
 		}
 	}
-	if v, ok := settings["wind_scale"]; ok {
+	if v, ok := physicsSetting(settings, "wind_scale"); ok {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			p.WindScale = f
 		}
 	}
-	if v, ok := settings["player_hit_radius"]; ok {
+	if v, ok := physicsSetting(settings, "player_hit_radius"); ok {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			p.PlayerHitRadius = f
 		}
 	}
-	if v, ok := settings["time_step"]; ok {
+	if v, ok := physicsSetting(settings, "time_step"); ok {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			p.TimeStep = f
 		}
 	}
-	if v, ok := settings["path_record_step"]; ok {
+	if v, ok := physicsSetting(settings, "path_record_step"); ok {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			p.PathRecordStep = f
 		}
 	}
-	if v, ok := settings["max_flight_seconds"]; ok {
+	if v, ok := physicsSetting(settings, "max_flight_seconds"); ok {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			p.MaxFlightSeconds = f
 		}
@@ -547,6 +555,16 @@ func loadPhysicsFromDB(ctx context.Context, db *database.PostgresDB) (*PhysicsCo
 	}
 
 	return p, nil
+}
+
+// physicsSetting is the game_settings row physics.<name> (the key the admin seed and the
+// migrations use), or a bare <name> row when there is none.
+func physicsSetting(settings map[string]string, name string) (string, bool) {
+	if v, ok := settings["physics."+name]; ok {
+		return v, true
+	}
+	v, ok := settings[name]
+	return v, ok
 }
 
 func (gd *GameData) validate() error {

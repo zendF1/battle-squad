@@ -100,8 +100,10 @@ func TestCraterDepthByCharacter(t *testing.T) {
 			t.Fatalf("%s: blast radius %v, want %d", id, s.Projectiles[0].ExplosionRadius, w.ExplosionRadius)
 		}
 	}
-	if math.Abs(depth["rookie"]-20) > 2 {
-		t.Fatalf("Rookie crater %v px deep, want about 20 (terrain damage 25)", depth["rookie"])
+	// The radius, plus how far inside the ground the shell is when it explodes (the segment is
+	// sampled every <= 4 px: 3 px at the faster shells of migration 032, was 1)
+	if depth["rookie"] < 20 || depth["rookie"] > 24 {
+		t.Fatalf("Rookie crater %v px deep, want 20..24 (terrain damage 25)", depth["rookie"])
 	}
 	for _, id := range []string{"rookie", "spark", "flora"} {
 		if depth["tanko"] < 2*depth[id] {

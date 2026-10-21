@@ -22,13 +22,13 @@ type settingDef struct {
 }
 
 var defaultSettings = []settingDef{
-	{"physics.gravity", "200", "number", "Lực hấp dẫn kéo đạn xuống. Tăng = đạn rơi nhanh, tầm bắn ngắn", "physics"},
-	{"physics.projectile_speed_multiplier", "6.0", "number", "Hệ số tốc độ đạn = power × giá trị này. Tăng = đạn bay xa hơn", "physics"},
-	{"physics.wind_scale", "30.0", "number", "Hệ số ảnh hưởng gió lên đạn. Tăng = gió đẩy đạn lệch nhiều hơn", "physics"},
+	{"physics.gravity", "445", "number", "Lực hấp dẫn kéo đạn xuống. Tăng = đạn rơi nhanh, tầm bắn ngắn", "physics"},
+	{"physics.projectile_speed_multiplier", "9.6", "number", "Hệ số tốc độ đạn = power × giá trị này. Tăng = đạn bay xa hơn", "physics"},
+	{"physics.wind_scale", "67", "number", "Hệ số ảnh hưởng gió lên đạn. Tăng = gió đẩy đạn lệch nhiều hơn", "physics"},
 	{"physics.player_hit_radius", "24.0", "number", "Bán kính va chạm player (pixels). Tăng = dễ bắn trúng hơn", "physics"},
 	{"physics.time_step", "0.02", "number", "Bước thời gian mô phỏng vật lý (giây). Giảm = chính xác hơn, tốn CPU hơn", "physics"},
 	{"physics.path_record_step", "0.05", "number", "Khoảng thời gian ghi path đạn cho animation client", "physics"},
-	{"physics.max_flight_seconds", "6.0", "number", "Thời gian bay tối đa của đạn trước khi biến mất", "physics"},
+	{"physics.max_flight_seconds", "4.5", "number", "Thời gian bay tối đa của đạn trước khi biến mất", "physics"},
 	{"match.turn_time_seconds", "20", "number", "Thời gian mỗi lượt (giây). Hết = tự động kết thúc lượt", "match"},
 	{"match.idle_timeout_minutes", "2", "number", "Phút không hoạt động trước khi match bị hủy", "match"},
 	{"move.step_pixels", "10", "number", "Số pixel di chuyển mỗi tick khi giữ nút move", "movement"},
