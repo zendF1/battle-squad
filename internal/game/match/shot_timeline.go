@@ -306,6 +306,7 @@ func (m *Match) broadcastShot(shot *ShotResolved, tl *shotTimeline) {
 		shot.SkillEnergies[id] = p.SkillEnergy
 	}
 	shooter.ShotTurns++
+	m.resetSelection() // the shot carries the actual choice
 
 	payload, _ := json.Marshal(shot)
 	m.broadcast(ws.Message{Event: "ShotResolved", Data: payload})

@@ -59,16 +59,20 @@ func (m *Match) snapshotPayload() []byte {
 }
 
 // matchStateSync is the MatchStateSync payload: the snapshot plus, for the requesting player,
-// the seq of the last Move the match loop took from them this turn (0 if none; see noteMoveSeq).
+// the seq of the last Move the match loop took from them this turn (0 if none; see noteMoveSeq),
+// and the current player's armed skill or shot item (omitted for the weapon), so a rejoining
+// client shows that player's use badge.
 type matchStateSync struct {
 	matchSnapshot
-	LastMoveSeq int `json:"lastMoveSeq"`
+	LastMoveSeq    int             `json:"lastMoveSeq"`
+	SelectedAction *ActionSelected `json:"selectedAction,omitempty"`
 }
 
 func (m *Match) syncPayload(playerID string) []byte {
 	payload, _ := json.Marshal(matchStateSync{
-		matchSnapshot: matchSnapshot{MatchState: m.State, Terrain: m.Terrain.Snapshot()},
-		LastMoveSeq:   m.lastMoveSeq[playerID],
+		matchSnapshot:  matchSnapshot{MatchState: m.State, Terrain: m.Terrain.Snapshot()},
+		LastMoveSeq:    m.lastMoveSeq[playerID],
+		SelectedAction: m.syncSelection(),
 	})
 	return payload
 }

@@ -77,6 +77,7 @@ func (m *Match) botStep(ctx context.Context, turn botTurnState, step int) {
 	case ShootAction:
 		// Aim visibly first; the shot follows unless the turn ends meanwhile
 		delay := randomDelay(botAimMinDelay, botAimMaxDelay)
+		m.selectBotAction(bot, act) // skill / shot item: its badge shows while it aims
 		m.broadcastAiming(bot.PlayerID, act.Angle, delay)
 		m.runOnTurnAfter(ctx, delay, func(ctx context.Context) {
 			m.botShoot(ctx, bot.PlayerID, act)

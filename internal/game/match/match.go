@@ -62,6 +62,15 @@ type Match struct {
 	resolving    bool                 // the current turn's action is animating; no further actions or timer ticks
 	lastMoveSeq  map[string]int       // playerID → seq of the last Move the loop took from them this turn (see noteMoveSeq)
 
+	// selection is what the current player armed this turn (SelectAction, or a bot's skill /
+	// shot item); selectionSent the last ActionSelected broadcast this turn; selectSentAt when
+	// each player's last ActionSelected went out; selectFlushPending a coalesced broadcast is
+	// scheduled (see queueSelectionBroadcast). Reset by startTurn and every resolved shot.
+	selection          ActionSelected
+	selectionSent      ActionSelected
+	selectSentAt       map[string]time.Time
+	selectFlushPending bool
+
 	// processRewards settles a normally ended match: rewards, consuming spent items and
 	// releasing the rest. releaseReservations returns every still-reserved item of the
 	// match; nil without a database. Fields so tests can fake them.
@@ -180,6 +189,7 @@ func NewMatch(
 		BotTier:      DefaultBotTier,
 		lastAction:   make(map[string]time.Time),
 		lastMoveSeq:  make(map[string]int),
+		selectSentAt: make(map[string]time.Time),
 	}
 	m.processRewards = func(ctx context.Context, stats map[string]*PlayerStats, usedItems map[string][]string) (map[string]RewardResult, error) {
 		return ProcessMatchRewards(ctx, m.db, m.economyRepo, m.State.MatchID, m.State.Mode, m.State.MapID, stats, usedItems, m.TeamRatings, m.EloParams)
@@ -422,6 +432,13 @@ func (m *Match) handleEvent(ev matchEvent) {
 	case "EndTurn":
 		m.el.Log("EndTurn", actorID, nil)
 		m.processEndTurn(ev.ctx, client)
+	case "SelectAction":
+		// Not rate limited like the actions above (it would delay the Shoot that follows);
+		// its broadcasts are coalesced instead
+		var sel SelectAction
+		if err := json.Unmarshal(msg.Data, &sel); err == nil {
+			m.processSelectAction(ev.ctx, client, sel)
+		}
 	case "Reconnect":
 		m.processReconnect(ev.ctx, client)
 	case "Leave":
@@ -444,6 +461,7 @@ func (m *Match) startTurn(ctx context.Context) {
 	m.turnSeq++
 	m.resolving = false
 	clear(m.lastMoveSeq) // a new turn starts a new replay on the mover's client
+	m.resetSelection()   // clients hide the badge at TurnStarted
 
 	player := m.State.Players[m.State.CurrentPlayerID]
 	player.MoveEnergy = turnMoveEnergy(player) // Reset move energy to full

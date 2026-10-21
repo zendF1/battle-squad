@@ -471,6 +471,7 @@ Client message → CompositeWSHandler
 | `Shoot` | `{angle, power, actionMode, itemId?}` | Bắn (weapon hoặc skill) |
 | `UseItem` | `{itemId, targetPosition?}` | Dùng item |
 | `EndTurn` | `{}` | Kết thúc lượt |
+| `SelectAction` | `{actionMode, itemId?}` | Người tới lượt vừa chọn (arm) trong HUD: `weapon`, `skill` hoặc `item` + `itemId`. Không commit gì, `Shoot` vẫn mang lựa chọn thật; đổi ý thoải mái, `weapon` = bỏ chọn. Server chỉ nhận từ người tới lượt, trong lượt, khi chưa có phát bắn đang resolve; `skill` cần skill energy 100 và không bị stun / freeze; `item` cần còn item đó trong túi và là item bắn (`power_shot`, `drill_bomb`, `spider_net`, `freeze_bomb`, `air_strike`, `teleport`; teleport cần di chuyển được). Item dùng ngay (medkit, wind_stopper...) vẫn đi `UseItem`. Sai thì bỏ qua im lặng. Không bị rate limit 150 ms của các action khác; server gộp broadcast (xem `ActionSelected`). Server cũ bỏ qua event này |
 | `Reconnect` | `{}` | Kết nối lại sau disconnect |
 | `Leave` | `{}` | Rời trận |
 
@@ -483,11 +484,12 @@ Client message → CompositeWSHandler
 | `TurnTimerTick` | `{timeLeft}` | Đếm ngược (mỗi 1s) |
 | `PlayerMoved` | `{playerId, position, moveEnergy, seq?}` | Player di chuyển; có `seq` khi trả lời `Move` có `seq` |
 | `PlayerAiming` | `{playerId, angle, durationMs}` | Player đang ngắm trước khi bắn. `angle` cùng quy ước với `Shoot.angle` và là đúng góc sẽ bắn (phát cố tình trượt thì là góc trượt); `ShotResolved` của player đó tới sau khoảng `durationMs`. Không gửi power. Hiện chỉ gửi cho bot; nếu lượt đổi (timeout) trong lúc ngắm thì không có phát bắn |
+| `ActionSelected` | `{playerId, actionMode, skillId?, itemId?}` | Người tới lượt đang chọn gì (gửi mọi player): `skill` (+ `skillId`), `item` (+ `itemId`), `weapon` (bỏ chọn). Client hiện badge trên đầu player đó và giữ tới khi `weapon`, lượt đổi (`TurnStarted`) hoặc hết replay của phát bắn. Chỉ gửi khi đổi so với lần gửi trước trong lượt, tối đa 1 lần / 100 ms / player (`selectBroadcastInterval`; đổi trong cửa sổ thì gửi lựa chọn mới nhất lúc hết cửa sổ). Server reset lựa chọn ở đầu lượt và khi phát bắn resolve, không gửi gì thêm. Bot: gửi ngay trước `PlayerAiming` khi bot sắp dùng skill hoặc item bắn |
 | `ShotResolved` | `{shooterId, actionMode, skillId?, itemId?, skillEnergy, skillEnergies, projectiles[], events[], duration}` | Toàn bộ kết quả một lượt bắn (weapon, skill, teleport). `skillEnergy` = năng lượng skill của người bắn sau phát bắn; `skillEnergies` = `{playerId: energy}` của mọi player sau phát bắn (người bị địch đánh trúng +10, xem Kỹ năng) |
 | `ItemUsed` | `{playerId, itemId, players, wind}` | Item bị tiêu hao |
 | `PlayerDamaged` | `[{playerId, damage, hp, shield, isAlive, type}]` | Damage đầu lượt của người tới lượt, ngoài phát bắn: `type` `lava` (75) hoặc `burn` (10% máu tối đa). Không qua defense, khiên chịu trước (`shield` = khiên còn lại). Gửi trước `TurnStarted`; nếu chết thì không có `TurnStarted` cho họ: server kiểm tra thắng thua rồi chuyển lượt |
 | `MatchEnded` | `{winningTeam, rewards}` | Trận kết thúc |
-| `MatchStateSync` | `MatchState` + `terrain` + `lastMoveSeq` | Full sync trả lời `Reconnect`. `lastMoveSeq`: `seq` của `Move` cuối cùng của người gửi `Reconnect` mà match loop đã nhận trong lượt hiện tại, kể cả `Move` bị bỏ (rate limit, đang resolve, không hợp lệ); `0` nếu chưa có hoặc không phải lượt của họ; reset khi lượt mới bắt đầu. Snapshot đã phản ánh mọi `Move` có `seq <= lastMoveSeq` |
+| `MatchStateSync` | `MatchState` + `terrain` + `lastMoveSeq` + `selectedAction?` | Full sync trả lời `Reconnect`. `selectedAction` (`ActionSelected` của người tới lượt, cả khi broadcast còn đang gộp) chỉ có khi họ đang chọn skill / item, để client vào lại vẫn hiện badge. `lastMoveSeq`: `seq` của `Move` cuối cùng của người gửi `Reconnect` mà match loop đã nhận trong lượt hiện tại, kể cả `Move` bị bỏ (rate limit, đang resolve, không hợp lệ); `0` nếu chưa có hoặc không phải lượt của họ; reset khi lượt mới bắt đầu. Snapshot đã phản ánh mọi `Move` có `seq <= lastMoveSeq` |
 
 **`ShotResolved`:** server tính xong toàn bộ phát bắn và state đã cập nhật trước khi gửi; client chỉ phát lại. `projectiles[]` là đường bay (`path[]` với `time`) của từng viên đạn; `time` luôn tính từ lúc bắn, nên viên phóng trễ (bom liên hoàn, tên lửa) có `path[0].time = launchDelay > 0` và client chỉ hiện nó từ lúc đó. Mỗi projectile: `{projectileId, ownerPlayerId, skillId?, kind?, launchDelay?, path[], hitPlayerId?, explosionPoint?, explosionRadius, craterRadius}`; `kind` (chỉ với skill): `flare` (pháo hiệu, đáp không nổ), `missile` (tên lửa rơi từ đỉnh map), `bomb` (bom liên hoàn), `seed` (hạt của Hoa hồi xuân, đáp lên đồng đội `hitPlayerId`, không nổ); thiếu = đạn thường. `events[]` sắp theo `t` (giây kể từ lúc bắn):
 
@@ -551,7 +553,7 @@ startTurn()
      (không lên lịch bot)
   6. Nếu bot → delay 1–2.5s (botTurnStartMin/MaxDelay) → botStep → DecideAction
      - Medkit / Move: xử lý ngay, botStep tiếp sau botFollowUpDelay 1.5s
-     - Shoot: broadcast PlayerAiming {playerId, angle, durationMs}, bắn sau 1.2–2.4s
+     - Shoot: skill / item bắn → broadcast ActionSelected trước; broadcast PlayerAiming {playerId, angle, durationMs}, bắn sau 1.2–2.4s
        (botAimMin/MaxDelay) qua runOnTurnAfter — bị huỷ nếu lượt đổi/trận kết thúc;
        lúc bắn kiểm tra lại vẫn là lượt bot, bot còn sống, chưa resolving
 
