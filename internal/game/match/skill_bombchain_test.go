@@ -7,9 +7,10 @@ import (
 	"battle-squad/internal/game/gamedata"
 )
 
-// TestBombChain: rank 2 → 5 bombs on one trajectory at least 0.3 s apart, craters shrinking
-// ×0.85; fired straight up they come down the same column, the later ones exploding deeper; damage split evenly and capped at the total; the enemy rooted;
-// its falls play one after another.
+// TestBombChain: rank 2 → 5 bombs on one trajectory at least chainLaunchGap (0.1 s) apart,
+// craters shrinking ×0.85; fired straight up they come down the same column, the later ones
+// exploding deeper; damage split evenly and capped at the total; the enemy rooted; its falls
+// play one after another.
 func TestBombChain(t *testing.T) {
 	m, clients := flatSkillMatch(t, skillPlayer{"p1", 1, "tanko", 400}, skillPlayer{"p2", 2, "rookie", 415})
 	m.State.Players["p1"].SkillRank = 2
@@ -23,7 +24,7 @@ func TestBombChain(t *testing.T) {
 	lastY := -1.0
 	for i, r := range s.Projectiles {
 		if r.Kind != "bomb" || r.Path[0].Position != start || r.Path[0].Time != r.LaunchDelay ||
-			(i == 0 && r.LaunchDelay != 0) || (i > 0 && r.LaunchDelay < s.Projectiles[i-1].LaunchDelay+0.3-1e-9) {
+			(i == 0 && r.LaunchDelay != 0) || (i > 0 && r.LaunchDelay < s.Projectiles[i-1].LaunchDelay+chainLaunchGap-1e-9) {
 			t.Fatalf("bomb %d: kind %q start %v launch %v", i, r.Kind, r.Path[0].Position, r.LaunchDelay)
 		}
 		if r.ExplosionRadius != float64(w.ExplosionRadius)*chainBlast ||
@@ -89,20 +90,21 @@ func assertChainCoherent(t *testing.T, s ShotResolved) {
 // TestPacedLaunch: a chain bomb leaves chainLaunchGap after the previous one, or later so that
 // it explodes chainHitGap after the last landing.
 func TestPacedLaunch(t *testing.T) {
-	if got := pacedLaunch(0.3, 1.5, 1.0); math.Abs(got-0.6) > 1e-9 {
-		t.Fatalf("no fall in the way: %v, want 0.6", got)
+	if got := pacedLaunch(0.3, 1.5, 1.0); math.Abs(got-0.4) > 1e-9 {
+		t.Fatalf("no fall in the way: %v, want 0.4", got)
 	}
 	if got := pacedLaunch(0.3, 1.5, 2.4); math.Abs(got-(2.4+chainHitGap-1.5)) > 1e-9 {
 		t.Fatalf("waiting for a landing at 2.4: %v", got)
 	}
 }
 
-// TestBombChainKeepsFloor: seven bombs dig through 400 px of ground but stop chainFloorMargin
-// above the bottom of the map; nobody falls out of it.
+// TestBombChainKeepsFloor: seven bombs (a 220% terrain bonus on cannon_ball's 52 px crater) dig
+// through 400 px of ground but stop chainFloorMargin above the bottom of the map; nobody falls
+// out of it.
 func TestBombChainKeepsFloor(t *testing.T) {
 	m, clients := flatSkillMatch(t, skillPlayer{"p1", 1, "tanko", 400}, skillPlayer{"p2", 2, "rookie", 415})
 	m.State.Players["p1"].SkillRank = 4
-	m.State.Players["p1"].TerrainDamageBonus = 60
+	m.State.Players["p1"].TerrainDamageBonus = 220
 	s := fireSkill(t, m, clients, "p1", 90, 10)
 	floor := float64(m.Terrain.Height) - chainFloorMargin
 	deepest := 0.0

@@ -2,7 +2,7 @@
   name: Basic Rocket
   damage: 480
   explosionRadius: 40
-  terrainDamage: 50
+  terrainDamage: 25
   projectileWeight: 1.0
   windInfluence: 1.0
   multiHit: 1
@@ -11,7 +11,7 @@
   name: Cannon Ball
   damage: 420
   explosionRadius: 60
-  terrainDamage: 130
+  terrainDamage: 65
   projectileWeight: 1.5
   windInfluence: 0.5
   multiHit: 1

@@ -7,10 +7,10 @@
   name: Mưa tên lửa
   cooldownTurn: 2
   effectType: missile_rain
-  projectileCount: 6
+  projectileCount: 12
   statusEffectId: burn
   damageMultiplier: 1.0
-  description: "Bắn pháo hiệu; tên lửa rơi xuống quanh chỗ nó đáp (6 quả, +2 mỗi cấp súng), mỗi quả 35% sát thương; địch trúng bị bỏng: mất 10% máu tối đa đầu lượt sau."
+  description: "Bắn pháo hiệu; tên lửa rơi xuống quanh chỗ nó đáp (12 quả, +4 mỗi cấp súng), mỗi quả 25% sát thương; địch trúng bị bỏng: mất 10% máu tối đa đầu lượt sau."
 
 - skillId: heavy_bomb
   characterId: tanko

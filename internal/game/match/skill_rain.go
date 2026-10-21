@@ -15,21 +15,22 @@ import (
 // rainCrater ×; the whole rain deals one target at most rainCap × base (before defense).
 // Every enemy damaged burns.
 const (
-	rainBaseCount     = 6
-	rainCountPerRank  = 2
+	rainBaseCount     = 12
+	rainCountPerRank  = 4
 	rainSpreadBase    = 90.0
 	rainSpreadPerRank = 15.0
 	// rainFocus packs the columns toward the flare: column offset = spread × |v|^rainFocus for
-	// v spread evenly over -1..1, so half of them fall within ± spread / 4. With 1 (even over
-	// the spread) a well placed flare dealt its target ~0.65 × base at any rank (2 of the 14
-	// missiles hit); with 2 it is ~1.0 × base at rank 0 up to ~1.7 × base at rank 4 on
+	// v spread evenly over -1..1, so half of them fall within ± spread / 4. A well placed flare
+	// deals its target ~1.4 × base at rank 0 (12 missiles) and the cap at rank 4 (28) on
 	// grassland_valley (TestMissileRainOnRealMap), the rest still covers ~100 px around.
+	// (Before the playtest tuning: 6 + 2 × rank missiles of 0.35 × base, 0.1 s apart: ~1.0 ×
+	// base at rank 0, ~1.7 × at rank 4.)
 	rainFocus     = 2.0
 	rainDelay     = 0.5
-	rainInterval  = 0.1
+	rainInterval  = 0.05
 	rainStartY    = -60.0 // missiles start above the top of the map
 	rainDropPower = 120.0 // initial downward speed: power × 6 px/s (~0.7 s down to the ground)
-	rainDamage    = 0.35
+	rainDamage    = 0.25
 	rainBlast     = 0.7
 	rainCrater    = 0.6
 	rainCap       = 2.0

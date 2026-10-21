@@ -74,7 +74,7 @@ func identityMatch(t *testing.T, shooterChar string, shooterX float64, targetCha
 }
 
 // TestCraterDepthByCharacter: a normal shot into flat ground. The crater radius is the
-// weapon's terrain damage × 0.8 px, so Tanko (130) digs far deeper than the others.
+// weapon's terrain damage × 0.8 px, so Tanko (65) digs far deeper than the others.
 func TestCraterDepthByCharacter(t *testing.T) {
 	useConfigGameData(t)
 	depth := map[string]float64{}
@@ -100,8 +100,8 @@ func TestCraterDepthByCharacter(t *testing.T) {
 			t.Fatalf("%s: blast radius %v, want %d", id, s.Projectiles[0].ExplosionRadius, w.ExplosionRadius)
 		}
 	}
-	if math.Abs(depth["rookie"]-40) > 2 {
-		t.Fatalf("Rookie crater %v px deep, want about 40 (his 40 px blast, as before)", depth["rookie"])
+	if math.Abs(depth["rookie"]-20) > 2 {
+		t.Fatalf("Rookie crater %v px deep, want about 20 (terrain damage 25)", depth["rookie"])
 	}
 	for _, id := range []string{"rookie", "spark", "flora"} {
 		if depth["tanko"] < 2*depth[id] {

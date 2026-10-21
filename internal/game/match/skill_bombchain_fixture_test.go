@@ -121,7 +121,7 @@ func TestBombChainOnRealMap(t *testing.T) {
 		hits[k] = h
 		t.Logf("%s: %d bombs, hits %v, damage %v, %.2f s", k, len(s.Projectiles), h, d, s.Duration)
 	}
-	if hits["lob"]["e1"] < 3 || hits["lob"]["e1"] <= hits["flat"]["e1"] {
+	if hits["lob"]["e1"] < 5 || hits["lob"]["e1"] <= hits["flat"]["e1"] {
 		t.Fatalf("lobbed chain hits %d times, flat %d", hits["lob"]["e1"], hits["flat"]["e1"])
 	}
 	if out := os.Getenv("BOMBCHAIN_FIXTURE_OUT"); out != "" {

@@ -25,7 +25,7 @@ import (
 const (
 	chainBaseCount    = 3
 	chainCountPerRank = 1
-	chainLaunchGap    = 0.3
+	chainLaunchGap    = 0.1
 	chainTotalBase    = 1.8
 	chainTotalPerRank = 0.15
 	chainBlast        = 1.3

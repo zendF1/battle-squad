@@ -20,7 +20,7 @@ func ReduceByDefense(raw float64, defense int) float64 {
 }
 
 // craterPxPerTerrainDamage converts a weapon's terrain damage to the radius (px) of the
-// crater its explosion carves: Rookie's 50 carves 40 px, the size of his blast.
+// crater its explosion carves: Rookie's 25 carves 20 px, Tanko's 65 52 px.
 const craterPxPerTerrainDamage = 0.8
 
 // weaponCraterRadius is the crater a weapon's explosion carves, before skills, fragile

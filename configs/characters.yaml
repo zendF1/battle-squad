@@ -6,7 +6,7 @@
   mobility: 100
   defense: 50
   skillPower: 50
-  terrainDamage: 50
+  terrainDamage: 25
   difficulty: 1
   weaponId: basic_rocket
   skillId: triple_shot
@@ -19,7 +19,7 @@
   mobility: 80
   defense: 60
   skillPower: 65
-  terrainDamage: 130
+  terrainDamage: 65
   difficulty: 2
   weaponId: cannon_ball
   skillId: heavy_bomb

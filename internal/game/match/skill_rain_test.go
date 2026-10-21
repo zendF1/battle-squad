@@ -37,12 +37,12 @@ func TestMissileRain(t *testing.T) {
 		}
 	}
 	rain := eventsOf(s, "rain", "")
-	if len(rain) != 1 || rain[0].Count != 14 || rain[0].Radius != 150 || math.Abs(rain[0].T-(flightEnd(flare)+rainDelay)) > 1e-9 {
+	if len(rain) != 1 || rain[0].Count != 28 || rain[0].Radius != 150 || math.Abs(rain[0].T-(flightEnd(flare)+rainDelay)) > 1e-9 {
 		t.Fatalf("rain events %+v", rain)
 	}
 	missiles := s.Projectiles[1:]
-	if len(missiles) != 14 {
-		t.Fatalf("%d missiles, want 14 at rank 4", len(missiles))
+	if len(missiles) != 28 {
+		t.Fatalf("%d missiles, want 28 at rank 4", len(missiles))
 	}
 	launches := map[int]bool{}
 	w := gamedata.Data.Weapons["basic_rocket"]
@@ -134,7 +134,7 @@ func TestBotRainAimedLikeItsBestShot(t *testing.T) {
 
 func TestRainCountsPerRank(t *testing.T) {
 	for rank := 0; rank <= 4; rank++ {
-		if got, want := rainCount(rank), 6+2*rank; got != want {
+		if got, want := rainCount(rank), 12+4*rank; got != want {
 			t.Errorf("rain count rank %d = %d, want %d", rank, got, want)
 		}
 		if got, want := rainSpread(rank), 90+15*float64(rank); got != want {
@@ -165,7 +165,7 @@ func TestRainColumnsFocus(t *testing.T) {
 			t.Fatalf("rank %d: %d of %d columns within ± %v (want %d ± 1), farthest %v", rank, inner, n, spread/4, n/2, far)
 		}
 	}
-	edge := rainColumns(rand.New(rand.NewSource(1)), 14, 20, 150, 1600)
+	edge := rainColumns(rand.New(rand.NewSource(1)), 28, 20, 150, 1600)
 	for _, x := range edge {
 		if x < 2 {
 			t.Fatalf("column %v off the map", x)
@@ -211,8 +211,9 @@ func rainMapMatch(t *testing.T, id, weapon string, enemies ...skillPlayer) (*Mat
 
 // TestMissileRainOnRealMap plays the rain on grassland_valley, the flare aimed like the bot's
 // best shot at a Tanko 600 px away with a second one 100 px behind it, over many turns (rain
-// seeds): the aimed target takes ~1 × base at rank 0 and ~1.7 × base at rank 4 (cap 2 ×), the
-// one behind still takes some, both burn, and the whole skill replays in under ~4.5 s.
+// seeds): the aimed target takes ~1.4 × base at rank 0 and ~1.8 × base at rank 4 (cap 2 ×), the
+// one behind still takes some at rank 4, both burn, the missiles fall within ~2.1 s and the
+// whole skill replays in under ~4.5 s.
 func TestMissileRainOnRealMap(t *testing.T) {
 	useConfigGameData(t)
 	const runs = 20
@@ -221,9 +222,9 @@ func TestMissileRainOnRealMap(t *testing.T) {
 		rank           int
 		weapon         string
 		minHit, maxHit float64 // mean damage to the aimed target, × base
-	}{{0, "", 0.75, 1.3}, {4, "rookie_weapon_lv40", 1.4, 2.0}} {
-		var aimed, behind, burned int
-		longest := 0.0
+	}{{0, "", 1.15, 1.7}, {4, "rookie_weapon_lv40", 1.6, 2.0}} {
+		var aimed, behind, burned, capped int
+		longest, rainLongest := 0.0, 0.0
 		for k := 0; k < runs; k++ {
 			m, cl := rainMapMatch(t, fmt.Sprintf("rain-%d", k), c.weapon, skillPlayer{"e1", 2, "tanko", 1050}, skillPlayer{"e2", 2, "tanko", 1150})
 			p := m.State.Players["rookie"]
@@ -240,21 +241,29 @@ func TestMissileRainOnRealMap(t *testing.T) {
 					burned++
 				}
 			}
-			if limit := capOfBase(rainCap * base)(m.State.Players["e1"]); totalDamage(s, "e1") > limit {
+			limit := capOfBase(rainCap * base)(m.State.Players["e1"])
+			if totalDamage(s, "e1") > limit {
 				t.Fatalf("rank %d: %d damage over the cap %d", c.rank, totalDamage(s, "e1"), limit)
 			}
+			if totalDamage(s, "e1") >= limit-1 {
+				capped++
+			}
 			longest = math.Max(longest, s.Duration)
+			if rain := eventsOf(s, "rain", ""); len(rain) == 1 {
+				rainLongest = math.Max(rainLongest, s.Duration-rain[0].T)
+			}
 		}
 		mean := float64(aimed) / runs / base
-		t.Logf("rank %d: aimed %.2f × base, behind %.2f × base, %d burns, longest %.2f s", c.rank, mean, float64(behind)/runs/base, burned, longest)
+		t.Logf("rank %d: aimed %.2f × base (%d of %d runs at the cap), behind %.2f × base, %d burns, rain %.2f s, longest %.2f s",
+			c.rank, mean, capped, runs, float64(behind)/runs/base, burned, rainLongest, longest)
 		if mean < c.minHit || mean > c.maxHit {
 			t.Fatalf("rank %d: aimed target took %.2f × base on average, want %.2f..%.2f", c.rank, mean, c.minHit, c.maxHit)
 		}
 		if c.rank == 4 && (behind == 0 || burned <= runs) {
 			t.Fatalf("rank 4: the enemy behind took %d, %d burns", behind, burned)
 		}
-		if longest > 4.5 {
-			t.Fatalf("rank %d: the rain lasts %.2f s", c.rank, longest)
+		if longest > 4.5 || rainLongest > 2.3 {
+			t.Fatalf("rank %d: the skill lasts %.2f s, the rain %.2f s", c.rank, longest, rainLongest)
 		}
 	}
 }

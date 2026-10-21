@@ -31,15 +31,15 @@ func readMigration(t *testing.T, name string) string {
 	return string(sql)
 }
 
-// Migration 028 turns the old rows into configs/skills.yaml's (what the admin seed inserts on a
-// fresh database), and reruns keep later admin edits.
+// Migrations 028 then 030 turn the old rows into configs/skills.yaml's (what the admin seed
+// inserts on a fresh database), and reruns keep later admin edits.
 func TestSkillRedesignMigrationMatchesSeed(t *testing.T) {
 	ctx := context.Background()
 	db := dbtest.NewSchema(t, 0, "001_init_schema.up.sql", "004_admin_config_tables.up.sql")
 	if _, err := db.Pool.Exec(ctx, oldSkillRows); err != nil {
 		t.Fatal(err)
 	}
-	up := readMigration(t, "028_skill_redesign.up.sql")
+	up := readMigration(t, "028_skill_redesign.up.sql") + "\n" + readMigration(t, "030_rain_tune.up.sql")
 	for i := 0; i < 2; i++ {
 		if _, err := db.Pool.Exec(ctx, up); err != nil {
 			t.Fatal(err)
@@ -83,7 +83,17 @@ func TestSkillRedesignMigrationMatchesSeed(t *testing.T) {
 		t.Fatalf("admin edit lost: %q %v", name, mult)
 	}
 
-	// The down migration restores the first design
+	// 030's down restores 028's rain row, 028's down the first design
+	if _, err := db.Pool.Exec(ctx, readMigration(t, "030_rain_tune.down.sql")); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.Pool.QueryRow(ctx, `SELECT projectile_count FROM config_skills WHERE skill_id = 'triple_shot'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 6 {
+		t.Fatalf("030 down: rain count %d", count)
+	}
 	if _, err := db.Pool.Exec(ctx, readMigration(t, "028_skill_redesign.down.sql")); err != nil {
 		t.Fatal(err)
 	}
