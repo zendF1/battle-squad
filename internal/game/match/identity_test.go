@@ -74,7 +74,8 @@ func identityMatch(t *testing.T, shooterChar string, shooterX float64, targetCha
 }
 
 // TestCraterDepthByCharacter: a normal shot into flat ground. The crater radius is the
-// weapon's terrain damage × 0.8 px, so Tanko (65) digs far deeper than the others.
+// weapon's terrain damage × 0.8 px, so Tanko (65) digs far deeper than the others; the bowl is
+// half the radius deep.
 func TestCraterDepthByCharacter(t *testing.T) {
 	useConfigGameData(t)
 	depth := map[string]float64{}
@@ -100,13 +101,14 @@ func TestCraterDepthByCharacter(t *testing.T) {
 			t.Fatalf("%s: blast radius %v, want %d", id, s.Projectiles[0].ExplosionRadius, w.ExplosionRadius)
 		}
 	}
-	// The radius, plus how far inside the ground the shell is when it explodes (the segment is
-	// sampled every <= 4 px: 3 px at the faster shells of migration 032, was 1)
-	if depth["rookie"] < 20 || depth["rookie"] > 24 {
-		t.Fatalf("Rookie crater %v px deep, want 20..24 (terrain damage 25)", depth["rookie"])
+	// Half the radius (the bowl, Terrain.CarveBowl; a circle crater was the whole radius: 23 px),
+	// plus how far inside the ground the shell is when it explodes (the segment is sampled every
+	// <= 4 px: 3 px at the faster shells of migration 032, was 1)
+	if depth["rookie"] < 10 || depth["rookie"] > 14 {
+		t.Fatalf("Rookie crater %v px deep, want 10..14 (terrain damage 25, a 20 px bowl)", depth["rookie"])
 	}
 	for _, id := range []string{"rookie", "spark", "flora"} {
-		if depth["tanko"] < 2*depth[id] {
+		if depth["tanko"] < 1.8*depth[id] {
 			t.Fatalf("Tanko digs %v px, not clearly deeper than %s's %v", depth["tanko"], id, depth[id])
 		}
 	}

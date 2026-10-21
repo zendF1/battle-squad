@@ -136,6 +136,8 @@ type ProjectileResult struct {
 	LaunchDelay float64 `json:"launchDelay,omitempty"`
 	// floorY > 0 keeps the rows y >= floorY when the explosion carves its crater (bomb chain).
 	floorY float64
+	// crater is the shape the explosion carves: CraterBowl ("" too) or CraterCircle (bomb chain).
+	crater string
 }
 
 // ShotEvent is one entry of a ShotResolved timeline. T is seconds since the shot was fired;
@@ -147,7 +149,8 @@ type ShotEvent struct {
 	ProjectileID   string   `json:"projectileId,omitempty"`
 	Position       *Vector2 `json:"position,omitempty"`       // explode, flare, rain (the flare point)
 	Radius         float64  `json:"radius,omitempty"`         // explode; rain: half the spread of the drop columns
-	Floor          float64  `json:"floor,omitempty"`          // explode: rows y >= floor are not carved (0: the whole circle)
+	Floor          float64  `json:"floor,omitempty"`          // explode: rows y >= floor are not carved (0: the whole crater)
+	Crater         string   `json:"crater,omitempty"`         // explode: the crater's shape, bowl (Terrain.CarveBowl) or circle (the bomb chain)
 	TerrainVersion uint64   `json:"terrainVersion,omitempty"` // explode: terrain version after the crater
 	Amount         int      `json:"amount,omitempty"`         // damage (HP + shield lost), heal (HP gained), shield (shield gained)
 	HP             *int     `json:"hp,omitempty"`             // damage, heal: HP after the change

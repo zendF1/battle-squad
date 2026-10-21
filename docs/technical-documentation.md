@@ -493,7 +493,7 @@ Client message → CompositeWSHandler
 
 | `type` | Trường | Ghi chú |
 |--------|--------|---------|
-| `explode` | `projectileId, position, radius, terrainVersion, floor?` | Khoét terrain tại `t` (cuối đường bay). `floor` > 0: không khoét các hàng `y >= floor` (bom liên hoàn giữ đáy map) |
+| `explode` | `projectileId, position, radius, crater, terrainVersion, floor?` | Khoét terrain tại `t` (cuối đường bay). `crater`: hình hố, `bowl` (lòng chảo nông, `Terrain.CarveBowl`; mọi vụ nổ) hoặc `circle` (hình tròn, `DestroyCircleAbove`; chỉ bom liên hoàn); thiếu = `bowl`. `floor` > 0: không khoét các hàng `y >= floor` (bom liên hoàn giữ đáy map) |
 | `damage` | `playerId, amount, hp, cause, projectileId?, critical?, shield?` | `cause`: `explosion`, `laser`, `fall`, `out_of_map`. `amount` = máu + khiên mất; `shield` (khiên còn lại) chỉ có khi player có khiên trước cú đánh |
 | `heal` | `playerId, amount, hp` | `amount` = máu thực hồi (có thể 0 khi đầy máu) |
 | `shield` | `playerId, amount, shield` | Khiên nhận thêm / khiên sau đó (tối đa 50% máu tối đa) |
@@ -622,6 +622,11 @@ Crater (khoét terrain, không ảnh hưởng damage):
   craterRadius = weapon.terrainDamage × 0.8 px      // terrainDamage ≤ 0 → explosionRadius
                × skill (xem Kỹ năng) × fragile ×2 (đạn thường) × (1 + terrainDamageBonus/100)
   ProjectileResult.craterRadius = trước terrainDamageBonus; explode.radius = cuối cùng
+  Hình hố (Terrain.CarveBowl, client TerrainMask.carve_bowl khớp từng bit), r = explode.radius,
+  (dx, dy) = pixel − tâm đã làm tròn, y hướng xuống; khoét pixel destructible khi:
+    dx² + 2·r·dy ≤ r²        // đáy parabol: sâu r/2 dưới tâm, rộng r mỗi bên ở độ cao tâm
+    dy ≥ −1,5·r              // nắp phẳng (bowlCeiling): đáy chạm nắp ở |dx| = 2r
+  Bom liên hoàn (crater = circle) giữ hình tròn bán kính r (giếng sâu có chủ đích).
 
 Fall damage (không qua defense):
   threshold = 150px
@@ -690,7 +695,8 @@ Mỗi nhân vật có một thế mạnh riêng. `migrations/023_character_ident
 | Skill (028 thay cả bốn, xem Kỹ năng) | Triple Shot ×1,25 ×3 | Heavy Bomb (bom đào): ×1,3 → **×1,1**, nổ ×1,5 → **×2**, hố **×1,8** | Shock Field ×0,9 → **×1,3** + lưới | Healing Bloom 450 → **650** HP |
 
 - **Năng lượng di chuyển**: trước đây mọi nhân vật 100 (`mobility` 70/40/75/65 chỉ để hiển thị). Giờ `config_characters.mobility` là năng lượng gốc mỗi lượt (`gamedata.BaseMoveEnergy`, ≤ 0 hoặc nhân vật lạ → 100). `battlestats.Base` mang nó trong `Stats.MoveEnergy`; điểm và trang bị cộng vào `MoveEnergyBonus`; `Stats.TurnMoveEnergy()` = tổng. Room đặt `BattlePlayerState.moveEnergy = maxMoveEnergy` khi vào trận, `startTurn` nạp lại `maxMoveEnergy` (state cũ thiếu field → tính lại từ config + bonus). `GET /player/characters` `baseStats.*.moveEnergy` và `stats.moveEnergy` báo đúng số này.
-- **Hố**: `terrain_damage` của vũ khí trước đây không được đọc (hố = bán kính nổ). Giờ hố = `terrain_damage × 0,8` px (`match.craterPxPerTerrainDamage`; 50 → 40 px nên hố của Rookie không đổi), tách khỏi bán kính damage. Hố phẳng (bắn xuống đất bằng, `TestCraterDepthByCharacter`): Rookie sâu 23 px, Tanko 55, Spark 23, Flora 27 (bán kính hố + ~3 px: đạn đã vào đất một bước lấy mẫu khi nổ; trước 032: 21 / 53 / 21 / 25). `migrations/029_weapon_craters_halved` (sau playtest: Tanko và Rookie phá đất quá nhiều) giảm nửa terrain damage của `basic_rocket` 50 → 25 và `cannon_ball` 130 → 65 (cả bản hiển thị ở `config_characters`), chỉ dòng còn giữ giá trị cũ: hố phát thường và mọi hố skill (bội số của hố vũ khí) đều còn một nửa; damage và bán kính nổ giữ nguyên. Trước 029: Rookie sâu 41 px, Tanko 105.
+- **Hố**: `terrain_damage` của vũ khí trước đây không được đọc (hố = bán kính nổ). Giờ hố = `terrain_damage × 0,8` px (`match.craterPxPerTerrainDamage`; 50 → 40 px nên hố của Rookie không đổi), tách khỏi bán kính damage. Hố phẳng (bắn xuống đất bằng, `TestCraterDepthByCharacter`): Rookie sâu 13 px, Tanko 29, Spark 13, Flora 15 (nửa bán kính hố + ~3 px: đạn đã vào đất một bước lấy mẫu khi nổ; hố tròn trước đây: 23 / 55 / 23 / 27, trước 032: 21 / 53 / 21 / 25). `migrations/029_weapon_craters_halved` (sau playtest: Tanko và Rookie phá đất quá nhiều) giảm nửa terrain damage của `basic_rocket` 50 → 25 và `cannon_ball` 130 → 65 (cả bản hiển thị ở `config_characters`), chỉ dòng còn giữ giá trị cũ: hố phát thường và mọi hố skill (bội số của hố vũ khí) đều còn một nửa; damage và bán kính nổ giữ nguyên. Trước 029: Rookie sâu 41 px, Tanko 105.
+- **Hố lòng chảo** (playtest 4: hố tròn có vách gần thẳng đứng ở mép, ai rơi vào không đi ra được): mọi vụ nổ trừ bom liên hoàn khoét `Terrain.CarveBowl` (công thức ở Damage Calculation) thay cho hình tròn. Cùng bán kính r: rộng 2r như cũ, sâu r/2 dưới điểm nổ (tròn: r). Vách dốc nhất trên đất bằng 45° (1:1) ở mép; trên sườn 30° phía dốc lên 60° (1,73:1), gặp mặt đất cách điểm nổ ~1,73r; mọi bậc pixel ≤ 2 px, dưới 3 px người chơi leo được mỗi cột (`TestBowlWallsClimbable`: hố 12 / 20 / 24 / 40 / 52 / 104 px trên đất bằng và sườn ±30°; hố tròn cũ có bậc 8..18 px ở mép trên đất bằng, 17..110 px phía dốc lên). Rookie và Tanko tự bắn xuống chân trên đất bằng và sườn ±30°: rơi 13 / 29 px (tròn: 23 / 55; không mất máu rơi, ngưỡng 150 px), rồi đi ra hai phía bằng năng lượng một lượt (`TestWalkOutOfCrater`; hố tròn: kẹt). Nắp phẳng 1,5r đủ cao để trên sườn tới ~35° mép phía dốc lên không để lại mái nhô; sườn dốc hơn có thể còn bậc hoặc mái ở phía dốc lên, phía dốc xuống vẫn ra được. Nổ trong khối đất (vách, trần) khoét rộng hơn hình tròn: tới 4r ngang, 2r đứng, diện tích ~5,3r² (tròn 3,1r²). Trúng thẳng người (điểm nổ trên thân, ~20 px trên mặt đất) khoét ít hơn hẳn: Rookie gần như không chạm đất, Tanko ~5 px (tròn ~30). Mảnh đất fragile (×2) giữ ×2 trên hình mới. Bom liên hoàn giữ hình tròn (`crater: circle`): giếng/rãnh của nó vẫn có vách đứng, người rơi xuống giếng không tự đi ra được.
 - **Bom đào của Tanko** (thiết kế cũ, 028 thay bằng Bom liên hoàn; `single_large_bomb`, hằng số `match.heavyBombBlastScale` 2 và `heavyBombCraterScale` 1,8): nổ 120 px, hố 187 px (rộng ~374 px). Trúng thẳng một Rookie trên đất bằng (`TestDiggingBombDropsTargetIntoFallDamage`): 426 damage nổ, mục tiêu rơi 166 px (vừa quá ngưỡng 150 px) → 60 damage rơi. Phát thường của Tanko (hố 104 px) chỉ làm mục tiêu tụt 82 px, không mất máu rơi. Người bắn / đồng đội đứng trong hố cũng rơi theo. Trên frozen_peak (đất mỏng nhất ~233 px ở đáy thung lũng) một quả nổ ngay mặt đất ở bất kỳ đâu vẫn chừa ≥ 46 px đất dưới mọi cột của hố (`TestDiggingBombKeepsGroundOnThinMaps`; grassland_valley ~234 px → ≥ 47 px, steel_base 300 px → ≥ 113 px), nên một phát không thủng xuống đáy map; nhiều phát chồng lên cùng chỗ thì vẫn có thể.
 - **Spark** `shock_field` `damageMultiplier` 0,9 → 1,3 (config); lưới giữ nguyên. **Flora** `match.skillHealAmount` 450 → 650.
 
@@ -772,7 +778,7 @@ Terrain zones đặc biệt:
 - `ice`: Trượt (giảm friction)
 - `fragile`: Sập sau khi bị bắn
 
-Methods: `IsSolid(x,y)`, `DestroyCircle(cx,cy,radius)`, `GetLandingY(x,maxY)`, `GetTerrainTypeAt(x,y)`
+Methods: `IsSolid(x,y)`, `Carve(shape,cx,cy,radius,floorY)` (`CarveBowl` mọi vụ nổ, `DestroyCircleAbove` bom liên hoàn), `GetLandingY(x,maxY)`, `GetTerrainTypeAt(x,y)`
 
 ### Items & Status Effects
 

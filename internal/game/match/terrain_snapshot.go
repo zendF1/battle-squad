@@ -12,7 +12,7 @@ import (
 type TerrainSnapshot struct {
 	Width        int    `json:"width"`
 	Height       int    `json:"height"`
-	Version      uint64 `json:"version"` // number of DestroyCircle operations already applied
+	Version      uint64 `json:"version"` // number of crater operations (Terrain.Carve) already applied
 	Solid        string `json:"solid"`
 	Destructible string `json:"destructible"`
 }

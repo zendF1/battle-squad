@@ -12,7 +12,7 @@ func TestTerrainDamageBonusGrowsCraterOnly(t *testing.T) {
 	cur := m.State.CurrentPlayerID
 	shooter, target := m.State.Players[cur], m.State.Players[m.other(cur)]
 	shooter.TerrainDamageBonus = 30
-	target.Position.X = shooter.Position.X + 15
+	target.Position.X = shooter.Position.X + 300 // the shell falls back into the ground at the shooter's feet
 	groundPlayers(m, clients)
 
 	send(m, clients[cur], "Shoot", ShootAction{Angle: 90, Power: 10, ActionMode: "weapon"})
@@ -28,10 +28,14 @@ func TestTerrainDamageBonusGrowsCraterOnly(t *testing.T) {
 	if ex[0].Radius != 39 {
 		t.Fatalf("crater radius %v, want 30 * 1.30 = 39", ex[0].Radius)
 	}
-	// The terrain was carved with the crater radius
+	// The terrain was carved with the crater radius: a bowl 39 / 2 = 19.5 px under the impact
+	// (the weapon's 30 alone: 15) and 39 px to each side at its height
 	p := *ex[0].Position
-	if m.Terrain.IsSolid(p.X, p.Y+36) {
+	if m.Terrain.IsSolid(p.X, p.Y+18) || m.Terrain.IsSolid(p.X+36, p.Y) || m.Terrain.IsSolid(p.X-36, p.Y) {
 		t.Fatalf("terrain inside the crater radius is still solid")
+	}
+	if !m.Terrain.IsSolid(p.X, p.Y+21) {
+		t.Fatalf("carved under the bowl's floor")
 	}
 }
 

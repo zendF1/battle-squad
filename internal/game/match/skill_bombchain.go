@@ -74,6 +74,7 @@ func resolveBombChain(m *Match, s *skillShot) {
 		r.ExplosionRadius = float64(weapon.ExplosionRadius) * chainBlast
 		r.CraterRadius = weaponCraterRadius(weapon) * chainCrater
 		r.floorY = floor
+		r.crater = CraterCircle // the chain digs its shaft with round craters
 		shot.Projectiles = append(shot.Projectiles, r)
 		if r.ExplosionPoint == nil {
 			continue
