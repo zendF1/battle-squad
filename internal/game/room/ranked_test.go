@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"testing"
 
+	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/game/matchmaker"
 	"battle-squad/internal/shared/database"
 )
@@ -42,6 +43,11 @@ func TestRankedRosterOneHuman(t *testing.T) {
 		},
 		MapID: "grassland_valley", HasBot: true,
 	}
+	prev := gamedata.Data
+	t.Cleanup(func() { gamedata.Data = prev })
+	gamedata.Data = &gamedata.GameData{Maps: map[string]gamedata.MapConfig{
+		"grassland_valley": {MapID: "grassland_valley", Name: "Thung lũng cỏ"},
+	}}
 	profiles := map[string]rankedProfile{"p1": {DisplayName: "Smoke", Level: 40, TitleID: "first_blood"}}
 	ro := buildRankedRoster(result, profiles, botIDs())
 	ro.Found.RoomID, ro.Found.MatchID = "r1", "m1"
@@ -50,7 +56,7 @@ func TestRankedRosterOneHuman(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"roomId":"r1","matchId":"m1","mapId":"grassland_valley","mode":"ranked_2v2","teams":[` +
+	want := `{"roomId":"r1","matchId":"m1","mapId":"grassland_valley","mapName":"Thung lũng cỏ","mapTheme":"grassland","mode":"ranked_2v2","teams":[` +
 		`{"teamId":1,"players":[` +
 		`{"playerId":"p1","displayName":"Smoke","characterId":"spark","isBot":false,"level":40,"rating":1050,"tier":"silver","division":3,"titleId":"first_blood"},` +
 		`{"playerId":"bot_0001","displayName":"Bot 0001","characterId":"rookie","isBot":true,"level":40,"rating":1050,"tier":"silver","division":3,"titleId":""}]},` +

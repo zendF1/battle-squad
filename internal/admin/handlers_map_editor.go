@@ -178,6 +178,7 @@ func (s *Server) handleMapEditor(w http.ResponseWriter, r *http.Request) {
 		"MapName":        mapName,
 		"IsNew":          isNew,
 		"BrickTypesJSON": string(brickTypesJSON),
+		"MapThemes":      gamedata.MapThemes,
 	})
 }
 
@@ -208,6 +209,7 @@ func (s *Server) handleMapSave(w http.ResponseWriter, r *http.Request) {
 		DefaultWindPowerRange json.RawMessage `json:"defaultWindPowerRange"`
 		MinRankTier           string          `json:"minRankTier"`
 		Description           string          `json:"description"`
+		Theme                 string          `json:"theme"`
 		Tiles                 json.RawMessage `json:"tiles"`
 		SpawnPoints           json.RawMessage `json:"spawnPoints"`
 	}
@@ -269,6 +271,11 @@ func (s *Server) handleMapSave(w http.ResponseWriter, r *http.Request) {
 		Tiles:                 tiles,
 		Description:           body.Description,
 		MinRankTier:           minRankTier,
+		Theme:                 body.Theme, // "" keeps the stored theme (grassland for a new map)
+	}
+	if m.Theme != "" && !gamedata.KnownMapTheme(m.Theme) {
+		writeMapSaveError(w, fmt.Sprintf("unknown theme %q", m.Theme))
+		return
 	}
 
 	cfg := gamedata.MapConfig{MapID: mapID, GridWidth: gridWidth, GridHeight: gridHeight, CellSize: cellSize}

@@ -192,6 +192,15 @@ func (t *Terrain) IsSolid(x, y float64) bool {
 	return getBit(t.Mask, ix, iy, t.Width)
 }
 
+// IsDestructible reports whether pixel (x, y) is solid soft terrain (explosions carve it);
+// solid pixels that are not are hard. Outside the map it is false.
+func (t *Terrain) IsDestructible(x, y int) bool {
+	if x < 0 || x >= t.Width || y < 0 || y >= t.Height {
+		return false
+	}
+	return getBit(t.Mask, x, y, t.Width) && getBit(t.DestructibleMask, x, y, t.Width)
+}
+
 // DestroyCircle clears the destructible solid pixels within radius of (cx, cy). No explosion
 // carves it any more (every one is a bowl, CarveBowl); it stays for the tests and the client's
 // parity fixture (crater "circle").

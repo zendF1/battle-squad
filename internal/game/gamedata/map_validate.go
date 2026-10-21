@@ -114,3 +114,48 @@ func ValidateMap(m MapConfig, brickTypes map[int]BrickTypeConfig) error {
 
 	return nil
 }
+
+// DefaultMapTheme is the theme of a map without one (today's grassland look).
+const DefaultMapTheme = "grassland"
+
+// MapThemes are the themes the client draws (docs/technical-documentation.md, Maps). Each is a
+// sky / background, a soft (destructible) and a hard (indestructible) material, and a bottom:
+// water (beach, ice, sky, temple, city_night, steel) or an abyss (the others). Either way a
+// player below the map bottom is out of the map.
+var MapThemes = []string{
+	"grassland", "ice", "beach", "graveyard", "desert", "sky", "temple", "steel", "city_night", "stone", "cave",
+}
+
+// KnownMapTheme reports whether theme is one of MapThemes.
+func KnownMapTheme(theme string) bool {
+	for _, t := range MapThemes {
+		if t == theme {
+			return true
+		}
+	}
+	return false
+}
+
+// ThemeOrDefault is the map's theme, or DefaultMapTheme when it has none or one the client
+// does not know.
+func (m MapConfig) ThemeOrDefault() string {
+	if KnownMapTheme(m.Theme) {
+		return m.Theme
+	}
+	return DefaultMapTheme
+}
+
+// MapDisplay is the name and theme clients show for mapID (MatchStarted mapName / mapTheme,
+// MatchFound): the loaded map's, else the id itself and DefaultMapTheme.
+func MapDisplay(mapID string) (name, theme string) {
+	if Data != nil {
+		if m, ok := Data.Maps[mapID]; ok {
+			name = m.Name
+			if name == "" {
+				name = mapID
+			}
+			return name, m.ThemeOrDefault()
+		}
+	}
+	return mapID, DefaultMapTheme
+}

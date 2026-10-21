@@ -95,6 +95,13 @@
                 </select>
             </div>
             <div class="form-group">
+                <label>Theme</label>
+                <select id="propTheme">
+                    {{range .MapThemes}}<option value="{{.}}">{{.}}</option>
+                    {{end}}
+                </select>
+            </div>
+            <div class="form-group">
                 <label>Description</label>
                 <textarea id="propDescription"></textarea>
             </div>

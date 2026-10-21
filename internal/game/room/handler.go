@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	mrand "math/rand/v2"
 	"strings"
 	"time"
 
@@ -81,7 +82,7 @@ func (h *WSHandler) HandleMessage(ctx context.Context, client *ws.Client, msg ws
 
 		room, err := h.hub.CreateRoom(ctx, client.PlayerID, displayName, CreateRoomPayload{
 			Mode:  "pvp_1v1",
-			MapID: "grassland_valley",
+			MapID: quickPlayMapID(payload, mrand.IntN),
 		})
 		if err != nil {
 			errResp := model.AppError{Code: "ROOM_CREATE_FAILED", Message: err.Error(), Status: 400}

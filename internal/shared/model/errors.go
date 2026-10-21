@@ -126,4 +126,6 @@ var (
 	ErrChestAlreadyClaimed   = AppError{Code: "CHEST_ALREADY_CLAIMED", Message: "This chest was already claimed", Status: http.StatusConflict}
 
 	ErrTitleNotOwned = AppError{Code: "TITLE_NOT_OWNED", Message: "You do not own this title", Status: http.StatusForbidden}
+
+	ErrMapNotFound = AppError{Code: "MAP_NOT_FOUND", Message: "Map not found", Status: http.StatusNotFound}
 )

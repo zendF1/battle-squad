@@ -1,6 +1,11 @@
 package room
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"sort"
+
+	"battle-squad/internal/game/gamedata"
+)
 
 type RoomPlayer struct {
 	PlayerID    string   `json:"playerId"`
@@ -100,11 +105,13 @@ type SelectItemsPayload struct {
 // MatchFound is sent to every human of a ranked match (same payload) before the
 // match starts: the room and match ids, map, mode and both teams.
 type MatchFound struct {
-	RoomID  string           `json:"roomId"`
-	MatchID string           `json:"matchId"`
-	MapID   string           `json:"mapId"`
-	Mode    string           `json:"mode"`
-	Teams   []MatchFoundTeam `json:"teams"`
+	RoomID   string           `json:"roomId"`
+	MatchID  string           `json:"matchId"`
+	MapID    string           `json:"mapId"`
+	MapName  string           `json:"mapName"`
+	MapTheme string           `json:"mapTheme"`
+	Mode     string           `json:"mode"`
+	Teams    []MatchFoundTeam `json:"teams"`
 }
 
 // MatchFoundTeam is one side of a MatchFound, humans first, then bots.
@@ -126,4 +133,27 @@ type MatchFoundPlayer struct {
 	Tier        string `json:"tier"`
 	Division    int    `json:"division"`
 	TitleID     string `json:"titleId"`
+}
+
+// newMatchFound is a MatchFound for mapID with the map's name and theme (teams still empty).
+func newMatchFound(mapID string) MatchFound {
+	name, theme := gamedata.MapDisplay(mapID)
+	return MatchFound{MapID: mapID, MapName: name, MapTheme: theme, Mode: RankedMode}
+}
+
+// PracticeMapID is the map of a QuickPlay against the idle bot (the target dummy).
+const PracticeMapID = "grassland_valley"
+
+// quickPlayMapID is the map of a QuickPlay: a random loaded map against the AI bot ("Đấu với
+// máy"), PracticeMapID against the idle one. intn(n) draws in [0, n).
+func quickPlayMapID(p QuickPlayPayload, intn func(n int) int) string {
+	if !p.AIBot() || gamedata.Data == nil || len(gamedata.Data.Maps) == 0 {
+		return PracticeMapID
+	}
+	ids := make([]string, 0, len(gamedata.Data.Maps))
+	for id := range gamedata.Data.Maps {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids[intn(len(ids))]
 }

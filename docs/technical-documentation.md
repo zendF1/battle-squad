@@ -83,7 +83,8 @@ cmd/
 ├── game/main.go          WebSocket game server
 ├── admin/main.go         Admin dashboard
 ├── worker/main.go        Background jobs
-└── migrate/main.go       Database migration tool
+├── migrate/main.go       Database migration tool
+└── mapgen/main.go        Ghi migration 036 / 037 + configs/maps.yaml, bricks.yaml từ internal/game/mapgen (-preview: PNG)
 
 internal/
 ├── api/                  API server modules (handler → service → repository)
@@ -100,6 +101,7 @@ internal/
 │   ├── rank/             Elo rating, leaderboard, seasons, season rewards
 │   ├── moderation/       Player reports, ban/unban (admin only)
 │   ├── appconfig/        Version policy, remote config
+│   ├── maps/             GET /maps, /maps/{id}: map catalogue cho client sync
 │   ├── matchhistory/     Match history query
 │   ├── rooms/            Room listing (đọc từ Redis)
 │   └── dev/              Dev tools (clear rooms, reset data)
@@ -110,6 +112,7 @@ internal/
 │   ├── matchmaker/       Matchmaking engine (Redis queue, leader election)
 │   ├── room/             Room hub + goroutines, battle room creation
 │   ├── match/            Match engine: physics, damage, terrain, bots, rewards
+│   ├── mapgen/           Layout 16 map (primitive vẽ tay) → tiles, migration, YAML
 │   ├── battlestats/      Chỉ số vào trận (gốc + điểm + equipment), dùng chung cho room và GET /player/characters
 │   └── gamedata/         Load game configs (DB, fallback YAML) — game server và API đều load lúc khởi động
 │
@@ -135,8 +138,8 @@ internal/
     ├── scheduler.go      Job scheduler with panic recovery
     └── jobs/             ban_expire, daily_reset, account_deletion
 
-configs/                  YAML game data (characters, weapons, skills, items, maps, physics)
-migrations/               SQL migration files (001-020)
+configs/                  YAML game data (characters, weapons, skills, items, maps, bricks); mirror của DB cho test / fallback
+migrations/               SQL migration files (001-037)
 ```
 
 ---
@@ -165,6 +168,8 @@ Mọi response REST (trừ `/healthz`, `/readyz`, `/livez`, `/metrics`) đều c
 | POST | `/auth/logout` | Logout | Blacklist refresh token trong Redis |
 | GET | `/app/version-policy?platform=` | GetVersionPolicy | Policy version cho android/ios |
 | GET | `/app/config` | GetRemoteConfig | Remote config (API URL, WS URL, features) |
+| GET | `/maps` | maps.List | Danh sách map để client sync (nguồn: `config_maps` + `config_brick_types`), xem **Maps** ở mục 7. Header `ETag` = `version`; gửi `If-None-Match` với ETag đã cache → `304` khi không đổi |
+| GET | `/maps/{mapId}` | maps.Get | Một map kèm `tiles` (lưới brick id, `[]` với map legacy) và `spawnPoints`, để vẽ preview; không có → `MAP_NOT_FOUND` 404 |
 | GET | `/healthz` | Healthz | Health check |
 | GET | `/readyz` | Readyz | Readiness check (DB + Redis) |
 | GET | `/livez` | Livez | Liveness check |
@@ -444,7 +449,7 @@ Mọi lobby event trừ `CreateLobby` / `JoinLobby` chạy trên goroutine của
 **`MatchFound`** (`room.MatchFound`):
 
 ```json
-{"roomId":"...","matchId":"...","mapId":"grassland_valley","mode":"ranked_2v2",
+{"roomId":"...","matchId":"...","mapId":"ice_bridge","mapName":"Cầu băng","mapTheme":"ice","mode":"ranked_2v2",
  "teams":[{"teamId":1,"players":[{"playerId":"p1","displayName":"Smoke","characterId":"spark",
    "isBot":false,"level":40,"rating":1050,"tier":"silver","division":2,"titleId":""}, ...]},
   {"teamId":2,"players":[...]}]}
@@ -468,7 +473,7 @@ Mỗi team đủ 2 người: người thật trước (theo thứ tự entry), r
 |-------|---------|-------|
 | `CreateRoom` | `{mode, mapId, password?}` | Tạo phòng (pvp_1v1, pvp_2v2) |
 | `JoinRoom` | `{roomId, password?}` | Vào phòng |
-| `QuickPlay` | `{bot?: "ai", characterId?: string, items?: string[]}` | Chơi tutorial: mặc định bot idle (đứng yên), `bot: "ai"` cho bot AI di chuyển và bắn. `characterId` mặc định `rookie`, `items` mặc định `[]`. Loadout được kiểm tra như `SelectCharacter`/`SelectItems` (nhân vật hợp lệ và đã sở hữu, tối đa 3 item, item có trong game data, mỗi item ≤ `maxUsePerMatch`, có trong `inventory_items`) trước khi tạo phòng; item được reserve như `StartMatch` của phòng custom và bị trừ khi dùng trong trận. Sai loadout → `RoomError` code `LOADOUT_INVALID` và không tạo phòng; nếu reserve thất bại (thiếu số lượng, item bị trận khác giữ) cũng trả `LOADOUT_INVALID`, lỗi reserve khác trả `MATCH_START_FAILED`, và phòng đã tạo bị huỷ. `DEV_UNLOCK_ALL` bỏ qua kiểm tra sở hữu và không reserve |
+| `QuickPlay` | `{bot?: "ai", characterId?: string, items?: string[]}` | Chơi tutorial: mặc định bot idle (đứng yên, map `grassland_valley`), `bot: "ai"` cho bot AI di chuyển và bắn (map ngẫu nhiên trong mọi map). `characterId` mặc định `rookie`, `items` mặc định `[]`. Loadout được kiểm tra như `SelectCharacter`/`SelectItems` (nhân vật hợp lệ và đã sở hữu, tối đa 3 item, item có trong game data, mỗi item ≤ `maxUsePerMatch`, có trong `inventory_items`) trước khi tạo phòng; item được reserve như `StartMatch` của phòng custom và bị trừ khi dùng trong trận. Sai loadout → `RoomError` code `LOADOUT_INVALID` và không tạo phòng; nếu reserve thất bại (thiếu số lượng, item bị trận khác giữ) cũng trả `LOADOUT_INVALID`, lỗi reserve khác trả `MATCH_START_FAILED`, và phòng đã tạo bị huỷ. `DEV_UNLOCK_ALL` bỏ qua kiểm tra sở hữu và không reserve |
 | `ChangeTeam` | `{teamId}` | Đổi team (1 hoặc 2) |
 | `SelectCharacter` | `{characterId}` | Chọn nhân vật |
 | `SelectItems` | `{items[]}` | Chọn items (max 3) |
@@ -501,7 +506,7 @@ Mỗi team đủ 2 người: người thật trước (theo thứ tự entry), r
 
 | Event | Payload | Mô tả |
 |-------|---------|-------|
-| `MatchStarted` | `{matchId, players, turnOrder, wind, mapId}` | Trận bắt đầu |
+| `MatchStarted` | `MatchState` (`{matchId, roomId, mode, mapId, mapName, mapTheme, turnIndex, currentPlayerId, wind, players, status, turnOrder, turnTimeLeft, activeEffects}`) + `terrain` | Trận bắt đầu. `mapName` là tên map tiếng Việt (`config_maps.name`), `mapTheme` cách client vẽ map (một trong `MapThemes`, mặc định `grassland`); `MatchStateSync` cũng có hai field này |
 | `TurnStarted` | `{currentPlayerId, turnIndex, wind, moveEnergy, maxMoveEnergy, skillEnergy, skipped?}` | Lượt mới; `moveEnergy` là năng lượng của người tới lượt (đã trừ net / root / stun / freeze), `maxMoveEnergy` là mức đầy của họ. `skipped` (`"stun"` / `"freeze"`, chỉ có khi bị) = người tới lượt mất trọn lượt: server bỏ mọi Move/Shoot/UseItem và tự kết thúc lượt sau 2 s (`skipTurnDelay`) |
 | `TurnTimerTick` | `{timeLeft}` | Đếm ngược (mỗi 1s) |
 | `PlayerMoved` | `{playerId, position, moveEnergy, seq?}` | Player di chuyển; có `seq` khi trả lời `Move` có `seq` |
@@ -790,20 +795,51 @@ Room (`getActualStats` → `newBattlePlayer`) và API cùng tính bằng package
 
 ### Terrain System
 
-3 built-in maps:
+Map = lưới tile (`config_maps.tiles`: `gridHeight` hàng × `gridWidth` cột, mỗi ô một `brick_type_id` của `config_brick_types`, 0 = trống, ô `cellSize` px) → `NewTerrainWithBricks` tô từng ô bằng polygon `border` của brick (toạ độ 0..16, gốc dưới trái, y lên) vào mask solid + mask destructible (brick `destructible = false` là đất cứng, nổ không phá được). Map không có tile (`tiles = []`: `grassland_valley`, `frozen_peak`) dùng đất legacy (sine) và `terrainLayers`. Người rơi xuống dưới đáy map chết (`out_of_map`), dù client vẽ nước hay vực.
 
-| Map | Đặc điểm |
-|-----|---------|
-| `grassland_valley` | Đồi thoải (sine wave) |
-| `frozen_peak` | Đỉnh nhọn (multiple sine frequencies) |
-| `steel_base` | Platform bậc thang |
-
-Terrain zones đặc biệt:
+Terrain zones đặc biệt (chỉ map legacy):
 - `lava`: 75 damage/turn khi đứng (không qua defense)
 - `ice`: Trượt (giảm friction)
 - `fragile`: Sập sau khi bị bắn
 
-Methods: `IsSolid(x,y)`, `CarveBowl(cx,cy,radius)` (mọi vụ nổ), `Carve(shape,cx,cy,radius)` (`bowl` / `circle` = `DestroyCircle`, chỉ test và fixture client), `GetLandingY(x,maxY)`, `GetTerrainTypeAt(x,y)`
+Methods: `IsSolid(x,y)`, `IsDestructible(x,y)`, `CarveBowl(cx,cy,radius)` (mọi vụ nổ), `Carve(shape,cx,cy,radius)` (`bowl` / `circle` = `DestroyCircle`, chỉ test và fixture client), `GetLandingY(x,maxY)`, `SpawnY(x,y)`, `CanStandAt(x,y)`, `GetTerrainTypeAt(x,y)`
+
+### Maps (migration 036 / 037)
+
+**Nguồn**: DB (`config_maps`, `config_brick_types`) là nguồn chính; sửa được trong admin map editor (`/maps/edit`, có ô Theme). Client sync qua `GET /maps` (và `GET /maps/{id}` cho preview), terrain của trận vẫn đến trong `MatchStarted`. `configs/maps.yaml` + `configs/bricks.yaml` là bản mirror cho test và YAML fallback (`LoadGameData` đọc cả `bricks.yaml` vào `gamedata.BrickTypes`).
+
+**Generator**: 16 map được vẽ tay bằng primitive trong `internal/game/mapgen` (`Rect`, `Chamfer` = khối bo góc 45°, `Island`, `Band` = dầm 45° dày 1 ô, `Hill` / `Peak`, `Icicle`, `Paint` đổi vật liệu, `Mirror` lật nửa trái sang phải để hai đội cùng địa hình) theo vị trí bục / cầu / đảo / khe của bản đồ tham khảo (chỉ layout, không dùng ảnh của họ). `go run ./cmd/mapgen` ghi `migrations/036_*`, `037_*`, `configs/maps.yaml`, `configs/bricks.yaml` (`-preview DIR`: PNG mask cứng / mềm + spawn; `-check`: báo file lỗi thời; test `TestGeneratedFilesUpToDate` cũng kiểm tra). Sửa layout → sửa `mapgen`, chạy lại generator, rồi viết migration mới cập nhật map (chỉ khi row còn đúng bản generator cũ) vì 037 không ghi đè row đã có.
+
+**Kích thước**: mọi map mới 100 × 56 ô × 16 px = 1600 × 896 (màn trận của client không có camera pan/zoom: viewport cố định 1600 × 900, map rộng hơn sẽ bị cắt). Map tham khảo ~2,1:1 được ép về 1,78:1.
+
+**Theme** (`config_maps.theme`, `gamedata.MapThemes`, mặc định `grassland`): `grassland`, `ice`, `beach`, `graveyard`, `desert`, `sky`, `temple`, `steel`, `city_night`, `stone`, `cave`. Mỗi theme = nền trời, vật liệu mềm, vật liệu cứng, đáy nước (`beach`, `ice`, `sky`, `temple`, `city_night`, `steel`) hoặc vực (còn lại). Theme lạ coi là `grassland` (`ThemeOrDefault`).
+
+**Brick types** (036, id cố định, row có sẵn được giữ; sequence đẩy qua 19): 1 Dirt (mềm, khối đầy), 2 Rock (cứng, khối đầy), 3 Ice, 4 Lava, 5 Fragile (mặc định của admin seed); 6..12 Dirt (mềm) và 13..19 Rock (cứng) các hình: Slope Up-Right ◢, Slope Up-Left ◣, Ceiling Right ◥, Ceiling Left ◤, Half Bottom, Half Top, Plank (6 px trên cùng). Dốc 45°: leo được (≤ 1 px mỗi px). Client không cần brick: đất mềm / cứng có trong mask `terrain.destructible`.
+
+| mapId | Tên | Theme | Hạng tối thiểu | Gió | Layout |
+|---|---|---|---|---|---|
+| `grassland_valley` | Thung lũng cỏ | grassland | bronze | 0–4 | legacy (đồi sine) |
+| `frozen_peak` | Đỉnh băng | grassland | silver | 1–4 | legacy (đỉnh nhọn) |
+| `ice_bridge` | Cầu băng | ice | bronze | 1,5–4 | 4 nhịp cầu băng mềm, nối bằng 3 vòm băng cứng |
+| `coconut_isles` | Đảo dừa | beach | bronze | 0,5–3,5 | 7 đảo cát mềm, khe 2 ô giữa các đảo |
+| `graveyard` | Nghĩa trang | graveyard | bronze | 0–3 | nền đất trên vực, gò, lòng trũng giữa có huyệt mở, bia cứng, bí ngô, khối treo |
+| `pyramid` | Kim tự tháp | desert | bronze | 0–3 | kim tự tháp rỗng bằng đá cứng, cửa ở chân, đụn cát bên trong, nền cát trên đá |
+| `floating_isle` | Đảo nổi | sky | bronze | 2–4 | đảo cỏ (mềm) trên lõi đá cứng |
+| `frozen_land` | Băng giá | ice | bronze | 1,5–4 | thềm băng, nhũ băng treo (4 cái giữa cứng) |
+| `sky_temple` | Đền tế | temple | silver | 0,5–3 | mái ván dài, cột cứng, hai sàn, ván thấp giữa, thuyền trên dung nham |
+| `escape` | Trốn thoát | city_night | gold | 0–3 | thùng thép cứng xếp vòng cung (không gì phá được) |
+| `iron_bars` | Song sắt | steel | bronze | 0–3 | thanh thép + thùng cứng nhiều tầng trên sàn mềm |
+| `barricade` | Rào cản | steel | bronze | 0–3 | lưới chốt thép cứng trên sàn mềm |
+| `iron_city` | Thành phố sắt | city_night | gold | 0–2,5 | dầm thép cứng: dốc từ góc xuống, zigzag giữa, bục có lớp mạ mềm |
+| `stone_forest` | Rừng đá | stone | bronze | 0–3 | khối đá cứng lơ lửng, nền cỏ trên đá, 2 hố, gai đá |
+| `stone_cave` | Hang đá | cave | silver | 0–2 | bát đá cứng (đá vụn mềm trên mặt), que gỗ |
+| `sky_islands` | Đảo bay | sky | silver | 2–4 | nhiều đảo nhỏ, dải đảo dài sát nước |
+| `iron_bridge` | Cầu sắt | steel | bronze | 0,5–3,5 | 3 nhịp cầu (tấm mềm trên dầm cứng), giàn cứng ở đầu nhịp, thùng cứng |
+| `steel_base` | Căn cứ thép | steel | gold | 0–2,5 | dầm, khối thép cứng, bục có lớp mạ mềm (thay map legacy cùng id khi row còn chưa có tile) |
+
+Spawn: 4 điểm `[đội 1 a, đội 1 b, đội 2 a, đội 2 b]` (`TeamSpawns`: nửa đầu cho đội 1 bên trái), đội 2 là ảnh gương của đội 1; 1v1 dùng điểm đầu của mỗi đội. Test (`internal/game/match/maps_test.go`): mỗi map hợp lệ với brick types (như admin editor kiểm khi lưu), 4 spawn đúng nửa, đứng được (`CanStandAt`) trên đúng bục, dưới chân ≥ 60 px đất hoặc gặp đất cứng, không có ô lẻ trôi nổi; mỗi spawn bắn trúng được ít nhất một spawn địch và bị bắn trúng từ một spawn địch, hai spawn 1v1 bắn được nhau (không gió); bot vs bot 2v2 chơi hết trận trên mọi map.
+
+**Xoay map**: ranked chọn ngẫu nhiên trong các map có `minRankTier` ≤ hạng của người cao nhất (`randomMapForRating`): bronze có 11 map (grassland_valley + 10 map mới), silver thêm frozen_peak, sky_temple, stone_cave, sky_islands, gold thêm escape, iron_city, steel_base. QuickPlay "Đấu với máy" (`bot: "ai"`) chọn ngẫu nhiên trong mọi map đã load (`quickPlayMapID`); Luyện tập (bot idle) luôn `grassland_valley`. Game server đọc map lúc khởi động: thêm / sửa map cần restart `cmd/game`.
 
 ### Items & Status Effects
 
@@ -1131,7 +1167,8 @@ State-based decision making, difficulty theo rank tier:
 | Table | PK | Mô tả |
 |-------|-----|-------|
 | `game_settings` | `key` | Key-value config (matchmaking, elo, bot_difficulty) |
-| `config_characters/weapons/skills/items/maps` | `*_id` | Game data (admin editable) |
+| `config_characters/weapons/skills/items/maps` | `*_id` | Game data (admin editable); `config_maps.theme` (036) |
+| `config_brick_types` | `brick_type_id` | Brick của map tile: tên, `destructible`, `border` polygon, `color`; id 1..19 do 036 tạo |
 
 ---
 
@@ -1199,6 +1236,7 @@ State-based decision making, difficulty theo rank tier:
 | `MILESTONE_ALREADY_CLAIMED` | 409 | Mốc thưởng đã nhận |
 | `MILESTONE_NOT_REACHED` | 400 | Mốc thưởng chưa đạt |
 | `TITLE_NOT_OWNED` | 403 | Đeo danh hiệu chưa sở hữu, không tồn tại hoặc đã tắt |
+| `MAP_NOT_FOUND` | 404 | `GET /maps/{mapId}` với map không có |
 | `MISSION_NOT_FOUND` / `MISSION_NOT_DONE` / `MISSION_ALREADY_CLAIMED` | 404 / 400 / 409 | Nhận nhiệm vụ ngày không có / chưa xong / đã nhận hôm nay |
 | `CHEST_NOT_FOUND` / `CHEST_LOCKED` / `CHEST_ALREADY_CLAIMED` | 404 / 400 / 409 | Rương năng động không có / chưa đủ năng động / đã nhận kỳ này |
 | `METHOD_NOT_ALLOWED` | 405 | Sai HTTP method |

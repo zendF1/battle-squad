@@ -230,8 +230,8 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 	// Seed maps (JSONB fields need marshaling)
 	mapQuery := `INSERT INTO config_maps
 		(map_id, name, width, height, default_wind_power_range, terrain_layers, spawn_points,
-		 grid_width, grid_height, cell_size, tiles, min_rank_tier)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		 grid_width, grid_height, cell_size, tiles, min_rank_tier, theme, description)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		ON CONFLICT (map_id) DO NOTHING`
 	for _, m := range data.Maps {
 		windRange, err := json.Marshal(m.DefaultWindPowerRange)
@@ -268,7 +268,7 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 		}
 		if _, err := db.Pool.Exec(ctx, mapQuery,
 			m.MapID, m.Name, m.Width, m.Height, windRange, terrainLayers, spawnPoints,
-			gridWidth, gridHeight, cellSize, tiles, minRankTier,
+			gridWidth, gridHeight, cellSize, tiles, minRankTier, m.ThemeOrDefault(), m.Description,
 		); err != nil {
 			return fmt.Errorf("insert map %s: %w", m.MapID, err)
 		}

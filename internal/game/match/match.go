@@ -155,11 +155,14 @@ func NewMatch(
 		p.Position.Y = terrain.SpawnY(p.Position.X, p.Position.Y)
 	}
 
+	mapName, mapTheme := gamedata.MapDisplay(mapID)
 	mState := MatchState{
 		MatchID:         matchID,
 		RoomID:          roomID,
 		Mode:            mode,
 		MapID:           mapID,
+		MapName:         mapName,
+		MapTheme:        mapTheme,
 		TurnIndex:       0,
 		CurrentPlayerID: turnOrder[0],
 		Wind: WindState{

@@ -486,13 +486,14 @@ type ConfigMap struct {
 	Tiles                 json.RawMessage
 	Description           string
 	MinRankTier           string
+	Theme                 string // gamedata.MapThemes; "" keeps the stored theme on save
 }
 
 // GetMaps returns all maps ordered by map_id.
 func (r *Repository) GetMaps(ctx context.Context) ([]ConfigMap, error) {
 	rows, err := r.db.Pool.Query(ctx,
 		`SELECT map_id, name, width, height, grid_width, grid_height, cell_size,
-		        default_wind_power_range, terrain_layers, spawn_points, tiles, description, min_rank_tier
+		        default_wind_power_range, terrain_layers, spawn_points, tiles, description, min_rank_tier, theme
 		 FROM config_maps ORDER BY map_id`)
 	if err != nil {
 		return nil, fmt.Errorf("query maps: %w", err)
@@ -505,7 +506,7 @@ func (r *Repository) GetMaps(ctx context.Context) ([]ConfigMap, error) {
 		if err := rows.Scan(&m.MapID, &m.Name, &m.Width, &m.Height,
 			&m.GridWidth, &m.GridHeight, &m.CellSize,
 			&m.DefaultWindPowerRange, &m.TerrainLayers, &m.SpawnPoints,
-			&m.Tiles, &m.Description, &m.MinRankTier); err != nil {
+			&m.Tiles, &m.Description, &m.MinRankTier, &m.Theme); err != nil {
 			return nil, fmt.Errorf("scan map: %w", err)
 		}
 		maps = append(maps, m)
@@ -518,12 +519,12 @@ func (r *Repository) GetMap(ctx context.Context, id string) (*ConfigMap, error) 
 	var m ConfigMap
 	err := r.db.Pool.QueryRow(ctx,
 		`SELECT map_id, name, width, height, grid_width, grid_height, cell_size,
-		        default_wind_power_range, terrain_layers, spawn_points, tiles, description, min_rank_tier
+		        default_wind_power_range, terrain_layers, spawn_points, tiles, description, min_rank_tier, theme
 		 FROM config_maps WHERE map_id = $1`, id).
 		Scan(&m.MapID, &m.Name, &m.Width, &m.Height,
 			&m.GridWidth, &m.GridHeight, &m.CellSize,
 			&m.DefaultWindPowerRange, &m.TerrainLayers, &m.SpawnPoints,
-			&m.Tiles, &m.Description, &m.MinRankTier)
+			&m.Tiles, &m.Description, &m.MinRankTier, &m.Theme)
 	if err != nil {
 		return nil, fmt.Errorf("get map %s: %w", id, err)
 	}
@@ -535,8 +536,8 @@ func (r *Repository) UpsertMap(ctx context.Context, m *ConfigMap) error {
 	_, err := r.db.Pool.Exec(ctx,
 		`INSERT INTO config_maps
 		 (map_id, name, width, height, grid_width, grid_height, cell_size,
-		  default_wind_power_range, terrain_layers, spawn_points, tiles, description, min_rank_tier, updated_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, CURRENT_TIMESTAMP)
+		  default_wind_power_range, terrain_layers, spawn_points, tiles, description, min_rank_tier, theme, updated_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, COALESCE(NULLIF($14, ''), 'grassland'), CURRENT_TIMESTAMP)
 		 ON CONFLICT (map_id) DO UPDATE SET
 		   name=EXCLUDED.name, width=EXCLUDED.width, height=EXCLUDED.height,
 		   grid_width=EXCLUDED.grid_width, grid_height=EXCLUDED.grid_height,
@@ -545,9 +546,10 @@ func (r *Repository) UpsertMap(ctx context.Context, m *ConfigMap) error {
 		   terrain_layers=EXCLUDED.terrain_layers, spawn_points=EXCLUDED.spawn_points,
 		   tiles=EXCLUDED.tiles,
 		   description=EXCLUDED.description, min_rank_tier=EXCLUDED.min_rank_tier,
+		   theme=CASE WHEN $14 = '' THEN config_maps.theme ELSE EXCLUDED.theme END,
 		   updated_at=CURRENT_TIMESTAMP`,
 		m.MapID, m.Name, m.Width, m.Height, m.GridWidth, m.GridHeight, m.CellSize,
-		m.DefaultWindPowerRange, m.TerrainLayers, m.SpawnPoints, m.Tiles, m.Description, m.MinRankTier)
+		m.DefaultWindPowerRange, m.TerrainLayers, m.SpawnPoints, m.Tiles, m.Description, m.MinRankTier, m.Theme)
 	if err != nil {
 		return fmt.Errorf("upsert map %s: %w", m.MapID, err)
 	}
@@ -664,6 +666,7 @@ type MapTilesData struct {
 	SpawnPoints           json.RawMessage `json:"spawnPoints"`
 	MinRankTier           string          `json:"minRankTier"`
 	Description           string          `json:"description"`
+	Theme                 string          `json:"theme"`
 }
 
 // GetMapTiles returns tiles data for the map editor.
@@ -671,10 +674,10 @@ func (r *Repository) GetMapTiles(ctx context.Context, id string) (*MapTilesData,
 	var d MapTilesData
 	err := r.db.Pool.QueryRow(ctx,
 		`SELECT map_id, name, grid_width, grid_height, cell_size,
-		        default_wind_power_range, tiles, spawn_points, min_rank_tier, description
+		        default_wind_power_range, tiles, spawn_points, min_rank_tier, description, theme
 		 FROM config_maps WHERE map_id = $1`, id).
 		Scan(&d.MapID, &d.Name, &d.GridWidth, &d.GridHeight, &d.CellSize,
-			&d.DefaultWindPowerRange, &d.Tiles, &d.SpawnPoints, &d.MinRankTier, &d.Description)
+			&d.DefaultWindPowerRange, &d.Tiles, &d.SpawnPoints, &d.MinRankTier, &d.Description, &d.Theme)
 	if err != nil {
 		return nil, fmt.Errorf("get map tiles %s: %w", id, err)
 	}

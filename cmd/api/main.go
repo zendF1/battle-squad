@@ -17,6 +17,7 @@ import (
 	"battle-squad/internal/api/giftcode"
 	"battle-squad/internal/api/iap"
 	"battle-squad/internal/api/inventory"
+	"battle-squad/internal/api/maps"
 	"battle-squad/internal/api/matchhistory"
 	"battle-squad/internal/api/milestone"
 	"battle-squad/internal/api/mission"
@@ -127,6 +128,8 @@ func main() {
 	appconfigService := appconfig.NewService(db, cfg)
 	appconfigHandler := appconfig.NewHandler(appconfigService)
 
+	mapsHandler := maps.NewHandler(maps.NewService(maps.NewRepository(db)))
+
 	matchhistoryRepo := matchhistory.NewRepository(db)
 	matchhistoryService := matchhistory.NewService(matchhistoryRepo)
 	matchhistoryHandler := matchhistory.NewHandler(matchhistoryService)
@@ -184,6 +187,10 @@ func main() {
 
 	r.Get("/app/version-policy", appconfigHandler.GetVersionPolicy)
 	r.Get("/app/config", appconfigHandler.GetRemoteConfig)
+
+	// Map catalogue (public: the client syncs it before login, config_maps is the source)
+	r.Get("/maps", mapsHandler.List)
+	r.Get("/maps/{mapId}", mapsHandler.Get)
 
 	// 9. Protected Endpoints (Auth Required)
 	r.Group(func(r chi.Router) {

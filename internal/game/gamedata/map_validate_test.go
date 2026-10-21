@@ -119,3 +119,47 @@ func TestGameDataValidateSkipsInvalidMaps(t *testing.T) {
 		t.Error("expected invalid map to be dropped")
 	}
 }
+
+func TestMapThemeAndDisplay(t *testing.T) {
+	if (MapConfig{}).ThemeOrDefault() != "grassland" || (MapConfig{Theme: "lava_world"}).ThemeOrDefault() != "grassland" ||
+		(MapConfig{Theme: "city_night"}).ThemeOrDefault() != "city_night" {
+		t.Fatal("ThemeOrDefault")
+	}
+	prev := Data
+	t.Cleanup(func() { Data = prev })
+	Data = &GameData{Maps: map[string]MapConfig{"ice_bridge": {MapID: "ice_bridge", Name: "Cầu băng", Theme: "ice"}, "x": {MapID: "x"}}}
+	if n, th := MapDisplay("ice_bridge"); n != "Cầu băng" || th != "ice" {
+		t.Fatalf("ice_bridge: %q %q", n, th)
+	}
+	if n, th := MapDisplay("x"); n != "x" || th != "grassland" {
+		t.Fatalf("unnamed: %q %q", n, th)
+	}
+	if n, th := MapDisplay("missing"); n != "missing" || th != "grassland" {
+		t.Fatalf("missing: %q %q", n, th)
+	}
+}
+
+// configs/bricks.yaml loads as the brick types (the YAML mirror of config_brick_types), and
+// the maps keep their theme.
+func TestLoadGameDataReadsBricksAndThemes(t *testing.T) {
+	prevData, prevBricks := Data, BrickTypes
+	t.Cleanup(func() { Data, BrickTypes = prevData, prevBricks })
+	if err := LoadGameData("../../../configs"); err != nil {
+		t.Fatal(err)
+	}
+	if b, ok := BrickTypes[2]; !ok || b.Destructible || len(BrickTypes) < 19 {
+		t.Fatalf("brick types %v", BrickTypes)
+	}
+	if b := BrickTypes[6]; !b.Destructible || len(b.Border.Top) != 2 {
+		t.Fatalf("brick 6 %+v", b)
+	}
+	if m := Data.Maps["ice_bridge"]; m.Theme != "ice" || m.Name != "Cầu băng" || !m.HasTiles() {
+		t.Fatalf("ice_bridge %+v", m.MapID)
+	}
+	if m := Data.Maps["grassland_valley"]; m.ThemeOrDefault() != "grassland" || m.HasTiles() {
+		t.Fatal("grassland_valley")
+	}
+	if len(Data.Maps) != 18 {
+		t.Fatalf("%d maps, want 18", len(Data.Maps))
+	}
+}

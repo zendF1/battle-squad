@@ -79,6 +79,8 @@ type MatchState struct {
 	RoomID          string                        `json:"roomId"`
 	Mode            string                        `json:"mode"`
 	MapID           string                        `json:"mapId"`
+	MapName         string                        `json:"mapName"`  // the map's Vietnamese name (config_maps.name)
+	MapTheme        string                        `json:"mapTheme"` // how the client draws it (gamedata.MapThemes)
 	TurnIndex       int                           `json:"turnIndex"`
 	CurrentPlayerID string                        `json:"currentPlayerId"`
 	Wind            WindState                     `json:"wind"`

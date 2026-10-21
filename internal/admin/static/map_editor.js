@@ -221,6 +221,7 @@
                 document.getElementById('propCellSize').value = data.cellSize;
                 document.getElementById('propMinRankTier').value = data.minRankTier || 'bronze';
                 document.getElementById('propDescription').value = data.description || '';
+                document.getElementById('propTheme').value = data.theme || 'grassland';
 
                 var windRange = [0, 4];
                 try {
@@ -258,6 +259,7 @@
         document.getElementById('propWindMax').value = 4;
         document.getElementById('propMinRankTier').value = 'bronze';
         document.getElementById('propDescription').value = '';
+        document.getElementById('propTheme').value = 'grassland';
     };
 
     MapEditor.prototype.save = function() {
@@ -298,6 +300,7 @@
             defaultWindPowerRange: [windMin, windMax],
             minRankTier: document.getElementById('propMinRankTier').value,
             description: document.getElementById('propDescription').value,
+            theme: document.getElementById('propTheme').value,
             tiles: this.tiles,
             spawnPoints: this.spawnPoints
         };

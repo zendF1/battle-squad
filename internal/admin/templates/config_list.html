@@ -72,11 +72,11 @@
 {{end}}
 </tbody>
 {{else if eq .ConfigType "maps"}}
-<thead><tr><th>ID</th><th>Name</th><th>Grid</th><th>Cell Size</th><th>Min Rank</th><th>Description</th><th>Actions</th></tr></thead>
+<thead><tr><th>ID</th><th>Name</th><th>Grid</th><th>Cell Size</th><th>Min Rank</th><th>Theme</th><th>Description</th><th>Actions</th></tr></thead>
 <tbody>
 {{range .Items}}
 <tr>
-    <td>{{.MapID}}</td><td>{{.Name}}</td><td>{{.GridWidth}}x{{.GridHeight}}</td><td>{{.CellSize}}px</td><td style="text-transform:capitalize">{{.MinRankTier}}</td><td>{{.Description}}</td>
+    <td>{{.MapID}}</td><td>{{.Name}}</td><td>{{.GridWidth}}x{{.GridHeight}}</td><td>{{.CellSize}}px</td><td style="text-transform:capitalize">{{.MinRankTier}}</td><td>{{.Theme}}</td><td>{{.Description}}</td>
     <td>
         <a href="/maps/editor?id={{.MapID}}" class="btn btn-primary btn-sm">Edit</a>
         <form method="POST" action="/maps/delete" style="display:inline" onsubmit="return confirm('Delete this map?')">

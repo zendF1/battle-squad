@@ -83,6 +83,10 @@ type MapConfig struct {
 	Tiles                 [][]int      `yaml:"tiles"` // 0 = air, >0 = brick_type_id
 	SpawnPoints           []SpawnPoint `yaml:"spawnPoints"`
 	MinRankTier           string       `yaml:"minRankTier"`
+	// Theme is how the client draws the map (sky, soft and hard material, bottom); see
+	// MapThemes. "" is DefaultMapTheme.
+	Theme       string `yaml:"theme,omitempty"`
+	Description string `yaml:"description,omitempty"`
 
 	// Legacy fields (for backward compatibility during transition)
 	Width         int            `yaml:"width,omitempty"`
@@ -244,13 +248,25 @@ func LoadGameData(configDir string) error {
 		gData.Items[i.ItemID] = i
 	}
 
-	// 5. Load maps
+	// 5. Load maps and, when bricks.yaml exists, the brick types their tiles use (the YAML
+	// mirror of config_brick_types; without it every brick is a destructible square)
 	var maps []MapConfig
 	if err := loadYAMLFile(filepath.Join(configDir, "maps.yaml"), &maps); err != nil {
 		return err
 	}
 	for _, m := range maps {
 		gData.Maps[m.MapID] = m
+	}
+	bricksPath := filepath.Join(configDir, "bricks.yaml")
+	if _, err := os.Stat(bricksPath); err == nil {
+		var bricks []BrickTypeConfig
+		if err := loadYAMLFile(bricksPath, &bricks); err != nil {
+			return err
+		}
+		BrickTypes = make(map[int]BrickTypeConfig, len(bricks))
+		for _, b := range bricks {
+			BrickTypes[b.BrickTypeID] = b
+		}
 	}
 
 	// Validate configuration relationships
@@ -383,7 +399,7 @@ func LoadGameDataFromDB(db *database.PostgresDB) error {
 	// 5. Load maps (with JSONB fields)
 	rows, err = db.Pool.Query(ctx, `SELECT map_id, name, grid_width, grid_height, cell_size,
 		default_wind_power_range, tiles, spawn_points,
-		width, height, terrain_layers, min_rank_tier
+		width, height, terrain_layers, min_rank_tier, theme, description
 		FROM config_maps`)
 	if err != nil {
 		return fmt.Errorf("failed to query config_maps: %w", err)
@@ -395,7 +411,7 @@ func LoadGameDataFromDB(db *database.PostgresDB) error {
 		var legacyWidth, legacyHeight int
 		if err := rows.Scan(&m.MapID, &m.Name, &m.GridWidth, &m.GridHeight, &m.CellSize,
 			&windRangeJSON, &tilesJSON, &spawnJSON,
-			&legacyWidth, &legacyHeight, &terrainJSON, &m.MinRankTier); err != nil {
+			&legacyWidth, &legacyHeight, &terrainJSON, &m.MinRankTier, &m.Theme, &m.Description); err != nil {
 			return fmt.Errorf("failed to scan config_maps row: %w", err)
 		}
 		m.Width = legacyWidth

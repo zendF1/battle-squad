@@ -91,7 +91,7 @@ func buildRankedRoster(result matchmaker.MatchResult, profiles map[string]ranked
 
 	ro := rankedRoster{
 		LobbyMapping: map[string]string{},
-		Found:        MatchFound{MapID: result.MapID, Mode: RankedMode},
+		Found:        newMatchFound(result.MapID),
 		TeamRatings:  map[int]int{},
 		BotRating:    botRating,
 	}
