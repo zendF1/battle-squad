@@ -9,9 +9,12 @@ import (
 	"sync"
 	"time"
 
+	"battle-squad/internal/game/match"
 	"battle-squad/internal/game/matchmaker"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
+	"battle-squad/internal/shared/ranked"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -156,180 +159,82 @@ func (h *Hub) saveToRedis(ctx context.Context, state *RoomState) {
 	h.redis.Client.HSet(ctx, "rooms:active", state.RoomID, data)
 }
 
-func (h *Hub) CreateBattleFromMatch(ctx context.Context, result matchmaker.MatchResult, botDiffConfig matchmaker.BotDifficultyConfig, eloConfig matchmaker.EloConfig) error {
-	h.Lock()
-	defer h.Unlock()
-
+// CreateBattleFromMatch creates the battle room of a matchmade ranked 2v2 game:
+// bots fill the free slots, every human's items are reserved, every human's
+// lobby gets MatchFound (and its clients join the room), and the match starts
+// mmConfig.MatchStartDelay seconds later with MatchStarted.
+func (h *Hub) CreateBattleFromMatch(ctx context.Context, result matchmaker.MatchResult, botDiffConfig matchmaker.BotDifficultyConfig, eloConfig matchmaker.EloConfig, mmConfig matchmaker.MatchmakingConfig) error {
 	roomID := generateID()
 	matchID := generateID()
 
-	// Build players from both entries
-	var players []RoomPlayer
-	lobbyMapping := make(map[string]string)
-
-	// Helper to add players from a queue entry
-	addEntry := func(entry matchmaker.QueueEntry, teamID int) {
-		for _, pid := range entry.PlayerIDs {
-			charID := "rookie"
-			if c, ok := entry.PlayerChars[pid]; ok {
-				charID = c
-			}
-			var items []string
-			if itm, ok := entry.PlayerItems[pid]; ok {
-				items = itm
-			} else {
-				items = []string{}
-			}
-			name := "Player_" + pid[:6]
-			if n, ok := entry.PlayerNames[pid]; ok {
-				name = n
-			}
-			players = append(players, RoomPlayer{
-				PlayerID:    pid,
-				DisplayName: name,
-				TeamID:      teamID,
-				CharacterID: charID,
-				Items:       items,
-				IsReady:     true,
-				IsHost:      false,
-			})
-			lobbyMapping[pid] = entry.LobbyID
-		}
+	humanIDs := make([]string, 0, 4)
+	for pid := range result.HumanRatings() {
+		humanIDs = append(humanIDs, pid)
 	}
-
-	addEntry(result.Entry1, 1)
-	addEntry(result.Entry2, 2)
-
-	// Fill bots for teams that need 2 players each
-	teamCount := map[int]int{}
-	for _, p := range players {
-		teamCount[p.TeamID]++
+	if len(humanIDs) == 0 {
+		return errors.New("ranked match without players")
 	}
-	for teamID := 1; teamID <= 2; teamID++ {
-		for teamCount[teamID] < 2 {
-			botID := "bot_" + generateID()[:8]
-			botName := "Bot " + botID[len(botID)-4:]
-			players = append(players, RoomPlayer{
-				PlayerID:    botID,
-				DisplayName: botName,
-				TeamID:      teamID,
-				CharacterID: "rookie",
-				Items:       []string{},
-				IsReady:     true,
-				IsHost:      false,
-			})
-			teamCount[teamID]++
-		}
+	var pool *pgxpool.Pool
+	if h.db != nil {
+		pool = h.db.Pool
 	}
-
-	// Set first player as host
-	if len(players) > 0 {
-		players[0].IsHost = true
-	}
+	roster := buildRankedRoster(result, loadRankedProfiles(ctx, pool, humanIDs), func() string {
+		return "bot_" + generateID()[:8]
+	})
+	roster.Found.RoomID = roomID
+	roster.Found.MatchID = matchID
 
 	roomState := RoomState{
 		RoomID:       roomID,
-		HostPlayerID: players[0].PlayerID,
-		Mode:         "ranked_2v2",
+		HostPlayerID: roster.Players[0].PlayerID,
+		Mode:         RankedMode,
 		MapID:        result.MapID,
 		MaxPlayers:   4,
-		Players:      players,
+		Players:      roster.Players,
 		Status:       "in_match",
-		LobbyMapping: lobbyMapping,
+		LobbyMapping: roster.LobbyMapping,
 		HasBot:       result.HasBot,
 	}
 
 	room := NewRoom(roomID, roomState, h, h.db)
-	h.rooms[roomID] = room
+	room.reserveRankedItems(matchID)
 
+	h.Lock()
+	h.rooms[roomID] = room
+	h.Unlock()
 	observability.ActiveRooms.Inc()
 
-	// [RANKED-DEBUG] Log all players
-	for i, p := range players {
-		observability.Log.Info().
-			Str("roomId", roomID).
-			Int("idx", i).
-			Str("playerId", p.PlayerID).
-			Str("displayName", p.DisplayName).
-			Int("teamId", p.TeamID).
-			Str("characterId", p.CharacterID).
-			Bool("isReady", p.IsReady).
-			Msg("[RANKED-DEBUG] player in room")
-	}
-
-	// [RANKED-DEBUG] Log lobby mapping
-	for pid, lid := range lobbyMapping {
-		observability.Log.Info().
-			Str("roomId", roomID).
-			Str("playerId", pid).
-			Str("lobbyId", lid).
-			Msg("[RANKED-DEBUG] lobby mapping")
-	}
-
-	observability.Log.Info().
-		Str("roomId", roomID).
-		Int("clientCount", len(room.Clients)).
-		Msg("[RANKED-DEBUG] room.Clients BEFORE lobbyNotifier")
-
-	// Register lobby clients in battle room BEFORE starting the match,
-	// so they receive the MatchStarted broadcast.
-	// NOTE: We pass the room directly to avoid deadlock — lobbyNotifier
-	// used to call FindRoom() which needs RLock, but we already hold Lock.
+	// MatchFound to every human's lobby; the notifier registers the lobby
+	// clients in the room before the match goroutine starts
 	if h.lobbyNotifier != nil {
-		observability.Log.Info().Str("roomId", roomID).Msg("[RANKED-DEBUG] calling lobbyNotifier")
-		matchFoundData := map[string]string{"roomId": roomID, "matchId": matchID}
-		notifiedLobbies := make(map[string]bool)
-		for _, lid := range lobbyMapping {
-			if !notifiedLobbies[lid] {
-				observability.Log.Info().
-					Str("roomId", roomID).
-					Str("lobbyId", lid).
-					Msg("[RANKED-DEBUG] notifying lobby")
-				h.lobbyNotifier(lid, "MatchFound", matchFoundData, room)
-				notifiedLobbies[lid] = true
+		notified := make(map[string]bool)
+		for _, lid := range roster.LobbyMapping {
+			if !notified[lid] {
+				h.lobbyNotifier(lid, "MatchFound", roster.Found, room)
+				notified[lid] = true
 			}
 		}
-	} else {
-		observability.Log.Warn().Str("roomId", roomID).Msg("[RANKED-DEBUG] lobbyNotifier is NIL!")
 	}
 
-	observability.Log.Info().
-		Str("roomId", roomID).
-		Int("clientCount", len(room.Clients)).
-		Msg("[RANKED-DEBUG] room.Clients AFTER lobbyNotifier")
-
-	// [RANKED-DEBUG] Log registered client IDs
-	for pid := range room.Clients {
-		observability.Log.Info().
-			Str("roomId", roomID).
-			Str("clientPlayerId", pid).
-			Msg("[RANKED-DEBUG] registered client")
+	botModifier := 1.0
+	if result.HasBot {
+		botModifier = mmConfig.BotRatingModifier
+	}
+	eloParams := match.EloParams{
+		KFactor:       eloConfig.KFactor,
+		RatingFloor:   eloConfig.RatingFloor,
+		DefaultRating: eloConfig.DefaultRating,
+		BotModifier:   botModifier,
+		HasBot:        result.HasBot,
 	}
 
-	// Determine bot tier from average rating
-	avgRating := (result.Entry1.Rating + result.Entry2.Rating) / 2
-	tierName := ratingToTier(avgRating)
-	botTierCfg := botDiffConfig.Tiers[tierName]
+	// Bot difficulty from the humans' average rating
+	tierName := ranked.Tier(roster.BotRating)
+	room.startRankedMatch(matchID, botDiffConfig.Tiers[tierName], eloParams, roster.TeamRatings,
+		time.Duration(mmConfig.MatchStartDelay)*time.Second)
 
-	observability.Log.Info().
-		Str("roomId", roomID).
-		Str("matchId", matchID).
-		Str("botTier", tierName).
-		Int("avgRating", avgRating).
-		Msg("[RANKED-DEBUG] about to call startRankedMatch")
-
-	// Start ranked match (spawns match goroutine which broadcasts MatchStarted)
-	room.startRankedMatch(matchID, botTierCfg, eloConfig, result)
-
-	observability.Log.Info().
-		Str("roomId", roomID).
-		Msg("[RANKED-DEBUG] startRankedMatch returned, spawning room.Run()")
-
-	// Spawn room goroutine AFTER match setup so it processes events
-	// from an already-running match.
+	// Room goroutine after the match setup, so it forwards events to a running match
 	go room.Run()
-
-	// Sync to Redis
 	h.saveToRedis(ctx, &roomState)
 
 	observability.Log.Info().
@@ -337,26 +242,8 @@ func (h *Hub) CreateBattleFromMatch(ctx context.Context, result matchmaker.Match
 		Str("matchId", matchID).
 		Str("botTier", tierName).
 		Bool("hasBot", result.HasBot).
-		Msg("[RANKED-DEBUG] CreateBattleFromMatch completed")
-
+		Msg("ranked battle created")
 	return nil
-}
-
-func ratingToTier(rating int) string {
-	switch {
-	case rating < 1000:
-		return "bronze"
-	case rating < 1200:
-		return "silver"
-	case rating < 1500:
-		return "gold"
-	case rating < 1800:
-		return "platinum"
-	case rating < 2200:
-		return "diamond"
-	default:
-		return "master"
-	}
 }
 
 func generateID() string {

@@ -10,6 +10,7 @@ import (
 
 	"battle-squad/internal/api/economy"
 	"battle-squad/internal/shared/database"
+	"battle-squad/internal/shared/ranked"
 )
 
 type Service struct {
@@ -34,53 +35,52 @@ func generateID() string {
 	return hex.EncodeToString(bytes)
 }
 
+// GetCurrentSeason returns the active season, creating "Mùa N" when none is
+// active (the same helper the match rewards use).
 func (s *Service) GetCurrentSeason(ctx context.Context) (*Season, error) {
-	season, err := s.repo.GetActiveSeason(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if season == nil {
-		// Mock season for testing if none active in DB
-		return &Season{
-			SeasonID: "season_1",
-			Name:     "Pre-Season Alpha",
-			StartsAt: time.Now().Add(-24 * time.Hour),
-			EndsAt:   time.Now().Add(30 * 24 * time.Hour),
-			Status:   "active",
-		}, nil
-	}
-	return season, nil
+	return s.repo.GetOrCreateActiveSeason(ctx)
 }
 
+// GetPlayerRank is GET /rank/me: the player's row in the current season with its
+// leaderboard position and the season. A player without a row gets the elo
+// config's default rating (1000 = silver 3) and rankPos 0.
 func (s *Service) GetPlayerRank(ctx context.Context, playerID string) (*PlayerRank, error) {
 	season, err := s.GetCurrentSeason(ctx)
 	if err != nil {
 		return nil, err
 	}
+	ref := &SeasonRef{SeasonID: season.SeasonID, Name: season.Name, EndsAt: season.EndsAt}
 
 	pr, err := s.repo.GetPlayerRank(ctx, playerID, season.SeasonID)
 	if err != nil {
 		return nil, err
 	}
 	if pr == nil {
-		// Return default unranked/new-rank values
 		var displayName string
 		query := "SELECT display_name FROM player_profiles WHERE player_id = $1"
-		err := s.db.Pool.QueryRow(ctx, query, playerID).Scan(&displayName)
-		if err != nil {
-			displayName = "Player_" + playerID[:6]
+		if err := s.db.Pool.QueryRow(ctx, query, playerID).Scan(&displayName); err != nil {
+			displayName = "Player_" + playerID[:min(6, len(playerID))]
 		}
+		elo, _ := s.repo.LoadEloConfig(ctx)
+		tier, division := ranked.TierAndDivision(elo.DefaultRating)
 		return &PlayerRank{
 			PlayerID:    playerID,
 			DisplayName: displayName,
 			SeasonID:    season.SeasonID,
-			Rating:      1000,
-			Tier:        "silver",
-			Division:    3,
-			HighestTier: "silver",
+			Rating:      elo.DefaultRating,
+			Tier:        tier,
+			Division:    division,
+			HighestTier: tier,
 			UpdatedAt:   time.Now(),
+			Season:      ref,
 		}, nil
 	}
+	pos, err := s.repo.GetRankPos(ctx, playerID, season.SeasonID)
+	if err != nil {
+		return nil, err
+	}
+	pr.RankPos = pos
+	pr.Season = ref
 	return pr, nil
 }
 

@@ -3,11 +3,14 @@ package lobby
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"sync"
 	"time"
 
+	"battle-squad/internal/game/matchmaker"
+	"battle-squad/internal/game/room"
 	"battle-squad/internal/game/ws"
+	"battle-squad/internal/shared/model"
 	"battle-squad/internal/shared/observability"
 )
 
@@ -139,6 +142,10 @@ func (l *LobbyRoom) handleEvent(ctx context.Context, client *ws.Client, msg ws.M
 		l.processLeave(ctx, client)
 	case "UpdateLoadout":
 		l.processUpdateLoadout(ctx, client, msg)
+	case "StartQueue":
+		l.processStartQueue(ctx, client)
+	case "CancelQueue":
+		l.processCancelQueue(ctx, client)
 	default:
 		observability.Log.Debug().
 			Str("lobby_id", l.ID).
@@ -187,7 +194,7 @@ func (l *LobbyRoom) processJoin(ctx context.Context, client *ws.Client) {
 
 	// Load loadout and rating.
 	characterID, items := loadPlayerLoadout(ctx, l.hub.db, client.PlayerID)
-	rating, tier := loadPlayerRating(ctx, l.hub.db, client.PlayerID)
+	rating, tier, division := loadPlayerRating(ctx, l.hub.db, client.PlayerID)
 
 	member := LobbyMember{
 		PlayerID:    client.PlayerID,
@@ -196,6 +203,7 @@ func (l *LobbyRoom) processJoin(ctx context.Context, client *ws.Client) {
 		Items:       items,
 		Rating:      rating,
 		Tier:        tier,
+		Division:    division,
 	}
 
 	l.State.Members = append(l.State.Members, member)
@@ -221,8 +229,13 @@ func (l *LobbyRoom) processLeave(ctx context.Context, client *ws.Client) {
 	delete(l.Clients, client.PlayerID)
 	client.LobbyID = ""
 
-	// If lobby was in queue, reset it and notify remaining clients.
+	// If lobby was in queue, take it out of the queue and notify remaining clients.
 	if l.State.Status == "in_queue" {
+		if l.hub.matchmaker != nil {
+			if _, err := l.hub.matchmaker.CancelQueue(ctx, client.PlayerID); err != nil {
+				observability.Log.Warn().Err(err).Str("lobby_id", l.ID).Msg("failed to leave the queue on lobby leave")
+			}
+		}
 		l.State.Status = "preparing"
 		l.State.QueueEntryID = ""
 		payload, _ := json.Marshal(map[string]string{"reason": "teammate disconnected"})
@@ -288,36 +301,27 @@ func (l *LobbyRoom) processUpdateLoadout(ctx context.Context, client *ws.Client,
 		return
 	}
 
-	member := l.State.Members[memberIdx]
-
-	// Validate and apply character change.
-	if payload.CharacterID != nil {
-		newChar := *payload.CharacterID
-		if newChar != "rookie" {
-			if !l.playerOwnsCharacter(ctx, client.PlayerID, newChar) {
-				l.sendError(client, "character_not_owned", fmt.Sprintf("character %q not owned", newChar))
-				return
-			}
-		}
-		member.CharacterID = newChar
+	if l.State.Status != "preparing" {
+		l.sendError(client, "INVALID_STATUS", "Loadout can only change while the lobby is preparing")
+		return
 	}
 
-	// Validate and apply items change.
+	member := l.State.Members[memberIdx]
+	if payload.CharacterID != nil {
+		member.CharacterID = *payload.CharacterID
+	}
 	if payload.Items != nil {
-		if len(payload.Items) > 3 {
-			l.sendError(client, "too_many_items", "maximum 3 items allowed")
+		member.Items = payload.Items
+	}
+	if err := room.ValidateLoadout(ctx, l.hub.db.Pool, client.PlayerID, member.CharacterID, member.Items); err != nil {
+		var loadoutErr *room.LoadoutError
+		if errors.As(err, &loadoutErr) {
+			l.sendError(client, model.ErrLoadoutInvalid.Code, loadoutErr.Reason)
 			return
 		}
-		if len(payload.Items) > 0 {
-			ownedItems := l.queryOwnedItems(ctx, client.PlayerID)
-			for _, itemID := range payload.Items {
-				if !ownedItems[itemID] {
-					l.sendError(client, "item_not_owned", fmt.Sprintf("item %q not owned or out of stock", itemID))
-					return
-				}
-			}
-		}
-		member.Items = payload.Items
+		observability.Log.Error().Err(err).Str("player_id", client.PlayerID).Msg("failed to validate lobby loadout")
+		l.sendError(client, model.ErrInternalServer.Code, "Failed to validate loadout")
+		return
 	}
 
 	l.State.Members[memberIdx] = member
@@ -335,6 +339,108 @@ func (l *LobbyRoom) processUpdateLoadout(ctx context.Context, client *ws.Client,
 }
 
 // ---------------------------------------------------------------------------
+// Queue
+// ---------------------------------------------------------------------------
+
+// processStartQueue (host only, lobby preparing) refreshes the members' ratings
+// and enqueues the lobby: LobbyUpdated (in_queue), then QueueStarted
+// {estimatedWait: botFillAfter seconds}. The lock is held until the lobby is
+// queued, so a MatchFound (Notify) always follows QueueStarted.
+func (l *LobbyRoom) processStartQueue(ctx context.Context, client *ws.Client) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.State.HostPlayerID != client.PlayerID {
+		l.sendError(client, "NOT_HOST", "Only the host can start queue")
+		return
+	}
+	if l.State.Status != "preparing" {
+		l.sendError(client, "INVALID_STATUS", "Lobby is not in preparing state")
+		return
+	}
+	if l.hub.matchmaker == nil {
+		l.sendError(client, "QUEUE_FAILED", "Matchmaking is not available")
+		return
+	}
+
+	playerIDs := make([]string, 0, len(l.State.Members))
+	playerRatings := make(map[string]int)
+	playerChars := make(map[string]string)
+	playerItems := make(map[string][]string)
+	playerNames := make(map[string]string)
+	for i, m := range l.State.Members {
+		// The rating may have changed since the member joined (an earlier match)
+		m.Rating, m.Tier, m.Division = loadPlayerRating(ctx, l.hub.db, m.PlayerID)
+		l.State.Members[i] = m
+
+		playerIDs = append(playerIDs, m.PlayerID)
+		playerRatings[m.PlayerID] = m.Rating
+		playerChars[m.PlayerID] = m.CharacterID
+		playerItems[m.PlayerID] = m.Items
+		playerNames[m.PlayerID] = m.DisplayName
+	}
+
+	entry, err := l.hub.matchmaker.EnqueueLobby(ctx, l.ID, playerIDs, playerRatings, playerChars, playerItems, playerNames)
+	if err != nil {
+		l.sendError(client, "QUEUE_FAILED", err.Error())
+		return
+	}
+	l.State.Status = "in_queue"
+	l.State.QueueEntryID = entry.EntryID
+	l.broadcastLobbyUpdatedLocked()
+	for _, c := range l.Clients {
+		l.sendEvent(c, "QueueStarted", map[string]int{"estimatedWait": l.hub.matchmaker.GetConfig().BotFillAfter})
+	}
+}
+
+// processCancelQueue takes a queued lobby out of the queue: LobbyUpdated
+// (preparing), then QueueCancelled {reason: "cancelled"}. When the matchmaker
+// already took the entry, the cancel is too late: nothing is sent and the
+// MatchFound follows.
+func (l *LobbyRoom) processCancelQueue(ctx context.Context, client *ws.Client) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.State.Status != "in_queue" {
+		l.sendError(client, "NOT_IN_QUEUE", "Lobby is not in queue")
+		return
+	}
+	if l.hub.matchmaker != nil {
+		if _, err := l.hub.matchmaker.CancelQueue(ctx, client.PlayerID); err != nil {
+			if errors.Is(err, matchmaker.ErrAlreadyMatched) {
+				return
+			}
+			observability.Log.Warn().Err(err).Str("lobby_id", l.ID).Msg("failed to cancel queue")
+		}
+	}
+	l.State.Status = "preparing"
+	l.State.QueueEntryID = ""
+	l.broadcastLobbyUpdatedLocked()
+	for _, c := range l.Clients {
+		l.sendEvent(c, "QueueCancelled", map[string]string{"reason": "cancelled"})
+	}
+}
+
+// reuseForHost reports whether the client's CreateLobby can return this lobby:
+// it hosts it and the lobby is open (preparing), or it is alone in it and has
+// left its match (the lobby then opens again).
+func (l *LobbyRoom) reuseForHost(client *ws.Client) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.State.HostPlayerID != client.PlayerID {
+		return false
+	}
+	switch {
+	case l.State.Status == "preparing":
+		return true
+	case l.State.Status == "in_match" && client.RoomID == "" && len(l.State.Members) == 1:
+		l.State.Status = "preparing"
+		return true
+	}
+	return false
+}
+
+// ---------------------------------------------------------------------------
 // DB helpers (called with mu held or before acquiring it)
 // ---------------------------------------------------------------------------
 
@@ -346,38 +452,6 @@ func (l *LobbyRoom) queryDisplayName(ctx context.Context, playerID string) strin
 		return playerID
 	}
 	return name
-}
-
-func (l *LobbyRoom) playerOwnsCharacter(ctx context.Context, playerID, characterID string) bool {
-	var exists bool
-	row := l.hub.db.Pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM player_characters WHERE player_id = $1 AND character_id = $2)`,
-		playerID, characterID)
-	_ = row.Scan(&exists)
-	return exists
-}
-
-// queryOwnedItems returns a set of item IDs the player owns (quantity > 0, not expired).
-func (l *LobbyRoom) queryOwnedItems(ctx context.Context, playerID string) map[string]bool {
-	rows, err := l.hub.db.Pool.Query(ctx,
-		`SELECT item_id FROM inventory_items
-		 WHERE player_id = $1
-		   AND quantity > 0
-		   AND (expires_at IS NULL OR expires_at > now())`,
-		playerID)
-	if err != nil {
-		return map[string]bool{}
-	}
-	defer rows.Close()
-
-	owned := make(map[string]bool)
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err == nil {
-			owned[id] = true
-		}
-	}
-	return owned
 }
 
 func (l *LobbyRoom) persistLoadout(ctx context.Context, playerID, characterID string, items []string) {
@@ -419,10 +493,7 @@ func (l *LobbyRoom) broadcastLobbyUpdatedLocked() {
 }
 
 func (l *LobbyRoom) sendError(client *ws.Client, code, message string) {
-	l.sendEvent(client, "Error", map[string]string{
-		"code":    code,
-		"message": message,
-	})
+	sendLobbyError(client, code, message)
 }
 
 func (l *LobbyRoom) sendEvent(client *ws.Client, event string, payload interface{}) {

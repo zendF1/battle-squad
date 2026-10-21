@@ -10,56 +10,19 @@ import (
 
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
+	"battle-squad/internal/shared/ranked"
 )
 
-var tierOrder = map[string]int{
-	"bronze": 0, "silver": 1, "gold": 2,
-	"platinum": 3, "diamond": 4, "master": 5,
-}
-
-func tierIndex(tier string) int {
-	if idx, ok := tierOrder[tier]; ok {
-		return idx
-	}
-	return 0
-}
-
-func ratingToTier(rating int) string {
-	switch {
-	case rating < 1000:
-		return "bronze"
-	case rating < 1200:
-		return "silver"
-	case rating < 1500:
-		return "gold"
-	case rating < 1800:
-		return "platinum"
-	case rating < 2200:
-		return "diamond"
-	default:
-		return "master"
-	}
-}
-
 const leaderKey = "matchmaking:leader"
-
-// MatchResult carries the two queue entries that have been matched, the chosen
-// map, and whether one side is a bot team.
-type MatchResult struct {
-	Entry1 QueueEntry
-	Entry2 QueueEntry
-	MapID  string
-	HasBot bool
-}
 
 // RoomCreator is the interface implemented by room.Hub that allows the
 // matchmaker to spawn a battle room without importing the room package.
 type RoomCreator interface {
-	CreateBattleFromMatch(ctx context.Context, result MatchResult, botDiffConfig BotDifficultyConfig, eloConfig EloConfig) error
+	CreateBattleFromMatch(ctx context.Context, result MatchResult, botDiffConfig BotDifficultyConfig, eloConfig EloConfig, mmConfig MatchmakingConfig) error
 }
 
 // Matchmaker is a background service that periodically scans the queue,
-// pairs entries by rating proximity, and creates battle rooms.  Only the
+// forms ranked 2v2 matches (planMatches), and creates battle rooms.  Only the
 // leader node (determined via a Redis lock) runs the matching logic.
 type Matchmaker struct {
 	queue       *Queue
@@ -232,10 +195,9 @@ func (m *Matchmaker) GetConfig() MatchmakingConfig {
 // Core matching tick
 // ---------------------------------------------------------------------------
 
-// tick is called every TickInterval seconds on the leader node.  It fetches
-// all queue entries (sorted by rating ascending), pairs them greedily within
-// an expanding rating range, and falls back to bots for entries that have
-// waited too long.
+// tick is called every TickInterval seconds on the leader node. It plans the
+// matches of the queued entries (planMatches), claims each match's entries and
+// hands the match to the room creator.
 func (m *Matchmaker) tick() {
 	m.mu.RLock()
 	cfg := m.cfg
@@ -250,41 +212,8 @@ func (m *Matchmaker) tick() {
 		return
 	}
 
-	now := time.Now().Unix()
-	matched := make([]bool, len(entries))
-
-	for i := 0; i < len(entries); i++ {
-		if matched[i] {
-			continue
-		}
-		e1 := entries[i]
-		waitSec := now - e1.QueuedAt
-
-		// Bot fallback: entry has waited longer than MaxWaitTime.
-		if waitSec >= int64(cfg.MaxWaitTime) {
-			matched[i] = true
-			m.matchWithBot(m.ctx, e1)
-			continue
-		}
-
-		allowedRange := calculateAllowedRange(int(waitSec), cfg)
-
-		for j := i + 1; j < len(entries); j++ {
-			if matched[j] {
-				continue
-			}
-			e2 := entries[j]
-			diff := e2.Rating - e1.Rating
-			if diff < 0 {
-				diff = -diff
-			}
-			if diff <= allowedRange {
-				matched[i] = true
-				matched[j] = true
-				m.matchEntries(m.ctx, e1, e2)
-				break
-			}
-		}
+	for _, result := range planMatches(entries, time.Now().Unix(), cfg) {
+		m.startMatch(m.ctx, result)
 	}
 }
 
@@ -302,90 +231,43 @@ func calculateAllowedRange(waitTimeSec int, cfg MatchmakingConfig) int {
 	return r
 }
 
-// matchEntries dequeues both entries and hands the pair to the room creator.
-func (m *Matchmaker) matchEntries(ctx context.Context, e1, e2 QueueEntry) {
-	if err := m.queue.Dequeue(ctx, e1.EntryID, e1.PlayerIDs); err != nil {
-		observability.Log.Error().Err(err).Str("entryID", e1.EntryID).Msg("matchmaker: matchEntries dequeue e1 error")
-		return
+// startMatch claims the match's entries (skipping a match one of whose entries
+// was cancelled meanwhile), picks the map and creates the battle room. A room
+// that cannot be created puts the entries back in the queue.
+func (m *Matchmaker) startMatch(ctx context.Context, result MatchResult) {
+	entries := result.Entries()
+	ok, err := m.queue.Claim(ctx, entries)
+	if err != nil {
+		observability.Log.Error().Err(err).Msg("matchmaker: claim entries error")
 	}
-	if err := m.queue.Dequeue(ctx, e2.EntryID, e2.PlayerIDs); err != nil {
-		observability.Log.Error().Err(err).Str("entryID", e2.EntryID).Msg("matchmaker: matchEntries dequeue e2 error")
-		return
-	}
-
-	m.mu.RLock()
-	eloConfig := m.eloConfig
-	botConfig := m.botConfig
-	m.mu.RUnlock()
-
-	maxRating := e1.Rating
-	if e2.Rating > maxRating {
-		maxRating = e2.Rating
-	}
-
-	result := MatchResult{
-		Entry1: e1,
-		Entry2: e2,
-		MapID:  m.randomMapForRating(maxRating),
-		HasBot: false,
-	}
-
-	if err := m.roomCreator.CreateBattleFromMatch(ctx, result, botConfig, eloConfig); err != nil {
-		observability.Log.Error().
-			Err(err).
-			Str("entry1", e1.EntryID).
-			Str("entry2", e2.EntryID).
-			Msg("matchmaker: CreateBattleFromMatch error")
-		return
-	}
-
-	observability.Log.Info().
-		Str("entry1", e1.EntryID).
-		Str("entry2", e2.EntryID).
-		Int("rating1", e1.Rating).
-		Int("rating2", e2.Rating).
-		Str("mapID", result.MapID).
-		Msg("matchmaker: matched two entries")
-}
-
-// matchWithBot dequeues the entry and pairs it against an empty bot team.
-func (m *Matchmaker) matchWithBot(ctx context.Context, entry QueueEntry) {
-	if err := m.queue.Dequeue(ctx, entry.EntryID, entry.PlayerIDs); err != nil {
-		observability.Log.Error().Err(err).Str("entryID", entry.EntryID).Msg("matchmaker: matchWithBot dequeue error")
+	if !ok {
 		return
 	}
 
 	m.mu.RLock()
 	eloConfig := m.eloConfig
 	botConfig := m.botConfig
+	cfg := m.cfg
 	m.mu.RUnlock()
 
-	// Bot team is represented by an empty QueueEntry (TeamSize = 0, no PlayerIDs).
-	botEntry := QueueEntry{
-		PlayerIDs: []string{},
-		TeamSize:  0,
-	}
+	result.MapID = m.randomMapForRating(result.MaxHumanRating())
 
-	result := MatchResult{
-		Entry1: entry,
-		Entry2: botEntry,
-		MapID:  m.randomMapForRating(entry.Rating),
-		HasBot: true,
-	}
-
-	if err := m.roomCreator.CreateBattleFromMatch(ctx, result, botConfig, eloConfig); err != nil {
-		observability.Log.Error().
-			Err(err).
-			Str("entry", entry.EntryID).
-			Msg("matchmaker: CreateBattleFromMatch (bot) error")
+	if err := m.roomCreator.CreateBattleFromMatch(ctx, result, botConfig, eloConfig, cfg); err != nil {
+		observability.Log.Error().Err(err).Str("mapID", result.MapID).Msg("matchmaker: CreateBattleFromMatch error, re-queueing entries")
+		for _, e := range entries {
+			if err := m.queue.Enqueue(ctx, e); err != nil {
+				observability.Log.Error().Err(err).Str("entryID", e.EntryID).Msg("matchmaker: re-queue entry error")
+			}
+		}
 		return
 	}
 
 	observability.Log.Info().
-		Str("entry", entry.EntryID).
-		Int("rating", entry.Rating).
+		Int("team1Humans", result.Teams[0].Humans()).
+		Int("team2Humans", result.Teams[1].Humans()).
+		Bool("hasBot", result.HasBot).
 		Str("mapID", result.MapID).
-		Msg("matchmaker: matched entry with bot")
+		Msg("matchmaker: match formed")
 }
 
 // ---------------------------------------------------------------------------
@@ -492,8 +374,7 @@ func (m *Matchmaker) randomMapForRating(maxRating int) string {
 	tiers := m.mapTiers
 	m.mu.RUnlock()
 
-	playerTier := ratingToTier(maxRating)
-	playerIdx := tierIndex(playerTier)
+	playerIdx := ranked.TierIndex(ranked.Tier(maxRating))
 
 	var eligible []string
 	for _, id := range ids {
@@ -501,7 +382,7 @@ func (m *Matchmaker) randomMapForRating(maxRating int) string {
 		if !ok {
 			mapTier = "bronze"
 		}
-		if tierIndex(mapTier) <= playerIdx {
+		if ranked.TierIndex(mapTier) <= playerIdx {
 			eligible = append(eligible, id)
 		}
 	}

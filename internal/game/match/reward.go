@@ -3,6 +3,7 @@ package match
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -12,8 +13,10 @@ import (
 	"battle-squad/internal/api/mission"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
+	"battle-squad/internal/shared/ranked"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // damagePerBonusExp is the damage dealt worth 1 bonus EXP. HP is 15× the old
@@ -46,24 +49,40 @@ type PlayerStats struct {
 	ItemsUsed   int // items spent
 	IsWinner    bool
 	IsDraw      bool
+	// Left: the player left the match (Leave or disconnect): never a winner, no coin or
+	// EXP, and in ranked the full loss of rating (actual score 0) whatever the team did
+	Left bool
 	// Counts: the match counts for this player's milestone counters and daily missions
 	// (Match.milestoneCounts)
 	Counts bool
 }
 
+// RankChange is a ranked player's rating before and after the match. Embedded
+// as a pointer in RewardResult: nil (unranked modes) leaves the fields out of
+// the JSON.
+type RankChange struct {
+	OldRating   int    `json:"oldRating"`
+	OldTier     string `json:"oldTier"`
+	OldDivision int    `json:"oldDivision"`
+	NewRating   int    `json:"newRating"`
+	NewTier     string `json:"newTier"`
+	NewDivision int    `json:"newDivision"`
+}
+
+// RewardResult is one human's MatchEnded rewards entry. Only ranked_2v2 changes
+// rating: there RatingChange and the RankChange fields are set; other modes send
+// ratingChange 0 and no rating fields.
 type RewardResult struct {
-	PlayerID         string `json:"playerId"`
-	ExpGained        int    `json:"expGained"`
-	CoinGained       int    `json:"coinGained"`
-	RatingChange     int    `json:"ratingChange"`
-	NewRating        int    `json:"newRating"`
-	NewTier          string `json:"newTier"`
-	NewDivision      int    `json:"newDivision"`
-	LevelUp          bool   `json:"levelUp"`
-	NewLevel         int    `json:"newLevel"`
-	CharLevelUp      bool   `json:"charLevelUp"`
-	CharNewLevel     int    `json:"charNewLevel"`
-	CharLevelsGained int    `json:"charLevelsGained"`
+	PlayerID     string `json:"playerId"`
+	ExpGained    int    `json:"expGained"`
+	CoinGained   int    `json:"coinGained"`
+	RatingChange int    `json:"ratingChange"`
+	*RankChange
+	LevelUp          bool `json:"levelUp"`
+	NewLevel         int  `json:"newLevel"`
+	CharLevelUp      bool `json:"charLevelUp"`
+	CharNewLevel     int  `json:"charNewLevel"`
+	CharLevelsGained int  `json:"charLevelsGained"`
 }
 
 func ProcessMatchRewards(
@@ -146,6 +165,7 @@ func ProcessMatchRewards(
 		// baseExp = 50, winBonusExp = 30
 		// damageBonusExp = totalDamage / damagePerBonusExp
 		// killBonusExp = killCount * 10
+		// A player who left gets neither
 		expGained := 50
 		if p.IsWinner {
 			expGained += 30
@@ -159,6 +179,9 @@ func ProcessMatchRewards(
 		if p.IsWinner {
 			coinGained += 20
 		}
+		if p.Left {
+			expGained, coinGained = 0, 0
+		}
 
 		// 3. Update player profile: add exp and coins
 		levelUp, newLevel, err := updateProfilePostMatch(ctx, tx, economyRepo, p.PlayerID, expGained, coinGained)
@@ -166,25 +189,11 @@ func ProcessMatchRewards(
 			return nil, fmt.Errorf("failed to update player profile: %w", err)
 		}
 
-		// 4. Update player rank rating (Mainly for PvP 1v1 as spec requests)
+		// 4. Rating: only ranked games change it (Elo of the team averages; a leaver
+		// scores 0)
 		ratingChange := 0
-		newRating := 1000
-		newTier := "silver"
-		newDivision := 3
-
-		if mode == "pvp_1v1" {
-			ratingChange = -20
-			if p.IsWinner {
-				ratingChange = 25
-			} else if p.IsDraw {
-				ratingChange = 0
-			}
-
-			newRating, newTier, newDivision, err = updatePlayerRank(ctx, tx, p.PlayerID, ratingChange, p.IsWinner, p.IsDraw)
-			if err != nil {
-				return nil, fmt.Errorf("failed to update rank rating: %w", err)
-			}
-		} else if mode == "ranked_2v2" {
+		var rank *RankChange
+		if mode == RankedMode {
 			actualScore := 0.0
 			if p.IsWinner {
 				actualScore = 1.0
@@ -192,19 +201,17 @@ func ProcessMatchRewards(
 				actualScore = 0.5
 			}
 
-			teamRating := teamRatings[p.TeamID]
 			opponentTeamID := 1
 			if p.TeamID == 1 {
 				opponentTeamID = 2
 			}
-			opponentRating := teamRatings[opponentTeamID]
+			ratingChange = CalculateEloChange(teamRatings[p.TeamID], teamRatings[opponentTeamID], actualScore, eloParams)
 
-			ratingChange = CalculateEloChange(teamRating, opponentRating, actualScore, eloParams)
-
-			newRating, newTier, newDivision, err = updatePlayerRank(ctx, tx, p.PlayerID, ratingChange, p.IsWinner, p.IsDraw)
+			rank, err = updatePlayerRank(ctx, tx, p.PlayerID, ratingChange, p.IsWinner, p.IsDraw, eloParams)
 			if err != nil {
 				return nil, fmt.Errorf("failed to update rank rating: %w", err)
 			}
+			ratingChange = rank.NewRating - rank.OldRating // the floor may cut a loss
 		}
 
 		// 5. Insert match history record
@@ -325,9 +332,7 @@ func ProcessMatchRewards(
 			ExpGained:        expGained,
 			CoinGained:       coinGained,
 			RatingChange:     ratingChange,
-			NewRating:        newRating,
-			NewTier:          newTier,
-			NewDivision:      newDivision,
+			RankChange:       rank,
 			LevelUp:          levelUp,
 			NewLevel:         newLevel,
 			CharLevelUp:      charLevelUp,
@@ -379,45 +384,40 @@ func updateProfilePostMatch(ctx context.Context, tx pgx.Tx, economyRepo *economy
 	return levelUp, level, nil
 }
 
-func updatePlayerRank(ctx context.Context, tx pgx.Tx, playerID string, ratingChange int, isWin, isDraw bool) (int, string, int, error) {
-	// Fetch active rank season (status = 'active')
-	var seasonID string
-	err := tx.QueryRow(ctx, "SELECT season_id FROM rank_seasons WHERE status = 'active' LIMIT 1").Scan(&seasonID)
-	if err != nil {
-		// No active season — ensure a default one exists for local dev/testing
-		seasonID = "season_1"
-		_, _ = tx.Exec(ctx, `INSERT INTO rank_seasons (season_id, name, starts_at, ends_at, status)
-			VALUES ($1, 'Default Season', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '90 days', 'active')
-			ON CONFLICT (season_id) DO NOTHING`, seasonID)
-	}
+// RankedMode is the only mode that changes rating.
+const RankedMode = "ranked_2v2"
 
-	// Find or initialize player rank config
+// updatePlayerRank applies a ranked result to the player's row of the active
+// season (created, as "Mùa N", when no season is active). A player without a
+// row starts at the elo config's default rating; the rating never falls below
+// its floor.
+func updatePlayerRank(ctx context.Context, tx pgx.Tx, playerID string, ratingChange int, isWin, isDraw bool, params EloParams) (*RankChange, error) {
+	season, err := ranked.EnsureActiveSeason(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	seasonID := season.SeasonID
+
 	var rating, wins, losses, draws, winStreak int
 	var highestTier string
-	querySelect := `
+	err = tx.QueryRow(ctx, `
 		SELECT rating, wins, losses, draws, win_streak, highest_tier
 		FROM player_ranks
 		WHERE player_id = $1 AND season_id = $2
-		FOR UPDATE
-	`
-	err = tx.QueryRow(ctx, querySelect, playerID, seasonID).Scan(&rating, &wins, &losses, &draws, &winStreak, &highestTier)
+		FOR UPDATE`, playerID, seasonID).Scan(&rating, &wins, &losses, &draws, &winStreak, &highestTier)
 
 	isNewRank := false
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			rating = 1000
-			wins = 0
-			losses = 0
-			draws = 0
-			winStreak = 0
-			highestTier = "silver"
-			isNewRank = true
-		} else {
-			return 0, "", 0, err
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
 		}
+		rating = params.defaultRating()
+		highestTier = ranked.Tier(rating)
+		isNewRank = true
 	}
+	change := &RankChange{OldRating: rating}
+	change.OldTier, change.OldDivision = ranked.TierAndDivision(rating)
 
-	// Calculate wins/losses count
 	if isWin {
 		wins++
 		winStreak++
@@ -429,97 +429,42 @@ func updatePlayerRank(ctx context.Context, tx pgx.Tx, playerID string, ratingCha
 		winStreak = 0
 	}
 
-	// Update rating (never go below 0)
-	rating = rating + ratingChange
+	rating += ratingChange
+	if rating < params.RatingFloor {
+		rating = params.RatingFloor
+	}
 	if rating < 0 {
 		rating = 0
 	}
-
-	// Map tier and division
-	tier, division := getTierAndDivision(rating)
-
-	// Keep track of highest tier
-	if compareTiers(tier, highestTier) > 0 {
+	tier, division := ranked.TierAndDivision(rating)
+	if ranked.CompareTiers(tier, highestTier) > 0 {
 		highestTier = tier
 	}
+	change.NewRating, change.NewTier, change.NewDivision = rating, tier, division
 
 	if isNewRank {
-		queryInsert := `
+		_, err = tx.Exec(ctx, `
 			INSERT INTO player_ranks (player_id, season_id, rating, tier, division, wins, losses, draws, win_streak, highest_tier)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		`
-		_, err = tx.Exec(ctx, queryInsert, playerID, seasonID, rating, tier, division, wins, losses, draws, winStreak, highestTier)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+			playerID, seasonID, rating, tier, division, wins, losses, draws, winStreak, highestTier)
 	} else {
-		queryUpdate := `
+		var tag pgconn.CommandTag
+		tag, err = tx.Exec(ctx, `
 			UPDATE player_ranks
 			SET rating = $1, tier = $2, division = $3, wins = $4, losses = $5, draws = $6, win_streak = $7, highest_tier = $8, updated_at = CURRENT_TIMESTAMP
-			WHERE player_id = $9 AND season_id = $10
-		`
-		_, err = tx.Exec(ctx, queryUpdate, rating, tier, division, wins, losses, draws, winStreak, highestTier, playerID, seasonID)
+			WHERE player_id = $9 AND season_id = $10`,
+			rating, tier, division, wins, losses, draws, winStreak, highestTier, playerID, seasonID)
+		if err == nil && tag.RowsAffected() != 1 {
+			err = fmt.Errorf("player_ranks row of %s vanished", playerID)
+		}
 	}
 	if err != nil {
-		return 0, "", 0, err
+		return nil, err
 	}
 
 	// Lifetime peaks for the rank milestones (separate from the season's highest_tier)
 	if err := milestone.RecordRankTx(ctx, tx, playerID, highestTier, rating); err != nil {
-		return 0, "", 0, err
+		return nil, err
 	}
-
-	return rating, tier, division, nil
-}
-
-func getTierAndDivision(rating int) (string, int) {
-	// Bronze: 0-999
-	// Silver: 1000-1199
-	// Gold: 1200-1499
-	// Platinum: 1500-1799
-	// Diamond: 1800-2199
-	// Master: 2200+
-	switch {
-	case rating < 1000:
-		div := 3 - (rating / 333)
-		if div < 1 {
-			div = 1
-		}
-		return "bronze", div
-	case rating < 1200:
-		div := 3 - ((rating - 1000) / 66)
-		if div < 1 {
-			div = 1
-		}
-		return "silver", div
-	case rating < 1500:
-		div := 3 - ((rating - 1200) / 100)
-		if div < 1 {
-			div = 1
-		}
-		return "gold", div
-	case rating < 1800:
-		div := 3 - ((rating - 1500) / 100)
-		if div < 1 {
-			div = 1
-		}
-		return "platinum", div
-	case rating < 2200:
-		div := 3 - ((rating - 1800) / 133)
-		if div < 1 {
-			div = 1
-		}
-		return "diamond", div
-	default:
-		return "master", 1
-	}
-}
-
-func compareTiers(t1, t2 string) int {
-	order := map[string]int{
-		"bronze":   1,
-		"silver":   2,
-		"gold":     3,
-		"platinum": 4,
-		"diamond":  5,
-		"master":   6,
-	}
-	return order[t1] - order[t2]
+	return change, nil
 }

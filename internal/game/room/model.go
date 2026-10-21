@@ -96,3 +96,34 @@ type SelectCharacterPayload struct {
 type SelectItemsPayload struct {
 	Items []string `json:"items"`
 }
+
+// MatchFound is sent to every human of a ranked match (same payload) before the
+// match starts: the room and match ids, map, mode and both teams.
+type MatchFound struct {
+	RoomID  string           `json:"roomId"`
+	MatchID string           `json:"matchId"`
+	MapID   string           `json:"mapId"`
+	Mode    string           `json:"mode"`
+	Teams   []MatchFoundTeam `json:"teams"`
+}
+
+// MatchFoundTeam is one side of a MatchFound, humans first, then bots.
+type MatchFoundTeam struct {
+	TeamID  int                `json:"teamId"`
+	Players []MatchFoundPlayer `json:"players"`
+}
+
+// MatchFoundPlayer is a player card of the MatchFound reveal. Level is the
+// account level; a bot has the humans' average level and counts as their
+// average rating; TitleID "" = no title equipped.
+type MatchFoundPlayer struct {
+	PlayerID    string `json:"playerId"`
+	DisplayName string `json:"displayName"`
+	CharacterID string `json:"characterId"`
+	IsBot       bool   `json:"isBot"`
+	Level       int    `json:"level"`
+	Rating      int    `json:"rating"`
+	Tier        string `json:"tier"`
+	Division    int    `json:"division"`
+	TitleID     string `json:"titleId"`
+}

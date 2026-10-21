@@ -12,7 +12,6 @@ import (
 	"battle-squad/internal/game/battlestats"
 	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/game/match"
-	"battle-squad/internal/game/matchmaker"
 	"battle-squad/internal/game/ws"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/model"
@@ -103,13 +102,6 @@ func (r *Room) Run() {
 		r.hub.UnregisterRoom(context.Background(), r.ID)
 	}()
 
-	observability.Log.Info().
-		Str("roomId", r.ID).
-		Str("status", r.State.Status).
-		Int("clientCount", len(r.Clients)).
-		Bool("hasMatch", r.match != nil).
-		Msg("[RANKED-DEBUG] Room.Run() goroutine started")
-
 	ticker := time.NewTicker(30 * time.Minute)
 	defer ticker.Stop()
 
@@ -124,15 +116,14 @@ func (r *Room) Run() {
 		case ev := <-r.Events:
 			r.handleEvent(ev)
 		case <-matchDoneCh:
-			// Match ended — notify players to return to their lobbies
-			if r.State.LobbyMapping != nil {
-				for playerID, lobbyID := range r.State.LobbyMapping {
-					if client, ok := r.Clients[playerID]; ok {
-						payload, _ := json.Marshal(map[string]string{"lobbyId": lobbyID})
-						select {
-						case client.Send <- ws.Message{Event: "ReturnToLobby", Data: payload}:
-						default:
-						}
+			// Match ended: the lobbies of a matchmade game get ReturnToLobby and
+			// are open again (status preparing)
+			if r.hub.lobbyNotifier != nil {
+				notified := map[string]bool{}
+				for _, lobbyID := range r.State.LobbyMapping {
+					if lobbyID != "" && !notified[lobbyID] {
+						notified[lobbyID] = true
+						r.hub.lobbyNotifier(lobbyID, "ReturnToLobby", map[string]string{"lobbyId": lobbyID}, nil)
 					}
 				}
 			}
@@ -602,7 +593,7 @@ func (r *Room) processStartTutorial(client *ws.Client, payload QuickPlayPayload)
 			spawnPos = match.Vector2{X: 400, Y: 0}
 		}
 
-		isBot := p.PlayerID[:4] == "bot_"
+		isBot := isBotID(p.PlayerID)
 		stats, look := baseStats(p.CharacterID), cosmetics{}
 		if !isBot {
 			stats, look = r.getActualStats(p.PlayerID, p.CharacterID)
@@ -656,142 +647,6 @@ func (r *Room) abortTutorial(client *ws.Client, err error) {
 		}
 	}
 	r.cancel()
-}
-
-func (r *Room) startRankedMatch(matchID string, botTierConfig matchmaker.BotTierConfig, eloConfig matchmaker.EloConfig, matchResult matchmaker.MatchResult) {
-	observability.Log.Info().
-		Str("roomId", r.ID).
-		Str("matchId", matchID).
-		Int("clientCount", len(r.Clients)).
-		Int("playerCount", len(r.State.Players)).
-		Msg("[RANKED-DEBUG] startRankedMatch called")
-	// Build team spawn point queues from map config
-	team1Spawns, team2Spawns := r.teamSpawns()
-	team1Idx := 0
-	team2Idx := 0
-
-	// Build match players
-	matchPlayers := []*match.BattlePlayerState{}
-	for _, p := range r.State.Players {
-		var spawnPos match.Vector2
-		if p.TeamID == 2 {
-			sp := team2Spawns[team2Idx%len(team2Spawns)]
-			spawnPos = match.Vector2{X: sp.X, Y: sp.Y}
-			team2Idx++
-		} else {
-			sp := team1Spawns[team1Idx%len(team1Spawns)]
-			spawnPos = match.Vector2{X: sp.X, Y: sp.Y}
-			team1Idx++
-		}
-
-		isBot := len(p.PlayerID) >= 4 && p.PlayerID[:4] == "bot_"
-		stats, look := baseStats(p.CharacterID), cosmetics{}
-		if !isBot {
-			stats, look = r.getActualStats(p.PlayerID, p.CharacterID)
-		}
-		matchPlayers = append(matchPlayers, newBattlePlayer(p, spawnPos, stats, look, isBot))
-	}
-
-	// Collect per-team ratings for Elo calculation
-	team1Ratings := []int{}
-	team2Ratings := []int{}
-	for _, pid := range matchResult.Entry1.PlayerIDs {
-		if r, ok := matchResult.Entry1.PlayerRatings[pid]; ok {
-			team1Ratings = append(team1Ratings, r)
-		}
-	}
-	for _, pid := range matchResult.Entry2.PlayerIDs {
-		if r, ok := matchResult.Entry2.PlayerRatings[pid]; ok {
-			team2Ratings = append(team2Ratings, r)
-		}
-	}
-
-	avgTeam1 := match.TeamAvgRating(team1Ratings)
-	avgTeam2 := match.TeamAvgRating(team2Ratings)
-
-	// Build Elo params
-	botModifier := 1.0
-	if matchResult.HasBot {
-		// Load bot rating modifier from matchmaking config
-		mmCfg := matchmaker.LoadMatchmakingConfig(context.Background(), r.db)
-		botModifier = mmCfg.BotRatingModifier
-	}
-
-	eloParams := match.EloParams{
-		KFactor:     eloConfig.KFactor,
-		RatingFloor: eloConfig.RatingFloor,
-		BotModifier: botModifier,
-		HasBot:      matchResult.HasBot,
-	}
-
-	// [RANKED-DEBUG] Log match players
-	for _, mp := range matchPlayers {
-		observability.Log.Info().
-			Str("roomId", r.ID).
-			Str("matchId", matchID).
-			Str("playerId", mp.PlayerID).
-			Str("displayName", mp.DisplayName).
-			Int("teamId", mp.TeamID).
-			Bool("isBot", mp.IsBot).
-			Int("hp", mp.HP).
-			Msg("[RANKED-DEBUG] match player")
-	}
-
-	observability.Log.Info().
-		Str("roomId", r.ID).
-		Int("clientCount", len(r.Clients)).
-		Msg("[RANKED-DEBUG] r.Clients before NewMatch")
-
-	for pid := range r.Clients {
-		observability.Log.Info().
-			Str("roomId", r.ID).
-			Str("clientPlayerId", pid).
-			Msg("[RANKED-DEBUG] client in r.Clients")
-	}
-
-	// Create match
-	r.match = match.NewMatch(
-		matchID,
-		r.ID,
-		r.State.Mode,
-		r.State.MapID,
-		matchPlayers,
-		r.Clients,
-		r.db,
-		r.hub.redis,
-		economy.NewRepository(),
-		r.hub,
-	)
-
-	// Set Elo data on match
-	r.match.TeamRatings = map[int]int{
-		1: avgTeam1,
-		2: avgTeam2,
-	}
-	r.match.EloParams = eloParams
-	// Matchmade matches (with or without bots) count for milestones
-	r.match.CountsForMilestones = true
-	// Zero config means the tier is missing from bot_difficulty: keep the default
-	// rather than a bot with no aim error
-	if botTierConfig != (matchmaker.BotTierConfig{}) {
-		r.match.BotTier = botTierConfig
-	}
-
-	// Track match completion
-	r.matchDone = r.match.MatchDone
-
-	// Run match loop
-	go r.match.Run()
-
-	// Sync room state
-	r.hub.SyncRoomState(context.Background(), &r.State)
-
-	observability.Log.Info().
-		Str("roomId", r.ID).
-		Str("matchId", matchID).
-		Int("team1Rating", avgTeam1).
-		Int("team2Rating", avgTeam2).
-		Msg("ranked match started")
 }
 
 func (r *Room) sendError(client *ws.Client, message string) {

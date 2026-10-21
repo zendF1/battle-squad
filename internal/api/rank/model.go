@@ -3,11 +3,11 @@ package rank
 import "time"
 
 type Season struct {
-	SeasonID  string    `json:"seasonId"`
-	Name      string    `json:"name"`
-	StartsAt  time.Time `json:"startsAt"`
-	EndsAt    time.Time `json:"endsAt"`
-	Status    string    `json:"status"` // upcoming, active, ended, reward_granting, closed
+	SeasonID string    `json:"seasonId"`
+	Name     string    `json:"name"`
+	StartsAt time.Time `json:"startsAt"`
+	EndsAt   time.Time `json:"endsAt"`
+	Status   string    `json:"status"` // upcoming, active, ended, reward_granting, closed
 }
 
 type PlayerRank struct {
@@ -23,7 +23,16 @@ type PlayerRank struct {
 	WinStreak   int       `json:"winStreak"`
 	HighestTier string    `json:"highestTier"`
 	UpdatedAt   time.Time `json:"updatedAt"`
-	RankPos     int       `json:"rankPos,omitempty"` // computed leaderboard rank index
+	RankPos     int       `json:"rankPos"` // 1-based leaderboard position in the season, 0 = no row
+	// Season is set by GET /rank/me only
+	Season *SeasonRef `json:"season,omitempty"`
+}
+
+// SeasonRef is the season a /rank/me answer belongs to.
+type SeasonRef struct {
+	SeasonID string    `json:"seasonId"`
+	Name     string    `json:"name"`
+	EndsAt   time.Time `json:"endsAt"`
 }
 
 type LeaderboardResponse struct {

@@ -56,11 +56,14 @@ type Match struct {
 	doneOnce     sync.Once
 	TeamRatings  map[int]int // teamID → avg rating for Elo
 	EloParams    EloParams   // Elo configuration
-	BotTier      matchmaker.BotTierConfig
-	lastAction   map[string]time.Time // playerID → last action timestamp (rate limit)
-	turnSeq      int                  // incremented every startTurn; stale callbacks compare against it
-	resolving    bool                 // the current turn's action is animating; no further actions or timer ticks
-	lastMoveSeq  map[string]int       // playerID → seq of the last Move the loop took from them this turn (see noteMoveSeq)
+	// StartDelay: Run waits this long before MatchStarted (matchmade games: the
+	// clients' MatchFound reveal)
+	StartDelay  time.Duration
+	BotTier     matchmaker.BotTierConfig
+	lastAction  map[string]time.Time // playerID → last action timestamp (rate limit)
+	turnSeq     int                  // incremented every startTurn; stale callbacks compare against it
+	resolving   bool                 // the current turn's action is animating; no further actions or timer ticks
+	lastMoveSeq map[string]int       // playerID → seq of the last Move the loop took from them this turn (see noteMoveSeq)
 
 	// selection is what the current player armed this turn (SelectAction, or a bot's skill /
 	// shot item); selectionSent the last ActionSelected broadcast this turn; selectSentAt when
@@ -230,45 +233,20 @@ func (m *Match) Run() {
 	observability.MatchStartedTotal.Inc()
 	defer observability.ActiveMatches.Dec()
 
-	observability.Log.Info().
-		Str("matchId", m.State.MatchID).
-		Str("roomId", m.State.RoomID).
-		Str("mode", m.State.Mode).
-		Int("clientCount", len(m.Clients)).
-		Int("playerCount", len(m.State.Players)).
-		Str("status", m.State.Status).
-		Msg("[RANKED-DEBUG] Match.Run() started")
-
-	for pid := range m.Clients {
-		observability.Log.Info().
-			Str("matchId", m.State.MatchID).
-			Str("clientPlayerId", pid).
-			Msg("[RANKED-DEBUG] Match.Run() client")
-	}
-
-	for pid, p := range m.State.Players {
-		observability.Log.Info().
-			Str("matchId", m.State.MatchID).
-			Str("playerId", pid).
-			Bool("isBot", p.IsBot).
-			Bool("isAlive", p.IsAlive).
-			Int("teamId", p.TeamID).
-			Msg("[RANKED-DEBUG] Match.Run() player state")
+	// A matchmade game waits StartDelay after MatchFound (the clients' reveal);
+	// events arriving meanwhile (a Leave) stay queued until the match starts
+	if m.StartDelay > 0 {
+		select {
+		case <-time.After(m.StartDelay):
+		case <-m.ctx.Done():
+			return
+		}
 	}
 
 	m.el.Start(m.ctx)
 	m.lastActivity = time.Now()
-
-	observability.Log.Info().
-		Str("matchId", m.State.MatchID).
-		Int("clientCount", len(m.Clients)).
-		Msg("[RANKED-DEBUG] about to broadcastMatchStarted")
 	m.broadcastMatchStarted()
 
-	observability.Log.Info().
-		Str("matchId", m.State.MatchID).
-		Str("currentPlayerId", m.State.CurrentPlayerID).
-		Msg("[RANKED-DEBUG] about to startTurn (first turn)")
 	// Initialize the first turn
 	m.startTurn(context.Background())
 
@@ -489,14 +467,6 @@ func (m *Match) startTurn(ctx context.Context) {
 	m.updateWind()
 
 	// Broadcast TurnStarted
-	observability.Log.Info().
-		Str("matchId", m.State.MatchID).
-		Int("turnIndex", m.State.TurnIndex).
-		Str("currentPlayerId", m.State.CurrentPlayerID).
-		Bool("isBot", player.IsBot).
-		Int("clientCount", len(m.Clients)).
-		Msg("[RANKED-DEBUG] startTurn: broadcasting TurnStarted")
-
 	skillEnergy := make(map[string]int, len(m.State.Players))
 	for id, p := range m.State.Players {
 		skillEnergy[id] = p.SkillEnergy
@@ -526,10 +496,6 @@ func (m *Match) startTurn(ctx context.Context) {
 	}
 
 	if player.IsBot {
-		observability.Log.Info().
-			Str("matchId", m.State.MatchID).
-			Str("botId", player.PlayerID).
-			Msg("[RANKED-DEBUG] startTurn: scheduling bot action")
 		// Short idle before acting; the bot then spends its "thinking" time visibly aiming
 		botDelay := randomDelay(botTurnStartMinDelay, botTurnStartMaxDelay)
 		m.runOnTurnAfter(ctx, botDelay, func(ctx context.Context) {
@@ -1041,7 +1007,8 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 		// Calculate rewards
 		stats := make(map[string]*PlayerStats)
 		for _, p := range m.State.Players {
-			isWinner := p.TeamID == winningTeam
+			// A player who left is never a winner (nor in a draw)
+			isWinner := p.TeamID == winningTeam && !p.Left
 			stats[p.PlayerID] = &PlayerStats{
 				PlayerID:    p.PlayerID,
 				CharacterID: p.CharacterID,
@@ -1053,7 +1020,8 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 				SkillUses:   p.SkillUses,
 				ItemsUsed:   len(p.UsedItems),
 				IsWinner:    isWinner,
-				IsDraw:      winningTeam == 0,
+				IsDraw:      winningTeam == 0 && !p.Left,
+				Left:        p.Left,
 				Counts:      m.milestoneCounts(p),
 			}
 		}
@@ -1075,18 +1043,18 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 		}
 
 		// Broadcast MatchEnded
-		payload, _ := json.Marshal(map[string]interface{}{
+		ended := map[string]interface{}{
 			"winningTeam": winningTeam,
 			"rewards":     rewards,
-		})
+			"stats":       m.endStats(),
+			"mvpPlayerId": matchMVP(m.State.Players, winningTeam),
+		}
+		payload, _ := json.Marshal(ended)
 		m.broadcast(ws.Message{
 			Event: "MatchEnded",
 			Data:  payload,
 		})
-		m.el.Log("MatchEnded", "", map[string]interface{}{
-			"winningTeam": winningTeam,
-			"rewards":     rewards,
-		})
+		m.el.Log("MatchEnded", "", ended)
 
 		// Cleanup connections
 		for _, client := range m.Clients {
@@ -1164,6 +1132,8 @@ func (m *Match) endAsNoContest() {
 		"winningTeam": 0,
 		"result":      "no_contest",
 		"message":     "Server terminated game due to error or shutdown",
+		"stats":       m.endStats(),
+		"mvpPlayerId": "",
 	})
 	m.broadcast(ws.Message{
 		Event: "MatchEnded",
@@ -1171,6 +1141,56 @@ func (m *Match) endAsNoContest() {
 	})
 	m.signalDone()
 	m.cancel()
+}
+
+// EndStats is one player's line of MatchEnded.stats.
+type EndStats struct {
+	DamageDealt int `json:"damageDealt"`
+	Kills       int `json:"kills"`
+	ShotsHit    int `json:"shotsHit"`
+	ShotsFired  int `json:"shotsFired"`
+}
+
+// endStats is MatchEnded.stats: every player of the match, bots included.
+func (m *Match) endStats() map[string]EndStats {
+	out := make(map[string]EndStats, len(m.State.Players))
+	for id, p := range m.State.Players {
+		out[id] = EndStats{DamageDealt: p.DamageDealt, Kills: p.KillCount, ShotsHit: p.ShotsHit, ShotsFired: p.ShotsFired}
+	}
+	return out
+}
+
+// matchMVP is the player (bots included) with the most damage dealt; ties go to
+// more kills, then the winning team, then the smaller player id. "" without players.
+func matchMVP(players map[string]*BattlePlayerState, winningTeam int) string {
+	var best *BattlePlayerState
+	for _, p := range players {
+		if best == nil {
+			best = p
+			continue
+		}
+		pw, bw := winningTeam != 0 && p.TeamID == winningTeam, winningTeam != 0 && best.TeamID == winningTeam
+		switch {
+		case p.DamageDealt != best.DamageDealt:
+			if p.DamageDealt > best.DamageDealt {
+				best = p
+			}
+		case p.KillCount != best.KillCount:
+			if p.KillCount > best.KillCount {
+				best = p
+			}
+		case pw != bw:
+			if pw {
+				best = p
+			}
+		case p.PlayerID < best.PlayerID:
+			best = p
+		}
+	}
+	if best == nil {
+		return ""
+	}
+	return best.PlayerID
 }
 
 func calculateAccuracy(fired, hit int) float64 {
@@ -1181,11 +1201,6 @@ func calculateAccuracy(fired, hit int) float64 {
 }
 
 func (m *Match) broadcast(msg ws.Message) {
-	observability.Log.Debug().
-		Str("matchId", m.State.MatchID).
-		Str("event", msg.Event).
-		Int("clientCount", len(m.Clients)).
-		Msg("[RANKED-DEBUG] broadcast")
 	for pid, client := range m.Clients {
 		select {
 		case client.Send <- msg:
@@ -1215,25 +1230,9 @@ func (m *Match) broadcast(msg ws.Message) {
 }
 
 func (m *Match) broadcastMatchStarted() {
-	observability.Log.Info().
-		Str("matchId", m.State.MatchID).
-		Int("clientCount", len(m.Clients)).
-		Msg("[RANKED-DEBUG] broadcastMatchStarted: broadcasting to clients")
-
-	for pid := range m.Clients {
-		observability.Log.Info().
-			Str("matchId", m.State.MatchID).
-			Str("targetPlayerId", pid).
-			Msg("[RANKED-DEBUG] broadcastMatchStarted: will send to")
-	}
-
 	m.broadcast(ws.Message{
 		Event: "MatchStarted",
 		Data:  m.snapshotPayload(),
 	})
 	m.el.Log("MatchStarted", "", m.State)
-
-	observability.Log.Info().
-		Str("matchId", m.State.MatchID).
-		Msg("[RANKED-DEBUG] broadcastMatchStarted: done")
 }

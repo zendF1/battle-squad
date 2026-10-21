@@ -18,7 +18,17 @@
     <div class="form-group">
         <label>maxWaitTime (seconds)</label>
         <input type="number" name="maxWaitTime" min="10" max="300" step="1">
-        <div class="desc">Thời gian chờ tối đa trước khi điền bot vào trận — tăng lên thì người chơi chờ lâu hơn nhưng ít gặp bot hơn</div>
+        <div class="desc">Không còn dùng khi ghép trận (xem botFillAfter); giữ lại cho tương thích</div>
+    </div>
+    <div class="form-group">
+        <label>botFillAfter (seconds)</label>
+        <input type="number" name="botFillAfter" min="0" max="300" step="1">
+        <div class="desc">Chờ bao nhiêu giây thì điền bot vào các chỗ trống (ưu tiên ghép người trong tầm rating trước) — tăng lên thì ít gặp bot hơn nhưng chờ lâu hơn</div>
+    </div>
+    <div class="form-group">
+        <label>matchStartDelay (seconds)</label>
+        <input type="number" name="matchStartDelay" min="0" max="10" step="1">
+        <div class="desc">Số giây từ MatchFound tới MatchStarted — thời gian client chạy hiệu ứng lật thẻ người chơi</div>
     </div>
     <div class="form-group">
         <label>baseRatingRange</label>

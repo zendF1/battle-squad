@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"battle-squad/internal/shared/database"
+	"battle-squad/internal/shared/ranked"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -17,28 +18,36 @@ func NewRepository(db *database.PostgresDB) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) GetActiveSeason(ctx context.Context) (*Season, error) {
-	query := `
-		SELECT season_id, name, starts_at, ends_at, status
-		FROM rank_seasons
-		WHERE status = 'active'
-		LIMIT 1
-	`
-	var s Season
-	err := r.db.Pool.QueryRow(ctx, query).Scan(
-		&s.SeasonID,
-		&s.Name,
-		&s.StartsAt,
-		&s.EndsAt,
-		&s.Status,
-	)
+// GetOrCreateActiveSeason returns the active season, creating "Mùa N" when none
+// is active (ranked.EnsureActiveSeason).
+func (r *Repository) GetOrCreateActiveSeason(ctx context.Context) (*Season, error) {
+	s, err := ranked.EnsureActiveSeason(ctx, r.db.Pool)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
-		}
 		return nil, err
 	}
-	return &s, nil
+	return &Season{SeasonID: s.SeasonID, Name: s.Name, StartsAt: s.StartsAt, EndsAt: s.EndsAt, Status: s.Status}, nil
+}
+
+// LoadEloConfig reads the elo config (defaults when the row is missing).
+func (r *Repository) LoadEloConfig(ctx context.Context) (ranked.EloConfig, error) {
+	return ranked.LoadEloConfig(ctx, r.db.Pool)
+}
+
+// GetRankPos is the player's 1-based position in the season's leaderboard
+// order (rating, then wins, then player id), 0 when the player has no row.
+func (r *Repository) GetRankPos(ctx context.Context, playerID, seasonID string) (int, error) {
+	var pos int
+	err := r.db.Pool.QueryRow(ctx, `
+		SELECT pos FROM (
+			SELECT r.player_id, ROW_NUMBER() OVER (ORDER BY r.rating DESC, r.wins DESC, r.player_id) AS pos
+			FROM player_ranks r
+			JOIN player_profiles p ON r.player_id = p.player_id
+			WHERE r.season_id = $1
+		) ranked WHERE player_id = $2`, seasonID, playerID).Scan(&pos)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil
+	}
+	return pos, err
 }
 
 func (r *Repository) GetPlayerRank(ctx context.Context, playerID, seasonID string) (*PlayerRank, error) {
@@ -75,11 +84,11 @@ func (r *Repository) GetPlayerRank(ctx context.Context, playerID, seasonID strin
 func (r *Repository) GetLeaderboard(ctx context.Context, seasonID string, limit, offset int) ([]PlayerRank, error) {
 	query := `
 		SELECT r.player_id, p.display_name, r.season_id, r.rating, r.tier, r.division, r.wins, r.losses, r.draws, r.win_streak, r.highest_tier, r.updated_at,
-		       ROW_NUMBER() OVER(ORDER BY r.rating DESC, r.wins DESC) as rank_pos
+		       ROW_NUMBER() OVER(ORDER BY r.rating DESC, r.wins DESC, r.player_id) as rank_pos
 		FROM player_ranks r
 		JOIN player_profiles p ON r.player_id = p.player_id
 		WHERE r.season_id = $1
-		ORDER BY r.rating DESC, r.wins DESC
+		ORDER BY r.rating DESC, r.wins DESC, r.player_id
 		LIMIT $2 OFFSET $3
 	`
 	rows, err := r.db.Pool.Query(ctx, query, seasonID, limit, offset)

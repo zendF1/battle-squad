@@ -3,6 +3,7 @@ package matchmaker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -159,9 +160,40 @@ func (q *Queue) GetAllEntries(ctx context.Context) ([]QueueEntry, error) {
 	return entries, nil
 }
 
-// CancelByPlayer looks up the entry associated with playerID, loads the full
-// entry, calls Dequeue for all players in that entry, and returns the entry.
-// Returns nil, nil when the player is not in the queue.
+// ErrAlreadyMatched: the entry was already taken by the matchmaker (its match is
+// being created), so it can no longer be cancelled.
+var ErrAlreadyMatched = errors.New("matchmaker queue: entry already matched")
+
+// Claim takes the entries out of the queue for one match. It removes each from
+// the sorted set first: an entry that is no longer there was cancelled (or
+// claimed) meanwhile, and then the entries already taken are put back and
+// Claim returns false. Claimed entries lose their detail and player keys.
+func (q *Queue) Claim(ctx context.Context, entries []QueueEntry) (bool, error) {
+	var taken []QueueEntry
+	for _, e := range entries {
+		n, err := q.redis.Client.ZRem(ctx, queueKey, e.EntryID).Result()
+		if err != nil || n == 0 {
+			for _, t := range taken {
+				q.redis.Client.ZAdd(ctx, queueKey, redis.Z{Score: float64(t.Rating), Member: t.EntryID}) //nolint:errcheck
+			}
+			if err != nil {
+				return false, fmt.Errorf("matchmaker queue: claim entry %s: %w", e.EntryID, err)
+			}
+			return false, nil
+		}
+		taken = append(taken, e)
+	}
+	for _, e := range taken {
+		if err := q.Dequeue(ctx, e.EntryID, e.PlayerIDs); err != nil {
+			return true, err
+		}
+	}
+	return true, nil
+}
+
+// CancelByPlayer looks up the entry associated with playerID, removes it from
+// the queue and returns it. Returns nil, nil when the player is not in the
+// queue, and ErrAlreadyMatched when the matchmaker already claimed the entry.
 func (q *Queue) CancelByPlayer(ctx context.Context, playerID string) (*QueueEntry, error) {
 	inQueue, entryID := q.IsPlayerInQueue(ctx, playerID)
 	if !inQueue {
@@ -183,6 +215,13 @@ func (q *Queue) CancelByPlayer(ctx context.Context, playerID string) (*QueueEntr
 		return nil, fmt.Errorf("matchmaker queue: CancelByPlayer unmarshal entry %s: %w", entryID, err)
 	}
 
+	removed, err := q.redis.Client.ZRem(ctx, queueKey, entry.EntryID).Result()
+	if err != nil {
+		return nil, fmt.Errorf("matchmaker queue: CancelByPlayer remove entry %s: %w", entryID, err)
+	}
+	if removed == 0 {
+		return nil, ErrAlreadyMatched
+	}
 	if err := q.Dequeue(ctx, entry.EntryID, entry.PlayerIDs); err != nil {
 		return nil, fmt.Errorf("matchmaker queue: CancelByPlayer dequeue entry %s: %w", entryID, err)
 	}

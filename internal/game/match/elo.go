@@ -3,10 +3,19 @@ package match
 import "math"
 
 type EloParams struct {
-	KFactor     int
-	RatingFloor int
-	BotModifier float64 // 0-1, multiplier for matches with bots
-	HasBot      bool
+	KFactor       int
+	RatingFloor   int     // ratings never fall below it
+	DefaultRating int     // rating of a player without a player_ranks row (0 = 1000)
+	BotModifier   float64 // 0-1, multiplier for matches with bots
+	HasBot        bool
+}
+
+// defaultRating is the rating a player without a player_ranks row starts from.
+func (p EloParams) defaultRating() int {
+	if p.DefaultRating > 0 {
+		return p.DefaultRating
+	}
+	return 1000
 }
 
 // CalculateEloChange returns the rating change for a team.

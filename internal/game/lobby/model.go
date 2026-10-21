@@ -15,6 +15,7 @@ type LobbyMember struct {
 	Items       []string `json:"items"`
 	Rating      int      `json:"rating"`
 	Tier        string   `json:"tier"`
+	Division    int      `json:"division"`
 }
 
 type UpdateLoadoutPayload struct {

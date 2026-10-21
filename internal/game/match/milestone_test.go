@@ -138,18 +138,26 @@ func TestRewardsRecordMilestoneCounters(t *testing.T) {
 	if value("p1", "rank_peak") != 2 || value("p1", "rating_peak") != rating || value("p2", "rank_peak") != 2 {
 		t.Errorf("rank peaks p1 %d/%d (rating %d) p2 %d", value("p1", "rank_peak"), value("p1", "rating_peak"), rating, value("p2", "rank_peak"))
 	}
-	if _, err := db.Pool.Exec(ctx, `UPDATE player_ranks SET rating = 1180 WHERE player_id = 'p1'`); err != nil {
+	// The unranked m2 left the rating alone
+	var afterM2 int
+	if err := db.Pool.QueryRow(ctx, `SELECT rating FROM player_ranks WHERE player_id = 'p1'`).Scan(&afterM2); err != nil {
 		t.Fatal(err)
 	}
-	play("m3", "pvp_1v1", &PlayerStats{PlayerID: "p1", CharacterID: "spark", TeamID: 1, IsWinner: true})
+	if afterM2 != rating {
+		t.Errorf("pvp_1v1 changed the rating %d -> %d", rating, afterM2)
+	}
+	if _, err := db.Pool.Exec(ctx, `UPDATE player_ranks SET rating = 1190 WHERE player_id = 'p1'`); err != nil {
+		t.Fatal(err)
+	}
+	play("m3", "ranked_2v2", &PlayerStats{PlayerID: "p1", CharacterID: "spark", TeamID: 1, IsWinner: true})
 	if value("p1", "rank_peak") != 3 {
 		t.Errorf("gold peak %d", value("p1", "rank_peak"))
 	}
 	if _, err := db.Pool.Exec(ctx, `UPDATE player_ranks SET rating = 900 WHERE player_id = 'p1'`); err != nil {
 		t.Fatal(err)
 	}
-	play("m4", "pvp_1v1", &PlayerStats{PlayerID: "p1", CharacterID: "spark", TeamID: 1})
-	if value("p1", "rank_peak") != 3 || value("p1", "rating_peak") != 1205 {
+	play("m4", "ranked_2v2", &PlayerStats{PlayerID: "p1", CharacterID: "spark", TeamID: 1})
+	if value("p1", "rank_peak") != 3 || value("p1", "rating_peak") != 1206 {
 		t.Errorf("peaks dropped: %d / %d", value("p1", "rank_peak"), value("p1", "rating_peak"))
 	}
 }

@@ -347,9 +347,9 @@ Giá normal (coin) — weapon (mỗi nhân vật) 500/1500/4000/10000, armor 400
 | POST | `/milestones/claim-all` | ClaimAll | Nhận mọi mốc đang nhận được trong 1 tx, cùng dạng kết quả (rewards cộng dồn); không có gì → `claimed: []` |
 | GET | `/player/titles` | List | Danh hiệu: `{titles:[{id, name, rarity, description, owned, obtainedAt}], equipped: {id, name, rarity} \| null}` — chỉ danh hiệu đang bật, theo `sort_order` rồi id; `obtainedAt` RFC3339 UTC hoặc null; xem §7 Danh hiệu |
 | POST | `/player/titles/equip` | Equip | `{titleId}` (null / thiếu / `""` = tháo) → `{equipped: {id, name, rarity} \| null}`; chưa sở hữu, không tồn tại hoặc đã tắt `TITLE_NOT_OWNED` 403 (không đổi gì); JSON sai `BAD_REQUEST` |
-| GET | `/rank/me` | GetRankMe | Rating, tier, division của mình |
-| GET | `/rank/leaderboard?page=&limit=` | GetLeaderboard | Bảng xếp hạng (default: page=1, limit=20) |
-| GET | `/rank/seasons/current` | GetCurrentSeason | Mùa giải hiện tại |
+| GET | `/rank/me` | GetRankMe | `{playerId, displayName, seasonId, rating, tier, division, wins, losses, draws, winStreak, highestTier, updatedAt, rankPos, season: {seasonId, name, endsAt}}` của mùa hiện tại. `rankPos` = vị trí (1-based) trong bảng xếp hạng mùa (rating ↓, wins ↓, player_id), `0` khi chưa có dòng `player_ranks`; khi đó rating = `elo.defaultRating` (1000 = silver, division 3), highestTier = tier đó. `endsAt` RFC3339 |
+| GET | `/rank/leaderboard?page=&limit=` | GetLeaderboard | Bảng xếp hạng (default: page=1, limit=20), `rankPos` mỗi dòng |
+| GET | `/rank/seasons/current` | GetCurrentSeason | Mùa giải hiện tại (dòng thật; chưa có mùa active thì tạo "Mùa N", xem §8 Mùa giải) |
 | POST | `/rank/reward/claim` | ClaimReward | Nhận thưởng cuối mùa |
 | GET | `/player/match-history?page=&limit=` | GetHistory | Lịch sử trận đấu |
 | GET | `/rooms?mode=&page=&limit=` | GetRooms | Danh sách phòng đang chờ |
@@ -416,28 +416,49 @@ Client message → CompositeWSHandler
 
 ### Lobby Events (Ranked Matchmaking)
 
+Mọi lobby event trừ `CreateLobby` / `JoinLobby` chạy trên goroutine của lobby theo đúng thứ tự client gửi, nên client gửi liền `CreateLobby` → `UpdateLoadout` → `StartQueue` được (`CreateLobby` gán `client.LobbyID` ngay).
+
 **Client → Server:**
 
 | Event | Payload | Mô tả |
 |-------|---------|-------|
-| `CreateLobby` | `{}` | Tạo lobby room |
-| `JoinLobby` | `{lobbyId}` | Join lobby theo ID |
-| `LeaveLobby` | `{}` | Rời lobby |
-| `UpdateLoadout` | `{characterId?, items?}` | Đổi character/items → lưu DB |
-| `StartQueue` | `{}` | Host bấm tìm trận |
+| `CreateLobby` | `{}` | Tạo lobby (host). Đã là host của lobby đang `preparing` → trả lại lobby đó (`LobbyUpdated`); lobby solo còn `in_match` mà mình đã rời trận → mở lại (`preparing`) và trả lại; lobby không còn → tạo mới; còn lại `ALREADY_IN_LOBBY` |
+| `JoinLobby` | `{lobbyId}` | Join lobby theo ID (tối đa 2 người) |
+| `LeaveLobby` | `{}` | Rời lobby (đang `in_queue` thì rời hàng đợi trước). Host rời → giải tán |
+| `UpdateLoadout` | `{characterId?, items?}` | Đổi character/items khi `preparing`; cùng luật QuickPlay (`room.ValidateLoadout`: nhân vật chơi được và sở hữu, ≤ 3 item đã biết trong giới hạn mỗi trận, đang có) → lưu `player_loadouts`. Sai → `LobbyError` `LOADOUT_INVALID` |
+| `StartQueue` | `{}` | Host bấm tìm trận (lobby `preparing`); đọc lại rating của các thành viên rồi vào hàng đợi |
 | `CancelQueue` | `{}` | Hủy tìm trận |
 
 **Server → Client:**
 
 | Event | Payload | Mô tả |
 |-------|---------|-------|
-| `LobbyUpdated` | `LobbyState` | State thay đổi |
-| `LobbyError` | `{error: {code, message}}` | Lỗi |
-| `LobbyDisbanded` | `{reason}` | Host rời → lobby giải tán |
-| `QueueStarted` | `{estimatedWait}` | Đã vào hàng đợi |
-| `QueueCancelled` | `{reason}` | Hủy queue |
-| `MatchFound` | `{matchId, roomId, mapId, players[], hasBot}` | Ghép xong |
-| `ReturnToLobby` | `{lobbyId}` | Trận xong, quay về lobby |
+| `LobbyUpdated` | `LobbyState` `{lobbyId, hostPlayerId, members:[{playerId, displayName, characterId, items, rating, tier, division}], status}` | State thay đổi; status `preparing` / `in_queue` / `in_match` |
+| `LobbyError` | `{error: {code, message, correlationId}}` | Lỗi (mọi lỗi lobby, cả lỗi trong lobby room — trước đây event `Error`) |
+| `LobbyDisbanded` | `{reason}` | Host rời / idle 30 phút → lobby giải tán |
+| `QueueStarted` | `{estimatedWait}` | Đã vào hàng đợi; `estimatedWait` = `botFillAfter` (giây, 20) — chậm nhất lúc đó bot được điền |
+| `QueueCancelled` | `{reason}` | `cancelled` (CancelQueue) / `teammate disconnected` |
+| `MatchFound` | xem dưới | Ghép xong, gửi cho mọi người thật trong trận (cùng payload) |
+| `ReturnToLobby` | `{lobbyId}` | Trận xong; lobby về `preparing` (kèm `LobbyUpdated`) |
+
+**`MatchFound`** (`room.MatchFound`):
+
+```json
+{"roomId":"...","matchId":"...","mapId":"grassland_valley","mode":"ranked_2v2",
+ "teams":[{"teamId":1,"players":[{"playerId":"p1","displayName":"Smoke","characterId":"spark",
+   "isBot":false,"level":40,"rating":1050,"tier":"silver","division":2,"titleId":""}, ...]},
+  {"teamId":2,"players":[...]}]}
+```
+
+Mỗi team đủ 2 người: người thật trước (theo thứ tự entry), rồi bot. `level` = level tài khoản (`player_profiles.level`), `titleId` = danh hiệu đang đeo (`""` = không). Bot: `playerId` `bot_xxxxxxxx`, `displayName` `Bot xxxx`, `characterId` `rookie`, `level` = trung bình level người thật, `rating` = trung bình rating người thật (tier/division theo rating đó), `titleId` `""`.
+
+**Luồng client sau `MatchFound`** (không cần gửi gì để vào trận):
+
+1. `MatchFound` → ngay sau đó `LobbyUpdated` (status `in_match`). Server đã đưa client vào battle room (`client.RoomID`).
+2. `matchStartDelay` giây sau (config `matchmaking`, mặc định 3 s) → `MatchStarted` (snapshot như mọi trận, mode `ranked_2v2`), rồi `TurnStarted` và các match event bình thường. Client buffer match event nếu màn trận chưa sẵn sàng.
+3. Kết thúc → `MatchEnded {winningTeam, rewards}` (rewards có rating, xem §7 Reward System), rồi `ReturnToLobby {lobbyId}` + `LobbyUpdated` (`preparing`). Lobby vẫn còn: `StartQueue` lại được, hoặc `LeaveLobby` (lobby solo → giải tán); `CreateLobby` lần sau trả lại đúng lobby đó.
+4. `Leave` (hoặc mất kết nối) trong trận = rời trận: thua toàn bộ rating, không coin/EXP; client về Home rồi nên gửi `LeaveLobby` (hoặc `CreateLobby` lại sau khi trận đã kết thúc / lobby solo).
+5. `CancelQueue` thua race: nếu matchmaker đã lấy entry, server không gửi `QueueCancelled` mà `MatchFound` đến ngay sau đó → trận vẫn diễn ra.
 
 ### Room Events
 
@@ -489,7 +510,7 @@ Client message → CompositeWSHandler
 | `ShotResolved` | `{shooterId, actionMode, skillId?, itemId?, skillEnergy, skillEnergies, projectiles[], events[], duration}` | Toàn bộ kết quả một lượt bắn (weapon, skill, teleport). `skillEnergy` = năng lượng skill của người bắn sau phát bắn; `skillEnergies` = `{playerId: energy}` của mọi player sau phát bắn (người bị địch đánh trúng +10, xem Kỹ năng) |
 | `ItemUsed` | `{playerId, itemId, players, wind}` | Item bị tiêu hao |
 | `PlayerDamaged` | `[{playerId, damage, hp, shield, isAlive, type}]` | Damage đầu lượt của người tới lượt, ngoài phát bắn: `type` `lava` (75) hoặc `burn` (10% máu tối đa). Không qua defense, khiên chịu trước (`shield` = khiên còn lại). Gửi trước `TurnStarted`; nếu chết thì không có `TurnStarted` cho họ: server kiểm tra thắng thua rồi chuyển lượt |
-| `MatchEnded` | `{winningTeam, rewards}` | Trận kết thúc |
+| `MatchEnded` | `{winningTeam, rewards, stats, mvpPlayerId}` (no-contest: `{winningTeam: 0, result: "no_contest", message, stats, mvpPlayerId: ""}`) | Trận kết thúc, xem §7 Reward System |
 | `MatchStateSync` | `MatchState` + `terrain` + `lastMoveSeq` + `selectedAction?` | Full sync trả lời `Reconnect`. `selectedAction` (`ActionSelected` của người tới lượt, cả khi broadcast còn đang gộp) chỉ có khi họ đang chọn skill / item, để client vào lại vẫn hiện badge. `lastMoveSeq`: `seq` của `Move` cuối cùng của người gửi `Reconnect` mà match loop đã nhận trong lượt hiện tại, kể cả `Move` bị bỏ (rate limit, đang resolve, không hợp lệ); `0` nếu chưa có hoặc không phải lượt của họ; reset khi lượt mới bắt đầu. Snapshot đã phản ánh mọi `Move` có `seq <= lastMoveSeq` |
 
 **`ShotResolved`:** server tính xong toàn bộ phát bắn và state đã cập nhật trước khi gửi; client chỉ phát lại. `projectiles[]` là đường bay (`path[]` với `time`) của từng viên đạn; `time` luôn tính từ lúc bắn, nên viên phóng trễ (bom liên hoàn, tên lửa) có `path[0].time = launchDelay > 0` và client chỉ hiện nó từ lúc đó. Mỗi projectile: `{projectileId, ownerPlayerId, skillId?, kind?, launchDelay?, path[], hitPlayerId?, explosionPoint?, explosionRadius, craterRadius}`; `kind` (chỉ với skill): `flare` (pháo hiệu, đáp không nổ), `missile` (tên lửa rơi từ đỉnh map), `bomb` (bom liên hoàn), `seed` (hạt của Hoa hồi xuân, đáp lên đồng đội `hitPlayerId`, không nổ); thiếu = đạn thường. `events[]` sắp theo `t` (giây kể từ lúc bắn):
@@ -923,9 +944,28 @@ Tổng 140 năng động. Rương ngày: `chest_d20` 300 coin · `chest_d40` 500
 
 **Claim**: một tx — khoá `player_profiles` `FOR UPDATE` (mỗi lần một claim của người chơi), đọc trạng thái qua tx (không dùng Pool), rồi ghi có điều kiện và kiểm tra `RowsAffected`: nhiệm vụ `UPDATE … WHERE period = hôm nay AND is_claimed = FALSE AND current_value >= required_value`, rương `INSERT … ON CONFLICT DO UPDATE … WHERE period <> kỳ này OR is_claimed = FALSE` (0 dòng → `*_ALREADY_CLAIMED`). Coin/gem của rương ghi `economy_transactions` source `mission`, `ref_id` = id rương; item/đá qua `milestone.GrantRewardItemTx` (item source `mission_reward`). Migration 034 chạy lại được (`IF NOT EXISTS`, seed `ON CONFLICT DO NOTHING` — giữ chỉnh sửa của admin).
 
-**Rating (chỉ ranked):**
-- `pvp_1v1`: cố định +25/-20
-- `ranked_2v2`: Elo formula `K * (actual - expected)`, K=32, điều chỉnh theo chênh lệch rating. Trận có bot: rating change × `botRatingModifier` (default 0.5)
+**Rời trận** (`Leave` / mất kết nối → `Left`, mọi mode): không bao giờ thắng (cả khi team thắng; không tính hoà), 0 EXP, 0 coin, lịch sử ghi `loss`; đồng đội vẫn nhận kết quả bình thường.
+
+**Rating — chỉ `ranked_2v2`** (`pvp_1v1` QuickPlay / phòng tự tạo và `pvp_2v2` không đổi rating, không ghi `player_ranks`):
+- Elo `round(K × (actual − expected))`, K = `elo.kFactor` (32), `expected = 1 / (1 + 10^((opp − team)/400))` với rating trung bình mỗi team; bot tính bằng trung bình rating người thật trong trận. `actual`: thắng 1, hoà 0,5, thua 0, **rời trận 0**. Trận có bot: × `botRatingModifier` (0,5).
+- Chưa có dòng `player_ranks` → bắt đầu từ `elo.defaultRating` (1000 = silver 3); rating không xuống dưới `elo.ratingFloor` (0); `ratingChange` là thay đổi thật sau khi chặn sàn.
+- Ghi vào mùa active (`ranked.EnsureActiveSeason`, tạo "Mùa N" nếu chưa có), cùng tx phần thưởng; mốc `rank_peak` / `rating_peak` theo sau.
+
+**`MatchEnded.rewards[playerId]`** (chỉ người thật): `{playerId, expGained, coinGained, ratingChange, levelUp, newLevel, charLevelUp, charNewLevel, charLevelsGained}`; ranked thêm `oldRating, oldTier, oldDivision, newRating, newTier, newDivision`. Mode khác: `ratingChange` 0 và **không có** các field rating (trước đây gửi 1000/silver/3 giả).
+
+`stats` (mọi mode, mọi người chơi kể cả bot và người đã rời): `{playerId: {damageDealt, kills, shotsHit, shotsFired}}`. `mvpPlayerId`: người (kể cả bot) có `damageDealt` cao nhất; hoà → nhiều kill hơn → thuộc team thắng → `playerId` nhỏ hơn; `""` khi no-contest.
+
+```json
+{"winningTeam":1,
+ "rewards":{"p1":{"playerId":"p1","expGained":95,"coinGained":50,"ratingChange":18,
+   "oldRating":1050,"oldTier":"silver","oldDivision":3,"newRating":1068,"newTier":"silver","newDivision":2,
+   "levelUp":false,"newLevel":12,"charLevelUp":true,"charNewLevel":5,"charLevelsGained":1}},
+ "stats":{"p1":{"damageDealt":4200,"kills":1,"shotsHit":6,"shotsFired":9},
+          "bot_1a2b3c4d":{"damageDealt":1800,"kills":0,"shotsHit":3,"shotsFired":8}},
+ "mvpPlayerId":"p1"}
+```
+
+`charNewLevel` / `charLevelsGained` là 0 khi nhân vật không lên level; `newLevel` luôn là level tài khoản sau trận.
 
 ---
 
@@ -934,34 +974,53 @@ Tổng 140 năng động. Rương ngày: `chest_d20` 300 coin · `chest_d40` 500
 ### Flow
 
 ```
-CreateLobby → chọn loadout → StartQueue → Matchmaker ghép → MatchFound → Battle Room → trận đấu → ReturnToLobby
+CreateLobby → UpdateLoadout → StartQueue → Matchmaker ghép (4 slot, 2 team × 2) → MatchFound
+  → (matchStartDelay) MatchStarted → trận ranked_2v2 → MatchEnded (rating) → ReturnToLobby
 ```
 
 ### Lobby Room
 
-- 1-2 người cùng team, actor pattern (goroutine + event channel)
+- 1-2 người cùng team, actor pattern (goroutine + event channel); mọi event trừ Create/Join chạy trên goroutine lobby (giữ thứ tự)
 - Character/items lưu trong `player_loadouts` DB table
-- Status: `preparing` → `in_queue` → `in_match` → `preparing` (loop)
-- Host rời → lobby giải tán, member nhận `LobbyDisbanded`
+- Status: `preparing` → `in_queue` → `in_match` → `preparing` (loop; `MatchFound` / `ReturnToLobby` qua `LobbyHub.Notify`)
+- Host rời → lobby giải tán, member nhận `LobbyDisbanded`; rời khi `in_queue` → entry rời hàng đợi
+- Rating của member: dòng `player_ranks` của mùa active, không có → `elo.defaultRating`; đọc lại mỗi `StartQueue`
 
 ### Matchmaker Engine
 
-- Goroutine chạy trong game server, tick mỗi 3s (configurable)
+- Goroutine chạy trong game server, tick mỗi `tickInterval` (3s)
 - Redis leader election (`SETNX` TTL 10s) cho multi-node
 - Hot-reload config mỗi 30s từ `game_settings` DB
 
 **Queue (Redis):**
 - Sorted set `matchmaking:queue:2v2` (score = rating)
-- Entry detail: `matchmaking:entry:{id}` (JSON string, TTL 120s)
+- Entry detail: `matchmaking:entry:{id}` (JSON string, TTL 120s): solo (1 người) hoặc party (lobby 2 người); `rating` = party rating, `playerRatings` = rating riêng
 - Player mapping: `matchmaking:player:{id}` (string, TTL 120s)
+- Lấy entry cho một trận (`Queue.Claim`): `ZREM` từng entry; entry đã biến mất (vừa bị hủy) → trả lại các entry đã lấy, bỏ trận đó. `CancelByPlayer` cũng `ZREM`; 0 → `ErrAlreadyMatched` (trận đang được tạo, cancel bị bỏ qua). Tạo room lỗi → entry vào lại hàng đợi (giữ `queuedAt`)
 
-**Algorithm:**
-1. Lấy tất cả entries, đã sorted theo rating
-2. Expanding range: `baseRange(100) + (waitTime/10s) × expandStep(50)`, max 300
-3. Tìm cặp có |rating₁ - rating₂| ≤ min(allowedRange₁, allowedRange₂)
-4. Timeout (default 60s) → điền Smart Bot
+**Ghép trận** (`planMatches`, mỗi tick):
+1. Phục vụ entry chờ lâu nhất trước; mỗi entry dùng 1 lần mỗi tick
+2. Hai entry ghép được khi |rating₁ − rating₂| ≤ min(allowedRange₁, allowedRange₂); mọi cặp entry trong trận đều phải ghép được. `allowedRange = baseRatingRange(100) + (wait/expandInterval(10s)) × expandStep(50)`, tối đa `maxRatingRange` (300)
+3. Trận đủ 4 người: party vs party, party vs 2 solo, hoặc 4 solo chia thành cặp có chênh lệch trung bình team nhỏ nhất (thử cả 3 cách chia); nhiều lựa chọn → chọn chênh lệch nhỏ nhất
+4. Không đủ người và entry đã chờ ≥ `botFillAfter` (20s): dùng người trong tầm trước (nhiều người nhất), bot lấp chỗ trống:
+   - party + 1 solo: party vs solo + bot; solo + party: solo + bot vs party
+   - solo + 2 solo: 2 người cùng team vs người thứ 3 + bot (cách chia cân nhất)
+   - solo + 1 solo: **đối thủ của nhau**, mỗi người 1 bot (1+bot vs 1+bot) — giữ PvP thay vì 2 người cùng team đánh 2 bot
+   - một mình: party vs 2 bot, solo + bot vs 2 bot
+5. Bot: `rookie`, chỉ số gốc; độ khó (`bot_difficulty`) theo tier của **trung bình rating người thật**; trong Elo bot = trung bình rating người thật; trận có bot nhân `botRatingModifier`
+6. Map: ngẫu nhiên trong các map có `min_rank_tier` ≤ tier của rating người thật cao nhất
+
+**Bắt đầu trận** (`room.Hub.CreateBattleFromMatch`): đọc profile (tên, level, danh hiệu) → dựng roster + `MatchFound` → giữ chỗ item của mọi người thật (`reservePlayerItems` như phòng tự tạo; ai không giữ được item thì chơi không item) → đăng ký room → `MatchFound` tới từng lobby, client vào room → match chạy, chờ `matchStartDelay` (3s) rồi `MatchStarted`. Item đã dùng bị trừ lúc kết thúc, phần còn lại trả về.
 
 **Party rating:** 3 strategies (config từ admin): `max` (default), `average`, `weighted`
+
+**Config `game_settings.matchmaking`**: `tickInterval, baseRatingRange, expandInterval, expandStep, maxRatingRange, botFillAfter (20, migration 035), matchStartDelay (3, migration 035), botRatingModifier, partyRatingStrategy, weightedRatio`; `maxWaitTime` (60) không còn dùng khi ghép. `game_settings.elo`: `kFactor, ratingFloor, defaultRating`.
+
+### Tier & mùa giải
+
+`internal/shared/ranked` là nơi duy nhất: `Tier` / `TierAndDivision` (bronze < 1000, silver < 1200, gold < 1500, platinum < 1800, diamond < 2200, master; division 3 thấp nhất → 1, master luôn 1), `TierIndex` / `CompareTiers`, `LoadEloConfig`, `EnsureActiveSeason`. Matchmaker, room, match rewards, lobby và `/rank` đều dùng nó (không còn `ratingToTier` trùng lặp).
+
+**Mùa giải (phase 1, chưa có vòng đời):** `EnsureActiveSeason` trả mùa `active`; không có thì tạo `season_<n>` tên "Mùa <n>" (n = số mùa + 1), 90 ngày — dùng chung cho match rewards và `/rank/seasons/current`, `/rank/me` (không còn mùa giả). Migration 035 đổi tên `season_1` "Default Season" → "Mùa 1".
 
 ### Smart Bot AI
 
@@ -1055,7 +1114,7 @@ State-based decision making, difficulty theo rank tier:
 
 | Table | PK | Mô tả |
 |-------|-----|-------|
-| `rank_seasons` | `season_id` | Mùa giải (status: upcoming→active→ended→closed) |
+| `rank_seasons` | `season_id` | Mùa giải (status: upcoming→active→ended→closed); tự tạo "Mùa N" khi chưa có mùa active |
 | `player_ranks` | `(player_id, season_id)` | Rating, tier, wins/losses per season |
 | `season_reward_claims` | `claim_id` | Thưởng cuối mùa (1 lần/season) |
 

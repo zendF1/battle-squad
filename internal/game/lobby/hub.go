@@ -8,8 +8,11 @@ import (
 	"errors"
 	"sync"
 
+	"battle-squad/internal/game/matchmaker"
+	"battle-squad/internal/game/ws"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
+	"battle-squad/internal/shared/ranked"
 )
 
 // LobbyHub manages the in-memory registry of active lobby rooms.
@@ -19,6 +22,8 @@ type LobbyHub struct {
 	db      *database.PostgresDB
 	redis   *database.RedisClient
 	nodeID  string
+	// matchmaker queues the lobbies (set by NewWSHandler)
+	matchmaker *matchmaker.Matchmaker
 }
 
 // NewLobbyHub constructs a LobbyHub.
@@ -32,7 +37,7 @@ func NewLobbyHub(db *database.PostgresDB, redis *database.RedisClient, nodeID st
 }
 
 // CreateLobby creates a new lobby owned by hostPlayerID and starts its goroutine.
-func (h *LobbyHub) CreateLobby(ctx context.Context, hostPlayerID, hostDisplayName string, rating int, tier string) (*LobbyRoom, error) {
+func (h *LobbyHub) CreateLobby(ctx context.Context, hostPlayerID, hostDisplayName string, rating int, tier string, division int) (*LobbyRoom, error) {
 	h.Lock()
 	defer h.Unlock()
 
@@ -62,6 +67,7 @@ func (h *LobbyHub) CreateLobby(ctx context.Context, hostPlayerID, hostDisplayNam
 				Items:       items,
 				Rating:      rating,
 				Tier:        tier,
+				Division:    division,
 			},
 		},
 	}
@@ -106,6 +112,47 @@ func (h *LobbyHub) FindLobbyByPlayer(playerID string) *LobbyRoom {
 	return nil
 }
 
+// Notify sends a matchmaking event to every client of the lobby. MatchFound
+// moves the lobby to in_match and hands each client to join (the battle room);
+// ReturnToLobby (match over) opens it again (preparing). Both broadcast
+// LobbyUpdated.
+func (h *LobbyHub) Notify(lobbyID, event string, data interface{}, join func(c *ws.Client)) error {
+	l, err := h.FindLobby(lobbyID)
+	if err != nil {
+		return err
+	}
+	payload, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	// A lobby reused since its match (see reuseForHost) no longer waits for it
+	if event == "ReturnToLobby" && l.State.Status != "in_match" {
+		return nil
+	}
+	for _, c := range l.Clients {
+		select {
+		case c.Send <- ws.Message{Event: event, Data: payload}:
+		default:
+			observability.Log.Warn().Str("lobby_id", lobbyID).Str("player_id", c.PlayerID).Str("event", event).
+				Msg("client send buffer full — dropping lobby notification")
+		}
+		if join != nil && c.RoomID == "" {
+			join(c)
+		}
+	}
+	switch event {
+	case "MatchFound":
+		l.State.Status = "in_match"
+		l.State.QueueEntryID = ""
+	case "ReturnToLobby":
+		l.State.Status = "preparing"
+	}
+	l.broadcastLobbyUpdatedLocked()
+	return nil
+}
+
 // UnregisterLobby removes the lobby from the registry.
 func (h *LobbyHub) UnregisterLobby(lobbyID string) {
 	h.Lock()
@@ -138,24 +185,25 @@ func loadPlayerLoadout(ctx context.Context, db *database.PostgresDB, playerID st
 	return characterID, items
 }
 
-// loadPlayerRating reads the player's rating and tier from the active season.
-// Defaults to 1000 / "bronze" when no row is found.
-func loadPlayerRating(ctx context.Context, db *database.PostgresDB, playerID string) (int, string) {
+// loadPlayerRating reads the player's rating in the active season with its
+// tier and division. A player without a row has the elo config's default
+// rating (1000 = silver 3).
+func loadPlayerRating(ctx context.Context, db *database.PostgresDB, playerID string) (int, string, int) {
 	const q = `
-		SELECT pr.rating, pr.tier
+		SELECT pr.rating
 		FROM player_ranks pr
 		JOIN rank_seasons rs ON rs.season_id = pr.season_id
 		WHERE pr.player_id = $1 AND rs.status = 'active'
+		ORDER BY rs.starts_at DESC
 		LIMIT 1`
 
 	var rating int
-	var tier string
-
-	row := db.Pool.QueryRow(ctx, q, playerID)
-	if err := row.Scan(&rating, &tier); err != nil {
-		return 1000, "bronze"
+	if err := db.Pool.QueryRow(ctx, q, playerID).Scan(&rating); err != nil {
+		elo, _ := ranked.LoadEloConfig(ctx, db.Pool)
+		rating = elo.DefaultRating
 	}
-	return rating, tier
+	tier, division := ranked.TierAndDivision(rating)
+	return rating, tier, division
 }
 
 // generateID produces a 32-character lowercase hex string (16 random bytes).

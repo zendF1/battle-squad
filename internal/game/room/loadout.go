@@ -136,3 +136,10 @@ func validateQuickPlayLoadout(ctx context.Context, own loadoutOwnership, playerI
 	}
 	return checkItemsOwned(ctx, own, playerID, p.Items)
 }
+
+// ValidateLoadout applies the QuickPlay loadout rules (a playable character the
+// player owns, at most 3 known items within their per-match limits, all held)
+// to a ranked lobby loadout. A rule broken is a *LoadoutError.
+func ValidateLoadout(ctx context.Context, pool *pgxpool.Pool, playerID, characterID string, items []string) error {
+	return validateQuickPlayLoadout(ctx, poolOwnership{pool: pool}, playerID, QuickPlayPayload{CharacterID: characterID, Items: items}, false)
+}

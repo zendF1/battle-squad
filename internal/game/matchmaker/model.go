@@ -7,17 +7,22 @@ import (
 
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
+	"battle-squad/internal/shared/ranked"
 )
 
 // MatchmakingConfig holds the queue-expansion and bot-fill parameters loaded
 // from the game_settings table (key = "matchmaking").
 type MatchmakingConfig struct {
-	TickInterval        int     `json:"tickInterval"`
-	BaseRatingRange     int     `json:"baseRatingRange"`
-	ExpandInterval      int     `json:"expandInterval"`
-	ExpandStep          int     `json:"expandStep"`
-	MaxRatingRange      int     `json:"maxRatingRange"`
-	MaxWaitTime         int     `json:"maxWaitTime"`
+	TickInterval    int `json:"tickInterval"`
+	BaseRatingRange int `json:"baseRatingRange"`
+	ExpandInterval  int `json:"expandInterval"`
+	ExpandStep      int `json:"expandStep"`
+	MaxRatingRange  int `json:"maxRatingRange"`
+	MaxWaitTime     int `json:"maxWaitTime"` // unused by matching since botFillAfter; kept for the admin form
+	// BotFillAfter: seconds an entry waits before its missing slots are filled with bots
+	BotFillAfter int `json:"botFillAfter"`
+	// MatchStartDelay: seconds between MatchFound and MatchStarted (the client's reveal)
+	MatchStartDelay     int     `json:"matchStartDelay"`
 	BotRatingModifier   float64 `json:"botRatingModifier"`
 	PartyRatingStrategy string  `json:"partyRatingStrategy"`
 	WeightedRatio       float64 `json:"weightedRatio"`
@@ -25,11 +30,7 @@ type MatchmakingConfig struct {
 
 // EloConfig holds the Elo rating algorithm parameters loaded from the
 // game_settings table (key = "elo").
-type EloConfig struct {
-	KFactor       int `json:"kFactor"`
-	RatingFloor   int `json:"ratingFloor"`
-	DefaultRating int `json:"defaultRating"`
-}
+type EloConfig = ranked.EloConfig
 
 // BotTierConfig holds the bot behaviour for a single rank tier.
 type BotTierConfig struct {
@@ -46,7 +47,8 @@ type BotDifficultyConfig struct {
 }
 
 // QueueEntry represents a single matchmaking queue entry. A solo player has
-// one element in PlayerIDs; a party has multiple.
+// one element in PlayerIDs; a party has two. Rating is the party rating
+// (partyRatingStrategy), PlayerRatings the members' own ratings.
 type QueueEntry struct {
 	EntryID       string              `json:"entryId"`
 	LobbyID       string              `json:"lobbyId"`
@@ -75,6 +77,8 @@ func DefaultMatchmakingConfig() MatchmakingConfig {
 		ExpandStep:          50,
 		MaxRatingRange:      300,
 		MaxWaitTime:         60,
+		BotFillAfter:        20,
+		MatchStartDelay:     3,
 		BotRatingModifier:   0.5,
 		PartyRatingStrategy: "max",
 		WeightedRatio:       0.7,
@@ -84,11 +88,7 @@ func DefaultMatchmakingConfig() MatchmakingConfig {
 // DefaultEloConfig returns the canonical Elo defaults that match the seed
 // values in migrations/005_add_loadouts_and_matchmaking.up.sql.
 func DefaultEloConfig() EloConfig {
-	return EloConfig{
-		KFactor:       32,
-		RatingFloor:   0,
-		DefaultRating: 1000,
-	}
+	return ranked.DefaultEloConfig()
 }
 
 // DefaultBotDifficultyConfig returns the canonical bot difficulty defaults
@@ -167,8 +167,8 @@ func LoadMatchmakingConfig(ctx context.Context, db *database.PostgresDB) Matchma
 // LoadEloConfig loads EloConfig from the DB. On any error it logs a warning
 // and returns the hard-coded defaults.
 func LoadEloConfig(ctx context.Context, db *database.PostgresDB) EloConfig {
-	cfg := DefaultEloConfig()
-	if err := LoadConfigFromDB(ctx, db, "elo", &cfg); err != nil {
+	cfg, err := ranked.LoadEloConfig(ctx, db.Pool)
+	if err != nil {
 		observability.Log.Warn().
 			Err(err).
 			Msg("matchmaker: failed to load elo config from DB, using defaults")
