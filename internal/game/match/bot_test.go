@@ -302,14 +302,14 @@ func TestPredictMoveRejectsFallingOffTheMap(t *testing.T) {
 	}
 }
 
-func TestPredictMoveMatchesProcessMoveOnIce(t *testing.T) {
+func TestIceDoesNotSlide(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		targetX float64
 		ok      bool
 	}{
-		{"slide on ground", 700, true},
-		{"slide into pit", 840, false}, // ends 10px short of the pit, slides 50px into it
+		{"walk on ice", 700, true},
+		{"stop short of a pit on ice", 790, true}, // ends 60px short of the pit: no slide toward it
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m, bot, _ := newBotMatch(t, 600, 1300, nil)

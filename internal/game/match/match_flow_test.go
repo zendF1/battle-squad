@@ -258,19 +258,21 @@ func TestFrozenPlayerCannotMove(t *testing.T) {
 	}
 }
 
-func TestIceSlideRequiresMovement(t *testing.T) {
+func TestMoveOnIceDoesNotSlide(t *testing.T) {
 	m, clients := newFlowMatch(t)
 	cur := m.State.CurrentPlayerID
 	p := m.State.Players[cur]
 	m.Terrain.Zones = append(m.Terrain.Zones, TerrainZone{Type: "ice", MinX: 0, MaxX: float64(m.Terrain.Width), MinY: 0, MaxY: float64(m.Terrain.Height)})
-	p.MoveEnergy = 0
-	start := p.Position
+	energy := p.MoveEnergy
+	target := p.Position.X + 20
+	want, _ := m.Terrain.WalkTo(p.Position.X, p.Position.Y, target)
 
-	for i := 0; i < 3; i++ {
-		send(m, clients[cur], "Move", MoveAction{TargetX: p.Position.X})
+	send(m, clients[cur], "Move", MoveAction{TargetX: target})
+
+	if p.Position.X != want {
+		t.Fatalf("on ice the walk ended at x=%v, want %v (no slide)", p.Position.X, want)
 	}
-
-	if p.Position != start {
-		t.Fatalf("slid on ice without moving: %v → %v", start, p.Position)
+	if spent := energy - p.MoveEnergy; spent != 10 {
+		t.Fatalf("20 px on ice cost %d energy, want 10", spent)
 	}
 }

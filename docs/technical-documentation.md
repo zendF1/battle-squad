@@ -805,7 +805,7 @@ Map = lưới tile (`config_maps.tiles`: `gridHeight` hàng × `gridWidth` cột
 
 Terrain zones đặc biệt (chỉ map legacy):
 - `lava`: 75 damage/turn khi đứng (không qua defense)
-- `ice`: Trượt (giảm friction)
+- `ice`: chỉ là hình (không trượt): di chuyển ở mọi nơi đều 1 thể lực = `pxPerEnergy` px
 - `fragile`: Sập sau khi bị bắn
 
 Methods: `IsSolid(x,y)`, `IsDestructible(x,y)`, `CarveBowl(cx,cy,radius)` (mọi vụ nổ), `Carve(shape,cx,cy,radius)` (`bowl` / `circle` = `DestroyCircle`, chỉ test và fixture client), `GetLandingY(x,maxY)`, `SpawnY(x,y)`, `CanStandAt(x,y)`, `GetTerrainTypeAt(x,y)`
@@ -1024,7 +1024,7 @@ Mọi luật và con số của trận nằm trong DB, sửa ở admin; Go chỉ
 | `config_status_effects.bad / skips_turn / blocks_move` | Cleanse, mất lượt (thứ tự `sort_order`: stun trước freeze), chặn đi / dịch chuyển |
 | `config_rank_tiers.min_rating / divisions / division_size` | bands hạng (`ranked.SetBands`, đổi nguyên khối, atomic) |
 
-Còn trong Go (không phải số cân bằng hay số client cần): tham số tìm đường bắn của bot AI (`bot*` trong `bot.go`, `skill_*.go`), nhịp replay (đệm 1,2 s sau phát bắn, 0,3 s sau teleport), cấu trúc 2v2 (`matchmaker.TeamSlots`), danh sách theme map (`gamedata.MapThemes`, client có art riêng), terrain zone của map legacy (băng trượt 50 px, đất giòn ×2).
+Còn trong Go (không phải số cân bằng hay số client cần): tham số tìm đường bắn của bot AI (`bot*` trong `bot.go`, `skill_*.go`), nhịp replay (đệm 1,2 s sau phát bắn, 0,3 s sau teleport), cấu trúc 2v2 (`matchmaker.TeamSlots`), danh sách theme map (`gamedata.MapThemes`, client có art riêng), terrain zone của map legacy (đất giòn ×2, dung nham trừ máu đầu lượt; vùng băng không còn làm trượt).
 
 **Snapshot.** `gamedata.LoadFromDB` đọc mọi bảng config + game_settings trong một transaction REPEATABLE READ READ ONLY thành một `gamedata.Snapshot` bất biến; `gamedatasync.Reloader` gắn `Version` = `apigamedata.VersionOf(snapshot)` (đúng hàm build của `GET /gamedata`), lưu payload vào `gamedata_versions`, rồi `gamedata.Publish` (atomic pointer). `match.NewMatchWithData(snapshot, …)` (room dùng `NewMatch` = `gamedata.Current()` lúc tạo trận) giữ con trỏ đó suốt trận: vật lý, luật, tuning, item, map đều đọc từ `m.gd` / `Terrain.gd`, không đọc biến toàn cục. Còn toàn cục (đổi atomic): `gamedata.Current()` cho room / lobby / API (chỉ số nhân vật lúc vào trận, giới hạn loadout, luật trang bị của API) và `ranked.Bands()` (hạng là của người chơi, không theo trận).
 

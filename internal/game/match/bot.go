@@ -424,19 +424,11 @@ func (b *BotBrain) bestMove(m *Match, bot *BattlePlayerState, weapon gamedata.We
 	return bestX, moved
 }
 
-// predictMove mirrors processMove (WalkTo, then the ice slide) and returns where
-// the player ends up. ok is false when any step of the walk drops to the bottom
-// of the map, which WalkTo reports as y = Terrain.Height.
+// predictMove mirrors processMove (WalkTo) and returns where the player ends up.
+// ok is false when any step of the walk drops to the bottom of the map, which
+// WalkTo reports as y = Terrain.Height.
 func predictMove(t *Terrain, from Vector2, targetX float64) (Vector2, bool) {
-	pos, ok := walkChecked(t, from, targetX)
-	if !ok || pos.X == from.X || t.GetTerrainTypeAt(pos.X, pos.Y) != "ice" {
-		return pos, ok
-	}
-	slide := 50.0
-	if pos.X < from.X {
-		slide = -50.0
-	}
-	return walkChecked(t, pos, pos.X+slide)
+	return walkChecked(t, from, targetX)
 }
 
 // walkChecked walks one pixel at a time with WalkTo, which takes the same steps

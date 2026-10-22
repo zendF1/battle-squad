@@ -673,22 +673,9 @@ func (m *Match) processMove(ctx context.Context, client *ws.Client, action MoveA
 		energyCost = player.MoveEnergy
 	}
 
-	startX := player.Position.X
 	player.MoveEnergy -= energyCost
 	player.Position.X = finalX
 	player.Position.Y = finalY
-
-	// Ice terrain: slide 50px in the movement direction, only after an actual step
-	iceTerrainType := m.Terrain.GetTerrainTypeAt(player.Position.X, player.Position.Y)
-	if actualDist > 0 && iceTerrainType == "ice" {
-		slideDir := 50.0
-		if finalX < startX {
-			slideDir = -50.0
-		}
-		slideX, slideY := m.Terrain.WalkTo(player.Position.X, player.Position.Y, player.Position.X+slideDir)
-		player.Position.X = slideX
-		player.Position.Y = slideY
-	}
 
 	// Broadcast PlayerMoved; seq tells the mover which of its commands this answers
 	moved := map[string]interface{}{
