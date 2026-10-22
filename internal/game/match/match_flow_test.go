@@ -276,3 +276,47 @@ func TestMoveOnIceDoesNotSlide(t *testing.T) {
 		t.Fatalf("20 px on ice cost %d energy, want 10", spent)
 	}
 }
+
+func TestWalkIntoBottomlessHoleKills(t *testing.T) {
+	m, clients := newFlowMatch(t)
+	cur := m.State.CurrentPlayerID
+	p := m.State.Players[cur]
+	p.MoveEnergy = 100
+	// A 10 px wide hole to the bottom of the map, 20 px ahead of the player
+	hole := int(p.Position.X) + 20
+	for x := hole; x < hole+10; x++ {
+		for y := 0; y < m.Terrain.Height; y++ {
+			clearBit(m.Terrain.Mask, x, y, m.Terrain.Width)
+		}
+	}
+	drain(clients[cur])
+
+	send(m, clients[cur], "Move", MoveAction{TargetX: p.Position.X + 60})
+
+	if p.IsAlive || p.HP != 0 {
+		t.Fatalf("walked into a bottomless hole and lived: alive=%v hp=%d pos=%v", p.IsAlive, p.HP, p.Position)
+	}
+	if p.Position.X != float64(hole) || p.Position.Y != float64(m.Terrain.Height) {
+		t.Fatalf("fell at %v, want (%d,%d)", p.Position, hole, m.Terrain.Height)
+	}
+	var moved, damaged bool
+	for len(clients[cur].Send) > 0 {
+		msg := <-clients[cur].Send
+		switch msg.Event {
+		case "PlayerMoved":
+			var d map[string]any
+			_ = json.Unmarshal(msg.Data, &d)
+			moved = d["outOfMap"] == true
+		case "PlayerDamaged":
+			var d []map[string]any
+			_ = json.Unmarshal(msg.Data, &d)
+			damaged = len(d) == 1 && d[0]["type"] == "out_of_map" && d[0]["isAlive"] == false
+		}
+	}
+	if !moved || !damaged {
+		t.Fatalf("PlayerMoved outOfMap=%v, PlayerDamaged out_of_map=%v", moved, damaged)
+	}
+	if !m.resolving {
+		t.Fatal("the turn is not locked while the fall plays")
+	}
+}

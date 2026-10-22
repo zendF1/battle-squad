@@ -483,7 +483,10 @@ func (m *Match) startTurn(ctx context.Context) {
 	// Damage at the start of the turn: lava under the feet, then burn. Shield absorbs first;
 	// a player it kills loses the turn.
 	combat := m.gd.Rules.Combat
-	if m.Terrain.GetTerrainTypeAt(player.Position.X, player.Position.Y) == "lava" {
+	if player.Position.Y >= float64(m.Terrain.Height) { // below the map: dead
+		m.sendPlayerDamaged(player, killPlayer(player), "out_of_map")
+	}
+	if player.IsAlive && m.Terrain.GetTerrainTypeAt(player.Position.X, player.Position.Y) == "lava" {
 		m.turnStartDamage(player, combat.LavaDamage, "lava")
 	}
 	if player.IsAlive && HasEffect(player, "burn") {
@@ -673,11 +676,14 @@ func (m *Match) processMove(ctx context.Context, client *ws.Client, action MoveA
 		energyCost = player.MoveEnergy
 	}
 
+	startY := player.Position.Y
 	player.MoveEnergy -= energyCost
 	player.Position.X = finalX
 	player.Position.Y = finalY
+	outOfMap := finalY >= float64(m.Terrain.Height)
 
-	// Broadcast PlayerMoved; seq tells the mover which of its commands this answers
+	// Broadcast PlayerMoved; seq tells the mover which of its commands this answers;
+	// outOfMap: the walk ended in a hole to the bottom of the map (PlayerDamaged follows)
 	moved := map[string]interface{}{
 		"playerId":   player.PlayerID,
 		"position":   player.Position,
@@ -686,10 +692,31 @@ func (m *Match) processMove(ctx context.Context, client *ws.Client, action MoveA
 	if action.Seq > 0 {
 		moved["seq"] = action.Seq
 	}
+	if outOfMap {
+		moved["outOfMap"] = true
+	}
 	payload, _ := json.Marshal(moved)
 	m.broadcast(ws.Message{
 		Event: "PlayerMoved",
 		Data:  payload,
+	})
+
+	if outOfMap {
+		m.fallOutOfMap(ctx, player, finalY-startY)
+	}
+}
+
+// fallOutOfMap kills the current player, who walked into a hole to the bottom of the map
+// (PlayerDamaged type out_of_map), and ends the turn once clients have shown the fall.
+func (m *Match) fallOutOfMap(ctx context.Context, p *BattlePlayerState, fallDistance float64) {
+	lost := killPlayer(p)
+	m.sendPlayerDamaged(p, lost, "out_of_map")
+	delay := fallDuration(max(fallDistance, 0), m.gd.Physics.Gravity) + 1.5 // the fall, then the death
+	m.resolveTurnAfter(ctx, delay, func(ctx context.Context) {
+		m.checkWinCondition(ctx)
+		if m.State.Status == "in_progress" {
+			m.endTurn(ctx)
+		}
 	})
 }
 
@@ -1095,6 +1122,12 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 // type}].
 func (m *Match) turnStartDamage(p *BattlePlayerState, damage int, kind string) {
 	hurtPlayer(p, damage)
+	m.sendPlayerDamaged(p, damage, kind)
+}
+
+// sendPlayerDamaged sends PlayerDamaged [{playerId, damage, hp, shield, isAlive, type}] for damage p
+// took outside a shot (lava, burn, out_of_map).
+func (m *Match) sendPlayerDamaged(p *BattlePlayerState, damage int, kind string) {
 	payload, _ := json.Marshal([]map[string]interface{}{{
 		"playerId": p.PlayerID,
 		"damage":   damage,

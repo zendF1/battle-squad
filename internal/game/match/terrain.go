@@ -386,6 +386,8 @@ func (t *Terrain) SpawnY(x, y float64) float64 {
 // The player follows the terrain surface but is blocked by steep upward slopes
 // (walls, crater edges). Going downward is always allowed. The surface is searched
 // locally around the current height, so roofs and platforms above the player are ignored.
+// A step over a hole that reaches the bottom of the map ends the walk there, with y =
+// Terrain.Height: the player falls out of the map.
 func (t *Terrain) WalkTo(startX, startY, targetX float64) (float64, float64) {
 
 	curX := int(math.Round(startX))
@@ -415,6 +417,9 @@ func (t *Terrain) WalkTo(startX, startY, targetX float64) (float64, float64) {
 
 		curX = nextX
 		curY = nextY
+		if curY >= t.Height {
+			break // fell out of the map
+		}
 	}
 
 	return float64(curX), float64(curY)

@@ -277,3 +277,17 @@ func TestWalkToBlockedByWall(t *testing.T) {
 		t.Errorf("walk off ledge: got (%v,%v), want (8,32)", x, y)
 	}
 }
+
+func TestWalkToStopsAtBottomlessHole(t *testing.T) {
+	useBricks(t, map[int]gamedata.BrickTypeConfig{1: {BrickTypeID: 1, Destructible: true}})
+	// Floor on columns 0-1 and 4-5, a hole down to the bottom of the map on columns 2-3.
+	terrain := NewTerrain(gamedata.MapConfig{
+		MapID: "test_hole", GridWidth: 6, GridHeight: 4, CellSize: 16,
+		Tiles: [][]int{{0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0}, {1, 1, 0, 0, 1, 1}},
+	})
+
+	x, y := terrain.WalkTo(8, 48, 88)
+	if x != 32 || y != float64(terrain.Height) {
+		t.Errorf("walk into a bottomless hole: got (%v,%v), want (32,%d): the walk ends where the player falls out", x, y, terrain.Height)
+	}
+}
