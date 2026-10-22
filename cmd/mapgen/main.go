@@ -16,9 +16,11 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
-	"battle-squad/internal/game/match"
+	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/game/mapgen"
+	"battle-squad/internal/game/match"
 )
 
 func main() {
@@ -57,7 +59,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		for _, m := range mapgen.Maps() {
+		for _, m := range append(mapgen.Maps(), mapgen.ArenaMaps()...) {
 			path := filepath.Join(*preview, m.MapID+".png")
 			if err := writePreview(path, m.MapID); err != nil {
 				fmt.Fprintln(os.Stderr, err)
@@ -72,7 +74,7 @@ func main() {
 // the cell grid faint, team 1's spawns blue and team 2's red where the match lands them.
 func writePreview(path, mapID string) error {
 	var cfg = mapgen.Maps()[0]
-	for _, m := range mapgen.Maps() {
+	for _, m := range append(mapgen.Maps(), mapgen.ArenaMaps()...) {
 		if m.MapID == mapID {
 			cfg = m
 		}
@@ -100,6 +102,10 @@ func writePreview(path, mapID string) error {
 		}
 	}
 	team1, team2 := cfg.TeamSpawns()
+	if strings.HasPrefix(cfg.MapID, "arena_") {
+		party, boss, minions := gamedata.BossSpawns(cfg)
+		team1, team2 = party, append([]gamedata.SpawnPoint{boss}, minions...)
+	}
 	mark := func(px, py float64, c color.RGBA) {
 		sy := t.SpawnY(px, py)
 		for dy := -40; dy <= 0; dy++ {

@@ -331,6 +331,7 @@ func LoadYAML(configDir string) (*Snapshot, error) {
 	}
 	s := NewSnapshot(gData)
 	s.Bricks = bricks
+	s.Bosses = DefaultBosses()
 	s.Source = "yaml"
 	return s, nil
 }
@@ -564,6 +565,27 @@ func LoadFromDB(ctx context.Context, db *database.PostgresDB) (*Snapshot, error)
 		return nil, err
 	}
 
+	if err := each("config_bosses", `SELECT boss_id, name, description, recommended_level, enabled, sort_order, map_id,
+		hp, defense, damage, body_size, turn_limit, shielded_damage_factor, out_of_map, skills, minions, waves, rewards,
+		daily_bonus_runs FROM config_bosses ORDER BY sort_order, boss_id`, func(rows pgx.Rows) error {
+		var b BossConfig
+		var skills, minions, waves, rewards []byte
+		if err := rows.Scan(&b.BossID, &b.Name, &b.Description, &b.RecommendedLevel, &b.Enabled, &b.SortOrder, &b.MapID,
+			&b.HP, &b.Defense, &b.Damage, &b.BodySize, &b.TurnLimit, &b.ShieldedDamageFactor, &b.OutOfMap,
+			&skills, &minions, &waves, &rewards, &b.DailyBonusRuns); err != nil {
+			return err
+		}
+		// A boss the match cannot run is dropped (and logged), like an invalid map
+		if err := ParseBossJSON(&b, skills, minions, waves, rewards); err != nil {
+			observability.Log.Error().Err(err).Str("bossId", b.BossID).Msg("skipping boss with invalid JSON")
+			return nil
+		}
+		s.Bosses = append(s.Bosses, b)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
 	if err := each("config_tips", `SELECT text FROM config_tips WHERE text <> '' ORDER BY sort_order, tip_id`, func(rows pgx.Rows) error {
 		var t string
 		if err := rows.Scan(&t); err != nil {
@@ -622,6 +644,7 @@ func LoadFromDB(ctx context.Context, db *database.PostgresDB) (*Snapshot, error)
 	if err := gData.validate(); err != nil {
 		return nil, fmt.Errorf("game data validation failed: %w", err)
 	}
+	s.Bosses = validBosses(s.Bosses, gData)
 
 	s.Physics = PhysicsFromSettings(s.Settings)
 	var ruleErrs []error
@@ -634,6 +657,24 @@ func LoadFromDB(ctx context.Context, db *database.PostgresDB) (*Snapshot, error)
 		observability.Log.Warn().Msg("config_rank_tiers bands are not valid, using the default bands")
 	}
 	return s, nil
+}
+
+// validBosses drops (and logs) the bosses the match cannot run (ValidateBoss), or whose arena
+// is not a loaded map.
+func validBosses(bosses []BossConfig, gData *GameData) []BossConfig {
+	var out []BossConfig
+	for _, b := range bosses {
+		err := ValidateBoss(b, gData.Characters, gData.Items)
+		if _, ok := gData.Maps[b.MapID]; err == nil && !ok {
+			err = fmt.Errorf("arena %q is not a loaded map", b.MapID)
+		}
+		if err != nil {
+			observability.Log.Error().Err(err).Str("bossId", b.BossID).Msg("skipping invalid boss config")
+			continue
+		}
+		out = append(out, b)
+	}
+	return out
 }
 
 func bandsFromTiers(tiers []RankTierConfig) []ranked.Band {

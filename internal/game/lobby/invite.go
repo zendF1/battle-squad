@@ -138,7 +138,7 @@ func (l *LobbyRoom) processInvite(ctx context.Context, client *ws.Client, msg ws
 	}
 
 	l.mu.RLock()
-	status, members := l.State.Status, len(l.State.Members)
+	status, members, maxMembers := l.State.Status, len(l.State.Members), l.maxMembersLocked()
 	var from *LobbyMember
 	for i := range l.State.Members {
 		if l.State.Members[i].PlayerID == client.PlayerID {
@@ -155,7 +155,7 @@ func (l *LobbyRoom) processInvite(ctx context.Context, client *ws.Client, msg ws
 	case status != "preparing":
 		l.sendError(client, "INVALID_STATUS", "Invites can only be sent while the lobby is preparing")
 		return
-	case members >= 2:
+	case members >= maxMembers:
 		l.sendError(client, "LOBBY_FULL", "The lobby is full")
 		return
 	}
@@ -219,7 +219,7 @@ func (l *LobbyRoom) processAccept(ctx context.Context, client *ws.Client, msg ws
 		fail("INVALID_STATUS", "The lobby is not accepting members")
 		return
 	}
-	if len(l.State.Members) >= 2 {
+	if len(l.State.Members) >= l.maxMembersLocked() {
 		fail("LOBBY_FULL", "The lobby is full")
 		return
 	}

@@ -29,6 +29,8 @@ func Files() map[string]string {
 		ThemesDownFile: ThemesDownSQL(),
 		WideUpFile:     WideUpSQL(),
 		WideDownFile:   WideDownSQL(),
+		ArenasUpFile:   ArenasUpSQL(),
+		ArenasDownFile: ArenasDownSQL(),
 		MapsYAMLFile:   MapsYAML(),
 		BricksYAMLFile: BricksYAML(),
 	}
@@ -208,7 +210,7 @@ func yamlString(s string) string {
 	return string(b)
 }
 
-// MapsYAML is configs/maps.yaml: the legacy maps and the generated ones, the YAML mirror of
+// MapsYAML is configs/maps.yaml: the legacy maps, the generated ones and the boss arenas, the YAML mirror of
 // config_maps the game falls back to (and the tests load).
 func MapsYAML() string {
 	var b strings.Builder
@@ -218,7 +220,7 @@ func MapsYAML() string {
 	for _, m := range legacyMaps {
 		fmt.Fprintf(&b, "\n- mapId: %s\n  name: %s\n  theme: grassland\n%s", m.id, yamlString(m.name), m.yaml)
 	}
-	for _, m := range Maps() {
+	for _, m := range append(Maps(), ArenaMaps()...) {
 		fmt.Fprintf(&b, "\n- mapId: %s\n  name: %s\n  theme: %s\n  description: %s\n", m.MapID, yamlString(m.Name), m.Theme, yamlString(m.Description))
 		fmt.Fprintf(&b, "  width: %d\n  height: %d\n  gridWidth: %d\n  gridHeight: %d\n  cellSize: %d\n", m.Width, m.Height, m.GridWidth, m.GridHeight, m.CellSize)
 		fmt.Fprintf(&b, "  defaultWindPowerRange: %s\n  minRankTier: %s\n  spawnPoints:\n", windJSON(m.DefaultWindPowerRange), m.MinRankTier)

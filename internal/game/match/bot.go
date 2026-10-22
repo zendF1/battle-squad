@@ -64,7 +64,11 @@ func (m *Match) botStep(ctx context.Context, turn botTurnState, step int) {
 		return
 	}
 
-	switch act := NewBotBrain(m.BotTier).DecideAction(m, bot, turn).(type) {
+	tier := m.BotTier
+	if hc := m.minionHitChance(bot); hc > 0 {
+		tier.HitChance = hc // a minion aims with its own hit chance
+	}
+	switch act := NewBotBrain(tier).DecideAction(m, bot, turn).(type) {
 	case UseItemAction:
 		m.el.Log("UseItem", bot.PlayerID, act)
 		m.processUseItem(ctx, nil, act)
@@ -433,11 +437,11 @@ func (b *BotBrain) scoreShot(m *Match, bot *BattlePlayerState, feet, origin Vect
 			}
 			continue
 		}
-		center := ep
-		if p.PlayerID == r.HitPlayerID {
-			center = p.Position // direct hit deals full damage
+		distance := 0.0 // a direct hit deals full damage
+		if p.PlayerID != r.HitPlayerID {
+			distance = blastDistance(p, ep, m.gd.Physics.PlayerHitRadius, shotOriginLift(m.Terrain))
 		}
-		s.damage += float64(CalculateExplosionDamage(p.Position, center, float64(weapon.Damage+bot.DamageBonus), radius, p.Defense))
+		s.damage += float64(m.shieldedDamage(p, explosionDamageAt(distance, float64(weapon.Damage+bot.DamageBonus), radius, p.Defense, gamedata.DefenseK())))
 		s.miss = math.Min(s.miss, dist)
 	}
 	return s

@@ -103,8 +103,9 @@ type SelectItemsPayload struct {
 }
 
 // MatchFound is sent to every human of a matchmade match (same payload) before the
-// match starts: the room and match ids, map, mode (the queue: ranked_2v2, casual_2v2)
-// and both teams.
+// match starts: the room and match ids, map, mode (the queue: ranked_2v2, casual_2v2,
+// boss:<bossId>) and both teams (boss mode: team 1 the party, team 2 the boss and its
+// first minions).
 type MatchFound struct {
 	RoomID   string           `json:"roomId"`
 	MatchID  string           `json:"matchId"`
@@ -134,6 +135,10 @@ type MatchFoundPlayer struct {
 	Tier        string `json:"tier"`
 	Division    int    `json:"division"`
 	TitleID     string `json:"titleId"`
+	// Boss mode, team 2 only: role boss / minion, the boss and the minion type
+	Role     string `json:"role,omitempty"`
+	BossID   string `json:"bossId,omitempty"`
+	MinionID string `json:"minionId,omitempty"`
 }
 
 // newMatchFound is a MatchFound of a match of mode on mapID with the map's name and theme
@@ -146,16 +151,19 @@ func newMatchFound(mapID, mode string) MatchFound {
 // PracticeMapID is the map of a QuickPlay against the idle bot (the target dummy).
 const PracticeMapID = "grassland_valley"
 
-// quickPlayMapID is the map of a QuickPlay: a random loaded map against the AI bot ("Đấu với
+// quickPlayMapID is the map of a QuickPlay: a random loaded map (not a boss arena) against the AI bot ("Đấu với
 // máy"), PracticeMapID against the idle one. intn(n) draws in [0, n).
 func quickPlayMapID(p QuickPlayPayload, intn func(n int) int) string {
-	maps := gamedata.Current().Data.Maps
-	if !p.AIBot() || len(maps) == 0 {
-		return PracticeMapID
-	}
+	gd := gamedata.Current()
+	maps := gd.Data.Maps
 	ids := make([]string, 0, len(maps))
 	for id := range maps {
-		ids = append(ids, id)
+		if !gd.IsBossArena(id) { // boss arenas are for boss fights only
+			ids = append(ids, id)
+		}
+	}
+	if !p.AIBot() || len(ids) == 0 {
+		return PracticeMapID
 	}
 	sort.Strings(ids)
 	return ids[intn(len(ids))]

@@ -84,7 +84,7 @@ GET /gamedata?version=13f9f9a13a6a316c (S2: exactly the game data of that versio
 `data` has these top-level keys, in this order: `version`, `physics`, `aim`, `aimAid`, `combat`,
 `terrain`, `movement`, `timings`, `skillEnergy`, `skillRanks`, `weapons`, `skills`,
 `characters`, `defaultCharacterId`, `items`, `itemRules`, `statusEffects`, `rank`, `levels`,
-`equipment`, `economy`, `matchmaking`, `modes`, `mapThemes`, `gunKinds` (S2).
+`equipment`, `economy`, `matchmaking`, `modes`, `mapThemes`, `gunKinds` (S2), `bosses` (boss mode).
 
 The **Source** column says where the admin edits the value: a `game_settings` row (`rules.<group>`
 rows are JSON objects, the field is the JSON key) or a config table column. A value that is
@@ -373,21 +373,25 @@ catalog endpoints.
 - `modes.lobby[]` `{modeId, name, description, queue, bot, category, icon, partySize, ranked}`:
   the enabled mode choices of the mode select screen, in order (group them by `category`).
   A non-empty `queue` joins that matchmaking queue (`CreateLobby {queue}` / `SetLobbyQueue
-  {queue}`, then `StartQueue`); the server runs `ranked_2v2` and `casual_2v2`. A non-empty `bot`
+  {queue}`, then `StartQueue`); the server runs `ranked_2v2`, `casual_2v2` and `boss:<bossId>`
+  of every enabled boss (§4.18; those modes have `category` `boss`, `icon` `boss`, `partySize`
+  4). A boss mode whose boss is disabled or missing is left out. A non-empty `bot`
   sends QuickPlay with `bot: <value>`. Neither means practice.
   - `category` (string): a `modes.categories[].categoryId`.
   - `icon` (string): an icon key the client maps to its own icon (`swords`, `trophy`, `robot`,
     `target`); `""` or an unknown key → the generic icon.
   - `partySize` (int, ≥ 1): the most lobby members; 2 shows the teammate slot and the party flow,
-    1 means solo (bot, practice).
+    4 the boss party's 3 "+" slots, 1 means solo (bot, practice). The server enforces it
+    (`LOBBY_FULL`; switching a bigger lobby to a smaller mode is `PARTY_TOO_LARGE`).
   - `ranked` (bool): its matches change rating / rank points (only the `ranked_2v2` queue): show
     the rank line and the result's rating row only then.
   - Source `config_game_modes` (kind `lobby`, `enabled` true; admin: Texts → Game Modes, which
-    rejects a queue the server does not run, a `ranked` flag that does not match the queue, or
-    an unknown category).
+    rejects a queue the server does not run, a `ranked` flag that does not match the queue, a
+    party bigger than the queue allows (2 for 2v2, 4 for a boss), or an unknown category).
 - `modes.match[]` `{modeId, name}`: a match's mode (MatchStarted `mode`, match history) and its
   Vietnamese name. A matchmade match's mode is its queue: `ranked_2v2` "Đấu hạng 2vs2",
-  `casual_2v2` "Đấu thường 2vs2".
+  `casual_2v2` "Đấu thường 2vs2", `boss:<bossId>` the boss's name (`boss:steel_robot` "Rô-bốt
+  Thép").
 - `mapThemes`: `default` (string) and `themes` (array of theme ids the server accepts, from Go
   `gamedata.MapThemes`). The art per theme stays in the client; an unknown theme draws as
   `default`.
@@ -396,9 +400,46 @@ catalog endpoints.
   (`bazooka` "Bazooka", `cannon` "Đại pháo", `shock_rifle` "Súng điện", `seed_launcher` "Súng hạt",
   `blaster` "Súng"). Source `config_gun_kinds`.
 
+### 4.18 `bosses[]` (config_bosses, enabled only, in display order; boss mode, migration 046)
+
+Everything the Boss tab and the arena need to draw and describe a boss:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `bossId` | string | id (`steel_robot`, `lava_crab`, `ice_witch`); the boss's match player id is `boss_<bossId>` |
+| `name`, `description` | string | Vietnamese texts |
+| `recommendedLevel` | int | shown on the card ("Lv đề xuất") |
+| `modeId` | string | the `modes.lobby` entry whose queue fights it (`""` when none) |
+| `queue` | string | `boss:<bossId>`: `CreateLobby {queue}` / `SetLobbyQueue {queue}`, and the match mode |
+| `mapId` | string | its arena (`GET /maps/{id}`; the match terrain still comes in `MatchStarted`) |
+| `hp` | int | the boss's max HP (the big HP bar) |
+| `bodySize` | number | × a player's body: the boss is drawn `bodySize` × a player's 40 px height; it is hit within `physics.playerHitRadius × bodySize` of a centre `physics.shotOriginLift × bodySize` above its feet |
+| `turnLimit` | int | boss turns before it escapes (the party loses) |
+| `shieldedDamageFactor` | number 0..1 | while a minion lives the boss takes this × the damage (show the shield; `MatchState.bossShielded`) |
+| `minions[]` | `{minionId, name, hp, bodySize}` | its minion types (a minion's match player id is `minion_<minionId>_<n>`) |
+| `skills[]` | `{skillId, name, description, kind}` | its skills (`ShotResolved.skillId` of the boss's turn); `kind` `rain`, `beam` or `summon` |
+| `dailyBonusRuns` | int | runs a day with the big reward table (`GET /boss/runs` has what is left) |
+
+```json
+{"bossId": "steel_robot", "name": "Rô-bốt Thép",
+ "description": "Người khổng lồ cơ khí canh giữ xưởng sắt bỏ hoang. Nã pháo dồn dập, bắn tia laze xuyên đất và gọi drone che chắn.",
+ "recommendedLevel": 10, "modeId": "boss_steel_robot", "queue": "boss:steel_robot", "mapId": "arena_steel_robot",
+ "hp": 12000, "bodySize": 3, "turnLimit": 15, "shieldedDamageFactor": 0.1,
+ "minions": [{"minionId": "drone", "name": "Drone", "hp": 650, "bodySize": 0.7}],
+ "skills": [
+   {"skillId": "shell_barrage", "name": "Mưa đạn pháo", "description": "Mười quả đạn pháo dội xuống quanh một người chơi.", "kind": "rain"},
+   {"skillId": "laser_beam", "name": "Tia laze nghiền", "description": "Tia laze xuyên địa hình bắn thẳng vào người yếu nhất, trúng mọi người trên đường.", "kind": "beam"},
+   {"skillId": "drone_wave", "name": "Gọi drone", "description": "Thả hai drone. Còn drone thì Rô-bốt Thép được che chắn.", "kind": "summon"}],
+ "dailyBonusRuns": 3}
+```
+
+The skill numbers, minion stats beyond HP / body, reward tables and waves stay on the server
+(admin Bosses page). Source: `config_bosses` (and `config_game_modes` for `modeId`).
+
 ## 5. Not in this payload
 
-- Maps and brick types: `GET /maps`, `GET /maps/{id}`.
+- Maps and brick types: `GET /maps`, `GET /maps/{id}` (the boss arenas included).
+- A player's boss runs left today: `GET /boss/runs`.
 - A player's own stats, stat multipliers and reset cost: `GET /player/characters`.
 - The equipment catalog with per-item prices, rates and stone powers; the shop, IAP, missions,
   milestones and titles: their own endpoints.
@@ -427,6 +468,16 @@ catalog endpoints.
   `casual_2v2` (match).
 - New table `config_mode_categories (category_id, name, sort_order)`: `pvp` "PvP" 1, `boss`
   "Boss" 2.
+
+## 6c. Boss mode (migrations 045_boss_arenas, 046_boss_mode)
+
+- 045 (generated by `go run ./cmd/mapgen`): the arenas `arena_steel_robot`, `arena_lava_crab`,
+  `arena_ice_witch` in `config_maps` (`ON CONFLICT DO NOTHING`).
+- 046: `config_bosses (boss_id, name, description, recommended_level, enabled, sort_order, map_id,
+  hp, defense, damage, body_size, turn_limit, shielded_damage_factor, out_of_map, skills, minions,
+  waves, rewards, daily_bonus_runs)` seeded with the three bosses; lobby modes `boss_<bossId>`
+  (queue `boss:<bossId>`, category `boss`, icon `boss`, party 4) and match modes `boss:<bossId>`;
+  `player_boss_runs`. Seed rows `ON CONFLICT DO NOTHING`, so reruns keep admin edits.
 
 ## 6b. DB behind it since S2 (migration 041_gamedata_rules)
 

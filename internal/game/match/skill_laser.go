@@ -72,13 +72,14 @@ func (m *Match) laserHits(shooter *BattlePlayerState, halfWidth float64, origin,
 		return nil
 	}
 	ux, uy := dx/length, dy/length
-	reach := halfWidth + m.gd.Physics.PlayerHitRadius
 	var hits []laserHit
 	for _, p := range players {
 		if !p.IsAlive || p.TeamID == shooter.TeamID {
 			continue
 		}
-		cx, cy := p.Position.X-origin.X, p.Position.Y-lift-origin.Y
+		reach := halfWidth + m.gd.Physics.PlayerHitRadius*bodyScale(p)
+		centre := bodyCentre(p, lift)
+		cx, cy := centre.X-origin.X, centre.Y-origin.Y
 		s := cx*ux + cy*uy // along the beam
 		if s < -reach || s > length+reach {
 			continue
@@ -120,12 +121,14 @@ func resolveLaser(m *Match, s *skillShot) {
 		damage := int(math.Round(reduceByDefense(raw, p.Defense, k)))
 		damage, critical := applyCritical(damage, player.CritChance, crit)
 		raw *= tu.Decay
+		damage = m.shieldedDamage(p, damage)
 		if damage <= 0 {
 			continue
 		}
 		shieldBefore := p.Shield
 		killed := hurtPlayer(p, damage)
 		player.DamageDealt += damage
+		m.noteBossSideDamage(player, p, damage)
 		player.ShotsHit++
 		e := damageEvent(t, p, damage, shieldBefore, "laser")
 		e.Critical = critical

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -472,14 +473,14 @@ var textTables = []*textTable{
 			{Name: "sort_order", Label: "Thứ tự", Kind: "int", Min: 0, Max: 10000}}},
 	{Path: "game-modes", Title: "Game Modes", Table: "config_game_modes", Key: "mode_id", KeyLabel: "Mode ID",
 		Order: "sort_order, mode_id", CanAdd: true, CanDelete: true, Check: checkGameModes,
-		Desc: "Chế độ: lobby = một lựa chọn ở màn Chọn chế độ, trong mục Category (Mode Categories), theo Thứ tự (queue: hàng chờ ghép trận, chỉ " +
-			strings.Join(matchmaker.Queues, " / ") + "; bot: QuickPlay với bot; cả hai trống = luyện tập; Icon: mã icon của client, trống = icon chung; " +
-			"Số người: tối đa trong đội, 1 khi không có queue; Xếp hạng: bật đúng khi queue là " + matchmaker.RankedQueue + "; tắt Bật = ẩn khỏi GET /gamedata). " +
-			"match = chế độ của trận (lịch sử, kết quả; mode id = queue của trận ghép).",
+		Desc: "Chế độ: lobby = một lựa chọn ở màn Chọn chế độ, trong mục Category (Mode Categories), theo Thứ tự (queue: hàng chờ ghép trận, " +
+			strings.Join(matchmaker.Queues, " / ") + " hoặc boss:<boss id> của một boss đang bật (trang Bosses); bot: QuickPlay với bot; cả hai trống = luyện tập; Icon: mã icon của client, trống = icon chung; " +
+			"Số người: tối đa trong đội (2v2: 1..2, boss: 1..4), 1 khi không có queue; Xếp hạng: bật đúng khi queue là " + matchmaker.RankedQueue + "; tắt Bật = ẩn khỏi GET /gamedata). " +
+			"match = chế độ của trận (lịch sử, kết quả; mode id = queue của trận ghép, vd boss:steel_robot).",
 		Cols: []textCol{{Name: "kind", Label: "Loại", Kind: "select", Options: []string{"lobby", "match"}}, {Name: "name", Label: "Tên", Kind: "text", Required: true},
 			{Name: "description", Label: "Mô tả", Kind: "text"}, {Name: "category", Label: "Category", Kind: "text"}, {Name: "icon", Label: "Icon", Kind: "text"},
-			{Name: "queue", Label: "Queue", Kind: "select", Options: append([]string{""}, matchmaker.Queues...)}, {Name: "bot", Label: "Bot", Kind: "text"},
-			{Name: "party_size", Label: "Số người", Kind: "int", Min: 1, Max: matchmaker.TeamSlots}, {Name: "ranked", Label: "Xếp hạng", Kind: "bool"},
+			{Name: "queue", Label: "Queue", Kind: "text"}, {Name: "bot", Label: "Bot", Kind: "text"},
+			{Name: "party_size", Label: "Số người", Kind: "int", Min: 1, Max: gamedata.BossPartySize}, {Name: "ranked", Label: "Xếp hạng", Kind: "bool"},
 			{Name: "enabled", Label: "Bật", Kind: "bool"}, {Name: "sort_order", Label: "Thứ tự", Kind: "int", Min: 0, Max: 10000}}},
 	{Path: "mode-categories", Title: "Mode Categories", Table: "config_mode_categories", Key: "category_id", KeyLabel: "Category ID",
 		Order: "sort_order, category_id", CanAdd: true, CanDelete: true, Check: checkGameModes,
@@ -529,9 +530,14 @@ func checkRankBands(ctx context.Context, tx pgx.Tx) error {
 }
 
 // checkGameModes rejects a lobby mode the server cannot run: a queue the matchmaker does not
-// run, ranked other than the queue's (only ranked_2v2 changes rating), a party bigger than 1
-// without a queue (or than a team), or a category that is not a config_mode_categories row.
+// run (a 2v2 queue, or boss:<id> of an enabled config_bosses row), ranked other than the
+// queue's (only ranked_2v2 changes rating), a party bigger than 1 without a queue (or than the
+// queue allows: 2 for 2v2, 4 for a boss), or a category that is not a config_mode_categories row.
 func checkGameModes(ctx context.Context, tx pgx.Tx) error {
+	bosses := map[string]bool{}
+	if err := collectIDs(ctx, tx, `SELECT boss_id FROM config_bosses WHERE enabled`, func(id string) { bosses[id] = true }); err != nil {
+		return err
+	}
 	cats := map[string]bool{}
 	rows, err := tx.Query(ctx, `SELECT category_id FROM config_mode_categories`)
 	if err != nil {
@@ -566,13 +572,16 @@ func checkGameModes(ctx context.Context, tx pgx.Tx) error {
 		bad := func(format string, args ...any) error {
 			return fmt.Errorf("%s: "+format, append([]any{id}, args...)...)
 		}
+		bossID, isBoss := gamedata.BossIDOfQueue(queue)
 		switch {
-		case queue != "" && !matchmaker.KnownQueue(queue):
-			return bad("queue %q không có, server chỉ chạy %s", queue, strings.Join(matchmaker.Queues, ", "))
+		case isBoss && !bosses[bossID]:
+			return bad("queue %q: boss %q không có hoặc đang tắt (trang Bosses)", queue, bossID)
+		case queue != "" && !isBoss && !slices.Contains(matchmaker.Queues, queue):
+			return bad("queue %q không có, server chỉ chạy %s và boss:<boss id>", queue, strings.Join(matchmaker.Queues, ", "))
 		case isRanked != matchmaker.IsRankedQueue(queue):
 			return bad("Xếp hạng phải %s với queue %q", map[bool]string{true: "bật", false: "tắt"}[matchmaker.IsRankedQueue(queue)], queue)
-		case party < 1 || party > matchmaker.TeamSlots:
-			return bad("Số người %d ngoài khoảng 1..%d", party, matchmaker.TeamSlots)
+		case party < 1 || party > matchmaker.MaxPartySize(queue):
+			return bad("Số người %d ngoài khoảng 1..%d", party, matchmaker.MaxPartySize(queue))
 		case queue == "" && party != 1:
 			return bad("Số người phải là 1 khi không có queue")
 		case !cats[category]:

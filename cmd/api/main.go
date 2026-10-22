@@ -10,6 +10,7 @@ import (
 
 	"battle-squad/internal/api/appconfig"
 	"battle-squad/internal/api/auth"
+	"battle-squad/internal/api/boss"
 	"battle-squad/internal/api/character"
 	"battle-squad/internal/api/dev"
 	"battle-squad/internal/api/economy"
@@ -111,6 +112,8 @@ func main() {
 	missionRepo := mission.NewRepository(db)
 	missionService := mission.NewService(missionRepo, economyRepo, db)
 	missionHandler := mission.NewHandler(missionService)
+
+	bossHandler := boss.NewHandler(boss.NewService(boss.NewRepository(db), gamedata.Current))
 
 	milestoneService := milestone.NewService(milestone.NewRepository(db), economyRepo, db)
 	milestoneHandler := milestone.NewHandler(milestoneService)
@@ -239,6 +242,8 @@ func main() {
 		r.Get("/missions/achievements", missionHandler.GetAchievements)
 		r.Post("/missions/claim", missionHandler.ClaimMission)
 		r.Post("/missions/chests/claim", missionHandler.ClaimChest)
+
+		r.Get("/boss/runs", bossHandler.GetRuns)
 
 		r.Get("/milestones", milestoneHandler.List)
 		r.Get("/milestones/summary", milestoneHandler.Summary)

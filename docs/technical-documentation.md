@@ -344,6 +344,7 @@ Giá normal (coin) — weapon (mỗi nhân vật) 500/1500/4000/10000, armor 400
 
 | Method | Path | Handler | Mô tả |
 |--------|------|---------|-------|
+| GET | `/boss/runs` | GetRuns | Lượt thưởng lớn còn lại hôm nay mỗi boss: `{day, resetAt, bosses:[{bossId, dailyBonusRuns, runsToday, bonusRunsLeft}]}` — xem §8a |
 | GET | `/missions/daily` | GetDailyMissions | Nhiệm vụ ngày: `DailyState` `{day, dayResetAt, week, weekResetAt, activity, weeklyActivity, missions:[{id, title, target, required, progress, activity, goto, state}], chests:[{id, track, threshold, state, rewards}], weekly:[…]}`; lần gọi đầu trong ngày hoàn thành `daily_login` — xem §7 Nhiệm vụ ngày |
 | GET | `/missions/achievements` | GetAchievements | Thành tích + tiến độ |
 | POST | `/missions/claim` | ClaimMission | `{missionId}` → `{activity, state}` (điểm năng động nhận được + `DailyState` mới); chưa xong `MISSION_NOT_DONE` 400, đã nhận `MISSION_ALREADY_CLAIMED` 409, không có (kể cả mốc thưởng) `MISSION_NOT_FOUND` 404 |
@@ -432,10 +433,11 @@ Màn Chọn chế độ của client dựng hoàn toàn từ `GET /gamedata` `mo
 | `ranked` | Đấu hạng 2vs2 | `ranked_2v2` | | pvp | `trophy` | 2 | true |
 | `bot` | Đấu máy | | `ai` | pvp | `robot` | 1 | false |
 | `practice` | Luyện tập | | | pvp | `target` | 1 | false |
+| `boss_steel_robot` / `boss_lava_crab` / `boss_ice_witch` | Rô-bốt Thép / Cua Dung Nham / Phù Thuỷ Băng | `boss:<bossId>` | | boss | `boss` | 4 | false |
 
-Mục Boss chưa có chế độ nào (client hiện thẻ "Sắp ra mắt"). `enabled = false` → chế độ không có trong `modes.lobby`. Match mode `casual_2v2` ("Đấu thường 2vs2") ở `modes.match` cho lịch sử / kết quả.
+Mục Boss có một chế độ mỗi boss đang bật (§8a; migration 046). `enabled = false` → chế độ không có trong `modes.lobby`. Match mode `casual_2v2` ("Đấu thường 2vs2") ở `modes.match` cho lịch sử / kết quả.
 
-**Hàng đợi** (`matchmaker.Queues`): chỉ `ranked_2v2` và `casual_2v2`. Mode của trận ghép = queue của nó (`MatchFound.mode`, `MatchStarted.mode`, `match_histories.mode`). Admin lưu một chế độ lobby có queue khác, `ranked` khác queue (`ranked` bật đúng khi queue `ranked_2v2`), `party_size` > 1 khi không có queue (hoặc > 2), hoặc `category` không có trong Mode Categories → lỗi, không lưu (`checkGameModes`); xoá một category đang dùng cũng bị từ chối.
+**Hàng đợi** (`matchmaker.AllQueues`): `ranked_2v2`, `casual_2v2` và `boss:<bossId>` của mỗi boss đang bật (§8a). Mode của trận ghép = queue của nó (`MatchFound.mode`, `MatchStarted.mode`, `match_histories.mode`). Admin lưu một chế độ lobby có queue khác, `ranked` khác queue (`ranked` bật đúng khi queue `ranked_2v2`), `party_size` > 1 khi không có queue (hoặc > 2), hoặc `category` không có trong Mode Categories → lỗi, không lưu (`checkGameModes`); xoá một category đang dùng cũng bị từ chối.
 
 **Đấu thường 2vs2 (`casual_2v2`)**: ghép y như Đấu hạng — cùng `planMatches` (party / solo, chênh rating, bot lấp sau `botFillAfter`, bot đa dạng theo `rules.bots`), dùng rating ẩn của người chơi (rating xếp hạng mùa active, không có → `elo.defaultRating`) để ghép và chọn map / độ khó bot. Khác Đấu hạng:
 
@@ -452,7 +454,7 @@ Mọi lobby event trừ `CreateLobby` / `JoinLobby` / `ListOnlinePlayers` / `Res
 | Event | Payload | Mô tả |
 |-------|---------|-------|
 | `CreateLobby` | `{queue?}` | Tạo lobby (host) với hàng đợi `queue` (`ranked_2v2` / `casual_2v2`; không gửi → `ranked_2v2`; khác → `INVALID_QUEUE`). Đã là host của lobby đang `preparing` → trả lại lobby đó, đổi sang `queue` (`LobbyUpdated`); lobby solo còn `in_match` mà mình đã rời trận → mở lại (`preparing`), đổi queue và trả lại; lobby không còn → tạo mới; còn lại `ALREADY_IN_LOBBY` |
-| `JoinLobby` | `{lobbyId}` | Join lobby theo ID (tối đa 2 người) |
+| `JoinLobby` | `{lobbyId}` | Join lobby theo ID (tối đa `party_size` của chế độ: 2 với 2v2, 4 với boss) |
 | `LeaveLobby` | `{}` | Rời lobby (đang `in_queue` thì rời hàng đợi trước). Host rời → giải tán |
 | `UpdateLoadout` | `{characterId?, items?}` | Đổi character/items khi `preparing`; cùng luật QuickPlay (`room.ValidateLoadout`: nhân vật chơi được và sở hữu, ≤ 3 item đã biết trong giới hạn mỗi trận, đang có) → lưu `player_loadouts`. Sai → `LobbyError` `LOADOUT_INVALID` |
 | `StartQueue` | `{}` | Host bấm tìm trận (lobby `preparing`, member đã `ready`, không thì `MEMBER_NOT_READY`); đọc lại rating của các thành viên rồi vào hàng đợi `queue` của lobby |
@@ -554,7 +556,7 @@ Thành công: người mời nhận `InviteSent {playerId, expiresInSec}`, ngư�
   - Không mặc vũ khí: `{kind: gunKind của nhân vật (không có → của nhân vật mặc định), tier: "basic"}` (`"basic"` = súng cơ bản, `Art.GUN_BASIC` của client).
   - Đọc khi vào lobby, làm mới (cùng `level`) mỗi `UpdateLoadout`.
 
-**Mã lỗi lobby (`LobbyError {error: {code, message}}`)** của party: `LOBBY_REQUIRED`, `LOBBY_NOT_FOUND`, `INVALID_STATUS`, `LOBBY_FULL`, `PLAYER_OFFLINE`, `PLAYER_BUSY`, `INVITE_PENDING`, `INVITE_EXPIRED`, `INVALID_PAYLOAD`, `IN_ROOM`, `ALREADY_IN_LOBBY`, `NOT_HOST`, `MEMBER_NOT_READY`, `INVALID_QUEUE` (`CreateLobby` / `SetLobbyQueue` với queue matchmaker không chạy). Như các mã lobby khác, chúng là chuỗi trong package `lobby` (`sendLobbyError`); riêng `INVALID_QUEUE` có trong `model/errors.go` (`ErrInvalidQueue`).
+**Mã lỗi lobby (`LobbyError {error: {code, message}}`)** của party: `LOBBY_REQUIRED`, `LOBBY_NOT_FOUND`, `INVALID_STATUS`, `LOBBY_FULL`, `PLAYER_OFFLINE`, `PLAYER_BUSY`, `INVITE_PENDING`, `INVITE_EXPIRED`, `INVALID_PAYLOAD`, `IN_ROOM`, `ALREADY_IN_LOBBY`, `NOT_HOST`, `MEMBER_NOT_READY`, `INVALID_QUEUE` (`CreateLobby` / `SetLobbyQueue` với queue matchmaker không chạy), `PARTY_TOO_LARGE` (lobby đông hơn `party_size` của queue mới, §8a). Như các mã lobby khác, chúng là chuỗi trong package `lobby` (`sendLobbyError`); riêng `INVALID_QUEUE` và `PARTY_TOO_LARGE` có trong `model/errors.go` (`ErrInvalidQueue`, `ErrPartyTooLarge`).
 
 ### Room Events
 
@@ -624,6 +626,8 @@ Thành công: người mời nhận `InviteSent {playerId, expiresInSec}`, ngư�
 | `teleport` | `playerId, from, to` | |
 | `flare` | `projectileId, position` | Pháo hiệu đáp (Mưa tên lửa): khói đỏ, không damage, không hố |
 | `rain` | `position, radius, count` | Tên lửa bắt đầu rơi: quanh `position.x` ± `radius`, `count` quả |
+| `summon` | `playerId, minionId, position, hp` | Chế độ boss: lính mới xuất hiện (§8a) |
+| `lava` | `zoneId, position, radius, amount, turns` | Chế độ boss: vũng dung nham (`amount` HP đầu lượt, `turns` vòng; `MatchState.lavaZones`) |
 | `beam` | `playerId, from, to, duration` | Tia laze từ `from` đến mép map `to`, hiện `duration` giây; xuyên địa hình, không khoét. `t` = thời gian nạp ở nòng (0,3 s); đầu tia quét ra 12000 px/s, mỗi địch trúng (`damage` cause `laser`) lúc đầu tia tới thân nó |
 
 Client thiếu field mới (hoặc server cũ) vẫn chạy: field vắng = mặc định (`kind` rỗng = đạn thường, `launchDelay` 0, `shield` không đổi, `floor` 0 = khoét cả hình tròn).
@@ -1206,6 +1210,107 @@ Không có item khiên (bloom là skill), nên luật "khiên khi máu thấp v�
 
 ---
 
+## 8a. Chế độ Boss (migration 045 / 046)
+
+Đội tối đa 4 người (người thật + bot đồng đội, team 1) đánh một boss và lính của nó (team 2). Mỗi boss là một dòng `config_bosses` (admin trang **Bosses**), có chế độ lobby riêng trong mục Boss của màn Chọn chế độ (`config_game_modes` kind `lobby`, category `boss`, icon `boss`, `party_size` 4, queue `boss:<bossId>`) và dòng match cùng id với queue (`boss:steel_robot` "Rô-bốt Thép": lịch sử / kết quả hiện tên boss). Code: `internal/game/gamedata/boss.go` (config, kiểm tra), `match/boss.go` (trận), `match/reward_boss.go` (thưởng), `matchmaker/plan_boss.go` (ghép), `room/boss.go` (tạo trận), `internal/api/boss` (`GET /boss/runs`), `mapgen/arenas.go` (arena).
+
+### Boss mặc định (thiết kế riêng, tên tiếng Việt)
+
+| bossId | Tên | Lv đề xuất | HP | Def | Damage | Thân | Arena | Lính | Kỹ năng |
+|---|---|---|---|---|---|---|---|---|---|
+| `steel_robot` | Rô-bốt Thép | 10 | 12.000 | 60 | 420 | 3 | `arena_steel_robot` Xưởng thép (steel) | `drone` Drone (spark, 650 HP, 160 dmg, thân 0,7), đầu trận 2, tối đa 4 | `shell_barrage` Mưa đạn pháo (rain 10 quả ± 180 px, 0,35 × dmg, nổ 55, trần 1,2 ×), `laser_beam` Tia laze nghiền (beam vào người ít máu nhất, 1,3 ×, giảm 0,85 mỗi người sau, hồi 2), `drone_wave` Gọi drone (summon 2, hồi 3) |
+| `lava_crab` | Cua Dung Nham | 25 | 18.000 | 90 | 480 | 3,2 | `arena_lava_crab` Miệng núi lửa (cave) | `crab` Cua con (tanko, 800 HP, 180 dmg), đầu 2, tối đa 4 | `fire_bombs` Bom dung nham (rain 4 quả ± 260, 0,55 ×, `burn` 1 lượt, mỗi chỗ nổ để vũng dung nham r 50 px, 150 HP / lượt, 2 vòng; hồi 1), `claw_slam` Càng nghiền (rain 1 quả vào người gần nhất, 1,6 ×, nổ 80, hố 36; hồi 1), `crab_wave` Gọi cua con (summon 2, hồi 3) |
+| `ice_witch` | Phù Thuỷ Băng | 40 | 24.000 | 80 | 520 | 2,8 | `arena_ice_witch` Đỉnh tuyết (ice) | `snowman` Người tuyết (flora, 900 HP, 170 dmg), đầu 3, tối đa 4 | `ice_spikes` Gai băng (rain 8 quả ± 220, 0,3 ×, `freeze` 1 lượt; hồi 2), `frost_beam` Tia băng giá (beam vào người ít máu nhất, 1,1 ×, `root` 1; hồi 1), `blizzard` Bão tuyết (rain 16 quả ± 420, 0,18 ×, `net` 1; hồi 1), `snowman_wave` Gọi người tuyết (summon 2, hồi 3) |
+
+Cả ba: 15 lượt boss tối đa, khiên 0,1 (còn lính sống: boss nhận 10 % damage), rơi khỏi map `clamp`, 3 lượt thưởng lớn mỗi ngày, `minionDamageFactor` 0,3. Bot đánh thử (4 bot cấp 1, `TestBotPartiesFinishBossMatches`): Rô-bốt Thép chết ở vòng ~10, Cua và Phù thuỷ thoát (còn ~3.700 / ~11.000 HP): đúng thứ tự level đề xuất.
+
+### Config `config_bosses` (gamedata.BossConfig)
+
+| Cột | Ý nghĩa |
+|---|---|
+| `boss_id`, `name`, `description`, `recommended_level`, `enabled`, `sort_order` | Thẻ ở tab Boss; tắt → boss, chế độ của nó không có trong `GET /gamedata`, queue không chạy (`INVALID_QUEUE`) |
+| `map_id` | Arena (`config_maps`): spawn 0..3 đội, 4 boss, 5.. lính (`gamedata.BossSpawns`) |
+| `hp`, `defense`, `damage` | Chỉ số boss; kỹ năng gây `damage × skill.damage` (rồi qua defense người trúng) |
+| `body_size` | × thân người chơi: va chạm trong `physics.player_hit_radius × size` quanh tâm `shotOriginLift × size` trên chân; vụ nổ đo tới mép thân (khoảng cách tới tâm − (size − 1) × hitRadius, hoặc tới chân nếu gần hơn); tia laze / beam trúng trong `halfWidth + hitRadius × size`. Người chơi (size 1) không đổi gì |
+| `turn_limit` | Số lượt boss; hết lượt thứ này mà boss còn sống → đội thua `boss_escaped` |
+| `shielded_damage_factor` | Còn lính sống: boss nhận damage × hệ số (0..1) |
+| `out_of_map` | `clamp` (mặc định): vụ nổ làm boss rơi khỏi đáy map thì boss đứng yên tại chỗ (không có event `fall`); `kill`: boss rơi chết như người chơi (đội thắng). Arena đặt boss trên nền cứng không phá được nên thực tế không xảy ra. Lính rơi khỏi map thì chết như người chơi (không ảnh hưởng trận) |
+| `skills` (JSON) | `[{skillId, name, description, kind, weight, cooldown, target, …}]`: `kind` `rain` (count, spread, damage, blast, crater, cap, status, statusTurns, lavaRadius, lavaTurns, lavaDamage), `beam` (damage, halfWidth, decay, status, statusTurns), `summon` (minionId, count); `target` `random` / `nearest` / `lowest_hp` |
+| `minions` (JSON) | `[{minionId, name, characterId, hp, defense, damage, moveEnergy, bodySize, hitChance}]`: lính đánh bằng bot AI và súng của `characterId` (damage của lính thay damage súng: `damageBonus = damage − damage súng`), `hitChance` thay hit chance của tier bot (0 = tier) |
+| `waves` (JSON) | `{initial: [{minionId, count}], maxAlive}` |
+| `rewards` (JSON) | `{minionDamageFactor, bonus: bảng, normal: bảng}`, xem Thưởng |
+| `daily_bonus_runs` | Số lượt đầu mỗi ngày dùng bảng `bonus` |
+
+Admin **Bosses** (`/bosses`, `/bosses/edit?id=`, POST `/bosses/save`, `/bosses/delete`): sửa mọi trường, cột JSON là textarea; lưu kiểm tra bằng `gamedata.ValidateBoss` (khoảng số, kind / target, status có lượt, summon / waves trỏ lính có thật, lính trỏ nhân vật có thật, drop trỏ `config_items` có thật, JSON không có field lạ) và arena có trong `config_maps`; sai → hiện lại form với lỗi, không lưu. Lưu bump `gamedata_revision` (trigger) → server reload. Xoá boss mà còn chế độ dùng queue của nó → từ chối. Game data loader bỏ (và log) boss không hợp lệ hoặc arena không load được.
+
+Game Modes (`checkGameModes`): queue `boss:<id>` hợp lệ khi boss có và đang bật; số người 1..4 với queue boss, 1..2 với queue 2v2; `ranked` phải tắt. Cột queue giờ là ô text (không còn select).
+
+### Hàng đợi và lobby
+
+- `matchmaker.AllQueues()` = `ranked_2v2`, `casual_2v2`, rồi `boss:<id>` của mọi boss đang bật (theo game data hiện tại); `KnownQueue` nhận chúng. Sorted set `matchmaking:queue:boss:<id>`.
+- Lobby: số người tối đa = `party_size` của chế độ lobby có queue đó (`matchmaker.PartySize`), chặn ở 4 với queue boss, 2 với 2v2 (`MaxPartySize`). `JoinLobby`, `InviteToLobby` (`LOBBY_FULL`), `RespondInvite`, lời mời bị huỷ khi đủ người: đều theo số này. `CreateLobby {queue: "boss:<id>"}` / `SetLobbyQueue {queue: "boss:<id>"}` như mọi queue; đổi lobby đang có 3–4 người sang queue 2v2 → `PARTY_TOO_LARGE` (`model.ErrPartyTooLarge`; cả `CreateLobby` khi lobby được dùng lại quá đông). `LobbyInvite.mode` = `boss:<id>`.
+- Ghép (`planBossMatches`, mỗi tick): không xét rating; entry (party 1..4 hoặc solo) xếp theo lúc vào hàng; mỗi trận lấy entry cũ nhất còn lại rồi thêm các entry sau (theo thứ tự) còn vừa 4 người. Đủ 4 → bắt đầu ngay; thiếu → khi entry cũ nhất đã chờ `botFillAfter` (20 s) thì bot đồng đội lấp chỗ trống. Mọi người thật ở team 1; team 2 do room dựng (boss + lính). Map = arena của boss. Độ khó bot đồng đội theo tier của trung bình rating (như Đấu hạng); bot đa dạng theo `rules.bots` ở cấp trung bình level người thật.
+- Arena không có trong vòng map PvP (`cmd/game matchMaps`, QuickPlay `quickPlayMapID`).
+
+### Trận
+
+- `MatchFound.mode` / `MatchStarted.mode` / `match_histories.mode` = `boss:<bossId>`. `MatchFound.teams[0]` = đội (người rồi bot), `teams[1]` = boss và lính đầu trận: card thêm `role` (`boss` / `minion`), `bossId`, `minionId`; boss `level` = level đề xuất, `rating` 0.
+- Boss và lính là `BattlePlayerState` bình thường (`isBot: true`, team 2) cộng: `role` `"boss"` / `"minion"`, `bossId`, `minionId` (lính), `bodySize`, và ở người chơi `bossDamage` / `minionDamage` (damage gây cho boss / lính; omitempty). Boss: `playerId` `boss_<bossId>`, `characterId` `""`, `displayName` = tên boss, `maxMoveEnergy` 0. Lính: `playerId` `minion_<minionId>_<n>`, `characterId` = nhân vật nền (súng / AI; client vẽ theo `minionId`, không theo `characterId`), `damageBonus` có thể âm. Phe boss không có năng lượng skill.
+- `MatchState` (MatchStarted, MatchStateSync) thêm (chỉ chế độ boss): `boss {bossId, playerId, round, turnLimit}` (`round` = số lượt boss đã bắt đầu, 0 trước lượt đầu), `bossShielded` (bool), `lavaZones [{zoneId, position{x,y}, radius, damage, expiresRound}]`.
+- Thứ tự lượt: đội và lính xen kẽ (đội[0], lính[0], đội[1], lính[1], …, phần còn lại), boss cuối: mỗi vòng boss đi một lần. Lính mới gọi ra vào thứ tự (trước boss) từ vòng sau; lính chết bị bỏ qua (và bỏ khỏi thứ tự khi xếp lại). `TurnStarted` thêm `round` và `lavaZones` (chỉ chế độ boss).
+- Lượt boss: `TurnStarted` (boss; `round` mới) → 1,2 s → `ActionSelected {playerId: boss, actionMode: "skill", skillId}` → 1,0 s → `ShotResolved {shooterId: boss, actionMode: "skill", skillId}`. Chọn kỹ năng theo `weight` trong các kỹ năng hết hồi (dùng ở vòng r thì dùng lại được từ vòng r + cooldown + 1); `summon` chỉ khi lính sống < `maxAlive`; không có gì → kỹ năng không-summon đầu tiên. Boss bị stun / freeze thì mất lượt như người chơi (vẫn tính một vòng).
+- Sự kiện trong `ShotResolved` của boss (mọi `t` tính từ lúc bắn, `bossChargeTime` 0,6 s):
+  - `rain`: `rain {t: 0.6, position (người bị nhắm), radius (spread), count}`, rồi mỗi quả là một projectile `kind: "missile"`, `skillId`, rơi thẳng từ trên map (y −60, 1500 px/s), cách nhau 0,08 s; mỗi quả `explode` / `damage` (cause `explosion`) / `die` / `fall` như thường; `status` (effect của kỹ năng) một lần mỗi người trúng; kỹ năng có dung nham: mỗi chỗ nổ thêm `lava {t, zoneId, position, radius, amount (HP mỗi lượt), turns (vòng)}`.
+  - `beam`: `beam {t: 0.6, playerId: boss, from (tâm thân boss), to (mép map), duration 0.8}` qua tâm thân người bị nhắm, xuyên địa hình; mỗi người trúng `damage` cause `laser` lúc đầu tia tới (12000 px/s), rồi `status`.
+  - `summon` (mới): `{t, type: "summon", playerId (minion_<id>_<n>), minionId, position, hp}`, cách nhau 0,3 s từ 0,6 s. State của lính: HP / def / damage / thân theo config (`GET /gamedata bosses[].minions`), team 2; `MatchStateSync` có đầy đủ.
+  - `lava` (mới): vũng dung nham; người đội đứng trong vũng (|x − position.x| ≤ radius, |y − position.y| ≤ 60) đầu lượt mất `damage` HP (`PlayerDamaged` type `lava`, không qua defense, khiên chịu trước); hết sau lượt boss thứ `expiresRound`. Phe boss không bị dung nham.
+  - Boss chết trong phát bắn: mọi lính còn sống chết theo, `die {playerId, cause: "boss_defeated"}` cùng `t` với `die` của boss.
+- Khiên: còn lính sống → mọi damage boss nhận × `shieldedDamageFactor` (`damage` event mang số đã giảm; bot đồng đội cũng tính như vậy khi chọn mục tiêu). Đổi trạng thái (lính cuối chết, lính mới ra) → `BossShieldChanged {bossId, playerId, shielded}` gửi ngay sau `ShotResolved` / `PlayerDamaged` gây ra nó (client áp dụng khi phát lại xong).
+- Kết thúc: boss chết → `winningTeam` 1, `result` `boss_defeated` (kể cả khi đội cũng chết cùng lúc). Cả đội chết → 2, `party_defeated`. Hết lượt boss thứ `turnLimit` (sau phát bắn của nó) → 2, `boss_escaped`. Rời trận / mất kết nối như mọi trận.
+- `MatchEnded` (chế độ boss) thêm `result` và `boss {bossId, result, round, turnLimit, bossHp, bossMaxHp, bossDamage: {playerId: damage}}` (`bossDamage` gồm cả bot đồng đội: bảng xếp hạng damage); `mvpPlayerId` chỉ xét đội. `stats` như mọi trận (cả boss / lính).
+
+### Thưởng (`processBossRewards`, một tx)
+
+Mỗi người thật không rời trận: damage hiệu dụng = `bossDamage + minionDamageFactor × minionDamage`; bảng = `bonus` cho `daily_bonus_runs` lượt đầu trong ngày **với boss đó**, sau đó `normal`:
+
+```
+gold  = min(baseGold + hiệu dụng / 1000 × goldPer1000Damage, maxGold) + winGold (nếu thắng)   → coin
+exp   = min(baseExp  + hiệu dụng / 1000 × expPer1000Damage,  maxExp)  + winExp  (nếu thắng)   → EXP tài khoản + nhân vật
+rolls = min(floor(hiệu dụng / damagePerDropRoll), maxDropRolls) + winDropRolls (nếu thắng)
+mỗi roll: một drop theo weight (hoặc không gì với emptyWeight), số lượng min..max
+```
+
+Rô-bốt Thép, bảng bonus: 100 + 60 / 1000 damage (tối đa 1.500) + 400 thắng coin; 40 + 25 / 1000 (tối đa 600) + 120 EXP; 1 roll / 2.000 damage (tối đa 4) + 1 thắng (medkit, power_shot, teleport, drill_bomb, freeze_bomb). Bảng normal ~¼. Cua ×1,33, Phù thuỷ ×1,6.
+
+- Lượt trong ngày: `player_boss_runs (player_id, boss_id, day, runs)`, `day` = ngày UTC+7 như nhiệm vụ ngày (`mission.PeriodsAt`, hết lúc 17:00 UTC). Khoá dòng `FOR UPDATE`, tạo / tăng và kiểm tra `RowsAffected`; lượt thứ N dùng bonus khi N ≤ `daily_bonus_runs`.
+- Coin: `economy_transactions` source `boss_reward`, ref = boss id; item: `inventory_items` source `boss_reward` (`milestone.GrantRewardItemTx`); lịch sử `match_histories` mode `boss:<id>`, `rating_change` 0; trận được tính cho mốc thưởng / nhiệm vụ ngày như trận ghép (≥ 3 lượt hành động). Mọi đọc / ghi qua tx, không query Pool.
+- Rời trận: không gì, lượt không bị tính (`bonusRunsLeft` = số còn lại hiện tại). Bot / boss / lính: không thưởng, không ghi dòng nào.
+- `MatchEnded.rewards[playerId]` thêm `bossDamage`, `minionDamage`, `bonusRun` (bool: lượt này dùng bảng bonus), `bonusRunsLeft` (còn lại hôm nay sau lượt này), `items [{itemId, quantity}]`; `ratingChange` 0, không có field rank.
+
+```json
+{"winningTeam":1,"result":"boss_defeated",
+ "boss":{"bossId":"steel_robot","result":"boss_defeated","round":9,"turnLimit":15,"bossHp":0,"bossMaxHp":12000,
+   "bossDamage":{"p1":9000,"bot_1a2b3c4d":2400}},
+ "rewards":{"p1":{"playerId":"p1","expGained":393,"coinGained":1058,"ratingChange":0,"levelUp":false,"newLevel":12,
+   "charLevelUp":false,"charNewLevel":0,"charLevelsGained":0,
+   "bossDamage":9000,"minionDamage":1000,"bonusRun":true,"bonusRunsLeft":2,"items":[{"itemId":"medkit","quantity":2}]}},
+ "stats":{...},"mvpPlayerId":"p1"}
+```
+
+### `GET /boss/runs` (Bearer)
+
+`{day, resetAt, bosses: [{bossId, dailyBonusRuns, runsToday, bonusRunsLeft}]}`: ngày UTC+7 hiện tại, lúc hết (RFC3339 UTC), mỗi boss đang bật theo thứ tự hiển thị (`bonusRunsLeft = max(dailyBonusRuns − runsToday, 0)`). `internal/api/boss` (handler → service → repository).
+
+### Arena (`internal/game/mapgen/arenas.go`, migration 045)
+
+150 × 70 ô như map PvP, không lật gương: sàn đội bên trái (đất mềm trên nền cứng, 4 spawn), giữa là chỗ của lính, bên phải bục lớn bằng vật liệu cứng cho boss (cách đội ~1.400–1.800 px). `go run ./cmd/mapgen` ghi `045_boss_arenas` (`INSERT … ON CONFLICT DO NOTHING`: chạy lại giữ chỉnh sửa trong map editor) và thêm arena vào `configs/maps.yaml`. Test: arena hợp lệ, mọi spawn đứng được, nền dưới boss cứng, mỗi spawn đội có phát gây damage cho boss.
+
+### Migration 046
+
+`config_bosses` (+ trigger revision, seed 3 boss = `gamedata.DefaultBosses()`, `ON CONFLICT DO NOTHING`), 6 dòng `config_game_modes` (3 lobby `boss_<id>` sort 11–13, 3 match `boss:<id>`), `player_boss_runs`. Chạy lại giữ chỉnh sửa admin (`TestBossMigration`); down xoá các dòng chế độ và hai bảng.
+
+---
+
 ## 9. Admin Dashboard
 
 ### Web UI Routes
@@ -1222,7 +1327,8 @@ Không có item khiên (bloom là skill), nên luật "khiên khi máu thấp v�
 | GET/POST | `/gamedata`, `/gamedata/reload` | Version game data (admin, từng server game / api, lỗi reload), payload `/gamedata`; "Tải lại cấu hình" tăng revision + báo mọi server |
 | GET/POST | `/rules` | Game Rules: các dòng số (physics, lượt, di chuyển, rơi, trang bị) và mọi nhóm `rules.*`, kiểm tra kiểu / khoảng / bắt buộc |
 | GET/POST | `/skills/tuning` | Mẫu mô tả + thông số kỹ năng (`config_skills.params`), xem trước số và mô tả theo cấp súng |
-| GET/POST | `/texts/{table}` | Sửa tại chỗ: status-effects (tên, marker, banner, xấu / mất lượt / chặn di chuyển), rank-tiers (tên, khoảng điểm, kiểm tra bands), equipment-tiers, equipment-slots, gun-kinds, type-words, game-modes (category, icon, queue chỉ `ranked_2v2` / `casual_2v2`, số người, xếp hạng, bật; `checkGameModes`), mode-categories, tips |
+| GET/POST | `/texts/{table}` | Sửa tại chỗ: status-effects (tên, marker, banner, xấu / mất lượt / chặn di chuyển), rank-tiers (tên, khoảng điểm, kiểm tra bands), equipment-tiers, equipment-slots, gun-kinds, type-words, game-modes (category, icon, queue `ranked_2v2` / `casual_2v2` / `boss:<id>` của boss đang bật, số người 1..2 / 1..4 với boss, xếp hạng, bật; `checkGameModes`), mode-categories, tips |
+| GET/POST | `/bosses`, `/bosses/edit`, `/bosses/save`, `/bosses/delete` | Boss: sửa mọi trường của `config_bosses` (JSON là textarea, kiểm tra `gamedata.ValidateBoss`), xoá khi không chế độ nào dùng (§8a) |
 | GET/POST | `/shop/*` | CRUD shop offers |
 | GET/POST | `/players` | Player list, ban/unban |
 | GET/POST | `/devtools/*` | Clear rooms, reset data, seed config |
@@ -1273,6 +1379,7 @@ Không có item khiên (bloom là skill), nên luật "khiên khi máu thấp v�
 | `player_stat_counters` | `(player_id, counter)` | Counter cho mốc thưởng (trận, thắng, thắng theo nhân vật, đỉnh cường hoá, đỉnh rank) |
 | `config_titles` | `title_id` | Danh hiệu: tên, rarity, thứ tự, mô tả cách đạt, bật/tắt |
 | `player_titles` | `(player_id, title_id)` | Danh hiệu người chơi sở hữu, `obtained_at` |
+| `player_boss_runs` | `(player_id, boss_id, day)` | 046: số lượt đánh boss xong trong ngày UTC+7 (`runs`); `daily_bonus_runs` lượt đầu dùng bảng thưởng lớn (§8a) |
 
 ### Equipment
 
@@ -1309,6 +1416,7 @@ Không có item khiên (bloom là skill), nên luật "khiên khi máu thấp v�
 | `game_settings` | `key` | Key-value config (matchmaking, elo, bot_difficulty); 041: `rules.*` (một dòng JSON mỗi nhóm luật, `gamedata.RuleGroups`) |
 | `config_characters/weapons/skills/items/maps` | `*_id` | Game data (admin editable); `config_maps.theme` (036); 040: `config_characters.role_name / playstyle / gun_kind / sort_order`, `config_items.display_name / sort_order`, `config_skills.description_template` |
 | `config_status_effects`, `config_rank_tiers`, `config_equipment_tiers`, `config_game_modes`, `config_tips` | `effect_id` / `tier` / `tier` / `mode_id` / `tip_id` | 040: text tiếng Việt + thứ tự hiển thị cho `GET /gamedata`; 044: `config_game_modes.category / icon / party_size / ranked / enabled` |
+| `config_bosses` | `boss_id` | 046: boss (chỉ số, kỹ năng / lính / đợt / thưởng JSON, lượt thưởng lớn mỗi ngày; §8a; admin Bosses) |
 | `config_mode_categories` | `category_id` | 044: các mục của màn Chọn chế độ (`name`, `sort_order`; `GET /gamedata` `modes.categories`) |
 | `config_brick_types` | `brick_type_id` | Brick của map tile: tên, `destructible`, `border` polygon, `color`; id 1..19 do 036 tạo |
 | `config_gun_kinds`, `config_equipment_slots`, `config_item_type_words` | `gun_kind` / `slot` / `word` | 041: tên loại súng, tên ô trang bị, chữ dịch loại trong tên trang bị "<Tier> <Type>" (`GET /gamedata` `gunKinds`, `equipment.slots`, `equipment.typeWords`) |

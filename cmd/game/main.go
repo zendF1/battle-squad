@@ -62,6 +62,9 @@ func matchMaps(s *gamedata.Snapshot) ([]string, map[string]string) {
 	ids := make([]string, 0, len(s.Data.Maps))
 	tiers := make(map[string]string, len(s.Data.Maps))
 	for mapID, mapCfg := range s.Data.Maps {
+		if s.IsBossArena(mapID) {
+			continue // boss arenas are not in the PvP rotation
+		}
 		ids = append(ids, mapID)
 		tier := mapCfg.MinRankTier
 		if tier == "" {

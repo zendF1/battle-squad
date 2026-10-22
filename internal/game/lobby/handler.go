@@ -31,6 +31,12 @@ func lobbyQueue(queue string) (string, bool) {
 	return queue, matchmaker.KnownQueue(queue)
 }
 
+// sendPartyTooLarge is LobbyError PARTY_TOO_LARGE: the lobby has more members than queue's
+// party size.
+func sendPartyTooLarge(client *ws.Client, queue string) {
+	sendLobbyError(client, model.ErrPartyTooLarge.Code, model.ErrPartyTooLarge.Message+": "+queue)
+}
+
 // sendInvalidQueue is LobbyError INVALID_QUEUE.
 func sendInvalidQueue(client *ws.Client, queue string) {
 	sendLobbyError(client, model.ErrInvalidQueue.Code, model.ErrInvalidQueue.Message+": "+queue)
@@ -111,6 +117,9 @@ func (h *WSHandler) handleCreateLobby(ctx context.Context, client *ws.Client, qu
 			client.LobbyID = ""
 		} else if existing.reuseForHost(client, queue) {
 			existing.Join(client)
+			return
+		} else if _, members, _ := existing.statusAndSize(); members > matchmaker.PartySize(queue) {
+			sendPartyTooLarge(client, queue)
 			return
 		} else {
 			sendLobbyError(client, "ALREADY_IN_LOBBY", "You are already in a lobby")
@@ -196,12 +205,12 @@ func (h *WSHandler) handleRespondInvite(ctx context.Context, client *ws.Client, 
 		sendLobbyError(client, "LOBBY_NOT_FOUND", "Lobby not found")
 		return
 	}
-	status, members := lobby.statusAndSize()
+	status, members, maxMembers := lobby.statusAndSize()
 	if status != "preparing" {
 		sendLobbyError(client, "INVALID_STATUS", "The lobby is not accepting members")
 		return
 	}
-	if members >= 2 {
+	if members >= maxMembers {
 		sendLobbyError(client, "LOBBY_FULL", "The lobby is full")
 		return
 	}

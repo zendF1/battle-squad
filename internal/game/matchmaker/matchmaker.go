@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
 	"battle-squad/internal/shared/ranked"
@@ -214,7 +215,7 @@ func (m *Matchmaker) tick() {
 	if err := m.queue.MigrateLegacy(m.ctx); err != nil {
 		observability.Log.Warn().Err(err).Msg("matchmaker: tick MigrateLegacy error")
 	}
-	for _, queue := range Queues {
+	for _, queue := range AllQueues() {
 		entries, err := m.queue.GetAllEntries(m.ctx, queue)
 		if err != nil {
 			observability.Log.Error().Err(err).Str("queue", queue).Msg("matchmaker: tick GetAllEntries error")
@@ -223,7 +224,11 @@ func (m *Matchmaker) tick() {
 		if len(entries) == 0 {
 			continue
 		}
-		for _, result := range planMatches(entries, time.Now().Unix(), cfg) {
+		plan := planMatches
+		if IsBossQueue(queue) {
+			plan = planBossMatches
+		}
+		for _, result := range plan(entries, time.Now().Unix(), cfg) {
 			result.Queue = queue
 			m.startMatch(m.ctx, result)
 		}
@@ -263,7 +268,11 @@ func (m *Matchmaker) startMatch(ctx context.Context, result MatchResult) {
 	cfg := m.cfg
 	m.mu.RUnlock()
 
-	result.MapID = m.randomMapForRating(result.MaxHumanRating())
+	if boss, ok := gamedata.Current().BossOfQueue(result.Queue); ok {
+		result.MapID = boss.MapID
+	} else {
+		result.MapID = m.randomMapForRating(result.MaxHumanRating())
+	}
 
 	if err := m.roomCreator.CreateBattleFromMatch(ctx, result, botConfig, eloConfig, cfg); err != nil {
 		observability.Log.Error().Err(err).Str("mapID", result.MapID).Msg("matchmaker: CreateBattleFromMatch error, re-queueing entries")
@@ -277,6 +286,7 @@ func (m *Matchmaker) startMatch(ctx context.Context, result MatchResult) {
 
 	observability.Log.Info().
 		Str("queue", result.Mode()).
+		Int("team1Bots", result.Teams[0].Bots).
 		Int("team1Humans", result.Teams[0].Humans()).
 		Int("team2Humans", result.Teams[1].Humans()).
 		Bool("hasBot", result.HasBot).

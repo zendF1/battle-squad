@@ -163,7 +163,7 @@ type drillState struct {
 
 // checkSegmentCollisions checks for terrain and player hits along the line from prev to curr,
 // sampled every stepPx px; a player is hit within hitRadius of its body centre (lift px above
-// its feet).
+// its feet), both × its body size (a boss's body is bigger, see body.go).
 func checkSegmentCollisions(
 	prev, curr Vector2,
 	ownerID string,
@@ -196,10 +196,11 @@ func checkSegmentCollisions(
 			if p.TeamID == ownerTeamID {
 				continue // skip all teammates (including self)
 			}
+			scale := bodyScale(p)
 			ddx := px - p.Position.X
-			ddy := py - (p.Position.Y - lift) // centre of the player body
+			ddy := py - (p.Position.Y - lift*scale) // centre of the player body
 			d := math.Sqrt(ddx*ddx + ddy*ddy)
-			if d <= hitRadius {
+			if d <= hitRadius*scale {
 				return true, Vector2{X: px, Y: py}, p.PlayerID
 			}
 		}

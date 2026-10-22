@@ -1,0 +1,38 @@
+{{define "content"}}{{$c := .B.Config}}
+<div class="top-bar">
+    <h1>{{if .IsNew}}Thêm boss{{else}}Sửa boss {{$c.BossID}}{{end}}</h1>
+    <a href="/bosses" class="btn btn-primary">Danh sách</a>
+</div>
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+<div class="card">
+<form method="POST" action="/bosses/save">
+{{if .IsNew}}<input type="hidden" name="new" value="1">{{end}}
+<div class="form-group"><label>Boss ID</label>
+    {{if .IsNew}}<input type="text" name="boss_id" value="{{$c.BossID}}" required>{{else}}<input type="hidden" name="boss_id" value="{{$c.BossID}}"><code>{{$c.BossID}}</code>{{end}}
+    <div class="desc">Chữ thường, số, _ (không dấu cách, không ':'); queue của boss là <code>boss:&lt;boss id&gt;</code></div></div>
+<div class="form-group"><label>Tên</label><input type="text" name="name" value="{{$c.Name}}" required></div>
+<div class="form-group"><label>Mô tả</label><textarea name="description" rows="2" style="width:100%">{{$c.Description}}</textarea></div>
+<div class="form-group"><label>Level đề xuất</label><input type="number" name="recommended_level" value="{{$c.RecommendedLevel}}" step="1" min="1"></div>
+<div class="form-group"><label>Bật</label><input type="checkbox" name="enabled" {{if $c.Enabled}}checked{{end}}><div class="desc">Tắt: boss và chế độ của nó không có trong GET /gamedata, hàng đợi không chạy</div></div>
+<div class="form-group"><label>Thứ tự</label><input type="number" name="sort_order" value="{{$c.SortOrder}}" step="1"></div>
+<div class="form-group"><label>Arena (map id)</label><input type="text" name="map_id" value="{{$c.MapID}}" required><div class="desc">config_maps; spawn 0..3 đội người chơi, 4 boss, 5.. lính</div></div>
+<div class="form-group"><label>HP</label><input type="number" name="hp" value="{{$c.HP}}" step="1" min="1"></div>
+<div class="form-group"><label>Phòng thủ</label><input type="number" name="defense" value="{{$c.Defense}}" step="1" min="0"></div>
+<div class="form-group"><label>Sát thương gốc</label><input type="number" name="damage" value="{{$c.Damage}}" step="1" min="0"><div class="desc">Kỹ năng gây damage × giá trị này</div></div>
+<div class="form-group"><label>Kích thước thân</label><input type="number" name="body_size" value="{{$c.BodySize}}" step="0.1" min="0.5" max="6"><div class="desc">× thân người chơi (bán kính trúng 24 × giá trị, tâm 20 × giá trị trên chân)</div></div>
+<div class="form-group"><label>Số lượt boss tối đa</label><input type="number" name="turn_limit" value="{{$c.TurnLimit}}" step="1" min="1" max="200"><div class="desc">Hết lượt thứ này của boss mà boss chưa chết: boss thoát, đội thua (boss_escaped)</div></div>
+<div class="form-group"><label>Hệ số sát thương khi có khiên</label><input type="number" name="shielded_damage_factor" value="{{$c.ShieldedDamageFactor}}" step="0.01" min="0" max="1"><div class="desc">Còn lính sống: boss nhận damage × hệ số này (0 = miễn nhiễm)</div></div>
+<div class="form-group"><label>Rơi khỏi map</label><select name="out_of_map">{{range .OutOfMaps}}<option value="{{.}}" {{if eq . $c.OutOfMap}}selected{{end}}>{{.}}</option>{{end}}</select><div class="desc">clamp: boss đứng yên tại chỗ thay vì rơi khỏi đáy map; kill: rơi là chết (đội thắng)</div></div>
+<div class="form-group"><label>Lượt thưởng lớn mỗi ngày</label><input type="number" name="daily_bonus_runs" value="{{$c.DailyBonusRuns}}" step="1" min="0" max="100"></div>
+<div class="form-group"><label>Kỹ năng (JSON)</label><textarea name="skills" rows="16" style="width:100%;font-family:monospace;font-size:12px">{{.B.SkillsJSON}}</textarea>
+    <div class="desc">Mảng {skillId, name, description, kind ({{.Kinds}}), weight, cooldown, target (random / nearest / lowest_hp)}. rain: count, spread, damage (× sát thương gốc), blast, crater, cap, status, statusTurns, lavaRadius, lavaTurns, lavaDamage. beam: damage, halfWidth, decay, status, statusTurns. summon: minionId, count</div></div>
+<div class="form-group"><label>Lính (JSON)</label><textarea name="minions" rows="8" style="width:100%;font-family:monospace;font-size:12px">{{.B.MinionsJSON}}</textarea>
+    <div class="desc">Mảng {minionId, name, characterId (súng và AI của nhân vật này), hp, defense, damage, moveEnergy, bodySize, hitChance}</div></div>
+<div class="form-group"><label>Đợt lính (JSON)</label><textarea name="waves" rows="5" style="width:100%;font-family:monospace;font-size:12px">{{.B.WavesJSON}}</textarea>
+    <div class="desc">{initial: [{minionId, count}], maxAlive}</div></div>
+<div class="form-group"><label>Phần thưởng (JSON)</label><textarea name="rewards" rows="20" style="width:100%;font-family:monospace;font-size:12px">{{.B.RewardsJSON}}</textarea>
+    <div class="desc">{minionDamageFactor, bonus: bảng, normal: bảng}; bảng = {baseGold, goldPer1000Damage, maxGold, winGold, baseExp, expPer1000Damage, maxExp, winExp, damagePerDropRoll, maxDropRolls, winDropRolls, emptyWeight, drops: [{itemId, weight, min, max}]}. bonus cho dailyBonusRuns lượt đầu mỗi ngày</div></div>
+<button type="submit" class="btn btn-primary">Lưu</button>
+</form>
+</div>
+{{end}}

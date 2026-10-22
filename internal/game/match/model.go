@@ -67,7 +67,25 @@ type BattlePlayerState struct {
 	// for milestones (see milestoneCounts).
 	ShotTurns int  `json:"-"`
 	Left      bool `json:"-"`
+
+	// Boss mode (omitted elsewhere): Role is "boss" or "minion" for the boss's side ("" for a
+	// player or bot teammate), BossID the boss of the match, MinionID the minion type
+	// (config_bosses.minions). BodySize scales the body (hit radius and centre height; 0 or
+	// absent = 1, a player). BossDamage / MinionDamage: the damage this player dealt to the boss /
+	// to minions (the rewards and the damage ranking).
+	Role         string  `json:"role,omitempty"`
+	BossID       string  `json:"bossId,omitempty"`
+	MinionID     string  `json:"minionId,omitempty"`
+	BodySize     float64 `json:"bodySize,omitempty"`
+	BossDamage   int     `json:"bossDamage,omitempty"`
+	MinionDamage int     `json:"minionDamage,omitempty"`
 }
+
+// The roles of the boss's side (BattlePlayerState.Role).
+const (
+	RoleBoss   = "boss"
+	RoleMinion = "minion"
+)
 
 type WindState struct {
 	Direction int     `json:"direction"` // -1: left, 0: no wind, 1: right
@@ -89,6 +107,32 @@ type MatchState struct {
 	TurnOrder       []string                      `json:"turnOrder"`
 	TurnTimeLeft    int                           `json:"turnTimeLeft"`  // in seconds
 	ActiveEffects   []StatusEffect                `json:"activeEffects"` // global active effects (like WindStop)
+
+	// Boss mode only (omitted elsewhere): the boss fight's state, whether the boss is shielded
+	// (any minion alive) and the lava pools its skills left.
+	Boss         *BossState `json:"boss,omitempty"`
+	BossShielded *bool      `json:"bossShielded,omitempty"`
+	LavaZones    []LavaZone `json:"lavaZones,omitempty"`
+}
+
+// BossState is MatchState.boss: the boss, its player id, how many of its turns have started
+// (Round, 0 before its first) and after how many it escapes (TurnLimit).
+type BossState struct {
+	BossID    string `json:"bossId"`
+	PlayerID  string `json:"playerId"`
+	Round     int    `json:"round"`
+	TurnLimit int    `json:"turnLimit"`
+}
+
+// LavaZone is a lava pool a boss skill left: a player standing within Radius px of Position.x
+// (and near its height) at the start of its turn loses Damage HP (no defense, shield first);
+// it is gone after the boss's turn number ExpiresRound.
+type LavaZone struct {
+	ZoneID       string  `json:"zoneId"`
+	Position     Vector2 `json:"position"`
+	Radius       float64 `json:"radius"`
+	Damage       int     `json:"damage"`
+	ExpiresRound int     `json:"expiresRound"`
 }
 
 type ShootAction struct {
@@ -144,7 +188,7 @@ type ProjectileResult struct {
 // fields not relevant to Type are omitted.
 type ShotEvent struct {
 	T              float64  `json:"t"`
-	Type           string   `json:"type"` // explode, damage, heal, shield, status, cleanse, fall, die, teleport, flare, rain, beam
+	Type           string   `json:"type"` // explode, damage, heal, shield, status, cleanse, fall, die, teleport, flare, rain, beam, summon, lava
 	PlayerID       string   `json:"playerId,omitempty"`
 	ProjectileID   string   `json:"projectileId,omitempty"`
 	Position       *Vector2 `json:"position,omitempty"`       // explode, flare, rain (the flare point)
@@ -163,6 +207,8 @@ type ShotEvent struct {
 	From           *Vector2 `json:"from,omitempty"`           // fall, teleport, beam
 	To             *Vector2 `json:"to,omitempty"`             // fall, teleport, beam
 	Duration       float64  `json:"duration,omitempty"`       // fall: seconds until landing; beam: seconds the beam shows
+	MinionID       string   `json:"minionId,omitempty"`       // summon: the minion type
+	ZoneID         string   `json:"zoneId,omitempty"`         // lava: the pool (MatchState.lavaZones)
 }
 
 // ShotResolved is the single message describing a whole shot: every projectile's flight plus

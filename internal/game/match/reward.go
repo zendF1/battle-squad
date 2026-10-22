@@ -56,6 +56,11 @@ type PlayerStats struct {
 	// Counts: the match counts for this player's milestone counters and daily missions
 	// (Match.milestoneCounts)
 	Counts bool
+	// IsBot: a bot (teammate, boss or minion): no rewards, no rows
+	IsBot bool
+	// BossDamage / MinionDamage: boss mode, the damage dealt to the boss / to minions
+	BossDamage   int
+	MinionDamage int
 }
 
 // RankChange is a ranked player's rating before and after the match. Embedded
@@ -84,6 +89,8 @@ type RewardResult struct {
 	CharLevelUp      bool `json:"charLevelUp"`
 	CharNewLevel     int  `json:"charNewLevel"`
 	CharLevelsGained int  `json:"charLevelsGained"`
+	// Boss mode only (nil elsewhere): the damage, the bonus run and the item drops
+	*BossReward
 }
 
 // ProcessMatchRewards is processMatchRewards with the current game data's player EXP curve.
@@ -124,61 +131,15 @@ func processMatchRewards(
 	}
 	defer tx.Rollback(ctx)
 
-	// Consume reservations of items spent during the match, one per use
-	for playerID, items := range usedItems {
-		for _, itemID := range items {
-			// Get reservation
-			var reservationID string
-			var quantity int
-			querySelect := `
-				SELECT reservation_id, quantity
-				FROM inventory_reservations
-				WHERE player_id = $1 AND match_id = $2 AND item_id = $3 AND status = 'reserved'
-				LIMIT 1
-				FOR UPDATE
-			`
-			err := tx.QueryRow(ctx, querySelect, playerID, matchID, itemID).Scan(&reservationID, &quantity)
-			if err != nil {
-				// No reservation found — skip silently (item may not have been reserved)
-				continue
-			}
-
-			// Deduct from inventory; never below zero
-			tag, err := tx.Exec(ctx,
-				`UPDATE inventory_items SET quantity = quantity - $1 WHERE player_id = $2 AND item_id = $3 AND quantity >= $1`,
-				quantity, playerID, itemID,
-			)
-			if err != nil {
-				return nil, fmt.Errorf("failed to deduct item %s for player %s: %w", itemID, playerID, err)
-			}
-			if tag.RowsAffected() == 0 {
-				// Inventory no longer covers the reservation; it is released below instead
-				observability.Log.Error().Str("matchId", matchID).Str("playerId", playerID).Str("itemId", itemID).
-					Msg("insufficient inventory to consume reservation")
-				continue
-			}
-
-			// Mark reservation as consumed
-			_, err = tx.Exec(ctx,
-				`UPDATE inventory_reservations SET status = 'consumed', updated_at = CURRENT_TIMESTAMP WHERE reservation_id = $1`,
-				reservationID,
-			)
-			if err != nil {
-				return nil, fmt.Errorf("failed to mark reservation consumed for item %s player %s: %w", itemID, playerID, err)
-			}
-		}
-	}
-
-	// Items brought but not used go back to the players
-	if _, err := tx.Exec(ctx, releaseReservationsSQL, matchID); err != nil {
-		return nil, fmt.Errorf("failed to release unused reservations: %w", err)
+	if err := consumeUsedItemsTx(ctx, tx, matchID, usedItems); err != nil {
+		return nil, err
 	}
 
 	results := make(map[string]RewardResult)
 
 	for _, p := range stats {
 		// Skip bot players — they have no player_profiles record
-		if len(p.PlayerID) >= 4 && p.PlayerID[:4] == "bot_" {
+		if p.IsBot || (len(p.PlayerID) >= 4 && p.PlayerID[:4] == "bot_") {
 			continue
 		}
 
@@ -205,7 +166,7 @@ func processMatchRewards(
 		}
 
 		// 3. Update player profile: add exp and coins
-		levelUp, newLevel, err := updateProfilePostMatch(ctx, tx, economyRepo, p.PlayerID, expGained, coinGained, expPerLevel)
+		levelUp, newLevel, err := updateProfilePostMatch(ctx, tx, economyRepo, p.PlayerID, expGained, coinGained, expPerLevel, "match_reward", "")
 		if err != nil {
 			return nil, fmt.Errorf("failed to update player profile: %w", err)
 		}
@@ -243,110 +204,15 @@ func processMatchRewards(
 			resStr = "draw"
 		}
 
-		historyQuery := `
-			INSERT INTO match_histories (match_id, player_id, mode, map_id, result, damage, kills, accuracy, exp_gained, coin_gained, rating_change)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		`
-		_, err = tx.Exec(
-			ctx,
-			historyQuery,
-			matchID,
-			p.PlayerID,
-			mode,
-			mapID,
-			resStr,
-			p.Damage,
-			p.Kills,
-			p.Accuracy,
-			expGained,
-			coinGained,
-			ratingChange,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to write match history: %w", err)
+		if err := insertHistoryTx(ctx, tx, matchID, mode, mapID, resStr, p, expGained, coinGained, ratingChange); err != nil {
+			return nil, err
 		}
 
-		if p.Counts {
-			if err := milestone.RecordMatchTx(ctx, tx, p.PlayerID, p.CharacterID, p.IsWinner); err != nil {
-				return nil, fmt.Errorf("failed to count match for milestones: %w", err)
-			}
-			if err := mission.RecordMatchTx(ctx, tx, p.PlayerID, mission.MatchStats{
-				Won: p.IsWinner, Damage: p.Damage, Kills: p.Kills, ShotsHit: p.ShotsHit,
-				SkillUses: p.SkillUses, ItemsUsed: p.ItemsUsed,
-			}, time.Now()); err != nil {
-				return nil, fmt.Errorf("failed to count match for daily missions: %w", err)
-			}
+		if err := recordCountsTx(ctx, tx, p); err != nil {
+			return nil, err
 		}
 
-		// Update character EXP and level
-		charLevelUp := false
-		charNewLevel := 0
-		charLevelsGained := 0
-
-		if p.CharacterID != "" {
-			var charLevelsVal string
-			if err := tx.QueryRow(ctx, `SELECT value FROM game_settings WHERE key = 'character_levels'`).Scan(&charLevelsVal); err == nil {
-				type levelEntry struct {
-					Level       int `json:"level"`
-					ExpRequired int `json:"expRequired"`
-				}
-				type levelsConfig struct {
-					Levels []levelEntry `json:"levels"`
-				}
-				var levelsCfg levelsConfig
-				if json.Unmarshal([]byte(charLevelsVal), &levelsCfg) == nil && len(levelsCfg.Levels) > 0 {
-					pointsPerLevel := 10
-					var progressionVal string
-					if err := tx.QueryRow(ctx, `SELECT value FROM game_settings WHERE key = 'character_progression'`).Scan(&progressionVal); err == nil {
-						type progConfig struct {
-							PointsPerLevel int `json:"pointsPerLevel"`
-						}
-						var progCfg progConfig
-						if json.Unmarshal([]byte(progressionVal), &progCfg) == nil && progCfg.PointsPerLevel > 0 {
-							pointsPerLevel = progCfg.PointsPerLevel
-						}
-					}
-
-					// Get or create character row
-					var currentExp, currentLevel int
-					err := tx.QueryRow(ctx,
-						`SELECT exp, level FROM player_characters WHERE player_id = $1 AND character_id = $2 FOR UPDATE`,
-						p.PlayerID, p.CharacterID).Scan(&currentExp, &currentLevel)
-					if err != nil {
-						// Insert default row if not exists
-						tx.Exec(ctx,
-							`INSERT INTO player_characters (player_id, character_id, level, exp, stat_points) VALUES ($1, $2, 1, 0, 0) ON CONFLICT DO NOTHING`,
-							p.PlayerID, p.CharacterID)
-						currentExp = 0
-						currentLevel = 1
-					}
-
-					newExp := currentExp + expGained
-					newLevel := 1
-					for _, entry := range levelsCfg.Levels {
-						if newExp >= entry.ExpRequired {
-							newLevel = entry.Level
-						}
-					}
-
-					levelsGained := 0
-					if newLevel > currentLevel {
-						levelsGained = newLevel - currentLevel
-					}
-					pointsToAdd := levelsGained * pointsPerLevel
-
-					tx.Exec(ctx,
-						`UPDATE player_characters SET exp = $3, level = $4, stat_points = stat_points + $5 WHERE player_id = $1 AND character_id = $2`,
-						p.PlayerID, p.CharacterID, newExp, newLevel, pointsToAdd)
-
-					if levelsGained > 0 {
-						charLevelUp = true
-						charNewLevel = newLevel
-						charLevelsGained = levelsGained
-					}
-				}
-			}
-		}
+		charLevelUp, charNewLevel, charLevelsGained := characterExpTx(ctx, tx, p.PlayerID, p.CharacterID, expGained)
 
 		results[p.PlayerID] = RewardResult{
 			PlayerID:         p.PlayerID,
@@ -369,7 +235,166 @@ func processMatchRewards(
 	return results, nil
 }
 
-func updateProfilePostMatch(ctx context.Context, tx pgx.Tx, economyRepo *economy.Repository, playerID string, expGained, coinGained, expPerLevel int) (bool, int, error) {
+// consumeUsedItemsTx consumes the reservations of the items spent during the match (one per
+// use, never below zero) and releases the rest.
+func consumeUsedItemsTx(ctx context.Context, tx pgx.Tx, matchID string, usedItems map[string][]string) error {
+	// Consume reservations of items spent during the match, one per use
+	for playerID, items := range usedItems {
+		for _, itemID := range items {
+			// Get reservation
+			var reservationID string
+			var quantity int
+			querySelect := `
+				SELECT reservation_id, quantity
+				FROM inventory_reservations
+				WHERE player_id = $1 AND match_id = $2 AND item_id = $3 AND status = 'reserved'
+				LIMIT 1
+				FOR UPDATE
+			`
+			err := tx.QueryRow(ctx, querySelect, playerID, matchID, itemID).Scan(&reservationID, &quantity)
+			if err != nil {
+				// No reservation found — skip silently (item may not have been reserved)
+				continue
+			}
+
+			// Deduct from inventory; never below zero
+			tag, err := tx.Exec(ctx,
+				`UPDATE inventory_items SET quantity = quantity - $1 WHERE player_id = $2 AND item_id = $3 AND quantity >= $1`,
+				quantity, playerID, itemID,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to deduct item %s for player %s: %w", itemID, playerID, err)
+			}
+			if tag.RowsAffected() == 0 {
+				// Inventory no longer covers the reservation; it is released below instead
+				observability.Log.Error().Str("matchId", matchID).Str("playerId", playerID).Str("itemId", itemID).
+					Msg("insufficient inventory to consume reservation")
+				continue
+			}
+
+			// Mark reservation as consumed
+			_, err = tx.Exec(ctx,
+				`UPDATE inventory_reservations SET status = 'consumed', updated_at = CURRENT_TIMESTAMP WHERE reservation_id = $1`,
+				reservationID,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to mark reservation consumed for item %s player %s: %w", itemID, playerID, err)
+			}
+		}
+	}
+
+	// Items brought but not used go back to the players
+	if _, err := tx.Exec(ctx, releaseReservationsSQL, matchID); err != nil {
+		return fmt.Errorf("failed to release unused reservations: %w", err)
+	}
+
+	return nil
+}
+
+// characterExpTx adds expGained to the player's character (player_characters, locked FOR
+// UPDATE; created when missing) and levels it up on the character_levels curve, with
+// pointsPerLevel stat points per level.
+func characterExpTx(ctx context.Context, tx pgx.Tx, playerID, characterID string, expGained int) (charLevelUp bool, charNewLevel, charLevelsGained int) {
+	if characterID != "" {
+		var charLevelsVal string
+		if err := tx.QueryRow(ctx, `SELECT value FROM game_settings WHERE key = 'character_levels'`).Scan(&charLevelsVal); err == nil {
+			type levelEntry struct {
+				Level       int `json:"level"`
+				ExpRequired int `json:"expRequired"`
+			}
+			type levelsConfig struct {
+				Levels []levelEntry `json:"levels"`
+			}
+			var levelsCfg levelsConfig
+			if json.Unmarshal([]byte(charLevelsVal), &levelsCfg) == nil && len(levelsCfg.Levels) > 0 {
+				pointsPerLevel := 10
+				var progressionVal string
+				if err := tx.QueryRow(ctx, `SELECT value FROM game_settings WHERE key = 'character_progression'`).Scan(&progressionVal); err == nil {
+					type progConfig struct {
+						PointsPerLevel int `json:"pointsPerLevel"`
+					}
+					var progCfg progConfig
+					if json.Unmarshal([]byte(progressionVal), &progCfg) == nil && progCfg.PointsPerLevel > 0 {
+						pointsPerLevel = progCfg.PointsPerLevel
+					}
+				}
+
+				// Get or create character row
+				var currentExp, currentLevel int
+				err := tx.QueryRow(ctx,
+					`SELECT exp, level FROM player_characters WHERE player_id = $1 AND character_id = $2 FOR UPDATE`,
+					playerID, characterID).Scan(&currentExp, &currentLevel)
+				if err != nil {
+					// Insert default row if not exists
+					tx.Exec(ctx,
+						`INSERT INTO player_characters (player_id, character_id, level, exp, stat_points) VALUES ($1, $2, 1, 0, 0) ON CONFLICT DO NOTHING`,
+						playerID, characterID)
+					currentExp = 0
+					currentLevel = 1
+				}
+
+				newExp := currentExp + expGained
+				newLevel := 1
+				for _, entry := range levelsCfg.Levels {
+					if newExp >= entry.ExpRequired {
+						newLevel = entry.Level
+					}
+				}
+
+				levelsGained := 0
+				if newLevel > currentLevel {
+					levelsGained = newLevel - currentLevel
+				}
+				pointsToAdd := levelsGained * pointsPerLevel
+
+				tx.Exec(ctx,
+					`UPDATE player_characters SET exp = $3, level = $4, stat_points = stat_points + $5 WHERE player_id = $1 AND character_id = $2`,
+					playerID, characterID, newExp, newLevel, pointsToAdd)
+
+				if levelsGained > 0 {
+					charLevelUp = true
+					charNewLevel = newLevel
+					charLevelsGained = levelsGained
+				}
+			}
+		}
+	}
+
+	return charLevelUp, charNewLevel, charLevelsGained
+}
+
+// insertHistoryTx writes the player's match_histories row.
+func insertHistoryTx(ctx context.Context, tx pgx.Tx, matchID, mode, mapID, result string, p *PlayerStats, expGained, coinGained, ratingChange int) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO match_histories (match_id, player_id, mode, map_id, result, damage, kills, accuracy, exp_gained, coin_gained, rating_change)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		matchID, p.PlayerID, mode, mapID, result, p.Damage, p.Kills, p.Accuracy, expGained, coinGained, ratingChange)
+	if err != nil {
+		return fmt.Errorf("failed to write match history: %w", err)
+	}
+	return nil
+}
+
+// recordCountsTx counts a counted match (p.Counts) for the player's milestones and daily missions.
+func recordCountsTx(ctx context.Context, tx pgx.Tx, p *PlayerStats) error {
+	if !p.Counts {
+		return nil
+	}
+	if err := milestone.RecordMatchTx(ctx, tx, p.PlayerID, p.CharacterID, p.IsWinner); err != nil {
+		return fmt.Errorf("failed to count match for milestones: %w", err)
+	}
+	if err := mission.RecordMatchTx(ctx, tx, p.PlayerID, mission.MatchStats{
+		Won: p.IsWinner, Damage: p.Damage, Kills: p.Kills, ShotsHit: p.ShotsHit,
+		SkillUses: p.SkillUses, ItemsUsed: p.ItemsUsed,
+	}, time.Now()); err != nil {
+		return fmt.Errorf("failed to count match for daily missions: %w", err)
+	}
+	return nil
+}
+
+// updateProfilePostMatch adds the EXP (levelling the account up) and the coins (economy ledger
+// source / refID) of a match to the player's profile, locked FOR UPDATE.
+func updateProfilePostMatch(ctx context.Context, tx pgx.Tx, economyRepo *economy.Repository, playerID string, expGained, coinGained, expPerLevel int, source, refID string) (bool, int, error) {
 	if expPerLevel <= 0 {
 		expPerLevel = gamedata.DefaultRules().Player.ExpPerLevel
 	}
@@ -392,14 +417,17 @@ func updateProfilePostMatch(ctx context.Context, tx pgx.Tx, economyRepo *economy
 
 	// Update profiles table
 	updateQuery := "UPDATE player_profiles SET level = $1, exp = $2 WHERE player_id = $3"
-	_, err = tx.Exec(ctx, updateQuery, level, nextExp, playerID)
+	tag, err := tx.Exec(ctx, updateQuery, level, nextExp, playerID)
 	if err != nil {
 		return false, 0, err
+	}
+	if tag.RowsAffected() != 1 {
+		return false, 0, fmt.Errorf("player_profiles row of %s vanished", playerID)
 	}
 
 	// Credit Coins using economy transaction ledger
 	if coinGained > 0 {
-		_, err = economyRepo.CreditTx(ctx, tx, playerID, "coin", coinGained, "match_reward", "")
+		_, err = economyRepo.CreditTx(ctx, tx, playerID, "coin", coinGained, source, refID)
 		if err != nil {
 			return false, 0, err
 		}

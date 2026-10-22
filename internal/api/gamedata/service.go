@@ -174,8 +174,8 @@ func Build(snap *gd.Snapshot) *GameData {
 	}
 	for _, m := range snap.Modes {
 		if m.Kind == "lobby" {
-			if !m.Enabled {
-				continue
+			if _, isBossQueue := gd.BossIDOfQueue(m.Queue); !m.Enabled || isBossQueue && !hasBoss(snap, m.Queue) {
+				continue // disabled, or the queue of a boss that is not enabled
 			}
 			out.Modes.Lobby = append(out.Modes.Lobby, LobbyMode{ModeID: m.ModeID, Name: m.Name, Description: m.Description, Queue: m.Queue,
 				Bot: m.Bot, Category: m.Category, Icon: m.Icon, PartySize: max(m.PartySize, 1), Ranked: m.Ranked})
@@ -187,6 +187,40 @@ func Build(snap *gd.Snapshot) *GameData {
 	out.GunKinds = []GunKind{}
 	for _, g := range snap.GunKinds {
 		out.GunKinds = append(out.GunKinds, GunKind{ID: g.ID, Name: g.Name})
+	}
+	out.Bosses = bosses(snap)
+	return out
+}
+
+func hasBoss(snap *gd.Snapshot, queue string) bool {
+	_, ok := snap.BossOfQueue(queue)
+	return ok
+}
+
+// bosses are the enabled bosses in display order, each with the lobby mode of its queue.
+func bosses(snap *gd.Snapshot) []Boss {
+	out := []Boss{}
+	for _, b := range snap.Bosses {
+		if !b.Enabled {
+			continue
+		}
+		modeID := ""
+		for _, m := range snap.Modes {
+			if m.Kind == "lobby" && m.Enabled && m.Queue == b.Queue() {
+				modeID = m.ModeID
+				break
+			}
+		}
+		e := Boss{BossID: b.BossID, Name: b.Name, Description: b.Description, RecommendedLevel: b.RecommendedLevel, ModeID: modeID,
+			Queue: b.Queue(), MapID: b.MapID, HP: b.HP, BodySize: b.BodySize, TurnLimit: b.TurnLimit,
+			ShieldedDamageFactor: b.ShieldedDamageFactor, Minions: []BossMinion{}, Skills: []BossSkill{}, DailyBonusRuns: b.DailyBonusRuns}
+		for _, m := range b.Minions {
+			e.Minions = append(e.Minions, BossMinion{MinionID: m.MinionID, Name: m.Name, HP: m.HP, BodySize: m.BodySize})
+		}
+		for _, s := range b.Skills {
+			e.Skills = append(e.Skills, BossSkill{SkillID: s.SkillID, Name: s.Name, Description: s.Description, Kind: s.Kind})
+		}
+		out = append(out, e)
 	}
 	return out
 }

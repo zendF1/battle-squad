@@ -91,6 +91,9 @@ type Match struct {
 	// (matchmaking, or quick play against the AI bot); custom rooms and the idle practice
 	// target do not.
 	CountsForMilestones bool
+
+	// boss is the boss fight (SetupBoss), nil in every other mode.
+	boss *bossRuntime
 }
 
 // milestoneMinShotTurns is how many actions (shots, skills, teleports) a player must have
@@ -219,6 +222,10 @@ func NewMatchWithData(
 		selectSentAt: make(map[string]time.Time),
 	}
 	m.processRewards = func(ctx context.Context, stats map[string]*PlayerStats, usedItems map[string][]string) (map[string]RewardResult, error) {
+		if m.boss != nil {
+			return processBossRewards(ctx, m.db, m.economyRepo, m.State.MatchID, m.boss.cfg, m.State.MapID, stats, usedItems,
+				m.gd.Rules.Player.ExpPerLevel, time.Now(), rand.New(rand.NewSource(time.Now().UnixNano())))
+		}
 		return processMatchRewards(ctx, m.db, m.economyRepo, m.State.MatchID, m.State.Mode, m.State.MapID, stats, usedItems, m.TeamRatings, m.EloParams,
 			m.gd.Rules.Player.ExpPerLevel)
 	}
@@ -477,22 +484,29 @@ func (m *Match) startTurn(ctx context.Context) {
 	player := m.State.Players[m.State.CurrentPlayerID]
 	player.MoveEnergy = m.turnMoveEnergy(player) // Reset move energy to full
 	ApplyTurnStartEffects(m.gd, player)          // net / root / stun / freeze limit this turn's movement
+	if m.boss != nil && player.Role == RoleBoss {
+		m.bossTurnStarted(player) // a new round
+	}
 
 	// Skill energy is incremented at end of turn, not start
 
 	// Damage at the start of the turn: lava under the feet, then burn. Shield absorbs first;
 	// a player it kills loses the turn.
 	combat := m.gd.Rules.Combat
-	if player.Position.Y >= float64(m.Terrain.Height) { // below the map: dead
+	if player.Position.Y >= float64(m.Terrain.Height) && !m.bossClampsFall(player) { // below the map: dead
 		m.sendPlayerDamaged(player, killPlayer(player), "out_of_map")
 	}
 	if player.IsAlive && m.Terrain.GetTerrainTypeAt(player.Position.X, player.Position.Y) == "lava" {
 		m.turnStartDamage(player, combat.LavaDamage, "lava")
 	}
+	if z := m.lavaZoneAt(player); player.IsAlive && z != nil { // a boss's lava pool
+		m.turnStartDamage(player, z.Damage, "lava")
+	}
 	if player.IsAlive && HasEffect(player, "burn") {
 		m.turnStartDamage(player, int(math.Round(float64(player.MaxHP)*float64(combat.BurnMaxHPPercent)/100)), "burn")
 	}
 	if !player.IsAlive {
+		m.syncBossShield() // a minion burnt to death
 		m.checkWinCondition(ctx)
 		if m.State.Status == "in_progress" {
 			m.endTurn(ctx)
@@ -517,6 +531,10 @@ func (m *Match) startTurn(ctx context.Context) {
 		"skillEnergy":     skillEnergy,
 		"turnTimeLeft":    m.State.TurnTimeLeft,
 	}
+	if m.boss != nil {
+		started["round"] = m.boss.round
+		started["lavaZones"] = m.State.LavaZones
+	}
 	skip := skipsTurn(m.gd, player)
 	if skip != "" {
 		started["skipped"] = skip
@@ -533,7 +551,9 @@ func (m *Match) startTurn(ctx context.Context) {
 		return
 	}
 
-	if player.IsBot {
+	if player.Role == RoleBoss {
+		m.runOnTurnAfter(ctx, secs(bossTurnDelaySec), m.bossAct)
+	} else if player.IsBot {
 		// Short idle before acting; the bot then spends its "thinking" time visibly aiming
 		botDelay := randomDelay(botTurnStartMinDelay, botTurnStartMaxDelay)
 		m.runOnTurnAfter(ctx, botDelay, func(ctx context.Context) {
@@ -545,7 +565,7 @@ func (m *Match) startTurn(ctx context.Context) {
 func (m *Match) endTurn(ctx context.Context) {
 	// Add skill energy to current player (rules.skill_energy: +perTurn per turn, at most max)
 	currentPlayer := m.State.Players[m.State.CurrentPlayerID]
-	if currentPlayer != nil && currentPlayer.IsAlive {
+	if currentPlayer != nil && currentPlayer.IsAlive && currentPlayer.Role == "" { // the boss's side has no skill
 		addSkillEnergy(currentPlayer, m.gd.Rules.SkillEnergy.PerTurn, m.gd.Rules.SkillEnergy.Max)
 	}
 
@@ -554,6 +574,11 @@ func (m *Match) endTurn(ctx context.Context) {
 		TickPlayerStatusEffects(currentPlayer)
 	}
 	m.State.ActiveEffects = tickEffects(m.State.ActiveEffects)
+
+	// The boss's turn closes a round: lava pools dry up, the turn limit
+	if m.boss != nil && currentPlayer != nil && currentPlayer.Role == RoleBoss && m.bossTurnEnded(ctx) {
+		return
+	}
 
 	// Find next player in order
 	currentIdx := -1
@@ -1041,15 +1066,40 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 	}
 
 	if !team1Alive || !team2Alive {
-		// Match is over!
-		m.State.Status = "ended"
-		observability.MatchEndedTotal.WithLabelValues("normal").Inc()
-
 		winningTeam := 0
 		if team1Alive {
 			winningTeam = 1
 		} else if team2Alive {
 			winningTeam = 2
+		}
+		m.finishMatch(ctx, winningTeam, "")
+		return
+	}
+
+	// Boss mode: the boss's side lives while the boss does (its minions die with it); the party
+	// wins on the boss's death even if it fell too
+	if boss := m.bossPlayer(); boss != nil && !boss.IsAlive {
+		m.killMinions()
+		m.finishMatch(ctx, 1, BossResultDefeated)
+	}
+}
+
+// finishMatch ends the match with winningTeam (0: a draw): rewards, MatchEnded, done. result is
+// MatchEnded.result in boss mode (BossResult*; "" works it out from the winner).
+func (m *Match) finishMatch(ctx context.Context, winningTeam int, result string) {
+	if m.State.Status == "ended" {
+		return
+	}
+	{
+		// Match is over!
+		m.State.Status = "ended"
+		observability.MatchEndedTotal.WithLabelValues("normal").Inc()
+		if m.boss != nil {
+			if boss := m.bossPlayer(); boss != nil && !boss.IsAlive {
+				winningTeam, result = 1, BossResultDefeated
+			} else if result == "" {
+				result = BossResultPartyDefeated
+			}
 		}
 
 		// Calculate rewards
@@ -1058,19 +1108,22 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 			// A player who left is never a winner (nor in a draw)
 			isWinner := p.TeamID == winningTeam && !p.Left
 			stats[p.PlayerID] = &PlayerStats{
-				PlayerID:    p.PlayerID,
-				CharacterID: p.CharacterID,
-				TeamID:      p.TeamID,
-				Damage:      p.DamageDealt,
-				Kills:       p.KillCount,
-				Accuracy:    calculateAccuracy(p.ShotsFired, p.ShotsHit),
-				ShotsHit:    p.ShotsHit,
-				SkillUses:   p.SkillUses,
-				ItemsUsed:   len(p.UsedItems),
-				IsWinner:    isWinner,
-				IsDraw:      winningTeam == 0 && !p.Left,
-				Left:        p.Left,
-				Counts:      m.milestoneCounts(p),
+				PlayerID:     p.PlayerID,
+				CharacterID:  p.CharacterID,
+				TeamID:       p.TeamID,
+				Damage:       p.DamageDealt,
+				Kills:        p.KillCount,
+				Accuracy:     calculateAccuracy(p.ShotsFired, p.ShotsHit),
+				ShotsHit:     p.ShotsHit,
+				SkillUses:    p.SkillUses,
+				ItemsUsed:    len(p.UsedItems),
+				IsBot:        p.IsBot,
+				BossDamage:   p.BossDamage,
+				MinionDamage: p.MinionDamage,
+				IsWinner:     isWinner,
+				IsDraw:       winningTeam == 0 && !p.Left,
+				Left:         p.Left,
+				Counts:       m.milestoneCounts(p),
 			}
 		}
 
@@ -1097,6 +1150,17 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 			"rewards":     rewards,
 			"stats":       m.endStats(),
 			"mvpPlayerId": matchMVP(m.State.Players, winningTeam),
+		}
+		if m.boss != nil {
+			party := map[string]*BattlePlayerState{}
+			for id, p := range m.State.Players {
+				if p.Role == "" {
+					party[id] = p
+				}
+			}
+			ended["mvpPlayerId"] = matchMVP(party, winningTeam)
+			ended["result"] = result
+			ended["boss"] = m.bossEnd(result)
 		}
 		payload, _ := json.Marshal(ended)
 		m.broadcast(ws.Message{

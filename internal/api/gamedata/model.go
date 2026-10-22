@@ -32,6 +32,48 @@ type GameData struct {
 	MapThemes          MapThemes      `json:"mapThemes"`
 	// GunKinds (added in S2): the Vietnamese name of each gun kind (characters[].gunKind).
 	GunKinds []GunKind `json:"gunKinds"`
+	// Bosses (boss mode, migration 046): the enabled bosses in display order.
+	Bosses []Boss `json:"bosses"`
+}
+
+// Boss is an enabled config_bosses row as the client draws and describes it: ModeID is the
+// lobby mode (modes.lobby) whose queue Queue (boss:<bossId>) fights it, MapID its arena; HP and
+// BodySize (× a player's body: hit radius physics.playerHitRadius × it around
+// physics.shotOriginLift × it above the feet) of the boss and of each minion type; TurnLimit
+// boss turns before it escapes; ShieldedDamageFactor the damage it takes while a minion lives;
+// DailyBonusRuns the runs a day with the bonus reward table.
+type Boss struct {
+	BossID               string       `json:"bossId"`
+	Name                 string       `json:"name"`
+	Description          string       `json:"description"`
+	RecommendedLevel     int          `json:"recommendedLevel"`
+	ModeID               string       `json:"modeId"`
+	Queue                string       `json:"queue"`
+	MapID                string       `json:"mapId"`
+	HP                   int          `json:"hp"`
+	BodySize             float64      `json:"bodySize"`
+	TurnLimit            int          `json:"turnLimit"`
+	ShieldedDamageFactor float64      `json:"shieldedDamageFactor"`
+	Minions              []BossMinion `json:"minions"`
+	Skills               []BossSkill  `json:"skills"`
+	DailyBonusRuns       int          `json:"dailyBonusRuns"`
+}
+
+// BossMinion is a minion type of a boss.
+type BossMinion struct {
+	MinionID string  `json:"minionId"`
+	Name     string  `json:"name"`
+	HP       int     `json:"hp"`
+	BodySize float64 `json:"bodySize"`
+}
+
+// BossSkill is a boss skill as the client names it (ShotResolved.skillId of the boss's turn);
+// Kind is rain, beam or summon.
+type BossSkill struct {
+	SkillID     string `json:"skillId"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Kind        string `json:"kind"`
 }
 
 // GunKind is a config_gun_kinds row: a gun art kind and its Vietnamese name ("Đại pháo").

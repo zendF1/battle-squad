@@ -1,6 +1,10 @@
 package matchmaker
 
-import "slices"
+import (
+	"slices"
+
+	"battle-squad/internal/game/gamedata"
+)
 
 // The matchmaking queues the matchmaker runs. A queue's matches play with the queue's id as
 // their mode (MatchFound / MatchStarted mode, match history): ranked_2v2 changes rating,
@@ -10,12 +14,44 @@ const (
 	CasualQueue = "casual_2v2"
 )
 
-// Queues lists the queues the matchmaker runs, in tick order.
+// Queues lists the 2v2 queues the matchmaker runs, in tick order. Each enabled boss adds its
+// queue boss:<bossId> (gamedata.BossQueue, AllQueues).
 var Queues = []string{RankedQueue, CasualQueue}
 
-// KnownQueue reports whether the matchmaker runs queue q.
+// AllQueues are Queues, then the queues of the current game data's enabled bosses.
+func AllQueues() []string {
+	return append(append([]string(nil), Queues...), gamedata.Current().BossQueues()...)
+}
+
+// KnownQueue reports whether the matchmaker runs queue q: a 2v2 queue or the queue of an
+// enabled boss of the current game data.
 func KnownQueue(q string) bool {
-	return slices.Contains(Queues, q)
+	if slices.Contains(Queues, q) {
+		return true
+	}
+	_, ok := gamedata.Current().BossOfQueue(q)
+	return ok
+}
+
+// IsBossQueue reports whether q is a boss queue (boss:<bossId>), known or not.
+func IsBossQueue(q string) bool {
+	_, ok := gamedata.BossIDOfQueue(q)
+	return ok
+}
+
+// MaxPartySize is the most players one lobby of queue q may bring: BossPartySize (4) for a boss
+// queue, TeamSlots (2) for a 2v2 queue.
+func MaxPartySize(q string) int {
+	if IsBossQueue(q) {
+		return gamedata.BossPartySize
+	}
+	return TeamSlots
+}
+
+// PartySize is the most members a lobby of queue q holds: the party size of the queue's lobby
+// mode (config_game_modes.party_size), at most MaxPartySize.
+func PartySize(q string) int {
+	return gamedata.Current().LobbyPartySize(q, MaxPartySize(q))
 }
 
 // IsRankedQueue reports whether queue q's matches change rating.

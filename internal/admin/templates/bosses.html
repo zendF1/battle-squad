@@ -1,0 +1,38 @@
+{{define "content"}}
+<div class="top-bar">
+    <h1>Bosses</h1>
+    <a href="/bosses/edit" class="btn btn-primary">+ Thêm boss</a>
+</div>
+{{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+<div class="card" style="font-size:13px;color:#666;">Chế độ Boss: mỗi boss có chỉ số, kỹ năng, lính, đợt lính, phần thưởng và số lượt thưởng lớn mỗi ngày. Mỗi boss cần một chế độ lobby ở Texts → Game Modes với queue <code>boss:&lt;boss id&gt;</code>, category boss, số người tối đa 4 (và một dòng match cùng id với queue để lịch sử hiện tên). <span style="color:#999;">(bảng config_bosses)</span></div>
+<div class="card">
+<table>
+<thead><tr><th>Boss ID</th><th>Tên</th><th>Lv đề xuất</th><th>Arena</th><th>HP</th><th>Def</th><th>Dmg</th><th>Lượt tối đa</th><th>Kỹ năng</th><th>Lính</th><th>Thưởng lớn / ngày</th><th>Bật</th><th></th></tr></thead>
+<tbody>
+{{range .Bosses}}{{$c := .Config}}
+<tr>
+    <td><strong>{{$c.BossID}}</strong></td>
+    <td>{{$c.Name}}</td>
+    <td>{{$c.RecommendedLevel}}</td>
+    <td>{{$c.MapID}}</td>
+    <td>{{$c.HP}}</td>
+    <td>{{$c.Defense}}</td>
+    <td>{{$c.Damage}}</td>
+    <td>{{$c.TurnLimit}}</td>
+    <td>{{range $c.Skills}}{{.Name}} ({{.Kind}})<br>{{end}}</td>
+    <td>{{range $c.Minions}}{{.Name}}<br>{{end}}</td>
+    <td>{{$c.DailyBonusRuns}}</td>
+    <td>{{if $c.Enabled}}<span class="badge badge-success">Bật</span>{{else}}<span class="badge badge-danger">Tắt</span>{{end}}</td>
+    <td style="white-space:nowrap;">
+        <a href="/bosses/edit?id={{$c.BossID}}" class="btn btn-primary btn-sm">Sửa</a>
+        <form method="POST" action="/bosses/delete" style="display:inline" onsubmit="return confirm('Xóa boss {{$c.BossID}}?')">
+            <input type="hidden" name="id" value="{{$c.BossID}}"><button type="submit" class="btn btn-danger btn-sm">Xóa</button>
+        </form>
+    </td>
+</tr>
+{{end}}
+</tbody>
+</table>
+</div>
+{{end}}

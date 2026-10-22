@@ -120,6 +120,12 @@ func (s *Server) Routes() http.Handler {
 	r.Post("/texts/{table}/save", s.handleTextTableSave)
 	r.Post("/texts/{table}/delete", s.handleTextTableDelete)
 
+	// Bosses
+	r.Get("/bosses", s.handleBossList)
+	r.Get("/bosses/edit", s.handleBossEdit)
+	r.Post("/bosses/save", s.handleBossSave)
+	r.Post("/bosses/delete", s.handleBossDelete)
+
 	// Shop offers
 	r.Get("/shop", s.handleShopList)
 	r.Get("/shop/edit", s.handleShopEdit)

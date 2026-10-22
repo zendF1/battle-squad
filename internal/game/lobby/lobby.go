@@ -216,7 +216,7 @@ func (l *LobbyRoom) processJoin(ctx context.Context, client *ws.Client) {
 	}
 
 	// New join validations.
-	if len(l.State.Members) >= 2 {
+	if len(l.State.Members) >= l.maxMembersLocked() {
 		l.sendError(client, "lobby_full", "lobby is full")
 		return
 	}
@@ -242,7 +242,7 @@ func (l *LobbyRoom) addMemberLocked(client *ws.Client, member LobbyMember) {
 		Msg("player joined lobby")
 
 	l.broadcastLobbyUpdatedLocked()
-	if len(l.State.Members) >= 2 {
+	if len(l.State.Members) >= l.maxMembersLocked() {
 		l.hub.cancelLobbyInvites(l.ID)
 	}
 }
@@ -562,16 +562,25 @@ func (l *LobbyRoom) processSetLobbyQueue(ctx context.Context, client *ws.Client,
 	case !matchmaker.KnownQueue(payload.Queue):
 		sendInvalidQueue(client, payload.Queue)
 		return
+	case len(l.State.Members) > matchmaker.PartySize(payload.Queue):
+		sendPartyTooLarge(client, payload.Queue)
+		return
 	}
 	l.State.Queue = payload.Queue
 	l.broadcastLobbyUpdatedLocked()
 }
 
-// statusAndSize is the lobby's status and member count.
-func (l *LobbyRoom) statusAndSize() (string, int) {
+// statusAndSize is the lobby's status, member count and most members.
+func (l *LobbyRoom) statusAndSize() (string, int, int) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
-	return l.State.Status, len(l.State.Members)
+	return l.State.Status, len(l.State.Members), l.maxMembersLocked()
+}
+
+// maxMembersLocked is the most members the lobby holds: its queue's party size
+// (matchmaker.PartySize: 2 for the 2v2 queues, 4 for a boss queue). Caller holds l.mu.
+func (l *LobbyRoom) maxMembersLocked() int {
+	return matchmaker.PartySize(l.State.Queue)
 }
 
 // soloHost reports whether the client hosts this lobby alone and it is not in the
@@ -589,7 +598,7 @@ func (l *LobbyRoom) soloHost(client *ws.Client) bool {
 func (l *LobbyRoom) reuseForHost(client *ws.Client, queue string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.State.HostPlayerID != client.PlayerID {
+	if l.State.HostPlayerID != client.PlayerID || len(l.State.Members) > matchmaker.PartySize(queue) {
 		return false
 	}
 	switch {

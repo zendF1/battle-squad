@@ -171,6 +171,7 @@ func (m *Match) explodeCapped(shooter *BattlePlayerState, r *ProjectileResult, b
 		Position: vecPtr(*r.ExplosionPoint), Radius: crater, Crater: CraterBowl, TerrainVersion: m.Terrain.Version,
 	})
 
+	hitRadius, lift := m.gd.Physics.PlayerHitRadius, shotOriginLift(m.Terrain)
 	var hit []*BattlePlayerState
 	for _, p := range m.playersByID() {
 		// No friendly fire — skip teammates
@@ -178,15 +179,16 @@ func (m *Match) explodeCapped(shooter *BattlePlayerState, r *ProjectileResult, b
 			continue
 		}
 
-		// Direct hit: use player's own position as explosion center (distance=0, full damage)
-		explosionCenter := *r.ExplosionPoint
-		if p.PlayerID == r.HitPlayerID {
-			explosionCenter = p.Position
+		// Direct hit: full damage (distance 0); otherwise the distance to the body (blastDistance)
+		distance := 0.0
+		if p.PlayerID != r.HitPlayerID {
+			distance = blastDistance(p, *r.ExplosionPoint, hitRadius, lift)
 		}
 
-		damage := calculateExplosionDamage(p.Position, explosionCenter, baseDamage, r.ExplosionRadius, p.Defense, k)
+		damage := explosionDamageAt(distance, baseDamage, r.ExplosionRadius, p.Defense, k)
 		damage, critical := applyCritical(damage, shooter.CritChance, crit)
 		damage = limit.clamp(p, damage)
+		damage = m.shieldedDamage(p, damage)
 		if damage <= 0 {
 			continue
 		}
@@ -195,6 +197,7 @@ func (m *Match) explodeCapped(shooter *BattlePlayerState, r *ProjectileResult, b
 		killed := hurtPlayer(p, damage)
 		hit = append(hit, p)
 		shooter.DamageDealt += damage
+		m.noteBossSideDamage(shooter, p, damage)
 		shooter.ShotsHit++
 		if killed {
 			shooter.KillCount++
@@ -221,6 +224,9 @@ func (m *Match) settleFalls(shooter *BattlePlayerState, t float64, tl *shotTimel
 		landY := m.Terrain.GetLandingY(p.Position.X, p.Position.Y)
 		if landY <= p.Position.Y {
 			continue
+		}
+		if landY >= float64(m.Terrain.Height) && m.bossClampsFall(p) {
+			continue // the boss never drops off the map (config out_of_map clamp): it stays put
 		}
 
 		from := p.Position
@@ -279,8 +285,8 @@ func (m *Match) grantHitEnergy(shooter *BattlePlayerState, tl *shotTimeline) {
 	}
 	for id := range hit {
 		p, ok := m.State.Players[id]
-		if !ok || !p.IsAlive || p.TeamID == shooter.TeamID {
-			continue
+		if !ok || !p.IsAlive || p.TeamID == shooter.TeamID || p.Role != "" {
+			continue // the boss's side has no skill
 		}
 		addSkillEnergy(p, m.gd.Rules.SkillEnergy.OnHit, m.gd.Rules.SkillEnergy.Max)
 	}
@@ -296,6 +302,7 @@ func (m *Match) broadcastShot(shot *ShotResolved, tl *shotTimeline) {
 	if shot.Projectiles == nil {
 		shot.Projectiles = []*ProjectileResult{}
 	}
+	m.bossAfterShot(tl)
 	for _, r := range shot.Projectiles {
 		tl.reach(flightEnd(r))
 	}
@@ -317,6 +324,7 @@ func (m *Match) broadcastShot(shot *ShotResolved, tl *shotTimeline) {
 	payload, _ := json.Marshal(shot)
 	m.broadcast(ws.Message{Event: "ShotResolved", Data: payload})
 	m.el.Log("ShotResolved", shot.ShooterID, shot.Events)
+	m.syncBossShield()
 }
 
 // finishShot broadcasts the shot, then ends the match or schedules the end of the turn once

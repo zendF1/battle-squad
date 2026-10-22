@@ -26,11 +26,13 @@ type Snapshot struct {
 	Modes      []GameModeConfig
 	// ModeCategories are the config_mode_categories rows in order (the mode select sections)
 	ModeCategories []ModeCategoryConfig
-	Tips           []string
-	GunKinds       []GunKindConfig       // config_gun_kinds in order
-	Slots          []EquipmentSlotConfig // config_equipment_slots in order
-	TypeWords      []TypeWordConfig      // config_item_type_words in order
-	Settings       map[string]string     // every game_settings row (key → value)
+	// Bosses are the config_bosses rows in display order (sort_order, boss_id), enabled or not
+	Bosses    []BossConfig
+	Tips      []string
+	GunKinds  []GunKindConfig       // config_gun_kinds in order
+	Slots     []EquipmentSlotConfig // config_equipment_slots in order
+	TypeWords []TypeWordConfig      // config_item_type_words in order
+	Settings  map[string]string     // every game_settings row (key → value)
 
 	// Version is GET /gamedata's version of this snapshot (set before it is published), "" for
 	// a snapshot no payload was built for (tests).
@@ -222,6 +224,22 @@ func (s *Snapshot) WithData(data *GameData) *Snapshot {
 	}
 	data.fill()
 	c.Data = data
+	c.index()
+	return c
+}
+
+// WithBosses is a copy of s with the bosses (tests).
+func (s *Snapshot) WithBosses(b []BossConfig) *Snapshot {
+	c := s.clone()
+	c.Bosses = b
+	c.index()
+	return c
+}
+
+// WithModes is a copy of s with the game modes (tests).
+func (s *Snapshot) WithModes(modes []GameModeConfig) *Snapshot {
+	c := s.clone()
+	c.Modes = modes
 	c.index()
 	return c
 }

@@ -19,7 +19,7 @@ import (
 func lobbyModes(t *testing.T, db *database.PostgresDB) []string {
 	t.Helper()
 	rows, err := db.Pool.Query(context.Background(), `SELECT mode_id, name, category, icon, party_size, ranked, enabled, sort_order
-		FROM config_game_modes WHERE kind = 'lobby' ORDER BY sort_order, mode_id`)
+		FROM config_game_modes WHERE kind = 'lobby' AND queue NOT LIKE 'boss:%' ORDER BY sort_order, mode_id`)
 	if err != nil {
 		t.Fatal(err)
 	}

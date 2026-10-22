@@ -160,8 +160,9 @@ func (h *Hub) saveToRedis(ctx context.Context, state *RoomState) {
 	h.redis.Client.HSet(ctx, "rooms:active", state.RoomID, data)
 }
 
-// CreateBattleFromMatch creates the battle room of a matchmade 2v2 game, of the
-// match's queue as its mode (ranked_2v2 changes rating, casual_2v2 does not):
+// CreateBattleFromMatch creates the battle room of a matchmade game, of the match's queue
+// as its mode (ranked_2v2 changes rating, casual_2v2 does not; boss:<bossId> is a boss
+// fight, startBossMatch):
 // bots fill the free slots, every human's items are reserved, every human's
 // lobby gets MatchFound (and its clients join the room), and the match starts
 // mmConfig.MatchStartDelay seconds later with MatchStarted.
@@ -180,15 +181,25 @@ func (h *Hub) CreateBattleFromMatch(ctx context.Context, result matchmaker.Match
 	if h.db != nil {
 		pool = h.db.Pool
 	}
+	gd := gamedata.Current()
+	boss, isBoss := gd.BossOfQueue(result.Mode())
+	if matchmaker.IsBossQueue(result.Mode()) && !isBoss {
+		return errors.New("boss match of an unknown or disabled boss: " + result.Mode())
+	}
 	var bots *botOutfitter
 	if result.Teams[0].Bots+result.Teams[1].Bots > 0 {
-		bots = newBotOutfitter(gamedata.Current(), loadBotWeaponsOrNone(ctx, querier(pool)), nil)
+		bots = newBotOutfitter(gd, loadBotWeaponsOrNone(ctx, querier(pool)), nil)
 	}
 	roster := buildRankedRoster(result, loadRankedProfiles(ctx, pool, humanIDs), func() string {
 		return "bot_" + generateID()[:8]
 	}, bots)
 	roster.Found.RoomID = roomID
 	roster.Found.MatchID = matchID
+	var bossSide []*match.BattlePlayerState
+	if isBoss {
+		bossSide = match.NewBossSide(gd, boss)
+		roster.Found.Teams[1].Players = bossCards(boss, bossSide)
+	}
 
 	roomState := RoomState{
 		RoomID:       roomID,
@@ -237,8 +248,12 @@ func (h *Hub) CreateBattleFromMatch(ctx context.Context, result matchmaker.Match
 
 	// Bot difficulty from the humans' average rating
 	tierName := ranked.Tier(roster.BotRating)
-	room.startRankedMatch(matchID, botDiffConfig.Tiers[tierName], eloParams, roster.TeamRatings,
-		time.Duration(mmConfig.MatchStartDelay)*time.Second)
+	startDelay := time.Duration(mmConfig.MatchStartDelay) * time.Second
+	if isBoss {
+		room.startBossMatch(matchID, gd, boss, bossSide, botDiffConfig.Tiers[tierName], startDelay)
+	} else {
+		room.startRankedMatch(matchID, botDiffConfig.Tiers[tierName], eloParams, roster.TeamRatings, startDelay)
+	}
 
 	// Room goroutine after the match setup, so it forwards events to a running match
 	go room.Run()
