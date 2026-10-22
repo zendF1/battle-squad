@@ -117,8 +117,8 @@ func validateJSONSetting(key string, body []byte) error {
 	switch key {
 	case "matchmaking":
 		var c struct {
-			TickInterval, BaseRatingRange, ExpandInterval, ExpandStep, MaxRatingRange, MaxWaitTime, BotFillAfter, MatchStartDelay *float64
-			BotRatingModifier, WeightedRatio                                                                                      *float64
+			TickInterval, BaseRatingRange, ExpandInterval, ExpandStep, MaxRatingRange, MaxWaitTime, BotFillAfter, MatchStartDelay, InviteTimeoutSec *float64
+			BotRatingModifier, WeightedRatio                                                                                                        *float64
 		}
 		if err := json.Unmarshal(body, &c); err != nil {
 			return fmt.Errorf("matchmaking: %w", err)
@@ -128,6 +128,7 @@ func validateJSONSetting(key string, body []byte) error {
 			v      *float64
 			lo, hi float64
 		}{{"tickInterval", c.TickInterval, 1, 3600}, {"botFillAfter", c.BotFillAfter, 0, 3600}, {"matchStartDelay", c.MatchStartDelay, 0, 60},
+			{"inviteTimeoutSec", c.InviteTimeoutSec, 5, 600},
 			{"weightedRatio", c.WeightedRatio, 0, 1}, {"botRatingModifier", c.BotRatingModifier, 0, 10}, {"maxWaitTime", c.MaxWaitTime, 0, 36000},
 			{"baseRatingRange", c.BaseRatingRange, 0, 100000}, {"expandStep", c.ExpandStep, 0, 100000}, {"maxRatingRange", c.MaxRatingRange, 0, 100000},
 			{"expandInterval", c.ExpandInterval, 0, 3600}}

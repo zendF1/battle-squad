@@ -167,3 +167,44 @@ func TestRanked2v2Migration(t *testing.T) {
 		t.Fatalf("down / up %v", c)
 	}
 }
+
+// Migration 042 adds inviteTimeoutSec to the matchmaking row once (an admin edit
+// survives reruns); its down file removes it.
+func TestPartyInviteMigration(t *testing.T) {
+	_, db := newRankHandler(t)
+	ctx := context.Background()
+	read := func(name string) string {
+		raw, err := os.ReadFile(filepath.Join("..", "..", "..", "migrations", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(raw)
+	}
+	timeout := func() any {
+		var raw string
+		if err := db.Pool.QueryRow(ctx, `SELECT value FROM game_settings WHERE key = 'matchmaking'`).Scan(&raw); err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]any{}
+		if err := json.Unmarshal([]byte(raw), &out); err != nil {
+			t.Fatal(err)
+		}
+		return out["inviteTimeoutSec"]
+	}
+	if v := timeout(); v != 30.0 {
+		t.Fatalf("after up %v", v)
+	}
+	exec(t, db, `UPDATE game_settings SET value = (value::jsonb || '{"inviteTimeoutSec":45}')::text WHERE key = 'matchmaking'`)
+	exec(t, db, read("042_party_invite.up.sql"))
+	if v := timeout(); v != 45.0 {
+		t.Fatalf("rerun %v", v)
+	}
+	exec(t, db, read("042_party_invite.down.sql"))
+	if v := timeout(); v != nil {
+		t.Fatalf("after down %v", v)
+	}
+	exec(t, db, read("042_party_invite.up.sql"))
+	if v := timeout(); v != 30.0 {
+		t.Fatalf("down / up %v", v)
+	}
+}

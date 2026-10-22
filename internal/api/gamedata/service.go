@@ -166,7 +166,8 @@ func Build(snap *gd.Snapshot) *GameData {
 	}
 	slots := matchmaker.TeamSlots
 	out.Matchmaking = Matchmaking{Queue: match.RankedMode, Slots: 2 * slots, TeamSize: slots,
-		BotFillAfterSec: mm.BotFillAfter, MatchStartDelaySec: mm.MatchStartDelay, Tips: nonNil(append([]string(nil), snap.Tips...))}
+		BotFillAfterSec: mm.BotFillAfter, MatchStartDelaySec: mm.MatchStartDelay,
+		InviteTimeoutSec: mm.InviteTimeoutSec, Tips: nonNil(append([]string(nil), snap.Tips...))}
 	out.Modes = Modes{Lobby: []LobbyMode{}, Match: []MatchMode{}}
 	for _, m := range snap.Modes {
 		if m.Kind == "lobby" {

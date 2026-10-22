@@ -46,6 +46,12 @@ func (c *CompositeWSHandler) HandleMessage(ctx context.Context, client *ws.Clien
 	c.roomHandler.HandleMessage(ctx, client, msg)
 }
 
+// Register marks the connection's player online (the invite list, see the
+// lobby presence); the newest connection of a player wins.
+func (c *CompositeWSHandler) Register(client *ws.Client) {
+	c.lobbyHandler.RegisterOnline(client)
+}
+
 func (c *CompositeWSHandler) Unregister(client *ws.Client) {
 	c.lobbyHandler.UnregisterFromLobby(client)
 	c.roomHandler.Unregister(client)

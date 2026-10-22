@@ -414,6 +414,7 @@ Client message → CompositeWSHandler
     ├── LobbyHandler.HandleLobbyMessage() → return true nếu là lobby event
     │     ├── CreateLobby, JoinLobby, LeaveLobby
     │     ├── UpdateLoadout, StartQueue, CancelQueue
+    │     ├── ListOnlinePlayers, InviteToLobby, RespondInvite, KickMember, SetReady
     │     └── return false → không phải lobby event
     │
     └── RoomHandler.HandleMessage() → xử lý room/match events
@@ -423,7 +424,7 @@ Client message → CompositeWSHandler
 
 ### Lobby Events (Ranked Matchmaking)
 
-Mọi lobby event trừ `CreateLobby` / `JoinLobby` chạy trên goroutine của lobby theo đúng thứ tự client gửi, nên client gửi liền `CreateLobby` → `UpdateLoadout` → `StartQueue` được (`CreateLobby` gán `client.LobbyID` ngay).
+Mọi lobby event trừ `CreateLobby` / `JoinLobby` / `ListOnlinePlayers` / `RespondInvite` chạy trên goroutine của lobby theo đúng thứ tự client gửi, nên client gửi liền `CreateLobby` → `UpdateLoadout` → `StartQueue` được (`CreateLobby` gán `client.LobbyID` ngay; `RespondInvite` accept cũng vậy, nên gửi liền `UpdateLoadout` / `SetReady` sau đó được).
 
 **Client → Server:**
 
@@ -433,20 +434,31 @@ Mọi lobby event trừ `CreateLobby` / `JoinLobby` chạy trên goroutine của
 | `JoinLobby` | `{lobbyId}` | Join lobby theo ID (tối đa 2 người) |
 | `LeaveLobby` | `{}` | Rời lobby (đang `in_queue` thì rời hàng đợi trước). Host rời → giải tán |
 | `UpdateLoadout` | `{characterId?, items?}` | Đổi character/items khi `preparing`; cùng luật QuickPlay (`room.ValidateLoadout`: nhân vật chơi được và sở hữu, ≤ 3 item đã biết trong giới hạn mỗi trận, đang có) → lưu `player_loadouts`. Sai → `LobbyError` `LOADOUT_INVALID` |
-| `StartQueue` | `{}` | Host bấm tìm trận (lobby `preparing`); đọc lại rating của các thành viên rồi vào hàng đợi |
+| `StartQueue` | `{}` | Host bấm tìm trận (lobby `preparing`, member đã `ready`, không thì `MEMBER_NOT_READY`); đọc lại rating của các thành viên rồi vào hàng đợi |
 | `CancelQueue` | `{}` | Hủy tìm trận |
+| `ListOnlinePlayers` | `{query?}` | Danh sách người đang online (xem Party) → `OnlinePlayers` |
+| `InviteToLobby` | `{playerId}` | Mời một người online vào lobby `preparing` chưa đủ 2 người → `InviteSent` (mình) + `LobbyInvite` (người được mời) |
+| `RespondInvite` | `{inviteId, accept}` | Người được mời trả lời; accept = vào lobby như `JoinLobby` |
+| `KickMember` | `{playerId}` | Host mời member ra (lobby `preparing`) |
+| `SetReady` | `{ready}` | Member (không phải host) sẵn sàng / huỷ sẵn sàng (lobby `preparing`) |
 
 **Server → Client:**
 
 | Event | Payload | Mô tả |
 |-------|---------|-------|
-| `LobbyUpdated` | `LobbyState` `{lobbyId, hostPlayerId, members:[{playerId, displayName, characterId, items, rating, tier, division}], status}` | State thay đổi; status `preparing` / `in_queue` / `in_match` |
+| `LobbyUpdated` | `LobbyState` `{lobbyId, hostPlayerId, members:[LobbyMember], status}` | State thay đổi; status `preparing` / `in_queue` / `in_match`. `LobbyMember` `{playerId, displayName, characterId, items, rating, tier, division, level, ready, gun: {kind, tier}}` (xem Party) |
 | `LobbyError` | `{error: {code, message, correlationId}}` | Lỗi (mọi lỗi lobby, cả lỗi trong lobby room — trước đây event `Error`) |
 | `LobbyDisbanded` | `{reason}` | Host rời / idle 30 phút → lobby giải tán |
 | `QueueStarted` | `{estimatedWait}` | Đã vào hàng đợi; `estimatedWait` = `botFillAfter` (giây, 20) — chậm nhất lúc đó bot được điền |
 | `QueueCancelled` | `{reason}` | `cancelled` (CancelQueue) / `teammate disconnected` |
 | `MatchFound` | xem dưới | Ghép xong, gửi cho mọi người thật trong trận (cùng payload) |
 | `ReturnToLobby` | `{lobbyId}` | Trận xong; lobby về `preparing` (kèm `LobbyUpdated`) |
+| `OnlinePlayers` | `{players:[OnlinePlayer]}` | Trả lời `ListOnlinePlayers` |
+| `InviteSent` | `{playerId, expiresInSec}` | Lời mời đã gửi (cho người mời) |
+| `LobbyInvite` | `{inviteId, lobbyId, mode: "ranked_2v2", expiresInSec, from: OnlinePlayer}` | Có lời mời (cho người được mời); `from` = người mời |
+| `InviteExpired` | `{playerId}` (người mời) / `{inviteId}` (người được mời) | Hết `inviteTimeoutSec` chưa trả lời; người được mời cũng nhận `{inviteId}` khi lobby đã đủ người hoặc giải tán |
+| `InviteDeclined` | `{playerId, displayName}` | Người được mời từ chối (cho người mời) |
+| `LobbyKicked` | `{lobbyId}` | Bị host mời ra; `client.LobbyID` đã xoá, những người còn lại nhận `LobbyUpdated` |
 
 **`MatchFound`** (`room.MatchFound`):
 
@@ -466,6 +478,61 @@ Mỗi team đủ 2 người: người thật trước (theo thứ tự entry), r
 3. Kết thúc → `MatchEnded {winningTeam, rewards}` (rewards có rating, xem §7 Reward System), rồi `ReturnToLobby {lobbyId}` + `LobbyUpdated` (`preparing`). Lobby vẫn còn: `StartQueue` lại được, hoặc `LeaveLobby` (lobby solo → giải tán); `CreateLobby` lần sau trả lại đúng lobby đó.
 4. `Leave` (hoặc mất kết nối) trong trận = rời trận: thua toàn bộ rating, không coin/EXP; client về Home rồi nên gửi `LeaveLobby` (hoặc `CreateLobby` lại sau khi trận đã kết thúc / lobby solo).
 5. `CancelQueue` thua race: nếu matchmaker đã lấy entry, server không gửi `QueueCancelled` mà `MatchFound` đến ngay sau đó → trận vẫn diễn ra.
+
+### Party: mời đồng đội (Xếp hạng 2v2)
+
+Không có hệ bạn bè: lời mời gửi tới **người đang online** trên game node (đang mở WebSocket), chọn từ danh sách có ô tìm tên.
+
+**Presence** (`lobby/presence.go`): map `playerId → *ws.Client` trong bộ nhớ, đăng ký khi kết nối (`ws.ConnectHandler.Register`), xoá khi kết nối đó đóng (`Unregister`); một người nhiều kết nối → giữ kết nối mới nhất. Trạng thái:
+
+- `in_match`: đang ở trong room (`client.RoomID != ""`)
+- `in_lobby`: ở lobby 2 người, hoặc lobby đang `in_queue`
+- `idle`: còn lại (host một mình trong lobby `preparing` vẫn là `idle`)
+
+**Giới hạn: chỉ một game node.** Presence và lời mời theo node (như lobby); người kết nối node khác coi như offline. Chưa có presence liên node.
+
+`OnlinePlayer` `{playerId, displayName, level, tier, division, characterId, status}`: `level` = `player_profiles.level`; `tier` / `division` theo rating mùa active (không có → `elo.defaultRating`); `characterId` = nhân vật trong lobby nếu đang ở lobby, không thì `player_loadouts` (mặc định `rookie`).
+
+**`ListOnlinePlayers {query?}`** → `OnlinePlayers {players}`: mọi người online trừ mình; `query` khớp `displayName` (chuỗi con, không phân biệt hoa thường) hoặc đúng `playerId`. Sắp xếp: `idle` trước, rồi rating gần mình nhất; tối đa 30. Tên, level, nhân vật, rating đọc một query cho cả danh sách.
+
+**`InviteToLobby {playerId}`** (member của lobby, thường là host). Kiểm tra theo thứ tự:
+
+1. đang ở lobby → không thì `LOBBY_REQUIRED`
+2. lobby `preparing` → `INVALID_STATUS`
+3. lobby < 2 người → `LOBBY_FULL`
+4. người được mời online → `PLAYER_OFFLINE`
+5. người được mời `idle` → `PLAYER_BUSY`
+6. lobby chưa mời người này (lời mời còn hạn) → `INVITE_PENDING`
+7. không tự mời mình → `INVALID_PAYLOAD`
+
+Thành công: người mời nhận `InviteSent {playerId, expiresInSec}`, người được mời nhận `LobbyInvite {inviteId, lobbyId, mode: "ranked_2v2", expiresInSec, from: OnlinePlayer}`. Sau `inviteTimeoutSec` (`game_settings matchmaking`, mặc định 30, admin trang Matchmaking; GET /gamedata `matchmaking.inviteTimeoutSec`) chưa trả lời → `InviteExpired {playerId}` cho người mời, `InviteExpired {inviteId}` cho người được mời. Lobby đủ 2 người (ai đó vào) hoặc giải tán → các lời mời còn lại bị huỷ: `InviteExpired {inviteId}` cho từng người được mời.
+
+**`RespondInvite {inviteId, accept}`** (người được mời):
+
+- Từ chối: người mời nhận `InviteDeclined {playerId, displayName}`; lời mời bị xoá (mời lại được).
+- Đồng ý, kiểm tra: lời mời còn (`INVITE_EXPIRED`), lobby còn (`LOBBY_NOT_FOUND`), `preparing` (`INVALID_STATUS`), còn chỗ (`LOBBY_FULL`), mình không ở room (`IN_ROOM`). Đang là host một mình của lobby khác (không `in_queue`) → server cho rời lobby đó trước (giải tán, không gửi `LobbyDisbanded`); đang ở lobby có người khác / đang tìm trận → `ALREADY_IN_LOBBY`. Rồi vào lobby như `JoinLobby`: mọi người nhận `LobbyUpdated`, member mới `ready = false`.
+
+**`KickMember {playerId}`**: chỉ host (`NOT_HOST`), lobby `preparing` (`INVALID_STATUS`), `playerId` là member khác host (`INVALID_PAYLOAD`). Member bị mời ra nhận `LobbyKicked {lobbyId}` (`client.LobbyID` xoá), những người còn lại nhận `LobbyUpdated`.
+
+**`SetReady {ready}`**: member không phải host (host gửi → `INVALID_PAYLOAD`; host luôn `ready: true`), lobby `preparing` (`INVALID_STATUS`) → `LobbyUpdated`. `StartQueue` với member chưa sẵn sàng → `MEMBER_NOT_READY`. `ready` về `false` khi vào lobby; giữ nguyên qua `UpdateLoadout` và qua các trận (Chơi tiếp của host chạy lại `StartQueue` ngay).
+
+**`StartQueue` khi có 2 người**: cả hai nhận `LobbyUpdated` (`in_queue`) + `QueueStarted`; `MatchFound` / `ReturnToLobby` gửi tới mọi client của lobby. Member huỷ tìm trận bằng `LeaveLobby` (server rời hàng đợi cho cả lobby, host nhận `QueueCancelled {reason: "teammate disconnected"}` + `LobbyUpdated`); host huỷ bằng `CancelQueue`.
+
+**`LobbyMember`**:
+
+```json
+{"playerId":"p2","displayName":"Smoke","characterId":"tanko","items":["shield"],"rating":1050,"tier":"silver","division":2,
+ "level":12,"ready":false,"gun":{"kind":"cannon","tier":"mithril"}}
+```
+
+- `level`: `player_profiles.level`; `ready`: xem `SetReady`.
+- `gun {kind, tier}`: súng nhân vật `characterId` cầm ngoài trận, đúng cặp client tính bằng `EquipmentModel.worn_gun` (`lobby.gunOf`). Vũ khí đang mặc trên nhân vật (`player_equipment` slot `weapon`, `equipped_on = characterId`, join `config_equipment_items`):
+  - `kind`: vũ khí riêng của nhân vật (`character_id`) → `gunKind` của nhân vật đó; không thì từ loại trong tên (`"Iron Shock Rifle"` → type word `shock rifle` → `shock_rifle`, `config_item_type_words`); không phải gun kind có trong `config_gun_kinds` → `blaster`.
+  - `tier`: `tier` của item; không thì chữ đầu của tên (`Iron` → `iron`); không thì hậu tố id (`_lv30` → `mithril`, `config_equipment_tiers.id_suffix`); không thì tier đầu tiên cùng loại (normal / crafted). Item không còn trong catalog → đoán từ id như client (`crafted_weapon_<tier>`, `<character>_weapon_lvN`).
+  - Không mặc vũ khí: `{kind: gunKind của nhân vật (không có → của nhân vật mặc định), tier: "basic"}` (`"basic"` = súng cơ bản, `Art.GUN_BASIC` của client).
+  - Đọc khi vào lobby, làm mới (cùng `level`) mỗi `UpdateLoadout`.
+
+**Mã lỗi lobby (`LobbyError {error: {code, message}}`)** của party: `LOBBY_REQUIRED`, `LOBBY_NOT_FOUND`, `INVALID_STATUS`, `LOBBY_FULL`, `PLAYER_OFFLINE`, `PLAYER_BUSY`, `INVITE_PENDING`, `INVITE_EXPIRED`, `INVALID_PAYLOAD`, `IN_ROOM`, `ALREADY_IN_LOBBY`, `NOT_HOST`, `MEMBER_NOT_READY`. Như các mã lobby khác, chúng là chuỗi trong package `lobby` (`sendLobbyError`), không nằm trong `model/errors.go` (bảng §13 là mã HTTP).
 
 ### Room Events
 
@@ -1046,6 +1113,7 @@ CreateLobby → UpdateLoadout → StartQueue → Matchmaker ghép (4 slot, 2 tea
 - Status: `preparing` → `in_queue` → `in_match` → `preparing` (loop; `MatchFound` / `ReturnToLobby` qua `LobbyHub.Notify`)
 - Host rời → lobby giải tán, member nhận `LobbyDisbanded`; rời khi `in_queue` → entry rời hàng đợi
 - Rating của member: dòng `player_ranks` của mùa active, không có → `elo.defaultRating`; đọc lại mỗi `StartQueue`
+- Party (mời đồng đội, §6 Party): `InviteToLobby` / `RespondInvite`, `KickMember`, `SetReady`; host luôn `ready`, member vào lobby `ready = false` và phải `SetReady` trước khi host `StartQueue`. Presence (ai đang online) và lời mời chỉ trong bộ nhớ của một game node
 
 ### Matchmaker Engine
 
@@ -1075,7 +1143,7 @@ CreateLobby → UpdateLoadout → StartQueue → Matchmaker ghép (4 slot, 2 tea
 
 **Party rating:** 3 strategies (config từ admin): `max` (default), `average`, `weighted`
 
-**Config `game_settings.matchmaking`**: `tickInterval, baseRatingRange, expandInterval, expandStep, maxRatingRange, botFillAfter (20, migration 035), matchStartDelay (3, migration 035), botRatingModifier, partyRatingStrategy, weightedRatio`; `maxWaitTime` (60) không còn dùng khi ghép. `game_settings.elo`: `kFactor, ratingFloor, defaultRating`.
+**Config `game_settings.matchmaking`**: `tickInterval, baseRatingRange, expandInterval, expandStep, maxRatingRange, botFillAfter (20, migration 035), matchStartDelay (3, migration 035), inviteTimeoutSec (30, migration 042), botRatingModifier, partyRatingStrategy, weightedRatio`; `maxWaitTime` (60) không còn dùng khi ghép. `game_settings.elo`: `kFactor, ratingFloor, defaultRating`.
 
 ### Tier & mùa giải
 

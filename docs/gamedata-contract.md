@@ -361,10 +361,12 @@ catalog endpoints.
   beats this rate (client-only tuning, `rules.economy` `coinsPerGem` 100).
 - `matchmaking`: `queue` (the ranked queue id), `slots` (players per match, 4), `teamSize` (2),
   `botFillAfterSec` (bots fill the free slots after this wait), `matchStartDelaySec` (s between
-  MatchFound and MatchStarted; the reveal must fit), and `tips` (Vietnamese strings shown while
-  searching, in order). `botFillAfterSec` and `matchStartDelaySec` come from
-  `game_settings matchmaking`, `slots` and `teamSize` from Go `matchmaker.TeamSlots`, `tips`
-  from `config_tips`.
+  MatchFound and MatchStarted; the reveal must fit), `inviteTimeoutSec` (s a party invite,
+  `InviteToLobby`, waits for its answer before `InviteExpired`; the same number the `LobbyInvite`
+  / `InviteSent` `expiresInSec` carries, default 30, migration 042) and `tips` (Vietnamese
+  strings shown while searching, in order). `botFillAfterSec`, `matchStartDelaySec` and
+  `inviteTimeoutSec` come from `game_settings matchmaking` (admin: Matchmaking page), `slots`
+  and `teamSize` from Go `matchmaker.TeamSlots`, `tips` from `config_tips`.
 - `modes.lobby[]` `{modeId, name, description, queue, bot}`: the mode choices on Home, in order.
   A non-empty `queue` joins that matchmaking queue. A non-empty `bot` sends QuickPlay with
   `bot: <value>`. Neither means practice.
@@ -1139,6 +1141,7 @@ The full response (`200`, `ETag: "4eedfeb2e6a5a751"`):
       "teamSize": 2,
       "botFillAfterSec": 20,
       "matchStartDelaySec": 3,
+      "inviteTimeoutSec": 30,
       "tips": [
         "Gió mạnh đẩy đạn rất xa: nhìn mũi tên gió trước khi bắn.",
         "Bom liên hoàn của Tanko đào hố sâu, địch trúng bị cầm chân lượt sau.",

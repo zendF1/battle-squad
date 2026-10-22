@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -90,12 +91,13 @@ func setting(t *testing.T, db *database.PostgresDB, key string) string {
 func TestGameDataRulesMigration(t *testing.T) {
 	ctx := context.Background()
 	names := registered(t)
-	if names[len(names)-1] != "041_gamedata_rules.up.sql" {
-		t.Fatalf("cmd/migrate does not end with 041: %v", names)
+	at := slices.Index(names, "041_gamedata_rules.up.sql")
+	if at < 0 {
+		t.Fatalf("cmd/migrate does not run 041: %v", names)
 	}
 
 	// the dev DB order: config rows (and the old seed of the dead rows) before 041
-	db := dbtest.NewSchema(t, 0, names[:len(names)-1]...)
+	db := dbtest.NewSchema(t, 0, names[:at]...)
 	snap, err := gamedata.LoadYAML(configsDir())
 	if err != nil {
 		t.Fatal(err)

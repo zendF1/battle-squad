@@ -35,6 +35,12 @@ type HandlerInterface interface {
 	Unregister(client *Client)
 }
 
+// ConnectHandler is an optional HandlerInterface extension: Register is told of
+// each new connection before its first message is read.
+type ConnectHandler interface {
+	Register(client *Client)
+}
+
 func (c *Client) ReadPump() {
 	defer func() {
 		observability.ActiveConnections.Dec()

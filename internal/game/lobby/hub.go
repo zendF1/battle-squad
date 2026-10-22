@@ -1,21 +1,21 @@
 package lobby
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"sync"
+	"time"
 
 	"battle-squad/internal/game/matchmaker"
 	"battle-squad/internal/game/ws"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
-	"battle-squad/internal/shared/ranked"
 )
 
-// LobbyHub manages the in-memory registry of active lobby rooms.
+// LobbyHub manages the in-memory registry of active lobby rooms, the players
+// online on this node (presence.go) and the pending invites (invite.go).
 type LobbyHub struct {
 	sync.RWMutex
 	lobbies map[string]*LobbyRoom
@@ -24,6 +24,17 @@ type LobbyHub struct {
 	nodeID  string
 	// matchmaker queues the lobbies (set by NewWSHandler)
 	matchmaker *matchmaker.Matchmaker
+	// store reads the players' names, loadouts, ratings and guns (the DB)
+	store memberStore
+
+	onlineMu sync.RWMutex
+	online   map[string]*ws.Client // playerId → newest connection
+
+	// invMu guards invites; it is a leaf lock (nothing else is locked while it is held)
+	invMu   sync.Mutex
+	invites map[string]*invite
+	// inviteTTL overrides the matchmaking config's inviteTimeoutSec (tests)
+	inviteTTL time.Duration
 }
 
 // NewLobbyHub constructs a LobbyHub.
@@ -33,11 +44,14 @@ func NewLobbyHub(db *database.PostgresDB, redis *database.RedisClient, nodeID st
 		db:      db,
 		redis:   redis,
 		nodeID:  nodeID,
+		store:   dbStore{db: db},
+		online:  make(map[string]*ws.Client),
+		invites: make(map[string]*invite),
 	}
 }
 
-// CreateLobby creates a new lobby owned by hostPlayerID and starts its goroutine.
-func (h *LobbyHub) CreateLobby(ctx context.Context, hostPlayerID, hostDisplayName string, rating int, tier string, division int) (*LobbyRoom, error) {
+// CreateLobby creates a new lobby hosted by host (ready) and starts its goroutine.
+func (h *LobbyHub) CreateLobby(host LobbyMember) (*LobbyRoom, error) {
 	h.Lock()
 	defer h.Unlock()
 
@@ -46,30 +60,19 @@ func (h *LobbyHub) CreateLobby(ctx context.Context, hostPlayerID, hostDisplayNam
 		l.mu.RLock()
 		ownerID := l.State.HostPlayerID
 		l.mu.RUnlock()
-		if ownerID == hostPlayerID {
+		if ownerID == host.PlayerID {
 			return nil, errors.New("player already has an active lobby")
 		}
 	}
 
 	lobbyID := generateID()
-
-	characterID, items := loadPlayerLoadout(ctx, h.db, hostPlayerID)
+	host.Ready = true
 
 	state := LobbyState{
 		LobbyID:      lobbyID,
-		HostPlayerID: hostPlayerID,
+		HostPlayerID: host.PlayerID,
 		Status:       "preparing",
-		Members: []LobbyMember{
-			{
-				PlayerID:    hostPlayerID,
-				DisplayName: hostDisplayName,
-				CharacterID: characterID,
-				Items:       items,
-				Rating:      rating,
-				Tier:        tier,
-				Division:    division,
-			},
-		},
+		Members:      []LobbyMember{host},
 	}
 
 	room := NewLobbyRoom(lobbyID, state, h)
@@ -78,7 +81,7 @@ func (h *LobbyHub) CreateLobby(ctx context.Context, hostPlayerID, hostDisplayNam
 
 	observability.Log.Info().
 		Str("lobby_id", lobbyID).
-		Str("host_player_id", hostPlayerID).
+		Str("host_player_id", host.PlayerID).
 		Msg("lobby created")
 
 	return room, nil
@@ -164,47 +167,6 @@ func (h *LobbyHub) UnregisterLobby(lobbyID string) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-// loadPlayerLoadout reads characterID and items from player_loadouts.
-// Defaults to "rookie" / empty slice when no row is found.
-func loadPlayerLoadout(ctx context.Context, db *database.PostgresDB, playerID string) (string, []string) {
-	const q = `SELECT character_id, items FROM player_loadouts WHERE player_id = $1`
-
-	var characterID string
-	var itemsRaw []byte
-
-	row := db.Pool.QueryRow(ctx, q, playerID)
-	if err := row.Scan(&characterID, &itemsRaw); err != nil {
-		return "rookie", []string{}
-	}
-
-	var items []string
-	if err := json.Unmarshal(itemsRaw, &items); err != nil {
-		items = []string{}
-	}
-	return characterID, items
-}
-
-// loadPlayerRating reads the player's rating in the active season with its
-// tier and division. A player without a row has the elo config's default
-// rating (1000 = silver 3).
-func loadPlayerRating(ctx context.Context, db *database.PostgresDB, playerID string) (int, string, int) {
-	const q = `
-		SELECT pr.rating
-		FROM player_ranks pr
-		JOIN rank_seasons rs ON rs.season_id = pr.season_id
-		WHERE pr.player_id = $1 AND rs.status = 'active'
-		ORDER BY rs.starts_at DESC
-		LIMIT 1`
-
-	var rating int
-	if err := db.Pool.QueryRow(ctx, q, playerID).Scan(&rating); err != nil {
-		elo, _ := ranked.LoadEloConfig(ctx, db.Pool)
-		rating = elo.DefaultRating
-	}
-	tier, division := ranked.TierAndDivision(rating)
-	return rating, tier, division
-}
 
 // generateID produces a 32-character lowercase hex string (16 random bytes).
 func generateID() string {

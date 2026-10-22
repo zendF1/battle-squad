@@ -17,6 +17,8 @@ import (
 const (
 	lobbyEventBufSize = 64
 	lobbyIdleTimeout  = 30 * time.Minute
+	// leaveWait bounds LeaveAndWait
+	leaveWait = 2 * time.Second
 )
 
 // lobbyEvent bundles a client message with the originating client and context.
@@ -24,6 +26,7 @@ type lobbyEvent struct {
 	client *ws.Client
 	msg    ws.Message
 	ctx    context.Context
+	done   chan struct{} // closed once handled (LeaveAndWait), nil otherwise
 }
 
 // LobbyRoom is a goroutine-based room for pre-match coordination.
@@ -62,6 +65,7 @@ func (l *LobbyRoom) Run() {
 				Interface("panic", r).
 				Msg("lobby goroutine panicked")
 		}
+		l.hub.cancelLobbyInvites(l.ID)
 		l.hub.UnregisterLobby(l.ID)
 	}()
 
@@ -75,6 +79,9 @@ func (l *LobbyRoom) Run() {
 		case ev := <-l.Events:
 			idleTicker.Reset(lobbyIdleTimeout)
 			l.handleEvent(ev.ctx, ev.client, ev.msg)
+			if ev.done != nil {
+				close(ev.done)
+			}
 
 		case <-idleTicker.C:
 			observability.Log.Info().Str("lobby_id", l.ID).Msg("lobby idle timeout — disbanding")
@@ -113,6 +120,25 @@ func (l *LobbyRoom) Leave(client *ws.Client) {
 	}
 }
 
+// LeaveAndWait leaves the lobby like Leave and waits (at most leaveWait) until
+// the lobby handled it; the client's LobbyID is cleared either way.
+func (l *LobbyRoom) LeaveAndWait(client *ws.Client) {
+	done := make(chan struct{})
+	select {
+	case l.Events <- lobbyEvent{client: client, msg: ws.Message{Event: "__lobby_leave"}, ctx: context.Background(), done: done}:
+		select {
+		case <-done:
+		case <-time.After(leaveWait):
+			observability.Log.Warn().Str("lobby_id", l.ID).Str("player_id", client.PlayerID).Msg("lobby leave not handled in time")
+		}
+	default:
+		observability.Log.Warn().Str("lobby_id", l.ID).Msg("lobby event buffer full — dropping leave")
+	}
+	if client.LobbyID == l.ID {
+		client.LobbyID = ""
+	}
+}
+
 // ProcessEvent enqueues an arbitrary client message.
 func (l *LobbyRoom) ProcessEvent(ctx context.Context, client *ws.Client, msg ws.Message) {
 	select {
@@ -146,6 +172,14 @@ func (l *LobbyRoom) handleEvent(ctx context.Context, client *ws.Client, msg ws.M
 		l.processStartQueue(ctx, client)
 	case "CancelQueue":
 		l.processCancelQueue(ctx, client)
+	case "InviteToLobby":
+		l.processInvite(ctx, client, msg)
+	case "__lobby_accept":
+		l.processAccept(ctx, client, msg)
+	case "KickMember":
+		l.processKick(ctx, client, msg)
+	case "SetReady":
+		l.processSetReady(ctx, client, msg)
 	default:
 		observability.Log.Debug().
 			Str("lobby_id", l.ID).
@@ -189,23 +223,13 @@ func (l *LobbyRoom) processJoin(ctx context.Context, client *ws.Client) {
 		return
 	}
 
-	// Look up display name.
-	displayName := l.queryDisplayName(ctx, client.PlayerID)
+	l.addMemberLocked(client, l.hub.store.Member(ctx, client.PlayerID))
+}
 
-	// Load loadout and rating.
-	characterID, items := loadPlayerLoadout(ctx, l.hub.db, client.PlayerID)
-	rating, tier, division := loadPlayerRating(ctx, l.hub.db, client.PlayerID)
-
-	member := LobbyMember{
-		PlayerID:    client.PlayerID,
-		DisplayName: displayName,
-		CharacterID: characterID,
-		Items:       items,
-		Rating:      rating,
-		Tier:        tier,
-		Division:    division,
-	}
-
+// addMemberLocked adds the client's player as a member, not ready, and broadcasts
+// LobbyUpdated; a full lobby's pending invites are cancelled. Caller holds l.mu.
+func (l *LobbyRoom) addMemberLocked(client *ws.Client, member LobbyMember) {
+	member.Ready = false
 	l.State.Members = append(l.State.Members, member)
 	l.Clients[client.PlayerID] = client
 	client.LobbyID = l.ID
@@ -216,6 +240,9 @@ func (l *LobbyRoom) processJoin(ctx context.Context, client *ws.Client) {
 		Msg("player joined lobby")
 
 	l.broadcastLobbyUpdatedLocked()
+	if len(l.State.Members) >= 2 {
+		l.hub.cancelLobbyInvites(l.ID)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -324,6 +351,7 @@ func (l *LobbyRoom) processUpdateLoadout(ctx context.Context, client *ws.Client,
 		return
 	}
 
+	member.Level, member.Gun = l.hub.store.Look(ctx, client.PlayerID, member.CharacterID)
 	l.State.Members[memberIdx] = member
 
 	// Persist loadout.
@@ -342,7 +370,8 @@ func (l *LobbyRoom) processUpdateLoadout(ctx context.Context, client *ws.Client,
 // Queue
 // ---------------------------------------------------------------------------
 
-// processStartQueue (host only, lobby preparing) refreshes the members' ratings
+// processStartQueue (host only, lobby preparing, the member ready: else
+// MEMBER_NOT_READY) refreshes the members' ratings
 // and enqueues the lobby: LobbyUpdated (in_queue), then QueueStarted
 // {estimatedWait: botFillAfter seconds}. The lock is held until the lobby is
 // queued, so a MatchFound (Notify) always follows QueueStarted.
@@ -358,6 +387,12 @@ func (l *LobbyRoom) processStartQueue(ctx context.Context, client *ws.Client) {
 		l.sendError(client, "INVALID_STATUS", "Lobby is not in preparing state")
 		return
 	}
+	for _, m := range l.State.Members {
+		if m.PlayerID != l.State.HostPlayerID && !m.Ready {
+			l.sendError(client, "MEMBER_NOT_READY", "Your teammate is not ready")
+			return
+		}
+	}
 	if l.hub.matchmaker == nil {
 		l.sendError(client, "QUEUE_FAILED", "Matchmaking is not available")
 		return
@@ -370,7 +405,7 @@ func (l *LobbyRoom) processStartQueue(ctx context.Context, client *ws.Client) {
 	playerNames := make(map[string]string)
 	for i, m := range l.State.Members {
 		// The rating may have changed since the member joined (an earlier match)
-		m.Rating, m.Tier, m.Division = loadPlayerRating(ctx, l.hub.db, m.PlayerID)
+		m.Rating, m.Tier, m.Division = l.hub.store.Rating(ctx, m.PlayerID)
 		l.State.Members[i] = m
 
 		playerIDs = append(playerIDs, m.PlayerID)
@@ -421,6 +456,102 @@ func (l *LobbyRoom) processCancelQueue(ctx context.Context, client *ws.Client) {
 	}
 }
 
+// processKick is KickMember {playerId} (host only, lobby preparing): the member
+// gets LobbyKicked {lobbyId} and leaves (its LobbyID cleared), the rest
+// LobbyUpdated.
+func (l *LobbyRoom) processKick(ctx context.Context, client *ws.Client, msg ws.Message) {
+	var payload KickMemberPayload
+	if err := json.Unmarshal(msg.Data, &payload); err != nil {
+		l.sendError(client, "INVALID_PAYLOAD", "Invalid payload")
+		return
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.State.HostPlayerID != client.PlayerID {
+		l.sendError(client, "NOT_HOST", "Only the host can kick a member")
+		return
+	}
+	if l.State.Status != "preparing" {
+		l.sendError(client, "INVALID_STATUS", "Members can only be kicked while the lobby is preparing")
+		return
+	}
+	idx := -1
+	for i, m := range l.State.Members {
+		if m.PlayerID == payload.PlayerID && m.PlayerID != l.State.HostPlayerID {
+			idx = i
+		}
+	}
+	if idx < 0 {
+		l.sendError(client, "INVALID_PAYLOAD", "The player is not a member of this lobby")
+		return
+	}
+	l.State.Members = append(l.State.Members[:idx], l.State.Members[idx+1:]...)
+	if kicked, ok := l.Clients[payload.PlayerID]; ok {
+		delete(l.Clients, payload.PlayerID)
+		if kicked.LobbyID == l.ID {
+			kicked.LobbyID = ""
+		}
+		l.sendEvent(kicked, "LobbyKicked", LobbyKickedPayload{LobbyID: l.ID})
+	}
+
+	observability.Log.Info().
+		Str("lobby_id", l.ID).
+		Str("player_id", payload.PlayerID).
+		Msg("member kicked from lobby")
+
+	l.broadcastLobbyUpdatedLocked()
+}
+
+// processSetReady is SetReady {ready} from a non-host member while the lobby is
+// preparing: LobbyUpdated.
+func (l *LobbyRoom) processSetReady(ctx context.Context, client *ws.Client, msg ws.Message) {
+	var payload SetReadyPayload
+	if err := json.Unmarshal(msg.Data, &payload); err != nil {
+		l.sendError(client, "INVALID_PAYLOAD", "Invalid payload")
+		return
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	idx := -1
+	for i, m := range l.State.Members {
+		if m.PlayerID == client.PlayerID {
+			idx = i
+		}
+	}
+	switch {
+	case idx < 0:
+		l.sendError(client, "LOBBY_REQUIRED", "You are not a member of this lobby")
+		return
+	case client.PlayerID == l.State.HostPlayerID:
+		l.sendError(client, "INVALID_PAYLOAD", "The host is always ready")
+		return
+	case l.State.Status != "preparing":
+		l.sendError(client, "INVALID_STATUS", "Ready can only change while the lobby is preparing")
+		return
+	}
+	l.State.Members[idx].Ready = payload.Ready
+	l.broadcastLobbyUpdatedLocked()
+}
+
+// statusAndSize is the lobby's status and member count.
+func (l *LobbyRoom) statusAndSize() (string, int) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.State.Status, len(l.State.Members)
+}
+
+// soloHost reports whether the client hosts this lobby alone and it is not in the
+// queue (accepting an invite then leaves it first).
+func (l *LobbyRoom) soloHost(client *ws.Client) bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.State.HostPlayerID == client.PlayerID && len(l.State.Members) == 1 && l.State.Status != "in_queue"
+}
+
 // reuseForHost reports whether the client's CreateLobby can return this lobby:
 // it hosts it and the lobby is open (preparing), or it is alone in it and has
 // left its match (the lobby then opens again).
@@ -443,16 +574,6 @@ func (l *LobbyRoom) reuseForHost(client *ws.Client) bool {
 // ---------------------------------------------------------------------------
 // DB helpers (called with mu held or before acquiring it)
 // ---------------------------------------------------------------------------
-
-func (l *LobbyRoom) queryDisplayName(ctx context.Context, playerID string) string {
-	var name string
-	row := l.hub.db.Pool.QueryRow(ctx,
-		`SELECT display_name FROM player_profiles WHERE player_id = $1`, playerID)
-	if err := row.Scan(&name); err != nil {
-		return playerID
-	}
-	return name
-}
 
 func (l *LobbyRoom) persistLoadout(ctx context.Context, playerID, characterID string, items []string) {
 	itemsJSON, err := json.Marshal(items)

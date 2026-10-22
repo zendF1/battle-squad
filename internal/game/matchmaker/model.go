@@ -26,6 +26,8 @@ type MatchmakingConfig struct {
 	BotRatingModifier   float64 `json:"botRatingModifier"`
 	PartyRatingStrategy string  `json:"partyRatingStrategy"`
 	WeightedRatio       float64 `json:"weightedRatio"`
+	// InviteTimeoutSec: seconds a lobby invite (InviteToLobby) waits for its answer
+	InviteTimeoutSec int `json:"inviteTimeoutSec"`
 }
 
 // EloConfig holds the Elo rating algorithm parameters loaded from the
@@ -82,6 +84,7 @@ func DefaultMatchmakingConfig() MatchmakingConfig {
 		BotRatingModifier:   0.5,
 		PartyRatingStrategy: "max",
 		WeightedRatio:       0.7,
+		InviteTimeoutSec:    30,
 	}
 }
 

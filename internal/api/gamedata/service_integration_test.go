@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -25,7 +26,7 @@ func migrationsDir() string {
 	return filepath.Join(filepath.Dir(self), "..", "..", "..", "migrations")
 }
 
-// registeredMigrations are the files cmd/migrate runs, in its order (041 the last).
+// registeredMigrations are the files cmd/migrate runs, in its order.
 func registeredMigrations(t *testing.T) []string {
 	t.Helper()
 	_, self, _, _ := runtime.Caller(0)
@@ -40,8 +41,8 @@ func registeredMigrations(t *testing.T) []string {
 			names = append(names, rest[:strings.Index(rest, `"`)])
 		}
 	}
-	if len(names) == 0 || names[len(names)-1] != "041_gamedata_rules.up.sql" {
-		t.Fatalf("cmd/migrate does not end with 041: %v", names)
+	if !slices.Contains(names, "041_gamedata_rules.up.sql") || !slices.Contains(names, "042_party_invite.up.sql") {
+		t.Fatalf("cmd/migrate does not run 041 and 042: %v", names)
 	}
 	return names
 }
@@ -278,7 +279,7 @@ func TestGameDataFromDB(t *testing.T) {
 	if g.Economy.CoinsPerGem != 100 {
 		t.Fatalf("economy %+v", g.Economy)
 	}
-	if mm := g.Matchmaking; mm.Queue != "ranked_2v2" || mm.Slots != 4 || mm.TeamSize != 2 || mm.BotFillAfterSec != 20 || mm.MatchStartDelaySec != 3 ||
+	if mm := g.Matchmaking; mm.Queue != "ranked_2v2" || mm.Slots != 4 || mm.TeamSize != 2 || mm.BotFillAfterSec != 20 || mm.MatchStartDelaySec != 3 || mm.InviteTimeoutSec != 30 ||
 		len(mm.Tips) != 12 || !strings.HasPrefix(mm.Tips[0], "Gió mạnh") {
 		t.Fatalf("matchmaking %+v", mm)
 	}

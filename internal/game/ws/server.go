@@ -142,6 +142,10 @@ func (s *Server) HandleUpgrade(w http.ResponseWriter, r *http.Request) {
 		ip:            clientIP,
 	}
 
+	if h, ok := s.handler.(ConnectHandler); ok {
+		h.Register(client)
+	}
+
 	go client.WritePump()
 	go client.ReadPump()
 

@@ -343,6 +343,7 @@ type Matchmaking struct {
 	TeamSize           int      `json:"teamSize"`
 	BotFillAfterSec    int      `json:"botFillAfterSec"`
 	MatchStartDelaySec int      `json:"matchStartDelaySec"`
+	InviteTimeoutSec   int      `json:"inviteTimeoutSec"`
 	Tips               []string `json:"tips"`
 }
 
