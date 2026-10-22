@@ -47,12 +47,12 @@
         <div class="form-group">
             <label>Mobility (Di chuyển)</label>
             <input type="number" name="mobility" value="{{.Character.Mobility}}" step="1">
-            <div class="desc">Năng lượng di chuyển cơ bản mỗi lượt (1 năng lượng = 2 px), cộng thêm điểm và trang bị. ≤ 0 = 100</div>
+            <div class="desc">Năng lượng di chuyển cơ bản mỗi lượt (tầm đi theo Game Rules → move.*), cộng thêm điểm và trang bị. ≤ 0 = mặc định (Game Rules → Di chuyển)</div>
         </div>
         <div class="form-group">
             <label>Defense (Phòng thủ)</label>
             <input type="number" name="defense" value="{{.Character.Defense}}" step="1">
-            <div class="desc">Giảm sát thương nhận vào. Công thức: dmg × 100/(100+defense)</div>
+            <div class="desc">Giảm sát thương nhận vào. Công thức: dmg × K/(K+defense), K = combat.defense_k (Game Rules)</div>
         </div>
         <div class="form-group">
             <label>Skill Power (Sức mạnh kỹ năng)</label>
@@ -62,7 +62,7 @@
         <div class="form-group">
             <label>Terrain Damage (Phá địa hình)</label>
             <input type="number" name="terrain_damage" value="{{.Character.TerrainDamage}}" step="1">
-            <div class="desc">Chỉ để hiển thị: hố nổ lấy từ vũ khí (bán kính = terrain damage của vũ khí × 0,8 px)</div>
+            <div class="desc">Chỉ để hiển thị: hố nổ lấy từ vũ khí (bán kính = terrain damage của vũ khí × craterPxPerTerrainDamage, Game Rules)</div>
         </div>
         <div class="form-group">
             <label>Difficulty (Độ khó)</label>
@@ -89,8 +89,38 @@
 </div>
 
 <div class="card">
+    <h2 style="margin-bottom:4px;font-size:18px;color:#1a1a2e;">Hiển thị cho client</h2>
+    <p style="margin-bottom:16px;font-size:13px;color:#888;">Client nhận qua GET /gamedata (characters[]).</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;">
+        <div class="form-group">
+            <label>Tên vai trò</label>
+            <input type="text" name="role_name" value="{{.Texts.RoleName}}">
+            <div class="desc">Nhãn tiếng Việt của vai trò (vd "Phá địa hình")</div>
+        </div>
+        <div class="form-group">
+            <label>Loại súng</label>
+            <select name="gun_kind">
+                <option value="" {{if eq .Texts.GunKind ""}}selected{{end}}>(súng chung)</option>
+                {{range .GunKinds}}<option value="{{.}}" {{if eq . $.Texts.GunKind}}selected{{end}}>{{.}}</option>{{end}}
+            </select>
+            <div class="desc">Hình súng của client; tên các loại ở <a href="/texts/gun-kinds">Gun Kinds</a></div>
+        </div>
+        <div class="form-group">
+            <label>Thứ tự</label>
+            <input type="number" name="sort_order" value="{{.Texts.SortOrder}}" step="1" min="0" max="10000">
+            <div class="desc">Thứ tự hiển thị trong danh sách nhân vật</div>
+        </div>
+    </div>
+    <div class="form-group">
+        <label>Lối chơi</label>
+        <textarea name="playstyle" rows="4">{{.Texts.Playstyle}}</textarea>
+        <div class="desc">Đoạn "Lối chơi" ở cửa hàng nhân vật</div>
+    </div>
+</div>
+
+<div class="card">
     <h2 style="margin-bottom:4px;font-size:18px;color:#1a1a2e;">Cấu hình kỹ năng (Skill)</h2>
-    <p style="margin-bottom:16px;font-size:13px;color:#888;">Kỹ năng đặc biệt của nhân vật. Cần 100 điểm nộ để sử dụng (+20 cuối mỗi lượt của mình, +10 khi bị địch đánh trúng). Số lượng / % theo cấp súng nằm trong code (internal/game/match/skill_tuning.go).</p>
+    <p style="margin-bottom:16px;font-size:13px;color:#888;">Kỹ năng đặc biệt của nhân vật. Năng lượng cần và cộng thêm: Game Rules → Năng lượng kỹ năng. Mẫu mô tả, số lượng / % theo cấp súng: {{if .Skill.SkillID}}<a href="/skills/tuning?id={{.Skill.SkillID}}">thông số kỹ năng</a>{{else}}trang Skills{{end}}.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;">
         <div class="form-group">
             <label>Skill ID</label>
@@ -127,7 +157,7 @@
             <label>Status Effect ID</label>
             <input type="text" name="status_effect_id" value="{{.Skill.StatusEffectID}}" readonly style="background:#f0f0f0;color:#888">
             <div class="desc">
-                {{if eq .Skill.StatusEffectID "burn"}}Bỏng: mất 10% máu tối đa đầu lượt sau
+                {{if eq .Skill.StatusEffectID "burn"}}Bỏng: mất % máu tối đa đầu lượt sau (Game Rules → Chiến đấu)
                 {{else if eq .Skill.StatusEffectID "root"}}Cầm chân: lượt sau không di chuyển / dịch chuyển
                 {{else if eq .Skill.StatusEffectID "stun"}}Choáng: mất trọn lượt sau
                 {{else if eq .Skill.StatusEffectID "net"}}Làm chậm di chuyển của địch

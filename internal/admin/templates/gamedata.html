@@ -1,0 +1,40 @@
+{{define "content"}}
+<div class="top-bar">
+    <h1>Game Data Version</h1>
+    <form method="POST" action="/gamedata/reload"><button type="submit" class="btn btn-warning">Tải lại cấu hình</button></form>
+</div>
+{{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+<div class="card">
+    <p style="font-size:13px;color:#666;margin-bottom:12px;">
+        Mọi lần lưu cấu hình (bảng config_*, game_settings) tăng <strong>revision</strong> và báo cmd/game, cmd/api tải lại (Redis
+        <code>gamedata:changed</code>; nếu lỡ thông báo, các server tự kiểm tra revision mỗi 10 giây). Trận mới dùng cấu hình mới;
+        trận đang chơi giữ cấu hình lúc bắt đầu. <strong>Version</strong> là version của GET /gamedata (MatchStarted
+        <code>gamedataVersion</code>): client tải lại khi khác bản đã lưu. "Tải lại cấu hình" buộc mọi server đọc lại DB.
+    </p>
+    <table>
+        <thead><tr><th>Server</th><th>Version</th><th>Revision</th><th>Nguồn</th><th>Tải lúc</th><th>Kiểm tra</th><th>Lỗi</th></tr></thead>
+        <tbody>
+        <tr><td><strong>admin (trang này)</strong></td><td><code>{{.Snapshot.Version}}</code></td><td>{{.Snapshot.Revision}}</td><td>{{.Snapshot.Source}}</td><td>{{.Snapshot.LoadedAt.Format "2006-01-02 15:04:05"}}</td><td></td><td></td></tr>
+        {{range .GD.Services}}
+        <tr>
+            <td>{{.Key}}</td>
+            <td><span class="badge {{if .Same}}badge-success{{else}}badge-warn{{end}}">{{.Version}}</span></td>
+            <td>{{.Revision}}</td><td>{{.Source}}</td>
+            <td>{{.LoadedAt.Format "2006-01-02 15:04:05"}}</td><td>{{.Age}} trước</td>
+            <td style="color:#c62828;font-size:12px;">{{.Error}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="7" style="color:#888;">Chưa có server nào báo cáo (cmd/game, cmd/api chưa chạy bản mới?)</td></tr>
+        {{end}}
+        </tbody>
+    </table>
+    <p style="font-size:12px;color:#888;margin-top:8px;">DB revision hiện tại: {{.GD.Revision}}</p>
+</div>
+<div class="card">
+    <details>
+        <summary style="cursor:pointer;font-weight:600;">GET /gamedata của cấu hình đang tải</summary>
+        <pre style="margin-top:12px;font-size:12px;max-height:600px;overflow:auto;background:#f9f9f9;padding:12px;border-radius:4px;">{{.Payload}}</pre>
+    </details>
+</div>
+{{end}}

@@ -46,6 +46,7 @@
 <tr>
     <td>{{.SkillID}}</td><td>{{.CharacterID}}</td><td>{{.Name}}</td><td>{{.CooldownTurn}}</td><td>{{.EffectType}}</td><td>{{.ProjectileCount}}</td><td>{{.DamageMultiplier}}</td>
     <td>
+        <a href="/skills/tuning?id={{.SkillID}}" class="btn btn-success btn-sm">Tuning</a>
         <a href="/skills/edit?id={{.SkillID}}" class="btn btn-primary btn-sm">Edit</a>
         <form method="POST" action="/skills/delete" style="display:inline" onsubmit="return confirm('Delete this skill?')">
             <input type="hidden" name="id" value="{{.SkillID}}">

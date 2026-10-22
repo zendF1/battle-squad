@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"battle-squad/internal/admin"
+	"battle-squad/internal/gamedatasync"
 	"battle-squad/internal/shared/config"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
@@ -42,6 +43,18 @@ func main() {
 	// 4. Seed config on startup (idempotent)
 	if err := admin.SeedAll(context.Background(), db, "configs"); err != nil {
 		log.Warn().Err(err).Msg("seed config on startup failed (non-fatal)")
+	}
+
+	// The game data the dashboard validates against and shows in its header (reloaded on every
+	// save like the game and API servers)
+	reloadCtx, stopReload := context.WithCancel(context.Background())
+	defer stopReload()
+	nodeID := os.Getenv("NODE_ID")
+	if nodeID == "" {
+		nodeID = "node-admin-1"
+	}
+	if err := gamedatasync.New(db, redis, "admin", nodeID, "configs").Start(reloadCtx); err != nil {
+		log.Warn().Err(err).Msg("failed to load game data (non-fatal)")
 	}
 
 	// 5. Determine port

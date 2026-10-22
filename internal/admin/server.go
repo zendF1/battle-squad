@@ -1,11 +1,14 @@
 package admin
 
 import (
+	"context"
 	"embed"
 	"html/template"
 	"io/fs"
 	"net/http"
+	"time"
 
+	"battle-squad/internal/gamedatasync"
 	"battle-squad/internal/shared/database"
 
 	"github.com/go-chi/chi/v5"
@@ -23,6 +26,8 @@ type Server struct {
 	db        *database.PostgresDB
 	redis     *database.RedisClient
 	configDir string
+	// notifyChannel is where saves announce a game data change (gamedatasync.Channel).
+	notifyChannel string
 }
 
 // NewServer creates a new admin Server with parsed templates and repository.
@@ -32,12 +37,14 @@ func NewServer(db *database.PostgresDB, redis *database.RedisClient, configDir s
 		db:        db,
 		redis:     redis,
 		configDir: configDir,
+
+		notifyChannel: gamedatasync.Channel,
 	}
 }
 
 var tmplFuncMap = template.FuncMap{
-	"add": func(a, b int) int { return a + b },
-	"sub": func(a, b int) int { return a - b },
+	"add":    func(a, b int) int { return a + b },
+	"sub":    func(a, b int) int { return a - b },
 	"safeJS": func(s string) template.JS { return template.JS(s) },
 	"deref": func(p *int) int {
 		if p == nil {
@@ -50,6 +57,8 @@ var tmplFuncMap = template.FuncMap{
 // Routes returns the chi router with all admin dashboard routes.
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
+	// Every save that changes the game data notifies the servers to reload it
+	r.Use(s.notifyOnChange)
 
 	// Serve static JS/CSS files
 	staticContent, _ := fs.Sub(staticFS, "static")
@@ -99,6 +108,17 @@ func (s *Server) Routes() http.Handler {
 	// Physics settings
 	r.Get("/physics", s.handlePhysics)
 	r.Post("/physics/save", s.handlePhysicsSave)
+
+	// Game data: the version, the rules, skill tuning, the text tables
+	r.Get("/gamedata", s.handleGameDataPage)
+	r.Post("/gamedata/reload", s.handleGameDataReload)
+	r.Get("/rules", s.handleRulesPage)
+	r.Post("/rules/save", s.handleRulesSave)
+	r.Get("/skills/tuning", s.handleSkillTuning)
+	r.Post("/skills/tuning/save", s.handleSkillTuningSave)
+	r.Get("/texts/{table}", s.handleTextTable)
+	r.Post("/texts/{table}/save", s.handleTextTableSave)
+	r.Post("/texts/{table}/delete", s.handleTextTableDelete)
 
 	// Shop offers
 	r.Get("/shop", s.handleShopList)
@@ -166,6 +186,12 @@ func (s *Server) Routes() http.Handler {
 // {{define "content"}} collisions between page templates, then executes "layout".
 func (s *Server) render(w http.ResponseWriter, tmplName string, data interface{}) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if m, ok := data.(map[string]interface{}); ok {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		m["GD"] = s.gameDataHeader(ctx)
+		m["TextTables"] = textTables
+		cancel()
+	}
 	tmpl, err := template.New("").Funcs(tmplFuncMap).ParseFS(templateFS, "templates/layout.html", "templates/"+tmplName+".html")
 	if err != nil {
 		http.Error(w, "template parse error: "+err.Error(), http.StatusInternalServerError)

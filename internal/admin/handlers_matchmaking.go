@@ -52,6 +52,10 @@ func (s *Server) handleMatchmakingConfigSave(settingKey string) http.HandlerFunc
 			http.Error(w, "Invalid JSON", http.StatusBadRequest)
 			return
 		}
+		if err := validateJSONSetting(settingKey, body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		if err := s.repo.UpsertJSONSetting(r.Context(), settingKey, string(body)); err != nil {
 			observability.Log.Error().Err(err).Str("key", settingKey).Msg("failed to save config")

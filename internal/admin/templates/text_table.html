@@ -1,0 +1,53 @@
+{{define "content"}}
+<div class="top-bar"><h1>{{.T.Title}}</h1></div>
+{{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+{{if .T.Desc}}<div class="card" style="font-size:13px;color:#666;">{{.T.Desc}} <span style="color:#999;">(bảng {{.T.Table}})</span></div>{{end}}
+<div class="card">
+<table>
+    <thead><tr><th>{{.T.KeyLabel}}</th>{{range .T.Cols}}<th>{{.Label}}</th>{{end}}<th></th></tr></thead>
+    <tbody>
+    {{$t := .T}}
+    {{range $i, $row := .Rows}}
+    {{$key := index $row $t.Key}}
+    <tr>
+        <td><strong>{{$key}}</strong>
+            <form id="f{{$i}}" method="POST" action="/texts/{{$t.Path}}/save"><input type="hidden" name="key" value="{{$key}}"></form>
+        </td>
+        {{range $t.Cols}}{{$v := index $row .Name}}
+        <td>
+            {{if eq .Kind "bool"}}<input form="f{{$i}}" type="checkbox" name="c_{{.Name}}" {{if eq $v "true"}}checked{{end}}>
+            {{else if eq .Kind "int"}}<input form="f{{$i}}" type="number" name="c_{{.Name}}" value="{{$v}}" step="1" min="{{.Min}}" max="{{.Max}}" required style="width:90px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;">
+            {{else if eq .Kind "select"}}<select form="f{{$i}}" name="c_{{.Name}}">{{range .Options}}<option value="{{.}}" {{if eq . $v}}selected{{end}}>{{.}}</option>{{end}}</select>
+            {{else if eq .Kind "textarea"}}<textarea form="f{{$i}}" name="c_{{.Name}}" rows="2" style="width:100%;min-width:320px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-family:inherit;" {{if .Required}}required{{end}}>{{$v}}</textarea>
+            {{else}}<input form="f{{$i}}" type="text" name="c_{{.Name}}" value="{{$v}}" {{if .Required}}required{{end}} style="width:100%;min-width:120px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;">
+            {{end}}
+        </td>
+        {{end}}
+        <td style="white-space:nowrap;">
+            <button form="f{{$i}}" type="submit" class="btn btn-primary btn-sm">Lưu</button>
+            {{if $t.CanDelete}}<form method="POST" action="/texts/{{$t.Path}}/delete" style="display:inline" onsubmit="return confirm('Xóa {{$key}}?')"><input type="hidden" name="key" value="{{$key}}"><button type="submit" class="btn btn-danger btn-sm">Xóa</button></form>{{end}}
+        </td>
+    </tr>
+    {{end}}
+    {{if .T.CanAdd}}
+    <tr style="background:#fafbff;">
+        <td><form id="fnew" method="POST" action="/texts/{{$t.Path}}/save"><input type="hidden" name="new" value="1"></form>
+            <input form="fnew" type="text" name="key" placeholder="mã mới" required style="width:120px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;"></td>
+        {{range $t.Cols}}
+        <td>
+            {{if eq .Kind "bool"}}<input form="fnew" type="checkbox" name="c_{{.Name}}">
+            {{else if eq .Kind "int"}}<input form="fnew" type="number" name="c_{{.Name}}" value="{{.Min}}" step="1" min="{{.Min}}" max="{{.Max}}" required style="width:90px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;">
+            {{else if eq .Kind "select"}}<select form="fnew" name="c_{{.Name}}">{{range .Options}}<option value="{{.}}">{{.}}</option>{{end}}</select>
+            {{else if eq .Kind "textarea"}}<textarea form="fnew" name="c_{{.Name}}" rows="2" style="width:100%;min-width:320px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-family:inherit;" {{if .Required}}required{{end}}></textarea>
+            {{else}}<input form="fnew" type="text" name="c_{{.Name}}" {{if .Required}}required{{end}} style="width:100%;min-width:120px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;">
+            {{end}}
+        </td>
+        {{end}}
+        <td><button form="fnew" type="submit" class="btn btn-success btn-sm">+ Thêm</button></td>
+    </tr>
+    {{end}}
+    </tbody>
+</table>
+</div>
+{{end}}

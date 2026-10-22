@@ -120,7 +120,7 @@ func (s *Server) handleConfigEdit(configType string) http.HandlerFunc {
 				{Name: "name", Label: "Name", Type: "text", Description: "Display name", Value: wp.Name},
 				{Name: "damage", Label: "Damage", Type: "number", Step: "1", Description: "Base damage dealt on hit", Value: wp.Damage},
 				{Name: "explosion_radius", Label: "Explosion Radius", Type: "number", Step: "1", Description: "Radius of explosion in pixels", Value: wp.ExplosionRadius},
-				{Name: "terrain_damage", Label: "Terrain Damage", Type: "number", Step: "1", Description: "Crater radius = terrain damage x 0.8 px (50 = 40 px); 0 = the explosion radius", Value: wp.TerrainDamage},
+				{Name: "terrain_damage", Label: "Terrain Damage", Type: "number", Step: "1", Description: "Crater radius = terrain damage × Game Rules → craterPxPerTerrainDamage (0.6: 20 = 12 px); 0 = the explosion radius", Value: wp.TerrainDamage},
 				{Name: "projectile_weight", Label: "Projectile Weight", Type: "number", Step: "0.1", Description: "Affects gravity pull on projectile (higher = drops faster)", Value: wp.ProjectileWeight},
 				{Name: "wind_influence", Label: "Wind Influence", Type: "number", Step: "0.1", Description: "How much wind affects the projectile (0=none, 1=full)", Value: wp.WindInfluence},
 				{Name: "multi_hit", Label: "Multi Hit", Type: "number", Step: "1", Description: "Number of projectiles fired (1=single shot)", Value: wp.MultiHit},
@@ -148,12 +148,13 @@ func (s *Server) handleConfigEdit(configType string) http.HandlerFunc {
 				{Name: "projectile_count", Label: "Projectile Count", Type: "number", Step: "1", Description: "Number of projectiles fired by skill", Value: sk.ProjectileCount},
 				{Name: "status_effect_id", Label: "Status Effect ID", Type: "text", Description: "ID of status effect applied (if any)", Value: sk.StatusEffectID},
 				{Name: "damage_multiplier", Label: "Damage Multiplier", Type: "number", Step: "0.1", Description: "Multiplier applied to base damage", Value: sk.DamageMultiplier},
-				{Name: "description", Label: "Description", Type: "textarea", Description: "Skill description", Value: sk.Description},
+				{Name: "description", Label: "Description", Type: "textarea", Description: "Mô tả cũ (dùng khi chưa có mẫu mô tả). Mẫu mô tả và các thông số theo cấp súng: trang Skills → Tuning", Value: sk.Description},
 			}
 
 		case "items":
 			title = "Item"
 			var it ConfigItem
+			var texts ItemTexts
 			if !isNew {
 				found, err := s.repo.GetItem(ctx, id)
 				if err != nil {
@@ -162,13 +163,16 @@ func (s *Server) handleConfigEdit(configType string) http.HandlerFunc {
 				}
 				it = *found
 				originalID = it.ItemID
+				texts, _ = s.repo.GetItemTexts(ctx, id)
 			}
 			fields = []FieldDef{
 				{Name: "item_id", Label: "Item ID", Type: "text", Description: "Unique identifier (e.g. item_heal_small)", Value: it.ItemID},
 				{Name: "name", Label: "Name", Type: "text", Description: "Display name", Value: it.Name},
 				{Name: "type", Label: "Type", Type: "text", Description: "Item type (heal, damage, buff, teleport, etc.)", Value: it.Type},
 				{Name: "target_type", Label: "Target Type", Type: "text", Description: "Who/what this item targets (self, enemy, terrain)", Value: it.TargetType},
-				{Name: "value", Label: "Value", Type: "number", Step: "0.1", Description: "Effect value (heal amount, damage amount, etc.)", Value: it.Value},
+				{Name: "display_name", Label: "Tên tiếng Việt", Type: "text", Description: "Tên client hiển thị (GET /gamedata items[].name); trống = Name", Value: texts.DisplayName},
+				{Name: "sort_order", Label: "Thứ tự", Type: "number", Step: "1", Description: "Thứ tự trong túi đồ của client", Value: texts.SortOrder},
+				{Name: "value", Label: "Value", Type: "number", Step: "any", Description: itemValueHelp(it.ItemID), Value: it.Value},
 				{Name: "max_use_per_match", Label: "Max Use Per Match", Type: "number", Step: "1", Description: "Maximum times this item can be used in a single match", Value: it.MaxUsePerMatch},
 				{Name: "cooldown", Label: "Cooldown (turns)", Type: "number", Step: "1", Description: "Turns to wait before item can be used again", Value: it.Cooldown},
 				{Name: "description", Label: "Description", Type: "textarea", Description: "Item description", Value: it.Description},
@@ -195,6 +199,10 @@ func (s *Server) handleConfigSave(configType string) http.HandlerFunc {
 			return
 		}
 		ctx := r.Context()
+		if err := validateConfigForm(configType, r); err != nil {
+			redirectMsg(w, r, "/"+configType, "error", err.Error())
+			return
+		}
 
 		switch configType {
 		case "characters":
@@ -287,6 +295,12 @@ func (s *Server) handleConfigSave(configType string) http.HandlerFunc {
 				http.Redirect(w, r, "/items?error=Failed+to+save+item", http.StatusSeeOther)
 				return
 			}
+			if err := s.repo.UpdateItemTexts(ctx, it.ItemID, ItemTexts{DisplayName: strings.TrimSpace(r.FormValue("display_name")),
+				SortOrder: formInt(r, "sort_order")}); err != nil {
+				observability.Log.Error().Err(err).Msg("failed to update item texts")
+				http.Redirect(w, r, "/items?error=Failed+to+save+item", http.StatusSeeOther)
+				return
+			}
 
 		}
 
@@ -341,6 +355,7 @@ func (s *Server) handleCharacterDetail() http.HandlerFunc {
 
 		var char ConfigCharacter
 		var skill ConfigSkill
+		var texts CharacterTexts
 
 		if !isNew {
 			found, err := s.repo.GetCharacter(ctx, id)
@@ -349,6 +364,7 @@ func (s *Server) handleCharacterDetail() http.HandlerFunc {
 				return
 			}
 			char = *found
+			texts, _ = s.repo.GetCharacterTexts(ctx, id)
 
 			// Load associated skill
 			sk, err := s.repo.GetSkillByCharacterID(ctx, id)
@@ -360,9 +376,17 @@ func (s *Server) handleCharacterDetail() http.HandlerFunc {
 		flash := r.URL.Query().Get("flash")
 		errMsg := r.URL.Query().Get("error")
 
+		gunKinds := []string{}
+		if rows, err := s.repo.TextRows(ctx, textTableOf("gun-kinds")); err == nil {
+			for _, row := range rows {
+				gunKinds = append(gunKinds, row["gun_kind"])
+			}
+		}
 		s.render(w, "character_detail", map[string]interface{}{
 			"ActivePage": "characters",
 			"Character":  char,
+			"Texts":      texts,
+			"GunKinds":   gunKinds,
 			"Skill":      skill,
 			"IsNew":      isNew,
 			"Flash":      flash,
@@ -383,6 +407,10 @@ func (s *Server) handleCharacterDetailSave() http.HandlerFunc {
 		charID := strings.TrimSpace(r.FormValue("character_id"))
 		if charID == "" {
 			http.Redirect(w, r, "/characters/detail?error=Character+ID+is+required", http.StatusSeeOther)
+			return
+		}
+		if err := validateConfigForm("characters", r); err != nil {
+			redirectMsg(w, r, "/characters/detail?id="+charID, "error", err.Error())
 			return
 		}
 
@@ -407,6 +435,13 @@ func (s *Server) handleCharacterDetailSave() http.HandlerFunc {
 		if err := s.repo.UpsertCharacter(ctx, c); err != nil {
 			observability.Log.Error().Err(err).Msg("failed to upsert character")
 			http.Redirect(w, r, "/characters?error=Failed+to+save+character", http.StatusSeeOther)
+			return
+		}
+		if err := s.repo.UpdateCharacterTexts(ctx, charID, CharacterTexts{RoleName: strings.TrimSpace(r.FormValue("role_name")),
+			Playstyle: strings.TrimSpace(r.FormValue("playstyle")), GunKind: strings.TrimSpace(r.FormValue("gun_kind")),
+			SortOrder: formInt(r, "sort_order")}); err != nil {
+			observability.Log.Error().Err(err).Msg("failed to update character texts")
+			http.Redirect(w, r, "/characters/detail?id="+charID+"&error=Failed+to+save+character", http.StatusSeeOther)
 			return
 		}
 

@@ -1,0 +1,57 @@
+{{define "content"}}
+<div class="top-bar"><h1>Game Rules</h1></div>
+{{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+<div class="card" style="font-size:13px;color:#666;">
+    Mọi luật và con số của trận đấu. Giá trị của vật phẩm (máu hồi, lượt, xuyên địa hình, hệ số Tăng lực, giới hạn di chuyển khi bị lưới)
+    sửa ở <a href="/items">Items</a>; số của kỹ năng ở <a href="/skills">Skills</a>; hiệu ứng ở <a href="/texts/status-effects">Status Effects</a>;
+    hạng ở <a href="/texts/rank-tiers">Rank Tiers</a>; đường cấp ở <a href="/character-progression">Character Progression</a>.
+    Lưu xong, trận mới dùng giá trị mới.
+</div>
+
+<div class="card" id="scalars">
+    <h2 style="font-size:18px;margin-bottom:4px;color:#1a1a2e;">Vật lý, lượt, di chuyển, rơi, trang bị</h2>
+    <p style="font-size:13px;color:#888;margin-bottom:12px;">Các dòng một số của game_settings.</p>
+    <form method="POST" action="/rules/save">
+        <input type="hidden" name="scalars" value="1">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;">
+        {{range .Scalars}}
+        <div class="form-group">
+            <label>{{.Label}} <span style="font-weight:400;color:#999;font-size:12px;">{{.Key}}</span></label>
+            <input type="number" name="s_{{.Key}}" value="{{.Value}}" step="{{if .Whole}}1{{else}}any{{end}}" min="{{.Min}}" max="{{.Max}}" required>
+            <div class="desc">{{.Desc}} ({{.Min}} … {{.Max}}{{if .Whole}}, số nguyên{{end}})</div>
+        </div>
+        {{end}}
+        </div>
+        <button type="submit" class="btn btn-primary">Lưu</button>
+    </form>
+</div>
+
+{{range .Groups}}
+<div class="card" id="{{.Key}}">
+    <h2 style="font-size:18px;margin-bottom:4px;color:#1a1a2e;">{{.Title}} <span style="font-weight:400;color:#999;font-size:12px;">{{.Key}}</span></h2>
+    {{if .Desc}}<p style="font-size:13px;color:#888;margin-bottom:12px;">{{.Desc}}</p>{{end}}
+    <form method="POST" action="/rules/save">
+        <input type="hidden" name="group" value="{{.Key}}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;">
+        {{range .Fields}}
+        <div class="form-group">
+            <label>{{.Label}} <span style="font-weight:400;color:#999;font-size:12px;">{{.Key}}</span></label>
+            {{if .IsMap}}
+            <textarea name="f_{{.Key}}" rows="6" required>{{.Value}}</textarea>
+            <div class="desc">{{.Desc}}. Mỗi dòng key=giá trị ({{.Min}} … {{.Max}})</div>
+            {{else if .IsText}}
+            <input type="text" name="f_{{.Key}}" value="{{.Value}}" required>
+            <div class="desc">{{.Desc}}</div>
+            {{else}}
+            <input type="number" name="f_{{.Key}}" value="{{.Value}}" step="any" min="{{.Min}}" max="{{.Max}}" required>
+            <div class="desc">{{.Desc}}{{if .Desc}} {{end}}({{.Min}} … {{.Max}})</div>
+            {{end}}
+        </div>
+        {{end}}
+        </div>
+        <button type="submit" class="btn btn-primary">Lưu</button>
+    </form>
+</div>
+{{end}}
+{{end}}

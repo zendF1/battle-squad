@@ -1,0 +1,46 @@
+{{define "content"}}
+<div class="top-bar">
+    <h1>Kỹ năng: {{.Skill.Name}}</h1>
+    <a href="/skills" class="btn btn-primary">← Danh sách kỹ năng</a>
+</div>
+{{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+<form method="POST" action="/skills/tuning/save">
+<input type="hidden" name="skill_id" value="{{.Skill.SkillID}}">
+<div class="card">
+    <p style="font-size:13px;color:#888;margin-bottom:12px;">Mã <strong>{{.Skill.SkillID}}</strong> · loại hiệu ứng <strong>{{.Skill.EffectType}}</strong> · ngắm: {{.AimKind}}.
+        Tên, hệ số sát thương và hiệu ứng sửa ở trang nhân vật (<a href="/skills/edit?id={{.Skill.SkillID}}">thông tin chung</a>).</p>
+    <div class="form-group">
+        <label>Mẫu mô tả</label>
+        <textarea name="description_template" rows="3">{{.Skill.Template}}</textarea>
+        <div class="desc">{key} là số của cấp súng (bảng dưới). Để trống thì client nhận mô tả cũ: {{.Skill.Description}}</div>
+    </div>
+</div>
+{{if .Params}}
+<div class="card">
+    <h2 style="font-size:18px;margin-bottom:12px;color:#1a1a2e;">Thông số</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;">
+    {{range .Params}}
+    <div class="form-group">
+        <label>{{.Label}} <span style="font-weight:400;color:#999;font-size:12px;">{{.Key}}</span></label>
+        <input type="number" name="param_{{.Key}}" value="{{.Value}}" step="{{if .Whole}}1{{else}}any{{end}}" min="{{.Min}}" max="{{.Max}}" required>
+        <div class="desc">{{if .Desc}}{{.Desc}}. {{end}}{{.Min}} … {{.Max}}{{if .Whole}}, số nguyên{{end}} · mặc định {{.Default}}</div>
+    </div>
+    {{end}}
+    </div>
+</div>
+{{else}}
+<div class="card" style="color:#888;">Loại hiệu ứng này chưa có thông số (bắn một viên đạn thường với sát thương kỹ năng).</div>
+{{end}}
+<button type="submit" class="btn btn-primary" style="margin-bottom:20px;">Lưu</button>
+</form>
+<div class="card">
+    <h2 style="font-size:18px;margin-bottom:12px;color:#1a1a2e;">Theo cấp súng (đã lưu)</h2>
+    <table>
+        <thead><tr><th>Cấp</th><th>Số</th><th>Mô tả client hiển thị</th></tr></thead>
+        <tbody>
+        {{range .Ranks}}<tr><td>{{.Rank}}</td><td style="font-size:12px;">{{.Values}}</td><td style="font-size:13px;">{{.Description}}</td></tr>{{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
