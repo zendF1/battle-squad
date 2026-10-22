@@ -5,15 +5,19 @@ payload, so the client hardcodes none of them. It loads it on launch, caches it,
 with a conditional GET. The client keeps only presentation: colours, layout, art per id, and
 animation feel.
 
-Server: `internal/api/gamedata` (handler → service → repository, types in `model.go`).
-Phase S1 builds it from the DB rows and from the Go constants the match plays with. Phase S2
-moves the constants into the DB without changing this contract.
+Server: `internal/api/gamedata` (handler → service → repository, types in `model.go`). Every
+value comes from the DB (phase S2): the config tables and `game_settings`, edited in the admin
+dashboard. The payload is built from one game data snapshot (`internal/game/gamedata`), the same
+snapshot the matches started from it play with, by one function (`apigamedata.Build`), so the
+client and the server agree on every number. Phase S2 only added fields (marked **S2**).
 
 ## 1. Request and response
 
 ```
 GET /gamedata
 If-None-Match: "13f9f9a13a6a316c"      (optional: the ETag of the cached copy)
+
+GET /gamedata?version=13f9f9a13a6a316c (S2: exactly the game data of that version)
 ```
 
 - Public: no `Authorization` header. The client calls it before login.
@@ -23,19 +27,30 @@ If-None-Match: "13f9f9a13a6a316c"      (optional: the ETag of the cached copy)
   the current ETag (a single value, a comma list, or `*`).
 - `500`: `{"success": false, "error": {"code": "INTERNAL_SERVER_ERROR", ...}}` when the DB
   cannot be read. Keep using the cache.
+- **S2** `?version=<v>`: the payload of version `v` as it was published (also after an admin
+  changed the config since), with `ETag: "<v>"` and the same `304` rule. `404
+  GAMEDATA_VERSION_NOT_FOUND` when no server published `v` (or it was pruned: payloads stay at
+  least 30 days, the newest 50 always).
 
 ## 2. Version and ETag rules
 
 - `version` is 16 lowercase hex chars: the first 8 bytes of the SHA-256 of the JSON of `data`
   with `version` set to `""`. The ETag is the same string in double quotes.
-- The server reads the config rows on every request; it has no cache. An admin edit (a config
-  row, a `game_settings` row, a text) changes the next response and its version. A deploy that
-  changes a Go constant in the payload changes it too.
+- The API serves the payload of the game data snapshot it has loaded (built once per snapshot).
+  An admin save (a config row, a `game_settings` row, a text) bumps the stored revision and
+  notifies cmd/game and cmd/api, which reload within a moment (a revision poll every 10 s is the
+  fallback); the next response then has the new content and version. A save that does not
+  change the content keeps the version.
 - The same content always gives the same version, on any API instance. Different content gives
   a different version. Versions are not ordered: compare them only for equality.
-- Phase S2 adds `gamedataVersion` to `MatchStarted` and `MatchStateSync`, with this same string.
-  When it differs from the cached `version`, the client refetches `/gamedata` before the player
-  aims or acts.
+- **S2** `MatchStarted` and `MatchStateSync` carry `gamedataVersion` (string): the `version`
+  of the game data that match plays with, from its start to its end (an admin save during the
+  match does not change it; new matches get the new data). It is computed by the same builder
+  from the same snapshot, so it always equals a `version` the API serves. When it differs from
+  the cached `version`, fetch `GET /gamedata?version=<gamedataVersion>` before the player aims
+  or acts, and play the match with it (a plain `GET /gamedata` may already return newer data
+  than the match uses). `TurnStarted` carries `turnTimeLeft` (seconds, number): the turn's
+  length, `timings.turnSec` of the match's game data.
 
 ### Client caching (phase C)
 
@@ -69,14 +84,16 @@ If-None-Match: "13f9f9a13a6a316c"      (optional: the ETag of the cached copy)
 `data` has these top-level keys, in this order: `version`, `physics`, `aim`, `aimAid`, `combat`,
 `terrain`, `movement`, `timings`, `skillEnergy`, `skillRanks`, `weapons`, `skills`,
 `characters`, `defaultCharacterId`, `items`, `itemRules`, `statusEffects`, `rank`, `levels`,
-`equipment`, `economy`, `matchmaking`, `modes`, `mapThemes`.
+`equipment`, `economy`, `matchmaking`, `modes`, `mapThemes`, `gunKinds` (S2).
 
-The **Source (S1)** column says where the value comes from today. S2 moves every "Go" source
-into the DB.
+The **Source** column says where the admin edits the value: a `game_settings` row (`rules.<group>`
+rows are JSON objects, the field is the JSON key) or a config table column. A value that is
+missing or not valid (wrong type, out of the range the dashboard enforces) falls back to the
+default in parentheses.
 
 ### 4.1 `physics`: the shell flight (`SimulateProjectile`, `match/shooting.go`)
 
-| Field | Type | Unit | Meaning | Source (S1) |
+| Field | Type | Unit | Meaning | Source |
 |---|---|---|---|---|
 | `gravity` | number | px/s² | downward acceleration | `game_settings physics.gravity` (default 445) |
 | `speedPerPower` | number | px/s per power point | launch speed = power × this | `physics.projectile_speed_multiplier` (9.6) |
@@ -85,21 +102,21 @@ into the DB.
 | `pathRecordStep` | number | s | how often the server records path points | `physics.path_record_step` (0.05) |
 | `maxFlightSec` | number | s | a flight stops after this | `physics.max_flight_seconds` (4.5) |
 | `playerHitRadius` | number | px | a shell hits an enemy within this of its body centre | `physics.player_hit_radius` (24) |
-| `collisionStepPx` | number | px | each step is checked for hits every this many px | Go `collisionStepPx` (4) |
-| `shotOriginLift` | number | px | a shot starts this far above the feet (the body centre; also the hit centre) | Go `ShotOriginLift` = PlayerHeight / 2 (20) |
-| `outOfBounds` | `{left, right, below}` numbers | px | the flight ends at x < −left, x > mapWidth + right or y > mapHeight + below | Go (100, 100, 50) |
+| `collisionStepPx` | number | px | each step is checked for hits every this many px | `rules.physics` `collisionStepPx` (4) |
+| `shotOriginLift` | number | px | a shot starts this far above the feet (the body centre; also the hit centre) | `rules.physics` `shotOriginLift` (20, the body centre) |
+| `outOfBounds` | `{left, right, below}` numbers | px | the flight ends at x < −left, x > mapWidth + right or y > mapHeight + below | `rules.physics` `outOfBoundsLeft` / `outOfBoundsRight` / `outOfBoundsBelow` (100, 100, 50) |
 
 `game_settings` keys: a `physics.<name>` row is read first, then a bare `<name>` row. A
 missing or unparsable row gives the default. The parser is `gamedata.PhysicsFromSettings`, the
-same one the match uses.
+same one the match uses (also for `match.*`, `move.*`, `fall.*` and `combat.defense_k`).
 
 ### 4.2 `aim`
 
-| Field | Type | Meaning | Source (S1) |
+| Field | Type | Meaning | Source |
 |---|---|---|---|
-| `powerMin`, `powerMax` | number | the Shoot power range; the server rejects power > `powerMax` | Go `maxShotPower` (0..100) |
-| `angleMin`, `angleMax` | number (deg) | the slingshot's angle range. Client only: the server accepts any finite angle | Go client tuning (0..180) |
-| `noAimAngle`, `noAimPower` | number | what to send with a skill whose `aimKind` is `none` (and the power of a `line` skill); the server still validates them | Go `NoAimAngle` / `NoAimPower` (90 / 50) |
+| `powerMin`, `powerMax` | number | the Shoot power range; the server rejects power > `powerMax` | `rules.aim` `powerMax` (100; `powerMin` is 0) |
+| `angleMin`, `angleMax` | number (deg) | the slingshot's angle range. Client only: the server accepts any finite angle | `rules.aim` `angleMin` / `angleMax` (0..180) |
+| `noAimAngle`, `noAimPower` | number | what to send with a skill whose `aimKind` is `none` (and the power of a `line` skill); the server still validates them | `rules.aim` `noAimAngle` / `noAimPower` (90 / 50) |
 
 ### 4.3 `aimAid`: the client's aiming guide (client-only tuning, served by the server)
 
@@ -109,63 +126,65 @@ same one the match uses.
 | `defaultTier` | string | the tier to use when the player is unranked or their tier is not in `guideArcLength` |
 | `hitTolerance` | `{max, minPart, farPx, highPx}` | the guide shows "Trúng!" when the exact path passes within `playerHitRadius + r` of an enemy's body centre, with r = `max` × min(1, `minPart` + (1 − `minPart`) × max(D / `farPx`, H / `highPx`)) px. D is the horizontal distance to the flight's end; H is the apex height above the origin |
 
-Source (S1): Go client tuning in `internal/api/gamedata/rules.go` (the playtest values of
-`aim_aid.gd`).
+Source: `rules.aim_aid` (`guideArcLength` object tier → px; `hitToleranceMax`,
+`hitToleranceMinPart`, `hitToleranceFarPx`, `hitToleranceHighPx`). `defaultTier` is the lowest
+rank tier.
 
 ### 4.4 `combat`
 
-| Field | Type | Meaning | Source (S1) |
+| Field | Type | Meaning | Source |
 |---|---|---|---|
 | `defenseK` | number | damage taken = raw × defenseK / (defenseK + defense) | `game_settings combat.defense_k` (600) |
-| `powerShotFactor` | number | a shot or skill armed with `power_shot` deals this × damage. The `power_shot` item `value` is not used | Go `powerShotFactor` (1.5) |
-| `lavaDamage` | int | HP lost at the start of a turn on lava (ignores defense) | Go `lavaDamage` (75) |
+| `powerShotFactor` | number | a shot or skill armed with `power_shot` deals this × damage | `config_items.value` of `power_shot` (1.5) |
+| `lavaDamage` | int | HP lost at the start of a turn on lava (ignores defense) | `rules.combat` `lavaDamage` (75) |
+| `critMultiplier` | number | **S2** a critical hit deals this × the damage (`damage` events with `critical`) | `rules.combat` `critMultiplier` (1.5) |
 
 ### 4.5 `terrain`
 
-| Field | Type | Meaning | Source (S1) |
+| Field | Type | Meaning | Source |
 |---|---|---|---|
-| `playerHeight` | int px | the free space a player needs above the ground | Go `PlayerHeight` (40) |
-| `maxClimbPerStep` | int px | the most a walking player climbs per 1 px step sideways | Go `maxClimbPerStep` (3) |
-| `craterPxPerTerrainDamage` | number | crater radius = weapon `terrainDamage` × this (see `weapons[].craterRadius`) | Go `craterPxPerTerrainDamage` (0.6) |
-| `bowlDepth` | number | a crater's floor lies `bowlDepth` × r under the impact point | Go `bowlDepth` (0.72) |
-| `bowlCeiling` | number | a crater carves up to `bowlCeiling` × r above the impact point | Go `bowlCeiling` (1.5) |
-| `maxTerrainDamageBonusPercent` | int % | the shooter's terrain damage bonus grows its craters by at most this % | Go `MaxTerrainDamageBonus` (50) |
-| `fallDamageThresholdPx` | number px | falls up to this deal no damage | Go `fallDamageThreshold` (150) |
-| `fallDamagePerPx` | number HP/px | HP lost per px of fall beyond the threshold (ignores defense) | Go `fallDamageMultiplier` (3.75) |
+| `playerHeight` | int px | the free space a player needs above the ground | `rules.terrain` `playerHeight` (40) |
+| `maxClimbPerStep` | int px | the most a walking player climbs per 1 px step sideways | `rules.terrain` `maxClimbPerStep` (3) |
+| `craterPxPerTerrainDamage` | number | crater radius = weapon `terrainDamage` × this (see `weapons[].craterRadius`) | `rules.terrain` `craterPxPerTerrainDamage` (0.6) |
+| `bowlDepth` | number | a crater's floor lies `bowlDepth` × r under the impact point | `rules.terrain` `bowlDepth` (0.72) |
+| `bowlCeiling` | number | a crater carves up to `bowlCeiling` × r above the impact point | `rules.terrain` `bowlCeiling` (1.5) |
+| `maxTerrainDamageBonusPercent` | int % | the shooter's terrain damage bonus grows its craters by at most this % | `rules.terrain` `maxTerrainDamageBonusPercent` (50) |
+| `fallDamageThresholdPx` | number px | falls up to this deal no damage | `game_settings fall.damage_threshold` (150) |
+| `fallDamagePerPx` | number HP/px | HP lost per px of fall beyond the threshold (ignores defense) | `game_settings fall.damage_per_pixel` (3.75) |
 
-The `game_settings` rows `fall.damage_threshold` and `fall.damage_per_pixel` exist, but the
-match does not read them today. The payload shows what the match uses; S2 wires the rows in.
+Migration 041 corrected the `fall.*` rows (seeded 30 / 0.5 but never read before S2) to the
+150 / 3.75 the match played with.
 
 ### 4.6 `movement`
 
-| Field | Type | Meaning | Source (S1) |
+| Field | Type | Meaning | Source |
 |---|---|---|---|
-| `pxPerEnergy` | number | a walk reaches at most moveEnergy × this px from the start | Go `movePxPerEnergy` (2) |
-| `energyPerPx` | number | a walk costs round(px walked × this) move energy | Go `moveEnergyPerPx` (0.5) |
-| `defaultMoveEnergy` | int | base move energy of a character with no `mobility` (the match sends `maxMoveEnergy` per player) | Go `DefaultMoveEnergy` (100) |
-| `netMoveEnergyCap` | int | a netted player has at most this much move energy | Go `netMoveEnergyCap` (50) |
+| `pxPerEnergy` | number | a walk reaches at most moveEnergy × this px from the start | `game_settings move.step_pixels` / `move.energy_cost_per_2px` (2 / 1 = 2) |
+| `energyPerPx` | number | a walk costs round(px walked × this) move energy | `move.energy_cost_per_2px` / `move.step_pixels` (1 / 2 = 0.5) |
+| `defaultMoveEnergy` | int | base move energy of a character with no `mobility` (the match sends `maxMoveEnergy` per player) | `rules.movement` `defaultMoveEnergy` (100) |
+| `netMoveEnergyCap` | int | a netted player has at most this much move energy | `config_items.value` of `spider_net` (50) |
 
 ### 4.7 `timings`
 
-| Field | Type | Meaning | Source (S1) |
+| Field | Type | Meaning | Source |
 |---|---|---|---|
-| `turnSec` | int s | a turn's length (TurnTimeLeft at its start) | Go `turnSeconds` (20). The `game_settings match.turn_time_seconds` row is not read today |
-| `actionIntervalSec` | number s | the server drops a player's actions sent closer together than this | Go `actionRateLimit` (0.15) |
-| `botFollowUpDelaySec` | number s | a bot waits this long after a heal or move before its next action | Go `botFollowUpDelay` (1.5) |
-| `skipTurnDelaySec` | number s | the server ends a turn skipped by stun or freeze after this | Go `skipTurnDelay` (2) |
+| `turnSec` | int s | a turn's length (TurnTimeLeft at its start) | `game_settings match.turn_time_seconds` (20) |
+| `actionIntervalSec` | number s | the server drops a player's actions sent closer together than this | `rules.timings` `actionIntervalSec` (0.15) |
+| `botFollowUpDelaySec` | number s | a bot waits this long after a heal or move before its next action | `rules.timings` `botFollowUpDelaySec` (1.5) |
+| `skipTurnDelaySec` | number s | the server ends a turn skipped by stun or freeze after this | `rules.timings` `skipTurnDelaySec` (2) |
 
 ### 4.8 `skillEnergy` and `skillRanks`
 
 `skillEnergy` `{max, perTurn, onHit}` (ints): a skill can be used at `max` energy. A player
 gains `perTurn` at the end of each of its own turns, and `onHit` once per enemy action that takes
-its HP or shield. Source: Go `skillEnergyMax` / `skillEnergyPerTurn` / `skillEnergyOnHit`
-(100 / 20 / 10).
+its HP or shield. Source: `rules.skill_energy` `max` / `perTurn` / `onHit` (100 / 20 / 10).
 
 `skillRanks` `{byTierWord, default, max}`: a player's skill rank comes from its equipped weapon
 item id. Take the part after the last `_` (e.g. `rookie_weapon_lv20` → `lv20`,
 `crafted_weapon_gold` → `gold`) and look it up in `byTierWord` (object word → int). No weapon,
 or a word not in the map, gives `default` (0). The rank is at most `max` (4). Inside a match, use
-the `skillRank` the server sends. Source: Go `weaponTierRanks`.
+the `skillRank` the server sends. Source: `rules.skill_ranks` (`byTierWord`, `default`; `max` is the
+highest value).
 
 ### 4.9 `weapons[]` (config_weapons, ordered by `weaponId`)
 
@@ -214,7 +233,10 @@ sau."
 | `laser` | `firstPct` on the first enemy (150 + 10r), `decayPct` less per next enemy (20) |
 | `bloom` | `selfPct` Flora's heal (40 + 5r), `allyPct` a teammate's (30 + 5r), `perRankPct` (5), `shieldCapPct` max shield as % of max HP (50) |
 
-**`params` per effect type.** These are the Go constants of `match/skill_*.go`. Times are in s,
+**`params` per effect type.** These are the skill's `config_skills.params` (JSON object; a missing
+or invalid key keeps the effect type's default), plus `burnMaxHpPercent` (missile_rain) and
+`shieldCapPercent` (bloom) from `rules.combat` and the derived `seedTime` (bloom). The
+description template is `config_skills.description_template`. Times are in s,
 speeds in px/s, damage factors are × the skill's base damage, blast and crater are × the
 weapon's:
 
@@ -247,7 +269,7 @@ aim aid (laser `halfWidth`) and for fallbacks; the beam event's own `t` / `durat
 | `hp`, `damage`, `mobility`, `defense`, `skillPower`, `terrainDamage`, `difficulty` | int | config base stats. A player's own stats still come from `/player/characters` |
 
 `defaultCharacterId` (string): the character every player owns and plays when none is picked
-(Go `room.DefaultCharacterID`, "rookie").
+(`rules.player` `defaultCharacterId`, "rookie").
 
 ### 4.12 `items[]` (config_items, in loadout order) and `itemRules`
 
@@ -256,7 +278,7 @@ aim aid (laser `halfWidth`) and for fallbacks; the beam event's own `t` / `durat
 | `itemId` | string | id |
 | `name` | string | Vietnamese name (`display_name`, else the config name) |
 | `type`, `targetType` | string | config values |
-| `value` | number | config value: medkit HP healed (450), wind_stopper turns (2), drill_bomb pierce px (50), freeze_bomb turns (1). The match does not use it for power_shot (see `combat.powerShotFactor`), spider_net or air_strike |
+| `value` | number | config value: medkit HP healed (450), wind_stopper turns (2), drill_bomb pierce px (50), freeze_bomb turns (1), power_shot damage factor (1.5, = `combat.powerShotFactor`), spider_net move energy cap (50, = `movement.netMoveEnergyCap`). Not used for air_strike (see `itemRules.airStrike`) or teleport |
 | `maxUsePerMatch`, `cooldown` | int | config values |
 | `instant` | bool | true: send `UseItem {itemId}`; it acts at once and the turn goes on. false: it arms the next shot, sent as `Shoot {angle, power, actionMode: "item", itemId}` |
 | `aimKind` | string | `none` (instant items), `arc` (a slingshot shot; teleport too), `targetX` (aimed at a map column: send `Shoot.targetX`; the server ignores angle and power but validates them) |
@@ -265,9 +287,10 @@ aim aid (laser `halfWidth`) and for fallbacks; the beam event's own `t` / `durat
 item id the match does not handle shows as `instant: true, aimKind: "none"`; the server will
 reject it.
 
-`itemRules`: `maxLoadout` (int; a player brings at most this many items, Go
-`room.MaxLoadoutItems` 3) and `airStrike {angle, power}` (numbers; the strike falls from
-(targetX, 0) at this angle and power whatever the Shoot carries, Go 270 / 80).
+`itemRules`: `maxLoadout` (int; a player brings at most this many items, `rules.items`
+`maxLoadout` 3) and `airStrike {angle, power}` (numbers; the strike falls from (targetX, 0) at
+this angle and power whatever the Shoot carries, `rules.items` `airStrikeAngle` /
+`airStrikePower` 270 / 80).
 
 ### 4.13 `statusEffects[]` (config_status_effects in order, then any effect the match knows without a row)
 
@@ -281,8 +304,10 @@ reject it.
 | `skipsTurn` | bool | the whole turn is skipped (the server ends it after `timings.skipTurnDelaySec`) |
 | `blocksMove` | bool | the player cannot walk or teleport |
 
-`bad`, `skipsTurn` and `blocksMove` come from the match code (`badEffects`, `skipTurnEffects`,
-root). When stun and freeze are both active, the server counts the skip as stun. An effect lasts while `durationTurn > 0` and loses one turn at the end of its target's
+`bad`, `skipsTurn` and `blocksMove` are the `config_status_effects` columns `bad`,
+`skips_turn`, `blocks_move` (an effect that skips the turn also blocks moving). When two
+turn-skipping effects are active, the server counts the skip as the first in this order (stun
+before freeze). An effect lasts while `durationTurn > 0` and loses one turn at the end of its target's
 own turn.
 
 ### 4.14 `rank`
@@ -296,8 +321,9 @@ own turn.
 A rating's tier is the last tier whose `minRating` ≤ rating (the first tier for any rating
 below it). Its division is clamp(`divisions` − floor((rating − `minRating`) / `divisionSize`),
 1, `divisions`), or 1 when `divisionSize` is 0. Division 3 is the lowest and 1 the highest;
-show them as "III", "II", "I". The tier ranges come from Go `ranked.Bands`, the names from
-`config_rank_tiers`.
+show them as "III", "II", "I". The tiers, names and ranges are `config_rank_tiers` (`name`,
+`min_rating`, `divisions`, `division_size`); the dashboard keeps them valid (from 0, each above
+the previous). The tier ids are fixed.
 
 ### 4.15 `levels`
 
@@ -307,21 +333,24 @@ show them as "III", "II", "I". The tier ranges come from Go `ranked.Bands`, the 
   the last level (80). Source: `game_settings character_levels`, the curve `/player/characters`
   uses.
 - `player.expPerLevel` (int): a player at level N needs N × `expPerLevel` EXP, counted from 0 at
-  level N, to reach N + 1 (Go `match.PlayerExpPerLevel`, 100).
+  level N, to reach N + 1 (`rules.player` `expPerLevel`, 100).
 
 ### 4.16 `equipment`
 
-| Field | Type | Meaning | Source (S1) |
+| Field | Type | Meaning | Source |
 |---|---|---|---|
-| `upgradeStepPerLevel` | number | a piece's stat multiplier = 1 + upgradeLevel × this + the `bonus` of every milestone reached | Go `battlestats.UpgradeStepPerLevel` (0.02) |
-| `maxUpgradeLevel` | int | highest +level | Go `equipment.MaxUpgradeLevel` (16) |
+| `upgradeStepPerLevel` | number | a piece's stat multiplier = 1 + upgradeLevel × this + the `bonus` of every milestone reached | `rules.equipment` `upgradeStepPerLevel` (0.02) |
+| `maxUpgradeLevel` | int | highest +level | `rules.equipment` `maxUpgradeLevel` (16) |
 | `milestones` | array of `{level, bonus}` | the bonus added once a piece reaches the level | `game_settings equipment.milestone_{6,10,14,16}_bonus` |
-| `maxStoneLevel` | int | highest stone level; stones below it merge into the next | Go `equipment.MaxStoneLevel` (12) |
-| `mergeMinCount`, `mergeMaxCount` | int | a merge takes this many stones (or gems) of one level | Go (2 / 4) |
+| `maxStoneLevel` | int | highest stone level; stones below it merge into the next | `rules.equipment` `maxStoneLevel` (12) |
+| `mergeMinCount`, `mergeMaxCount` | int | a merge takes this many stones (or gems) of one level | `rules.equipment` `mergeMinCount` / `mergeMaxCount` (2 / 4) |
 | `mergeRatePerItem` | number % | merge success chance per stone | `equipment.merge_rate_per_item` (25) |
 | `sellRate` | number | selling pays back floor(buy price × this) | `equipment.sell_rate` (0.25) |
 | `weaponUpgradeCostMultiplier` | number | weapons need upgrade_cost × this stone power | `equipment.weapon_upgrade_cost_multiplier` (3) |
-| `tiers` | array of `{tier, name, kind, idSuffix, skillRank}` | the item tiers in order: id, Vietnamese name ("Sắt"), `normal` (shop items whose ids end in `idSuffix`, `lv10`…`lv40`) or `crafted` (ids end in the tier itself; `idSuffix` `""`), and the skill rank a weapon of the tier gives | `config_equipment_tiers` + Go `weaponTierRanks` |
+| `tiers` | array of `{tier, name, kind, idSuffix, skillRank}` | the item tiers in order: id, Vietnamese name ("Sắt"), `normal` (shop items whose ids end in `idSuffix`, `lv10`…`lv40`) or `crafted` (ids end in the tier itself; `idSuffix` `""`), and the skill rank a weapon of the tier gives | `config_equipment_tiers` + `rules.skill_ranks` `byTierWord` |
+
+| `slots` | array of `{id, name}` | **S2** the equipment slots in display order, with their Vietnamese name (`helmet` "Mũ", `armor` "Áo", `gloves` "Găng tay", `pants` "Quần", `boots` "Giày", `weapon` "Vũ khí") | `config_equipment_slots` |
+| `typeWords` | array of `{word, name, gunKind}` | **S2** the type part of the catalog's "<Tier> <Type>" item names, lower case (`"shock rifle"`), its Vietnamese word ("Súng điện") and, for a gun, its gun kind (`gunKinds[].id`, `"shock_rifle"`; `""` for armour). Show "<name> <tier name>" ("Súng điện Thép") | `config_item_type_words` |
 
 The per-item numbers (upgrade rates, stone powers, careful-upgrade costs) stay in the equipment
 catalog endpoints.
@@ -329,7 +358,7 @@ catalog endpoints.
 ### 4.17 `economy`, `matchmaking`, `modes`, `mapThemes`
 
 - `economy.coinsPerGem` (int): the base gem → coin rate. A coin pack shows a bonus only when it
-  beats this rate (client-only tuning, 100).
+  beats this rate (client-only tuning, `rules.economy` `coinsPerGem` 100).
 - `matchmaking`: `queue` (the ranked queue id), `slots` (players per match, 4), `teamSize` (2),
   `botFillAfterSec` (bots fill the free slots after this wait), `matchStartDelaySec` (s between
   MatchFound and MatchStarted; the reveal must fit), and `tips` (Vietnamese strings shown while
@@ -344,6 +373,10 @@ catalog endpoints.
 - `mapThemes`: `default` (string) and `themes` (array of theme ids the server accepts, from Go
   `gamedata.MapThemes`). The art per theme stays in the client; an unknown theme draws as
   `default`.
+- **S2** `gunKinds[]` `{id, name}`: every gun art kind (`characters[].gunKind`; `blaster` is the
+  generic gun of crafted and shared weapons) with its Vietnamese name, in display order
+  (`bazooka` "Bazooka", `cannon` "Đại pháo", `shock_rifle` "Súng điện", `seed_launcher` "Súng hạt",
+  `blaster` "Súng"). Source `config_gun_kinds`.
 
 ## 5. Not in this payload
 
@@ -366,15 +399,33 @@ catalog endpoints.
   empty and inserts rows with `ON CONFLICT DO NOTHING`, so reruns keep admin edits.
   `configs/*.yaml` carries the same texts for the admin seed of a fresh DB.
 
-## 7. Example (the dev DB, 2026-10-22)
+## 6b. DB behind it since S2 (migration 041_gamedata_rules)
 
-The full response (`200`, `ETag: "13f9f9a13a6a316c"`):
+- `game_settings` JSON rows `rules.physics`, `rules.aim`, `rules.aim_aid`, `rules.combat`,
+  `rules.terrain`, `rules.movement`, `rules.timings`, `rules.skill_energy`, `rules.skill_ranks`,
+  `rules.items`, `rules.player`, `rules.equipment`, `rules.economy` (seeded with the values above).
+- The scalar rows `match.turn_time_seconds`, `move.step_pixels`, `move.energy_cost_per_2px`,
+  `fall.damage_threshold`, `fall.damage_per_pixel` now drive the match (the dead fall / move seed
+  values were corrected to what the match played with).
+- `config_skills.params` (JSONB), `config_status_effects.bad / skips_turn / blocks_move`,
+  `config_rank_tiers.min_rating / divisions / division_size`.
+- New tables `config_gun_kinds (gun_kind, name, sort_order)`, `config_equipment_slots (slot, name,
+  sort_order)`, `config_item_type_words (word, name, gun_kind, sort_order)` (texts from the
+  Godot client at 60a712b).
+- `gamedata_revision` (bumped by a trigger on every config write; the servers reload on it) and
+  `gamedata_versions` (every published payload, for `?version=`).
+- Idempotent: one-time fills only in the run that adds their column, seed rows `ON CONFLICT DO
+  NOTHING`, so reruns keep admin edits.
+
+## 7. Example (the dev DB, 2026-10-22, after S2)
+
+The full response (`200`, `ETag: "4eedfeb2e6a5a751"`):
 
 ```json
 {
   "success": true,
   "data": {
-    "version": "13f9f9a13a6a316c",
+    "version": "4eedfeb2e6a5a751",
     "physics": {
       "gravity": 445,
       "speedPerPower": 9.6,
@@ -396,18 +447,11 @@ The full response (`200`, `ETag: "13f9f9a13a6a316c"`):
       "noAimPower": 50
     },
     "aimAid": {
-      "guideArcLength": {
-        "bronze": 700,
-        "diamond": 500,
-        "gold": 600,
-        "master": 450,
-        "platinum": 550,
-        "silver": 650
-      },
+      "guideArcLength": {"bronze": 700, "diamond": 500, "gold": 600, "master": 450, "platinum": 550, "silver": 650},
       "defaultTier": "bronze",
       "hitTolerance": {"max": 20, "minPart": 0.2, "farPx": 1200, "highPx": 700}
     },
-    "combat": {"defenseK": 600, "powerShotFactor": 1.5, "lavaDamage": 75},
+    "combat": {"defenseK": 600, "powerShotFactor": 1.5, "lavaDamage": 75, "critMultiplier": 1.5},
     "terrain": {
       "playerHeight": 40,
       "maxClimbPerStep": 3,
@@ -418,18 +462,8 @@ The full response (`200`, `ETag: "13f9f9a13a6a316c"`):
       "fallDamageThresholdPx": 150,
       "fallDamagePerPx": 3.75
     },
-    "movement": {
-      "pxPerEnergy": 2,
-      "energyPerPx": 0.5,
-      "defaultMoveEnergy": 100,
-      "netMoveEnergyCap": 50
-    },
-    "timings": {
-      "turnSec": 20,
-      "actionIntervalSec": 0.15,
-      "botFollowUpDelaySec": 1.5,
-      "skipTurnDelaySec": 2
-    },
+    "movement": {"pxPerEnergy": 2, "energyPerPx": 0.5, "defaultMoveEnergy": 100, "netMoveEnergyCap": 50},
+    "timings": {"turnSec": 20, "actionIntervalSec": 0.15, "botFollowUpDelaySec": 1.5, "skipTurnDelaySec": 2},
     "skillEnergy": {"max": 100, "perTurn": 20, "onHit": 10},
     "skillRanks": {
       "byTierWord": {
@@ -1075,6 +1109,27 @@ The full response (`200`, `ETag: "13f9f9a13a6a316c"`):
         {"tier": "gold", "name": "Vàng", "kind": "crafted", "idSuffix": "", "skillRank": 3},
         {"tier": "titan", "name": "Titan", "kind": "crafted", "idSuffix": "", "skillRank": 4},
         {"tier": "diamond", "name": "Kim cương", "kind": "crafted", "idSuffix": "", "skillRank": 4}
+      ],
+      "slots": [
+        {"id": "helmet", "name": "Mũ"},
+        {"id": "armor", "name": "Áo"},
+        {"id": "gloves", "name": "Găng tay"},
+        {"id": "pants", "name": "Quần"},
+        {"id": "boots", "name": "Giày"},
+        {"id": "weapon", "name": "Vũ khí"}
+      ],
+      "typeWords": [
+        {"word": "sword", "name": "Kiếm", "gunKind": ""},
+        {"word": "vest", "name": "Áo giáp", "gunKind": ""},
+        {"word": "cap", "name": "Mũ", "gunKind": ""},
+        {"word": "pants", "name": "Quần", "gunKind": ""},
+        {"word": "boots", "name": "Giày", "gunKind": ""},
+        {"word": "gloves", "name": "Găng", "gunKind": ""},
+        {"word": "bazooka", "name": "Bazooka", "gunKind": "bazooka"},
+        {"word": "cannon", "name": "Đại pháo", "gunKind": "cannon"},
+        {"word": "shock rifle", "name": "Súng điện", "gunKind": "shock_rifle"},
+        {"word": "seed launcher", "name": "Súng hạt", "gunKind": "seed_launcher"},
+        {"word": "blaster", "name": "Súng", "gunKind": "blaster"}
       ]
     },
     "economy": {"coinsPerGem": 100},
@@ -1144,7 +1199,14 @@ The full response (`200`, `ETag: "13f9f9a13a6a316c"`):
         "stone",
         "cave"
       ]
-    }
+    },
+    "gunKinds": [
+      {"id": "bazooka", "name": "Bazooka"},
+      {"id": "cannon", "name": "Đại pháo"},
+      {"id": "shock_rifle", "name": "Súng điện"},
+      {"id": "seed_launcher", "name": "Súng hạt"},
+      {"id": "blaster", "name": "Súng"}
+    ]
   }
 }
 ```

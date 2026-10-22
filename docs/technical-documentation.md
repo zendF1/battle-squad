@@ -115,7 +115,7 @@ internal/
 │   ├── match/            Match engine: physics, damage, terrain, bots, rewards
 │   ├── mapgen/           Layout 16 map (primitive vẽ tay) → tiles, migration, YAML
 │   ├── battlestats/      Chỉ số vào trận (gốc + điểm + equipment), dùng chung cho room và GET /player/characters
-│   └── gamedata/         Load game configs (DB, fallback YAML) — game server và API đều load lúc khởi động
+│   └── gamedata/         Snapshot game data (DB, fallback YAML): config, luật (rules.*), tuning skill, text; mỗi trận giữ snapshot lúc bắt đầu
 │
 ├── admin/                Admin dashboard (chi router, HTML templates)
 │   ├── server.go         Routes + template rendering
@@ -168,9 +168,9 @@ Mọi response REST (trừ `/healthz`, `/readyz`, `/livez`, `/metrics`) đều c
 | POST | `/auth/refresh` | RefreshToken | Đổi refresh token lấy access token mới |
 | POST | `/auth/logout` | Logout | Blacklist refresh token trong Redis |
 | GET | `/app/version-policy?platform=` | GetVersionPolicy | Policy version cho android/ios |
-| GET | `/app/config` | GetRemoteConfig | Remote config (API URL, WS URL, features) |
+| GET | `/app/config` | GetRemoteConfig | Remote config (API URL, WS URL, features). `defaultCharacterSelect`, `activeItems` (thứ tự túi đồ), `clientParams.windScaleFactor` / `physicsTimeStep` lấy từ game data snapshot API đang phục vụ (chỉ giữ cho client cũ; luật đầy đủ ở `/gamedata`), `gamedataVersion` = version của `/gamedata` |
 | GET | `/maps` | maps.List | Danh sách map để client sync (nguồn: `config_maps` + `config_brick_types`), xem **Maps** ở mục 7. Header `ETag` = `version`; gửi `If-None-Match` với ETag đã cache → `304` khi không đổi |
-| GET | `/gamedata` | gamedata.Get | Public. Mọi luật, số và text tiếng Việt client cần (vật lý, aim aid, vũ khí, skill + template mô tả, nhân vật, item, status effect, rank, level, trang bị, matchmaking, mode, theme) để client không hardcode gì; hợp đồng đầy đủ ở `docs/gamedata-contract.md`. `version` = hash nội dung = `ETag`; `If-None-Match` khớp → `304` |
+| GET | `/gamedata` | gamedata.Get | Public. Mọi luật, số và text tiếng Việt client cần (vật lý, aim aid, vũ khí, skill + template mô tả, nhân vật, item, status effect, rank, level, trang bị, matchmaking, mode, theme) để client không hardcode gì; hợp đồng đầy đủ ở `docs/gamedata-contract.md`. `version` = hash nội dung = `ETag`; `If-None-Match` khớp → `304`. Build một lần mỗi snapshot (reload khi admin lưu). `?version=<v>` → đúng game data của version đó (bản một trận đang chơi báo trong `gamedataVersion`, lưu ở `gamedata_versions`), không có → `404 GAMEDATA_VERSION_NOT_FOUND` |
 | GET | `/maps/{mapId}` | maps.Get | Một map kèm `tiles` (lưới brick id, `[]` với map legacy) và `spawnPoints`, để vẽ preview; không có → `MAP_NOT_FOUND` 404 |
 | GET | `/healthz` | Healthz | Health check |
 | GET | `/readyz` | Readyz | Readiness check (DB + Redis) |
@@ -508,8 +508,8 @@ Mỗi team đủ 2 người: người thật trước (theo thứ tự entry), r
 
 | Event | Payload | Mô tả |
 |-------|---------|-------|
-| `MatchStarted` | `MatchState` (`{matchId, roomId, mode, mapId, mapName, mapTheme, turnIndex, currentPlayerId, wind, players, status, turnOrder, turnTimeLeft, activeEffects}`) + `terrain` | Trận bắt đầu. `mapName` là tên map tiếng Việt (`config_maps.name`), `mapTheme` cách client vẽ map (một trong `MapThemes`, mặc định `grassland`); `MatchStateSync` cũng có hai field này |
-| `TurnStarted` | `{currentPlayerId, turnIndex, wind, moveEnergy, maxMoveEnergy, skillEnergy, skipped?}` | Lượt mới; `moveEnergy` là năng lượng của người tới lượt (đã trừ net / root / stun / freeze), `maxMoveEnergy` là mức đầy của họ. `skipped` (`"stun"` / `"freeze"`, chỉ có khi bị) = người tới lượt mất trọn lượt: server bỏ mọi Move/Shoot/UseItem và tự kết thúc lượt sau 2 s (`skipTurnDelay`) |
+| `MatchStarted` | `MatchState` (`{matchId, roomId, mode, mapId, mapName, mapTheme, turnIndex, currentPlayerId, wind, players, status, turnOrder, turnTimeLeft, activeEffects}`) + `terrain` + `gamedataVersion` | Trận bắt đầu. `mapName` là tên map tiếng Việt (`config_maps.name`), `mapTheme` cách client vẽ map (một trong `MapThemes`, mặc định `grassland`); `MatchStateSync` cũng có hai field này. `gamedataVersion` (string, 16 hex) = `version` của `GET /gamedata` cho game data trận này chơi suốt trận (cùng một snapshot, cùng một hàm build); khác bản client đã cache → client tải `GET /gamedata?version=<gamedataVersion>` trước khi cho ngắm / hành động. `MatchStateSync` cũng có |
+| `TurnStarted` | `{currentPlayerId, turnIndex, wind, moveEnergy, maxMoveEnergy, skillEnergy, turnTimeLeft, skipped?}` | Lượt mới; `moveEnergy` là năng lượng của người tới lượt (đã trừ net / root / stun / freeze), `maxMoveEnergy` là mức đầy của họ. `turnTimeLeft` (số giây) = độ dài lượt (`game_settings match.turn_time_seconds` của trận, 20); sau đó `TurnTimerTick` đếm ngược. `skipped` (`"stun"` / `"freeze"`, chỉ có khi bị) = người tới lượt mất trọn lượt: server bỏ mọi Move/Shoot/UseItem và tự kết thúc lượt sau `rules.timings skipTurnDelaySec` (2 s) |
 | `TurnTimerTick` | `{timeLeft}` | Đếm ngược (mỗi 1s) |
 | `PlayerMoved` | `{playerId, position, moveEnergy, seq?}` | Player di chuyển; có `seq` khi trả lời `Move` có `seq` |
 | `PlayerAiming` | `{playerId, angle, durationMs}` | Player đang ngắm trước khi bắn. `angle` cùng quy ước với `Shoot.angle` và là đúng góc sẽ bắn (phát cố tình trượt thì là góc trượt); `ShotResolved` của player đó tới sau khoảng `durationMs`. Không gửi power. Hiện chỉ gửi cho bot; nếu lượt đổi (timeout) trong lúc ngắm thì không có phát bắn |
@@ -518,7 +518,7 @@ Mỗi team đủ 2 người: người thật trước (theo thứ tự entry), r
 | `ItemUsed` | `{playerId, itemId, players, wind}` | Item bị tiêu hao |
 | `PlayerDamaged` | `[{playerId, damage, hp, shield, isAlive, type}]` | Damage đầu lượt của người tới lượt, ngoài phát bắn: `type` `lava` (75) hoặc `burn` (10% máu tối đa). Không qua defense, khiên chịu trước (`shield` = khiên còn lại). Gửi trước `TurnStarted`; nếu chết thì không có `TurnStarted` cho họ: server kiểm tra thắng thua rồi chuyển lượt |
 | `MatchEnded` | `{winningTeam, rewards, stats, mvpPlayerId}` (no-contest: `{winningTeam: 0, result: "no_contest", message, stats, mvpPlayerId: ""}`) | Trận kết thúc, xem §7 Reward System |
-| `MatchStateSync` | `MatchState` + `terrain` + `lastMoveSeq` + `selectedAction?` | Full sync trả lời `Reconnect`. `selectedAction` (`ActionSelected` của người tới lượt, cả khi broadcast còn đang gộp) chỉ có khi họ đang chọn skill / item, để client vào lại vẫn hiện badge. `lastMoveSeq`: `seq` của `Move` cuối cùng của người gửi `Reconnect` mà match loop đã nhận trong lượt hiện tại, kể cả `Move` bị bỏ (rate limit, đang resolve, không hợp lệ); `0` nếu chưa có hoặc không phải lượt của họ; reset khi lượt mới bắt đầu. Snapshot đã phản ánh mọi `Move` có `seq <= lastMoveSeq` |
+| `MatchStateSync` | `MatchState` + `terrain` + `gamedataVersion` + `lastMoveSeq` + `selectedAction?` | Full sync trả lời `Reconnect` (`gamedataVersion` như `MatchStarted`). `selectedAction` (`ActionSelected` của người tới lượt, cả khi broadcast còn đang gộp) chỉ có khi họ đang chọn skill / item, để client vào lại vẫn hiện badge. `lastMoveSeq`: `seq` của `Move` cuối cùng của người gửi `Reconnect` mà match loop đã nhận trong lượt hiện tại, kể cả `Move` bị bỏ (rate limit, đang resolve, không hợp lệ); `0` nếu chưa có hoặc không phải lượt của họ; reset khi lượt mới bắt đầu. Snapshot đã phản ánh mọi `Move` có `seq <= lastMoveSeq` |
 
 **`ShotResolved`:** server tính xong toàn bộ phát bắn và state đã cập nhật trước khi gửi; client chỉ phát lại. `projectiles[]` là đường bay (`path[]` với `time`) của từng viên đạn; `time` luôn tính từ lúc bắn, nên viên phóng trễ (bom liên hoàn, tên lửa) có `path[0].time = launchDelay > 0` và client chỉ hiện nó từ lúc đó. Mỗi projectile: `{projectileId, ownerPlayerId, skillId?, kind?, launchDelay?, path[], hitPlayerId?, explosionPoint?, explosionRadius, craterRadius}`; `kind` (chỉ với skill): `flare` (pháo hiệu, đáp không nổ), `missile` (tên lửa rơi từ đỉnh map), `bomb` (bom liên hoàn), `seed` (hạt của Hoa hồi xuân, đáp lên đồng đội `hitPlayerId`, không nổ); thiếu = đạn thường. `events[]` sắp theo `t` (giây kể từ lúc bắn):
 
@@ -615,7 +615,7 @@ SimulateProjectile(startPos, angle, power, wind, weaponConfig):
     Record path mỗi 0.05s cho client animation
 ```
 
-Số vật lý đọc từ `game_settings` (`physics.*`, `gamedata.loadPhysicsFromDB`; thiếu dòng nào thì dùng `gamedata.DefaultPhysics()`, cùng giá trị với admin seed). Trước đây loader tìm key không có tiền tố `physics.` nên không bao giờ thấy dòng nào và luôn dùng mặc định; `SimulateProjectile` cũng cố định `power × 6` thay vì đọc `projectile_speed_multiplier`.
+Số vật lý đọc từ `game_settings` (`physics.*`, `gamedata.PhysicsFromSettings`; thiếu dòng nào thì dùng `gamedata.DefaultPhysics()`, cùng giá trị với admin seed), các số còn lại của đường bay từ `rules.physics` (bước kiểm tra va chạm 4 px, điểm bắn 20 px trên chân, ra ngoài 100 / 100 / 50 px) và lực tối đa từ `rules.aim` (xem Game data). Trước đây loader tìm key không có tiền tố `physics.` nên không bao giờ thấy dòng nào và luôn dùng mặc định; `SimulateProjectile` cũng cố định `power × 6` thay vì đọc `projectile_speed_multiplier`.
 
 Migration `032_faster_shells` (playtest: đạn bay chậm, tầm ngắn; chạy lại mỗi deploy, chỉ đổi dòng còn giá trị cũ): tốc độ power × 6 → **9,6** (×1,6), gravity 200 → **445** (×2,23), wind scale 30 → **67** (×2,23, nên gió vẫn lệch cùng tỉ lệ phát bắn), bay tối đa 6 → **4,5 s**. Cùng power bay xa hơn ~15% (tầm ∝ v²/g), phát bắn tới cùng chỗ mất ~0,67 × thời gian (cùng power: ~0,72 ×); hình dạng đường bay tới cùng điểm không đổi. Bước 0,02 s giữ nguyên: một bước bay tới 19 px (power 100) nhưng đoạn đường vẫn được lấy mẫu mỗi ≤ 4 px nên va chạm (tường mỏng, người chơi) như cũ; điểm nổ vẫn nằm trong đất ≤ 4 px.
 
@@ -668,7 +668,7 @@ Fall damage (không qua defense):
     damage = (fallDistance - 150) * 3.75
 ```
 
-`ReduceByDefense` (`match/damage.go`) là công thức defense duy nhất: `CalculateExplosionDamage` (trận) và bot (`evalShot`) đều gọi nó. K đọc lúc game server load game data (`gamedata.DefenseK()`, thiếu hoặc ≤ 0 → 600), sửa ở trang Physics của admin rồi restart `cmd/game`. Defense 50 nhận 600/650 ≈ 92% sát thương, defense 600 nhận 50%.
+`ReduceByDefense` (`match/damage.go`) là công thức defense duy nhất: `CalculateExplosionDamage` (trận) và bot (`evalShot`) đều gọi nó. K là `Physics.DefenseK` của game data trận đang chơi (thiếu hoặc ≤ 0 → 600), sửa ở trang Game Rules của admin: trận mới dùng giá trị mới, không cần restart. Defense 50 nhận 600/650 ≈ 92% sát thương, defense 600 nhận 50%.
 
 ### Balance ("số lớn")
 
@@ -694,7 +694,7 @@ Các số khác đã đổi:
 | HP mặc định nhân vật không có trong game data | 100 → **1.500** | `battlestats.defaultHP` |
 | EXP thưởng theo damage gây ra | 1 EXP / 20 damage → **1 EXP / 300 damage** | `match.damagePerBonusExp` (một trận gây ≈15× damage hơn trước) |
 
-Không đổi: `air_strike` value 30 (không code nào đọc), `drill_bomb` 50 (px xuyên), `spider_net` cap 50 move energy, `power_shot` ×1.5, `damageMultiplier` skill (1.25 / 1.3 / 0.9; 023 đổi, xem bên dưới), `fall.damage_per_pixel` / `fall.damage_threshold` trong `game_settings` (không được đọc: fall damage dùng hằng số trong `damage.go`).
+Không đổi: `air_strike` value 30 (không code nào đọc), `drill_bomb` 50 (px xuyên), `spider_net` cap 50 move energy, `power_shot` ×1.5, `damageMultiplier` skill (1.25 / 1.3 / 0.9; 023 đổi, xem bên dưới), `fall.damage_per_pixel` / `fall.damage_threshold` trong `game_settings` (lúc đó chưa được đọc; từ 041 match đọc chúng, migration sửa giá trị seed cũ 30 / 0,5 thành 150 / 3,75 đúng như hằng số đã chơi).
 
 Kiểm tra bằng `TestBalanceHitsToKill` (`internal/game/room/balance_integration_test.go`, cần `TEST_POSTGRES_DSN`): chạy mọi migration, catalog thật, `configs/*.yaml`, `getActualStats` của room và `CalculateExplosionDamage`. Rookie bắn Rookie cùng build, trúng trực tiếp, không gió, không crit:
 
@@ -1011,6 +1011,25 @@ Tổng 140 năng động. Rương ngày: `chest_d20` 300 coin · `chest_d40` 500
 
 ---
 
+### Game data: DB, snapshot, hot reload (S2, migration 041)
+
+Mọi luật và con số của trận nằm trong DB, sửa ở admin; Go chỉ giữ giá trị mặc định (`gamedata.DefaultRules`, `DefaultPhysics`, `Default*Tuning`, `DefaultStatusEffects`, `ranked.DefaultBands`) khi thiếu dòng hoặc giá trị sai kiểu / ngoài khoảng (bỏ qua và log).
+
+| Ở đâu | Giá trị |
+|---|---|
+| `game_settings` `physics.*`, `combat.defense_k`, `match.turn_time_seconds`, `match.idle_timeout_minutes`, `move.step_pixels` + `move.energy_cost_per_2px` (đi `step` px tốn `cost` năng lượng: 2 / 1), `fall.damage_threshold` / `fall.damage_per_pixel` (150 / 3,75), `equipment.*` | `gamedata.ScalarSettings` |
+| `game_settings` `rules.physics`, `rules.aim`, `rules.aim_aid`, `rules.combat`, `rules.terrain`, `rules.movement`, `rules.timings`, `rules.skill_energy`, `rules.skill_ranks`, `rules.items`, `rules.player`, `rules.equipment`, `rules.economy` (JSON) | `gamedata.RuleGroups` (khoảng hợp lệ từng field) |
+| `config_items.value` | medkit hồi máu, wind_stopper số lượt, drill_bomb px xuyên, freeze_bomb số lượt, **power_shot hệ số sát thương**, **spider_net giới hạn năng lượng di chuyển** |
+| `config_skills.params` (JSONB) + `description_template` | tuning theo loại hiệu ứng (`gamedata.SkillParamSpecs`) |
+| `config_status_effects.bad / skips_turn / blocks_move` | Cleanse, mất lượt (thứ tự `sort_order`: stun trước freeze), chặn đi / dịch chuyển |
+| `config_rank_tiers.min_rating / divisions / division_size` | bands hạng (`ranked.SetBands`, đổi nguyên khối, atomic) |
+
+Còn trong Go (không phải số cân bằng hay số client cần): tham số tìm đường bắn của bot AI (`bot*` trong `bot.go`, `skill_*.go`), nhịp replay (đệm 1,2 s sau phát bắn, 0,3 s sau teleport), cấu trúc 2v2 (`matchmaker.TeamSlots`), danh sách theme map (`gamedata.MapThemes`, client có art riêng), terrain zone của map legacy (băng trượt 50 px, đất giòn ×2).
+
+**Snapshot.** `gamedata.LoadFromDB` đọc mọi bảng config + game_settings trong một transaction REPEATABLE READ READ ONLY thành một `gamedata.Snapshot` bất biến; `gamedatasync.Reloader` gắn `Version` = `apigamedata.VersionOf(snapshot)` (đúng hàm build của `GET /gamedata`), lưu payload vào `gamedata_versions`, rồi `gamedata.Publish` (atomic pointer). `match.NewMatchWithData(snapshot, …)` (room dùng `NewMatch` = `gamedata.Current()` lúc tạo trận) giữ con trỏ đó suốt trận: vật lý, luật, tuning, item, map đều đọc từ `m.gd` / `Terrain.gd`, không đọc biến toàn cục. Còn toàn cục (đổi atomic): `gamedata.Current()` cho room / lobby / API (chỉ số nhân vật lúc vào trận, giới hạn loadout, luật trang bị của API) và `ranked.Bands()` (hạng là của người chơi, không theo trận).
+
+**Hot reload.** Trigger trên mọi bảng config tăng `gamedata_revision`; middleware của admin thấy revision đổi sau một request POST thì publish `gamedata:changed`. cmd/game, cmd/api, cmd/admin subscribe và đọc lại DB; dự phòng mỗi 10 s so revision. Nội dung không đổi (cùng version) → giữ snapshot cũ; DB lỗi / config sai (vd nhân vật trỏ vũ khí không có) → giữ snapshot đang chạy và báo lỗi ở `gamedata:loaded` (header admin hiện đỏ). Trận mới dùng snapshot mới, trận đang chơi không đổi. `GET /gamedata` build một lần mỗi snapshot.
+
 ## 8. Ranked Matchmaking System
 
 ### Flow
@@ -1088,7 +1107,11 @@ State-based decision making, difficulty theo rank tier:
 | GET/POST | `/skills/*` | CRUD skills |
 | GET/POST | `/items/*` | CRUD items |
 | GET/POST | `/maps/*` | CRUD maps |
-| GET/POST | `/physics` | Physics settings |
+| GET/POST | `/physics` | Mọi dòng game_settings (trừ `rules.*`), kiểm tra kiểu / khoảng |
+| GET/POST | `/gamedata`, `/gamedata/reload` | Version game data (admin, từng server game / api, lỗi reload), payload `/gamedata`; "Tải lại cấu hình" tăng revision + báo mọi server |
+| GET/POST | `/rules` | Game Rules: các dòng số (physics, lượt, di chuyển, rơi, trang bị) và mọi nhóm `rules.*`, kiểm tra kiểu / khoảng / bắt buộc |
+| GET/POST | `/skills/tuning` | Mẫu mô tả + thông số kỹ năng (`config_skills.params`), xem trước số và mô tả theo cấp súng |
+| GET/POST | `/texts/{table}` | Sửa tại chỗ: status-effects (tên, marker, banner, xấu / mất lượt / chặn di chuyển), rank-tiers (tên, khoảng điểm, kiểm tra bands), equipment-tiers, equipment-slots, gun-kinds, type-words, game-modes, tips |
 | GET/POST | `/shop/*` | CRUD shop offers |
 | GET/POST | `/players` | Player list, ban/unban |
 | GET/POST | `/devtools/*` | Clear rooms, reset data, seed config |
@@ -1172,10 +1195,13 @@ State-based decision making, difficulty theo rank tier:
 
 | Table | PK | Mô tả |
 |-------|-----|-------|
-| `game_settings` | `key` | Key-value config (matchmaking, elo, bot_difficulty) |
+| `game_settings` | `key` | Key-value config (matchmaking, elo, bot_difficulty); 041: `rules.*` (một dòng JSON mỗi nhóm luật, `gamedata.RuleGroups`) |
 | `config_characters/weapons/skills/items/maps` | `*_id` | Game data (admin editable); `config_maps.theme` (036); 040: `config_characters.role_name / playstyle / gun_kind / sort_order`, `config_items.display_name / sort_order`, `config_skills.description_template` |
 | `config_status_effects`, `config_rank_tiers`, `config_equipment_tiers`, `config_game_modes`, `config_tips` | `effect_id` / `tier` / `tier` / `mode_id` / `tip_id` | 040: text tiếng Việt + thứ tự hiển thị cho `GET /gamedata` |
 | `config_brick_types` | `brick_type_id` | Brick của map tile: tên, `destructible`, `border` polygon, `color`; id 1..19 do 036 tạo |
+| `config_gun_kinds`, `config_equipment_slots`, `config_item_type_words` | `gun_kind` / `slot` / `word` | 041: tên loại súng, tên ô trang bị, chữ dịch loại trong tên trang bị "<Tier> <Type>" (`GET /gamedata` `gunKinds`, `equipment.slots`, `equipment.typeWords`) |
+| `gamedata_revision` | `id` (=1) | 041: revision game data; trigger statement-level trên mọi bảng config_* và game_settings tăng nó mỗi lần ghi |
+| `gamedata_versions` | `version` | 041: payload `GET /gamedata` (text JSON) của mỗi version server đã publish (`?version=`), xoá sau 30 ngày ngoài 50 bản mới nhất |
 
 ---
 
@@ -1192,6 +1218,8 @@ State-based decision making, difficulty theo rank tier:
 | `session:{token}` | String | — | Refresh token blacklist |
 | `feature:{flag}` | String | — | Feature flags |
 | `idempotency:{key}` | String | 300s | Request deduplication |
+| `gamedata:changed` | Pub/Sub channel | — | Admin lưu cấu hình → cmd/game, cmd/api, cmd/admin tải lại game data (payload = revision) |
+| `gamedata:loaded` | Hash | — | `<service>/<node>` → `{service, node, version, revision, source, loadedAt, error?, checkedAt}`: game data mỗi process đang phục vụ (header admin) |
 
 ---
 
