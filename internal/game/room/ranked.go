@@ -63,19 +63,20 @@ func loadRankedProfiles(ctx context.Context, pool *pgxpool.Pool, playerIDs []str
 
 // rankedRoster is a matchmade game laid out for the room: the room players
 // (team 1 then team 2, humans before bots), each human's lobby, the MatchFound
-// teams (ids still empty) and each team's average rating for Elo, a bot
-// counting as the humans' average rating.
+// teams (ids still empty), each team's average rating for Elo, a bot
+// counting as the humans' average rating, and each bot's loadout.
 type rankedRoster struct {
 	Players      []RoomPlayer
 	LobbyMapping map[string]string
 	Found        MatchFound
 	TeamRatings  map[int]int
 	BotRating    int
+	Bots         map[string]botLoadout
 }
 
 // buildRankedRoster lays out the match. newBotID makes each bot's player id
-// ("bot_" + suffix).
-func buildRankedRoster(result matchmaker.MatchResult, profiles map[string]rankedProfile, newBotID func() string) rankedRoster {
+// ("bot_" + suffix); bots equips each bot for the humans' average level.
+func buildRankedRoster(result matchmaker.MatchResult, profiles map[string]rankedProfile, newBotID func() string, bots *botOutfitter) rankedRoster {
 	ratings := result.HumanRatings()
 	botRating := result.BotRating()
 
@@ -94,6 +95,7 @@ func buildRankedRoster(result matchmaker.MatchResult, profiles map[string]ranked
 		Found:        newMatchFound(result.MapID),
 		TeamRatings:  map[int]int{},
 		BotRating:    botRating,
+		Bots:         map[string]botLoadout{},
 	}
 	card := func(p RoomPlayer, isBot bool, level, rating int, titleID string) MatchFoundPlayer {
 		tier, div := ranked.TierAndDivision(rating)
@@ -134,9 +136,11 @@ func buildRankedRoster(result matchmaker.MatchResult, profiles map[string]ranked
 		}
 		for b := 0; b < team.Bots; b++ {
 			id := newBotID()
-			p := RoomPlayer{PlayerID: id, DisplayName: "Bot " + id[len(id)-4:], TeamID: teamID, CharacterID: "rookie", Items: []string{}, IsReady: true}
+			l := bots.outfit(botLevel)
+			p := botPlayer(id, "Bot "+id[len(id)-4:], teamID, l)
 			ro.Players = append(ro.Players, p)
-			ft.Players = append(ft.Players, card(p, true, botLevel, botRating, ""))
+			ro.Bots[id] = l
+			ft.Players = append(ft.Players, card(p, true, l.Level, botRating, ""))
 			sum += botRating
 		}
 		if n := len(ft.Players); n > 0 {
@@ -174,7 +178,9 @@ func (r *Room) reserveRankedItems(matchID string) {
 		}
 	}
 	for i := range r.State.Players {
-		r.State.Players[i].Items = []string{}
+		if !isBotID(r.State.Players[i].PlayerID) {
+			r.State.Players[i].Items = []string{}
+		}
 	}
 }
 
@@ -199,10 +205,7 @@ func (r *Room) startRankedMatch(matchID string, botTierConfig matchmaker.BotTier
 		}
 
 		isBot := isBotID(p.PlayerID)
-		stats, look := baseStats(p.CharacterID), cosmetics{}
-		if !isBot {
-			stats, look = r.getActualStats(p.PlayerID, p.CharacterID)
-		}
+		stats, look := r.playerStats(p, isBot)
 		matchPlayers = append(matchPlayers, newBattlePlayer(p, spawnPos, stats, look, isBot))
 	}
 
@@ -239,6 +242,18 @@ func (r *Room) startRankedMatch(matchID string, botTierConfig matchmaker.BotTier
 		Int("team1Rating", teamRatings[1]).
 		Int("team2Rating", teamRatings[2]).
 		Msg("ranked match started")
+}
+
+// playerStats are a room player's battle stats and cosmetics: a bot's from its loadout (base
+// stats without one), a human's from the database.
+func (r *Room) playerStats(p RoomPlayer, isBot bool) (battleStats, cosmetics) {
+	if !isBot {
+		return r.getActualStats(p.PlayerID, p.CharacterID)
+	}
+	if l, ok := r.bots[p.PlayerID]; ok {
+		return l.Stats, l.Look
+	}
+	return baseStats(p.CharacterID), cosmetics{}
 }
 
 func isBotID(playerID string) bool {

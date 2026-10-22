@@ -406,6 +406,8 @@ catalog endpoints.
 - `game_settings` JSON rows `rules.physics`, `rules.aim`, `rules.aim_aid`, `rules.combat`,
   `rules.terrain`, `rules.movement`, `rules.timings`, `rules.skill_energy`, `rules.skill_ranks`,
   `rules.items`, `rules.player`, `rules.equipment`, `rules.economy` (seeded with the values above).
+  `rules.bots` (migration 043: bot level spread, gun upgrade, items, medkit threshold, teleport
+  margins) is server-only and not in the payload.
 - The scalar rows `match.turn_time_seconds`, `move.step_pixels`, `move.energy_cost_per_2px`,
   `fall.damage_threshold`, `fall.damage_per_pixel` now drive the match (the dead fall / move seed
   values were corrected to what the match played with).

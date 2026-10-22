@@ -40,6 +40,9 @@
             {{if .IsMap}}
             <textarea name="f_{{.Key}}" rows="6" required>{{.Value}}</textarea>
             <div class="desc">{{.Desc}}. Mỗi dòng key=giá trị ({{.Min}} … {{.Max}})</div>
+            {{else if .IsList}}
+            <input type="text" name="f_{{.Key}}" value="{{.Value}}">
+            <div class="desc">{{.Desc}}</div>
             {{else if .IsText}}
             <input type="text" name="f_{{.Key}}" value="{{.Value}}" required>
             <div class="desc">{{.Desc}}</div>

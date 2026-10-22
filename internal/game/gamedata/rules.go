@@ -37,6 +37,7 @@ type Rules struct {
 	Player      PlayerRules      `json:"player"`
 	Equipment   EquipmentRules   `json:"equipment"`
 	Economy     EconomyRules     `json:"economy"`
+	Bots        BotRules         `json:"bots"`
 }
 
 // ShotRules (rules.physics) complete the physics.* rows: how a shell's flight is checked.
@@ -139,6 +140,21 @@ type EconomyRules struct {
 	CoinsPerGem int `json:"coinsPerGem"` // the base gem → coin rate the shop compares coin packs with (client only)
 }
 
+// BotRules (rules.bots): how the bots of matchmaking and "Đấu với máy" are equipped and use
+// their items. The aim (hit chance), item use chance, movement and medkit forget chance per
+// difficulty tier are the bot_difficulty row.
+type BotRules struct {
+	LevelSpread           int      `json:"levelSpread"`           // a bot's level is the humans' average ± up to this
+	WeaponUpgradeMin      int      `json:"weaponUpgradeMin"`      // a bot's gun is upgraded at least this
+	WeaponUpgradePerLevel float64  `json:"weaponUpgradePerLevel"` // and at most the gun's required level × this
+	DefaultItems          []string `json:"defaultItems"`          // every bot brings these
+	RandomItems           []string `json:"randomItems"`           // plus RandomItemCount of these at random
+	RandomItemCount       int      `json:"randomItemCount"`
+	MedkitHPPercent       int      `json:"medkitHpPercent"`       // a bot heals at or below this % of its max HP
+	TeleportLavaMarginPx  int      `json:"teleportLavaMarginPx"`  // a teleport never lands this close to lava
+	TeleportEnemyMarginPx int      `json:"teleportEnemyMarginPx"` // nor this close (horizontally) to an enemy
+}
+
 // DefaultRules are the rules the game played with before they moved into the DB (and what
 // 041_gamedata_rules seeds).
 func DefaultRules() *Rules {
@@ -146,7 +162,7 @@ func DefaultRules() *Rules {
 		Physics: ShotRules{CollisionStepPx: 4, ShotOriginLift: 20, OutOfBoundsLeft: 100, OutOfBoundsRight: 100, OutOfBoundsBelow: 50},
 		Aim:     AimRules{PowerMax: 100, AngleMin: 0, AngleMax: 180, NoAimAngle: 90, NoAimPower: 50},
 		AimAid: AimAidRules{
-			GuideArcLength: map[string]float64{"bronze": 700, "silver": 650, "gold": 600, "platinum": 550, "diamond": 500, "master": 450},
+			GuideArcLength:  map[string]float64{"bronze": 700, "silver": 650, "gold": 600, "platinum": 550, "diamond": 500, "master": 450},
 			HitToleranceMax: 20, HitToleranceMinPart: 0.2, HitToleranceFarPx: 1200, HitToleranceHighPx: 700,
 		},
 		Combat: CombatRules{LavaDamage: 75, CritMultiplier: 1.5, BurnMaxHPPercent: 10, ShieldCapPercent: 50},
@@ -164,6 +180,10 @@ func DefaultRules() *Rules {
 		Player:    PlayerRules{ExpPerLevel: 100, DefaultCharacterID: "rookie"},
 		Equipment: EquipmentRules{UpgradeStepPerLevel: 0.02, MaxUpgradeLevel: 16, MaxStoneLevel: 12, MergeMinCount: 2, MergeMaxCount: 4},
 		Economy:   EconomyRules{CoinsPerGem: 100},
+		Bots: BotRules{LevelSpread: 3, WeaponUpgradeMin: 0, WeaponUpgradePerLevel: 0.2,
+			DefaultItems:    []string{"medkit", "teleport"},
+			RandomItems:     []string{"power_shot", "drill_bomb", "spider_net", "freeze_bomb", "air_strike", "wind_stopper"},
+			RandomItemCount: 1, MedkitHPPercent: 35, TeleportLavaMarginPx: 40, TeleportEnemyMarginPx: 120},
 	}
 }
 
@@ -178,7 +198,7 @@ func (r *Rules) MaxSkillRank() int {
 
 // Field is one value of a rules group: its key in the row's JSON object, the admin label and
 // help, and the valid range (inclusive; each value of a map). A string field must not be
-// empty.
+// empty; a list of strings may be, but none of its entries.
 type Field struct {
 	Key   string
 	Label string
@@ -271,6 +291,17 @@ var RuleGroups = []Group{
 	{Key: "rules.economy", Title: "Kinh tế", Fields: []Field{
 		{"coinsPerGem", "Coin mỗi gem (gốc)", "Gói coin chỉ hiện bonus khi tốt hơn tỉ lệ này (client)", 1, 1000000},
 	}},
+	{Key: "rules.bots", Title: "Bot", Desc: "Bot của Xếp hạng và Đấu với máy: cấp, súng, vật phẩm. Độ chính xác, tỉ lệ dùng item, di chuyển, quên hồi máu theo hạng sửa ở Matchmaking (bot_difficulty).", Fields: []Field{
+		{"levelSpread", "Lệch cấp tối đa", "Cấp bot = cấp trung bình của người chơi ± tối đa chừng này (từ 1 tới cấp tối đa)", 0, 1000},
+		{"weaponUpgradeMin", "Cường hóa súng tối thiểu", "Súng của bot được cường hóa ít nhất chừng này", 0, 100},
+		{"weaponUpgradePerLevel", "Cường hóa tối đa / cấp yêu cầu của súng", "Cường hóa tối đa = cấp yêu cầu của súng × giá trị này (không quá cấp cường hóa tối đa)", 0, 10},
+		{"defaultItems", "Vật phẩm mặc định", "Mã vật phẩm mọi bot mang, cách nhau bằng dấu phẩy", 0, 0},
+		{"randomItems", "Vật phẩm ngẫu nhiên", "Bot mang thêm vật phẩm ngẫu nhiên trong danh sách này (để trống: mọi vật phẩm bot biết dùng)", 0, 0},
+		{"randomItemCount", "Số vật phẩm ngẫu nhiên", "", 0, 20},
+		{"medkitHpPercent", "Hồi máu khi máu ≤ (%)", "Bot dùng hộp cứu thương khi máu còn chừng này % máu tối đa trở xuống", 1, 100},
+		{"teleportLavaMarginPx", "Dịch chuyển: cách dung nham (px)", "Bot không dịch chuyển tới chỗ cách dung nham gần hơn chừng này", 0, 2000},
+		{"teleportEnemyMarginPx", "Dịch chuyển: cách địch (px)", "Bot không dịch chuyển tới chỗ cách địch (theo chiều ngang) gần hơn chừng này", 0, 5000},
+	}},
 }
 
 // RuleGroup returns the group with key.
@@ -332,6 +363,13 @@ func (f Field) checkValue(t reflect.Type, raw json.RawMessage) (reflect.Value, e
 			return v, fmt.Errorf("%s: required", f.Key)
 		}
 		return v, nil
+	case reflect.Slice:
+		for i := 0; i < v.Len(); i++ {
+			if strings.TrimSpace(v.Index(i).String()) == "" {
+				return v, fmt.Errorf("%s: empty entry", f.Key)
+			}
+		}
+		return v, nil
 	case reflect.Map:
 		if v.Len() == 0 {
 			return v, fmt.Errorf("%s: at least one entry is required", f.Key)
@@ -364,6 +402,8 @@ func kindName(t reflect.Type) string {
 		return "number"
 	case reflect.String:
 		return "text"
+	case reflect.Slice:
+		return "list of texts"
 	case reflect.Map:
 		if t.Elem().Kind() == reflect.Int {
 			return "map of whole numbers"
@@ -418,7 +458,7 @@ func (g Group) Encode(r *Rules) string {
 }
 
 // FormValues are r's group fields as admin form text: numbers in their shortest form, a map
-// as "key=value" lines in key order.
+// as "key=value" lines in key order, a list as "a, b".
 func (g Group) FormValues(r *Rules) map[string]string {
 	target := g.target(r)
 	out := map[string]string{}
@@ -438,6 +478,8 @@ func (g Group) FormValues(r *Rules) map[string]string {
 				}
 			}
 			out[f.Key] = strings.Join(lines, "\n")
+		case reflect.Slice:
+			out[f.Key] = strings.Join(v.Interface().([]string), ", ")
 		case reflect.Int:
 			out[f.Key] = strconv.FormatInt(v.Int(), 10)
 		case reflect.Float64:
@@ -452,6 +494,11 @@ func (g Group) FormValues(r *Rules) map[string]string {
 // IsMap reports whether the field holds a map (edited as key=value lines).
 func (g Group) IsMap(key string) bool {
 	return field(g.target(DefaultRules()), key).Kind() == reflect.Map
+}
+
+// IsList reports whether the field holds a list of texts (edited as "a, b").
+func (g Group) IsList(key string) bool {
+	return field(g.target(DefaultRules()), key).Kind() == reflect.Slice
 }
 
 // IsText reports whether the field holds text.
@@ -486,6 +533,14 @@ func (g Group) ParseForm(base *Rules, form map[string]string) (string, error) {
 				m[strings.TrimSpace(k)] = json.RawMessage(strings.TrimSpace(v))
 			}
 			raw, _ = json.Marshal(m)
+		case reflect.Slice:
+			list := []string{}
+			for _, e := range strings.FieldsFunc(text, func(r rune) bool { return r == ',' || r == '\n' || r == '\r' }) {
+				if e = strings.TrimSpace(e); e != "" {
+					list = append(list, e)
+				}
+			}
+			raw, _ = json.Marshal(list)
 		case reflect.String:
 			raw, _ = json.Marshal(strings.TrimSpace(text))
 		default:
@@ -527,6 +582,8 @@ func (r *Rules) Clone() *Rules {
 	for k, v := range r.SkillRanks.ByTierWord {
 		c.SkillRanks.ByTierWord[k] = v
 	}
+	c.Bots.DefaultItems = append([]string{}, r.Bots.DefaultItems...)
+	c.Bots.RandomItems = append([]string{}, r.Bots.RandomItems...)
 	return &c
 }
 

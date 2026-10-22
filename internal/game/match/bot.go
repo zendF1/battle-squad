@@ -33,7 +33,7 @@ const (
 
 	botAllyBlastPenalty = 25.0 // explosion next to an ally digs out the ground under it
 
-	botMaxSteps = 3 // medkit, move, shoot
+	botMaxSteps = 4 // medkit, wind stopper, move, shoot
 
 	// Idle time from TurnStarted to the bot's first action
 	botTurnStartMinDelay = 1000 * time.Millisecond
@@ -49,8 +49,8 @@ func randomDelay(min, max time.Duration) time.Duration {
 	return min + time.Duration(rand.Int63n(int64(max-min)+1))
 }
 
-// botStep performs one bot action on the match loop. Medkits and moves do not
-// end the turn, so the bot schedules its next step after them.
+// botStep performs one bot action on the match loop. Medkits, the wind stopper and moves do
+// not end the turn, so the bot schedules its next step after them.
 func (m *Match) botStep(ctx context.Context, turn botTurnState, step int) {
 	bot := m.State.Players[m.State.CurrentPlayerID]
 	if m.resolving || bot == nil || !bot.IsBot || !bot.IsAlive {
@@ -68,7 +68,7 @@ func (m *Match) botStep(ctx context.Context, turn botTurnState, step int) {
 	case UseItemAction:
 		m.el.Log("UseItem", bot.PlayerID, act)
 		m.processUseItem(ctx, nil, act)
-		turn.usedItem = true
+		turn.noteItem(act.ItemID)
 	case MoveAction:
 		m.el.Log("Move", bot.PlayerID, act)
 		m.processMove(ctx, nil, act)
@@ -151,8 +151,23 @@ func (b *BotBrain) rollHit() bool {
 
 // botTurnState records what the bot already did this turn.
 type botTurnState struct {
-	usedItem bool
-	moved    bool
+	usedItems []string // instant items used (medkit, wind_stopper)
+	moved     bool
+}
+
+// noteItem records an instant item used this turn.
+func (t *botTurnState) noteItem(itemID string) { t.usedItems = append(t.usedItems, itemID) }
+
+// first reports whether this is the turn's first decision (nothing used or walked yet).
+func (t botTurnState) first() bool { return !t.moved && len(t.usedItems) == 0 }
+
+func (t botTurnState) used(itemID string) bool {
+	for _, it := range t.usedItems {
+		if it == itemID {
+			return true
+		}
+	}
+	return false
 }
 
 // shotPlan is a simulated shot and how good its outcome is.
@@ -191,11 +206,15 @@ func arcDeviation(angle float64) float64 {
 }
 
 // DecideAction returns a UseItemAction, MoveAction or ShootAction for the bot,
-// or nil when it cannot act (no weapon configured).
+// or nil when it cannot act (no weapon configured). In order: a medkit at low HP, the skill
+// at full energy, then the best shot; when no shot from here damages an enemy it walks to a
+// spot with one, opens one with an item (drill bomb, air strike, wind stopper), teleports to
+// a safe spot with one, or closes in, and otherwise fires the shot that lands closest to an
+// enemy. A shot that hits may carry a damage item (power shot, freeze bomb, spider net).
 func (b *BotBrain) DecideAction(m *Match, bot *BattlePlayerState, turn botTurnState) interface{} {
 	now := time.Now().Unix()
 
-	if !turn.usedItem && b.wantsMedkit(bot) {
+	if turn.first() && b.wantsMedkit(m, bot) {
 		return UseItemAction{ItemID: "medkit", ClientTimestamp: now}
 	}
 
@@ -212,32 +231,32 @@ func (b *BotBrain) DecideAction(m *Match, bot *BattlePlayerState, turn botTurnSt
 
 	best := b.bestShot(m, bot, bot.Position, weapon)
 
-	// Every trajectory is blocked or falls short: look for a better spot first
-	if best.quality() <= 0 && !turn.moved && bot.MoveEnergy > 0 && b.rng.Float64() < b.tier.MovementSmart {
-		if targetX, ok := b.bestMove(m, bot, weapon, best); ok {
-			dir := "right"
-			if targetX < bot.Position.X {
-				dir = "left"
-			}
-			return MoveAction{Direction: dir, TargetX: targetX, ClientTimestamp: now}
+	// Every trajectory is blocked, falls short or endangers an ally
+	if best.quality() <= 0 {
+		if act, ok := b.unblock(m, bot, weapon, best, turn, now); ok {
+			return act
 		}
 	}
 
 	if !best.found {
-		best = shotPlan{angle: 45, power: 50}
-		if b.nearestEnemyX(m, bot) < bot.Position.X {
-			best.angle = 135
-		}
+		best = b.closestOffMapShot(m, bot, weapon)
 	}
 
 	shot := best
-	if best.damage > 0 && !b.rollHit() {
+	hit := best.damage > 0
+	if hit && !b.rollHit() {
 		// Without a safe miss nearby (e.g. a huge blast radius) the best shot is fired
 		if miss, ok := b.nearMiss(m, bot, best, weapon); ok {
-			shot = miss
+			shot, hit = miss, false
 		}
 	}
-	return ShootAction{Angle: shot.angle, Power: shot.power, ActionMode: "weapon", ClientTimestamp: now}
+	act := ShootAction{Angle: shot.angle, Power: shot.power, ActionMode: "weapon", ClientTimestamp: now}
+	if hit {
+		if item := b.hitItem(bot); item != "" {
+			act.ActionMode, act.ItemID = "item", &item
+		}
+	}
+	return act
 }
 
 // botMissOffsets are the angle/power nudges tried around the best shot to find
@@ -255,12 +274,17 @@ const botNearMissSlack = 100.0
 // enemy or endangers an ally; among misses within botNearMissSlack it picks at
 // random, otherwise the closest one.
 func (b *BotBrain) nearMiss(m *Match, bot *BattlePlayerState, best shotPlan, weapon gamedata.WeaponConfig) (shotPlan, bool) {
+	return b.nearMissIn(m, bot, best, weapon, b.env(m, bot))
+}
+
+// nearMissIn is nearMiss with the shot flying in env.
+func (b *BotBrain) nearMissIn(m *Match, bot *BattlePlayerState, best shotPlan, weapon gamedata.WeaponConfig, env shotEnv) (shotPlan, bool) {
 	var near []shotPlan
 	closest := shotPlan{}
 	for _, off := range botMissOffsets {
 		angle := math.Max(botMinAngle, math.Min(botMaxAngle, best.angle+off[0]))
 		power := math.Max(botMinPower, math.Min(m.gd.Rules.Aim.PowerMax, best.power+off[1]))
-		s := b.evalShot(m, bot, bot.Position, angle, power, weapon)
+		s := b.evalShotIn(m, bot, bot.Position, angle, power, weapon, env)
 		if !s.found || s.damage > 0 || s.allyRisk > 0 {
 			continue
 		}
@@ -277,18 +301,17 @@ func (b *BotBrain) nearMiss(m *Match, bot *BattlePlayerState, best shotPlan, wea
 	return closest, closest.found
 }
 
-func (b *BotBrain) wantsMedkit(bot *BattlePlayerState) bool {
-	hasMedkit := false
-	for _, it := range bot.Items {
-		if it == "medkit" {
-			hasMedkit = true
-			break
-		}
-	}
-	if !hasMedkit || bot.MaxHP <= 0 || float64(bot.HP)/float64(bot.MaxHP) >= 0.5 {
+// wantsMedkit reports whether the bot heals now: it holds a medkit, is hurt and at or below
+// rules.bots medkitHpPercent of its max HP, and does not forget (the tier's
+// medkitForgetChance).
+func (b *BotBrain) wantsMedkit(m *Match, bot *BattlePlayerState) bool {
+	if !hasItem(bot, "medkit") || bot.MaxHP <= 0 || bot.HP >= bot.MaxHP {
 		return false
 	}
-	return b.rng.Float64() < b.tier.UseItemChance
+	if bot.HP*100 > bot.MaxHP*m.gd.Rules.Bots.MedkitHPPercent {
+		return false
+	}
+	return b.rng.Float64() >= b.tier.MedkitForgetChance
 }
 
 func botWeapon(gd *gamedata.Snapshot, bot *BattlePlayerState) (gamedata.WeaponConfig, bool) {
@@ -300,14 +323,31 @@ func botWeapon(gd *gamedata.Snapshot, bot *BattlePlayerState) (gamedata.WeaponCo
 	return weapon, ok
 }
 
+// shotEnv is what a simulated shot flies through besides the terrain: the wind and how much
+// terrain it drills through (drill_bomb).
+type shotEnv struct {
+	wind   WindState
+	pierce float64
+}
+
+// env is the bot's shot as it would fly now.
+func (b *BotBrain) env(m *Match, bot *BattlePlayerState) shotEnv {
+	return shotEnv{wind: m.State.Wind, pierce: m.drillPierce(bot)}
+}
+
 // bestShot searches a coarse angle/power grid, then refines the best few
 // candidates at 1° / 1 power resolution, for the bot standing at feet.
 func (b *BotBrain) bestShot(m *Match, bot *BattlePlayerState, feet Vector2, weapon gamedata.WeaponConfig) shotPlan {
+	return b.bestShotIn(m, bot, feet, weapon, b.env(m, bot))
+}
+
+// bestShotIn is bestShot with the shot flying in env.
+func (b *BotBrain) bestShotIn(m *Match, bot *BattlePlayerState, feet Vector2, weapon gamedata.WeaponConfig, env shotEnv) shotPlan {
 	var top []shotPlan // best first, at most botRefineTop
 	maxShotPower := m.gd.Rules.Aim.PowerMax
 	for angle := botMinAngle; angle <= botMaxAngle; angle += botCoarseAngleStep {
 		for power := botMinPower; power <= maxShotPower; power += botCoarsePowerStep {
-			top = insertTop(top, b.evalShot(m, bot, feet, angle, power, weapon))
+			top = insertTop(top, b.evalShotIn(m, bot, feet, angle, power, weapon, env))
 		}
 	}
 
@@ -322,7 +362,7 @@ func (b *BotBrain) bestShot(m *Match, bot *BattlePlayerState, feet Vector2, weap
 				if angle < botMinAngle || angle > botMaxAngle || power < botMinPower || power > maxShotPower {
 					continue
 				}
-				if s := b.evalShot(m, bot, feet, angle, power, weapon); s.betterThan(best) {
+				if s := b.evalShotIn(m, bot, feet, angle, power, weapon, env); s.betterThan(best) {
 					best = s
 				}
 			}
@@ -354,8 +394,20 @@ func insertTop(top []shotPlan, s shotPlan) []shotPlan {
 // evalShot simulates one shot exactly as processShoot would for the bot standing at feet
 // (the shot starts at the body centre) and scores where it explodes.
 func (b *BotBrain) evalShot(m *Match, bot *BattlePlayerState, feet Vector2, angle, power float64, weapon gamedata.WeaponConfig) shotPlan {
-	r := SimulateProjectile(bot.PlayerID, bot.TeamID, shotOriginAt(m.Terrain, feet), angle, power, weapon,
-		m.State.Wind, m.Terrain, m.State.Players, m.drillPierce(bot))
+	return b.evalShotIn(m, bot, feet, angle, power, weapon, b.env(m, bot))
+}
+
+// evalShotIn is evalShot with the shot flying in env.
+func (b *BotBrain) evalShotIn(m *Match, bot *BattlePlayerState, feet Vector2, angle, power float64, weapon gamedata.WeaponConfig, env shotEnv) shotPlan {
+	return b.scoreShot(m, bot, feet, shotOriginAt(m.Terrain, feet), angle, power, weapon, env)
+}
+
+// scoreShot simulates a shot fired from origin by the bot standing at feet (an air strike
+// starts at the top of the map) and scores where it explodes; found is false when it leaves
+// the map without exploding.
+func (b *BotBrain) scoreShot(m *Match, bot *BattlePlayerState, feet, origin Vector2, angle, power float64, weapon gamedata.WeaponConfig, env shotEnv) shotPlan {
+	r := SimulateProjectile(bot.PlayerID, bot.TeamID, origin, angle, power, weapon,
+		env.wind, m.Terrain, m.State.Players, env.pierce)
 	if r.ExplosionPoint == nil {
 		return shotPlan{}
 	}
@@ -391,12 +443,55 @@ func (b *BotBrain) evalShot(m *Match, bot *BattlePlayerState, feet Vector2, angl
 	return s
 }
 
-// bestMove tries walking to a few spots in range and returns the walk target
-// whose best shot beats current, if any; when no spot has a damaging shot it walks toward
-// the nearest enemy instead. Walks that drop off the map are skipped.
-func (b *BotBrain) bestMove(m *Match, bot *BattlePlayerState, weapon gamedata.WeaponConfig, current shotPlan) (float64, bool) {
-	reach := float64(bot.MoveEnergy * 2) // processMove: 1 energy per 2px
-	bestX, best, moved := 0.0, current, false
+// closestOffMapShot is the shot fired when every trajectory leaves the map without exploding:
+// the one whose flight ends closest to an enemy (wind included), never a fixed aim.
+func (b *BotBrain) closestOffMapShot(m *Match, bot *BattlePlayerState, weapon gamedata.WeaponConfig) shotPlan {
+	env := b.env(m, bot)
+	maxPower := m.gd.Rules.Aim.PowerMax
+	best, bestDist := shotPlan{angle: botMinAngle, power: maxPower}, math.MaxFloat64
+	for angle := botMinAngle; angle <= botMaxAngle; angle += botCoarseAngleStep {
+		for power := botMinPower; power <= maxPower; power += botCoarsePowerStep {
+			r := SimulateProjectile(bot.PlayerID, bot.TeamID, shotOriginAt(m.Terrain, bot.Position), angle, power, weapon,
+				env.wind, m.Terrain, m.State.Players, env.pierce)
+			end := r.Path[len(r.Path)-1].Position
+			if r.ExplosionPoint != nil {
+				end = *r.ExplosionPoint
+			}
+			if d := enemyDistance(m, bot, end); d < bestDist {
+				best, bestDist = shotPlan{angle: angle, power: power, miss: d}, d
+			}
+		}
+	}
+	return best
+}
+
+// enemyDistance is the distance from pos to the bot's nearest living enemy (MaxFloat64
+// without one).
+func enemyDistance(m *Match, bot *BattlePlayerState, pos Vector2) float64 {
+	d := math.MaxFloat64
+	for _, p := range m.State.Players {
+		if p.IsAlive && p.TeamID != bot.TeamID {
+			d = math.Min(d, math.Hypot(p.Position.X-pos.X, p.Position.Y-pos.Y))
+		}
+	}
+	return d
+}
+
+// moveOption is a walk the bot may take: its target and the best shot from where it ends
+// (none when it only closes in on an enemy).
+type moveOption struct {
+	targetX float64
+	shot    shotPlan
+	ok      bool
+}
+
+// bestMove tries walking to a few spots in range (move energy × px per energy, as
+// processMove) and returns the walk whose best shot beats current, if any; closeIn walks
+// toward the nearest enemy, for when no spot in reach has a damaging shot. Walks that drop
+// off the map are skipped.
+func (b *BotBrain) bestMove(m *Match, bot *BattlePlayerState, weapon gamedata.WeaponConfig, current shotPlan) (better, closeIn moveOption) {
+	reach := float64(bot.MoveEnergy) * m.gd.Physics.PxPerEnergy()
+	best := current
 	for _, frac := range []float64{-1, -0.5, 0.5, 1} {
 		targetX := bot.Position.X + frac*reach
 		pos, ok := predictMove(m.Terrain, bot.Position, targetX)
@@ -404,24 +499,31 @@ func (b *BotBrain) bestMove(m *Match, bot *BattlePlayerState, weapon gamedata.We
 			continue // falls off the map, or blocked by a wall
 		}
 		if s := b.bestShot(m, bot, pos, weapon); s.betterThan(best) {
-			bestX, best, moved = targetX, s, true
+			best, better = s, moveOption{targetX: targetX, shot: s, ok: true}
 		}
 	}
-	if !moved && best.quality() <= 0 {
-		// No spot in reach has a damaging shot: on a 2400 px map the enemy may simply be out
-		// of range (a full-power shot carries ~2070 px), so close in on the nearest one.
-		dir := 1.0
-		if b.nearestEnemyX(m, bot) < bot.Position.X {
-			dir = -1.0
-		}
-		for _, frac := range []float64{1, 0.5} {
-			targetX := bot.Position.X + dir*frac*reach
-			if pos, ok := predictMove(m.Terrain, bot.Position, targetX); ok && math.Abs(pos.X-bot.Position.X) >= 10 {
-				return targetX, true
-			}
+	// On a 2400 px map the enemy may simply be out of range (a full-power shot carries
+	// ~2070 px): close in on the nearest one.
+	dir := 1.0
+	if b.nearestEnemyX(m, bot) < bot.Position.X {
+		dir = -1.0
+	}
+	for _, frac := range []float64{1, 0.5} {
+		targetX := bot.Position.X + dir*frac*reach
+		if pos, ok := predictMove(m.Terrain, bot.Position, targetX); ok && math.Abs(pos.X-bot.Position.X) >= 10 {
+			return better, moveOption{targetX: targetX, ok: true}
 		}
 	}
-	return bestX, moved
+	return better, moveOption{}
+}
+
+// moveTo is the MoveAction walking to targetX.
+func moveTo(bot *BattlePlayerState, targetX float64, now int64) MoveAction {
+	dir := "right"
+	if targetX < bot.Position.X {
+		dir = "left"
+	}
+	return MoveAction{Direction: dir, TargetX: targetX, ClientTimestamp: now}
 }
 
 // predictMove mirrors processMove (WalkTo) and returns where the player ends up.

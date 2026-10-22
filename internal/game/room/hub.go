@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/game/match"
 	"battle-squad/internal/game/matchmaker"
 	"battle-squad/internal/shared/database"
@@ -178,9 +179,13 @@ func (h *Hub) CreateBattleFromMatch(ctx context.Context, result matchmaker.Match
 	if h.db != nil {
 		pool = h.db.Pool
 	}
+	var bots *botOutfitter
+	if result.Teams[0].Bots+result.Teams[1].Bots > 0 {
+		bots = newBotOutfitter(gamedata.Current(), loadBotWeaponsOrNone(ctx, querier(pool)), nil)
+	}
 	roster := buildRankedRoster(result, loadRankedProfiles(ctx, pool, humanIDs), func() string {
 		return "bot_" + generateID()[:8]
-	})
+	}, bots)
 	roster.Found.RoomID = roomID
 	roster.Found.MatchID = matchID
 
@@ -197,6 +202,7 @@ func (h *Hub) CreateBattleFromMatch(ctx context.Context, result matchmaker.Match
 	}
 
 	room := NewRoom(roomID, roomState, h, h.db)
+	room.bots = roster.Bots
 	room.reserveRankedItems(matchID)
 
 	h.Lock()

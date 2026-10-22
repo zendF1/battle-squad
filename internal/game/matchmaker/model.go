@@ -36,9 +36,12 @@ type EloConfig = ranked.EloConfig
 
 // BotTierConfig holds the bot behaviour for a single rank tier.
 type BotTierConfig struct {
-	HitChance     float64 `json:"hitChance"` // % of shots aimed to hit (0–100)
-	UseItemChance float64 `json:"useItemChance"`
+	HitChance     float64 `json:"hitChance"`     // % of shots aimed to hit (0–100)
+	UseItemChance float64 `json:"useItemChance"` // chance to use a random item (power shot, drill...) when it helps
 	MovementSmart float64 `json:"movementSmart"`
+	// MedkitForgetChance: chance (0–1) the bot forgets to heal at low HP (rules.bots
+	// medkitHpPercent); 0 heals every time
+	MedkitForgetChance float64 `json:"medkitForgetChance"`
 }
 
 // BotDifficultyConfig is the top-level struct loaded from the game_settings
@@ -96,15 +99,17 @@ func DefaultEloConfig() EloConfig {
 
 // DefaultBotDifficultyConfig returns the canonical bot difficulty defaults
 // that match the seed values in
-// migrations/005_add_loadouts_and_matchmaking.up.sql and
-// migrations/012_bot_hit_chance.up.sql.
+// migrations/005_add_loadouts_and_matchmaking.up.sql,
+// migrations/012_bot_hit_chance.up.sql and migrations/043_bot_loadout.up.sql
+// (medkitForgetChance: only bronze bots sometimes forget to heal).
 func DefaultBotDifficultyConfig() BotDifficultyConfig {
 	return BotDifficultyConfig{
 		Tiers: map[string]BotTierConfig{
 			"bronze": {
-				HitChance:     60,
-				UseItemChance: 0.3,
-				MovementSmart: 0.3,
+				HitChance:          60,
+				UseItemChance:      0.3,
+				MovementSmart:      0.3,
+				MedkitForgetChance: 0.15,
 			},
 			"silver": {
 				HitChance:     70,

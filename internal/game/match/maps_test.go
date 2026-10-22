@@ -490,7 +490,7 @@ func playBotMatch(t *testing.T, m *Match, maxTurns int) int {
 			switch act := NewBotBrain(m.BotTier).DecideAction(m, bot, ts).(type) {
 			case UseItemAction:
 				m.processUseItem(ctx, nil, act)
-				ts.usedItem = true
+				ts.noteItem(act.ItemID)
 			case MoveAction:
 				m.processMove(ctx, nil, act)
 				ts.moved = true

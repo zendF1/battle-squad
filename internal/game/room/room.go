@@ -37,6 +37,7 @@ type Room struct {
 	cancel    context.CancelFunc
 	match     *match.Match
 	matchDone chan struct{}
+	bots      map[string]botLoadout // the loadout of each bot (player id)
 }
 
 // getActualStats adds the player's allocated stat points and equipment to the
@@ -564,19 +565,27 @@ func (r *Room) processStartTutorial(client *ws.Client, payload QuickPlayPayload)
 		}
 	}
 
-	botName := "Target Bot"
+	botID := "bot_" + matchID[:8]
 	if aiBot {
-		botName = "Máy"
+		// "Đấu với máy": a bot equipped for the player's level
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		level := max(loadRankedProfiles(ctx, r.db.Pool, []string{client.PlayerID})[client.PlayerID].Level, 1)
+		l := newBotOutfitter(gamedata.Current(), loadBotWeaponsOrNone(ctx, querier(r.db.Pool)), nil).outfit(level)
+		cancel()
+		r.bots = map[string]botLoadout{botID: l}
+		r.State.Players = append(r.State.Players, botPlayer(botID, "Máy", 2, l))
+	} else {
+		// "Luyện tập": the idle target dummy
+		r.State.Players = append(r.State.Players, RoomPlayer{
+			PlayerID:    botID,
+			DisplayName: "Target Bot",
+			TeamID:      2,
+			CharacterID: "rookie",
+			Items:       []string{},
+			IsReady:     true,
+			IsHost:      false,
+		})
 	}
-	r.State.Players = append(r.State.Players, RoomPlayer{
-		PlayerID:    "bot_" + matchID[:8],
-		DisplayName: botName,
-		TeamID:      2,
-		CharacterID: "rookie",
-		Items:       []string{},
-		IsReady:     true,
-		IsHost:      false,
-	})
 
 	r.State.Status = "in_match"
 	r.broadcastRoomUpdated()
@@ -594,10 +603,7 @@ func (r *Room) processStartTutorial(client *ws.Client, payload QuickPlayPayload)
 		}
 
 		isBot := isBotID(p.PlayerID)
-		stats, look := baseStats(p.CharacterID), cosmetics{}
-		if !isBot {
-			stats, look = r.getActualStats(p.PlayerID, p.CharacterID)
-		}
+		stats, look := r.playerStats(p, isBot)
 		bp := newBattlePlayer(p, spawnPos, stats, look, isBot)
 		bp.IsIdle = isBot && !aiBot
 		matchPlayers = append(matchPlayers, bp)
@@ -668,8 +674,8 @@ func (r *Room) reservePlayerItems(matchID string) error {
 	defer tx.Rollback(ctx)
 
 	for _, p := range r.State.Players {
-		if len(p.Items) == 0 {
-			continue
+		if len(p.Items) == 0 || isBotID(p.PlayerID) {
+			continue // a bot's items are in no inventory
 		}
 
 		counts, err := itemCounts(p.Items)

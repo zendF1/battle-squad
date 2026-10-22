@@ -111,7 +111,9 @@ func TestGameDataRulesMigration(t *testing.T) {
 		('fall.damage_per_pixel', '0.5', 'number', 'Damage mỗi pixel rơi vượt ngưỡng', 'physics'),
 		('move.step_pixels', '10', 'number', 'Số pixel di chuyển mỗi tick khi giữ nút move', 'movement'),
 		('move.energy_cost_per_2px', '0.5', 'number', 'Năng lượng tiêu hao mỗi 2 pixel di chuyển', 'movement')`)
-	runSQL(t, db, "041_gamedata_rules.up.sql")
+	for _, n := range names[at:] { // 041 and the migrations after it (043 adds rules.bots)
+		runSQL(t, db, n)
+	}
 	if err := SeedConfigFromYAML(ctx, db, configsDir()); err != nil { // the other config rows (the skills exist)
 		t.Fatal(err)
 	}
@@ -148,7 +150,9 @@ func TestGameDataRulesMigration(t *testing.T) {
 	if cols != 0 || setting(t, db, "fall.damage_threshold") != "120" {
 		t.Fatalf("down left %d columns", cols)
 	}
-	runSQL(t, db, "041_gamedata_rules.up.sql")
+	for _, n := range names[at:] {
+		runSQL(t, db, n)
+	}
 	execSQL(t, db, `UPDATE game_settings SET value = '150' WHERE key = 'fall.damage_threshold'`)
 	checkDefaults(t, db)
 

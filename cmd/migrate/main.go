@@ -70,6 +70,7 @@ func main() {
 		filepath.Join("migrations", "040_gamedata_texts.up.sql"),
 		filepath.Join("migrations", "041_gamedata_rules.up.sql"),
 		filepath.Join("migrations", "042_party_invite.up.sql"),
+		filepath.Join("migrations", "043_bot_loadout.up.sql"),
 	}
 
 	for _, migrationPath := range migrations {

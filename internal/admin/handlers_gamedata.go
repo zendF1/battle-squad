@@ -157,6 +157,7 @@ type ruleFieldView struct {
 	Value  string
 	IsMap  bool
 	IsText bool
+	IsList bool
 }
 
 type ruleGroupView struct {
@@ -180,7 +181,8 @@ func (s *Server) handleRulesPage(w http.ResponseWriter, r *http.Request) {
 		vals := g.FormValues(rules)
 		gv := ruleGroupView{Group: g}
 		for _, f := range g.Fields {
-			gv.Fields = append(gv.Fields, ruleFieldView{Field: f, Value: vals[f.Key], IsMap: g.IsMap(f.Key), IsText: g.IsText(f.Key)})
+			gv.Fields = append(gv.Fields, ruleFieldView{Field: f, Value: vals[f.Key], IsMap: g.IsMap(f.Key), IsText: g.IsText(f.Key),
+				IsList: g.IsList(f.Key)})
 		}
 		groups = append(groups, gv)
 	}

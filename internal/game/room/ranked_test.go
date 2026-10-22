@@ -43,11 +43,14 @@ func TestRankedRosterOneHuman(t *testing.T) {
 		},
 		MapID: "grassland_valley", HasBot: true,
 	}
-	gamedata.UseData(t, &gamedata.GameData{Maps: map[string]gamedata.MapConfig{
+	snap := gamedata.UseYAML(t, configsDir())
+	gamedata.UseForTest(t, snap.WithData(&gamedata.GameData{Maps: map[string]gamedata.MapConfig{
 		"grassland_valley": {MapID: "grassland_valley", Name: "Thung lũng cỏ"},
-	}})
+	}, Characters: snap.Data.Characters, Weapons: snap.Data.Weapons, Items: snap.Data.Items}))
 	profiles := map[string]rankedProfile{"p1": {DisplayName: "Smoke", Level: 40, TitleID: "first_blood"}}
-	ro := buildRankedRoster(result, profiles, botIDs())
+	// the middle of every draw: level 40 + 0, the middle free character
+	bots := newBotOutfitter(gamedata.Current(), testBotWeapons(), func(n int) int { return n / 2 })
+	ro := buildRankedRoster(result, profiles, botIDs(), bots)
 	ro.Found.RoomID, ro.Found.MatchID = "r1", "m1"
 
 	raw, err := json.Marshal(ro.Found)
@@ -57,10 +60,10 @@ func TestRankedRosterOneHuman(t *testing.T) {
 	want := `{"roomId":"r1","matchId":"m1","mapId":"grassland_valley","mapName":"Thung lũng cỏ","mapTheme":"grassland","mode":"ranked_2v2","teams":[` +
 		`{"teamId":1,"players":[` +
 		`{"playerId":"p1","displayName":"Smoke","characterId":"spark","isBot":false,"level":40,"rating":1050,"tier":"silver","division":3,"titleId":"first_blood"},` +
-		`{"playerId":"bot_0001","displayName":"Bot 0001","characterId":"rookie","isBot":true,"level":40,"rating":1050,"tier":"silver","division":3,"titleId":""}]},` +
+		`{"playerId":"bot_0001","displayName":"Bot 0001","characterId":"spark","isBot":true,"level":40,"rating":1050,"tier":"silver","division":3,"titleId":""}]},` +
 		`{"teamId":2,"players":[` +
 		`{"playerId":"bot_0002","displayName":"Bot 0002","characterId":"rookie","isBot":true,"level":40,"rating":1050,"tier":"silver","division":3,"titleId":""},` +
-		`{"playerId":"bot_0003","displayName":"Bot 0003","characterId":"rookie","isBot":true,"level":40,"rating":1050,"tier":"silver","division":3,"titleId":""}]}]}`
+		`{"playerId":"bot_0003","displayName":"Bot 0003","characterId":"tanko","isBot":true,"level":40,"rating":1050,"tier":"silver","division":3,"titleId":""}]}]}`
 	if string(raw) != want {
 		t.Fatalf("MatchFound\n got %s\nwant %s", raw, want)
 	}
@@ -74,6 +77,17 @@ func TestRankedRosterOneHuman(t *testing.T) {
 	}
 	if ro.BotRating != 1050 || ro.TeamRatings[1] != 1050 || ro.TeamRatings[2] != 1050 {
 		t.Fatalf("ratings bot %d teams %v", ro.BotRating, ro.TeamRatings)
+	}
+	// each bot's room entry carries its loadout: medkit, teleport and one random item
+	for _, p := range ro.Players[1:] {
+		l, ok := ro.Bots[p.PlayerID]
+		if !ok || p.CharacterID != l.CharacterID || !reflect.DeepEqual(p.Items, l.Items) || len(p.Items) != 3 ||
+			p.Items[0] != "medkit" || p.Items[1] != "teleport" {
+			t.Fatalf("bot %+v loadout %+v", p, l)
+		}
+		if want := l.CharacterID + "_weapon_lv40"; l.Look.WeaponItemID != want && l.Look.WeaponItemID != "crafted_weapon_gold" {
+			t.Fatalf("bot %s gun %q, want %s or crafted_weapon_gold", p.PlayerID, l.Look.WeaponItemID, want)
+		}
 	}
 }
 
@@ -91,7 +105,7 @@ func TestRankedRosterFullMatch(t *testing.T) {
 		},
 		MapID: "m",
 	}
-	ro := buildRankedRoster(result, map[string]rankedProfile{"a": {DisplayName: "A", Level: 5}}, botIDs())
+	ro := buildRankedRoster(result, map[string]rankedProfile{"a": {DisplayName: "A", Level: 5}}, botIDs(), nil)
 	if ro.TeamRatings[1] != 1100 || ro.TeamRatings[2] != 1080 {
 		t.Fatalf("team ratings %v", ro.TeamRatings)
 	}

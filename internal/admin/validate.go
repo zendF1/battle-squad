@@ -155,6 +155,23 @@ func validateJSONSetting(key string, body []byte) error {
 				}
 			}
 		}
+	case "bot_difficulty":
+		var c struct {
+			Tiers map[string]map[string]float64 `json:"tiers"`
+		}
+		if err := json.Unmarshal(body, &c); err != nil {
+			return fmt.Errorf("bot_difficulty: %w", err)
+		}
+		limits := map[string]float64{"hitChance": 100, "useItemChance": 1, "movementSmart": 1, "medkitForgetChance": 1}
+		for tier, fields := range c.Tiers {
+			for name, v := range fields {
+				if hi, ok := limits[name]; ok {
+					if err := inRange(tier+"."+name, v, 0, hi); err != nil {
+						return err
+					}
+				}
+			}
+		}
 	case "character_levels":
 		var c struct {
 			Levels []struct {

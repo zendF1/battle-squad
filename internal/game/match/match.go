@@ -931,13 +931,10 @@ func (m *Match) shootTeleport(ctx context.Context, player *BattlePlayerState, ac
 	m.broadcastItemUsed(player.PlayerID, "teleport")
 
 	tl := m.newTimeline()
-	if result.ExplosionPoint != nil && result.ExplosionPoint.Y < float64(m.Terrain.Height) {
-		landY := m.Terrain.GetLandingY(result.ExplosionPoint.X, result.ExplosionPoint.Y)
-		if landY < float64(m.Terrain.Height) {
-			from := player.Position
-			player.Position = Vector2{X: result.ExplosionPoint.X, Y: landY}
-			tl.add(ShotEvent{T: flightEnd(result), Type: "teleport", PlayerID: player.PlayerID, From: vecPtr(from), To: vecPtr(player.Position)})
-		}
+	if to, ok := teleportLanding(m.Terrain, result); ok {
+		from := player.Position
+		player.Position = to
+		tl.add(ShotEvent{T: flightEnd(result), Type: "teleport", PlayerID: player.PlayerID, From: vecPtr(from), To: vecPtr(player.Position)})
 	}
 
 	shot := &ShotResolved{
@@ -1077,10 +1074,11 @@ func (m *Match) checkWinCondition(ctx context.Context) {
 			}
 		}
 
-		// Items spent during the match; unused reservations are released
+		// Items spent during the match; unused reservations are released. A bot's items are
+		// not in any inventory.
 		usedItems := make(map[string][]string)
 		for _, p := range m.State.Players {
-			if len(p.UsedItems) > 0 {
+			if len(p.UsedItems) > 0 && !p.IsBot {
 				usedItems[p.PlayerID] = p.UsedItems
 			}
 		}
