@@ -38,6 +38,28 @@ func CompareTiers(a, b string) int {
 	return TierIndex(a) - TierIndex(b)
 }
 
+// Band is a tier's rating range: from MinRating up to the next band's MinRating (the last
+// band has no top). Its Divisions split it into DivisionSize rating points each, from the
+// lowest (division Divisions) up to division 1, which keeps everything above.
+type Band struct {
+	Tier         string
+	MinRating    int
+	Divisions    int
+	DivisionSize int // 0 for a tier with a single division
+}
+
+// Bands are the tiers' rating ranges, lowest first (one per Tiers entry): bronze < 1000 in
+// divisions of 333, silver < 1200 / 66, gold < 1500 / 100, platinum < 1800 / 100, diamond <
+// 2200 / 133, then master (a single division). GET /gamedata sends them to the client.
+var Bands = []Band{
+	{Tier: "bronze", MinRating: 0, Divisions: 3, DivisionSize: 333},
+	{Tier: "silver", MinRating: 1000, Divisions: 3, DivisionSize: 66},
+	{Tier: "gold", MinRating: 1200, Divisions: 3, DivisionSize: 100},
+	{Tier: "platinum", MinRating: 1500, Divisions: 3, DivisionSize: 100},
+	{Tier: "diamond", MinRating: 1800, Divisions: 3, DivisionSize: 133},
+	{Tier: "master", MinRating: 2200, Divisions: 1},
+}
+
 // Tier maps a rating to its tier: bronze < 1000, silver < 1200, gold < 1500,
 // platinum < 1800, diamond < 2200, master.
 func Tier(rating int) string {
@@ -46,32 +68,21 @@ func Tier(rating int) string {
 }
 
 // TierAndDivision maps a rating to its tier and division (3 lowest .. 1 highest;
-// master is always 1).
+// master is always 1): the last band whose MinRating the rating reaches (bronze below 0 too),
+// division Divisions − (rating − MinRating) / DivisionSize (integer division) clamped to
+// 1..Divisions.
 func TierAndDivision(rating int) (string, int) {
-	div := func(base, width int) int {
-		d := 3 - (rating-base)/width
-		if d < 1 {
-			d = 1
+	b := Bands[0]
+	for _, band := range Bands[1:] {
+		if rating >= band.MinRating {
+			b = band
 		}
-		if d > 3 {
-			d = 3
-		}
-		return d
 	}
-	switch {
-	case rating < 1000:
-		return "bronze", div(0, 333)
-	case rating < 1200:
-		return "silver", div(1000, 66)
-	case rating < 1500:
-		return "gold", div(1200, 100)
-	case rating < 1800:
-		return "platinum", div(1500, 100)
-	case rating < 2200:
-		return "diamond", div(1800, 133)
-	default:
-		return "master", 1
+	if b.Divisions <= 1 || b.DivisionSize <= 0 {
+		return b.Tier, 1
 	}
+	d := b.Divisions - (rating-b.MinRating)/b.DivisionSize
+	return b.Tier, min(max(d, 1), b.Divisions)
 }
 
 // EloConfig is the game_settings "elo" row.

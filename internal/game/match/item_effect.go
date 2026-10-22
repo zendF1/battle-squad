@@ -64,7 +64,7 @@ func ApplyImmediateItem(
 		var duration = 1 // lasts 1 turn (current turn)
 		switch itemID {
 		case "power_shot":
-			ApplyStatusEffect(player, StatusEffect{EffectID: "power_shot", TargetPlayerID: playerID, DurationTurn: duration, Value: 1.5, SourcePlayerID: playerID})
+			ApplyStatusEffect(player, StatusEffect{EffectID: "power_shot", TargetPlayerID: playerID, DurationTurn: duration, Value: powerShotFactor, SourcePlayerID: playerID})
 		case "drill_bomb":
 			ApplyStatusEffect(player, StatusEffect{EffectID: "drill_bomb", TargetPlayerID: playerID, DurationTurn: duration, SourcePlayerID: playerID})
 		case "spider_net":

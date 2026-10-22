@@ -137,9 +137,12 @@ func DefaultMilestones() Milestones {
 	return Milestones{Bonus6: 0.10, Bonus10: 0.20, Bonus14: 0.40, Bonus16: 1.00}
 }
 
+// UpgradeStepPerLevel is what each +level of a piece adds to its stat multiplier (2 %).
+const UpgradeStepPerLevel = 0.02
+
 // upgradeMultiplier is 1 + 2% per upgrade level + reached milestone bonuses.
 func (ms Milestones) upgradeMultiplier(level int) float64 {
-	mul := 1.0 + float64(level)*0.02
+	mul := 1.0 + float64(level)*UpgradeStepPerLevel
 	if level >= 6 {
 		mul += ms.Bonus6
 	}

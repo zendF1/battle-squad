@@ -5,6 +5,8 @@
   value: 450.0
   maxUsePerMatch: 1
   cooldown: 0
+  displayName: "Hộp cứu thương"
+  sortOrder: 1
 
 - itemId: teleport
   name: Teleport
@@ -13,6 +15,8 @@
   value: 0.0
   maxUsePerMatch: 1
   cooldown: 0
+  displayName: "Dịch chuyển"
+  sortOrder: 2
 
 - itemId: power_shot
   name: Power Shot
@@ -21,6 +25,8 @@
   value: 1.5
   maxUsePerMatch: 1
   cooldown: 0
+  displayName: "Tăng lực"
+  sortOrder: 3
 
 - itemId: drill_bomb
   name: Drill Bomb
@@ -29,6 +35,8 @@
   value: 50.0
   maxUsePerMatch: 1
   cooldown: 0
+  displayName: "Bom khoan"
+  sortOrder: 4
 
 - itemId: spider_net
   name: Spider Net
@@ -37,6 +45,8 @@
   value: 50.0
   maxUsePerMatch: 1
   cooldown: 0
+  displayName: "Lưới nhện"
+  sortOrder: 5
 
 - itemId: freeze_bomb
   name: Freeze Bomb
@@ -45,6 +55,8 @@
   value: 1.0
   maxUsePerMatch: 1
   cooldown: 0
+  displayName: "Bom băng"
+  sortOrder: 6
 
 - itemId: air_strike
   name: Air Strike
@@ -53,6 +65,8 @@
   value: 30.0
   maxUsePerMatch: 1
   cooldown: 0
+  displayName: "Không kích"
+  sortOrder: 7
 
 - itemId: wind_stopper
   name: Wind Stopper
@@ -61,3 +75,5 @@
   value: 2.0
   maxUsePerMatch: 1
   cooldown: 0
+  displayName: "Dừng gió"
+  sortOrder: 8

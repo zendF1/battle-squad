@@ -357,11 +357,11 @@ func updateProfilePostMatch(ctx context.Context, tx pgx.Tx, economyRepo *economy
 		return false, 0, err
 	}
 
-	// Calculate exp curve: level N requires N * 100 exp to level up
+	// Calculate exp curve: level N requires N * PlayerExpPerLevel exp to level up
 	nextExp := exp + expGained
 	levelUp := false
-	for nextExp >= level*100 {
-		nextExp -= level * 100
+	for nextExp >= level*PlayerExpPerLevel {
+		nextExp -= level * PlayerExpPerLevel
 		level++
 		levelUp = true
 	}
@@ -386,6 +386,9 @@ func updateProfilePostMatch(ctx context.Context, tx pgx.Tx, economyRepo *economy
 
 // RankedMode is the only mode that changes rating.
 const RankedMode = "ranked_2v2"
+
+// PlayerExpPerLevel: a player at level N needs N × PlayerExpPerLevel EXP to reach N + 1.
+const PlayerExpPerLevel = 100
 
 // updatePlayerRank applies a ranked result to the player's row of the active
 // season (created, as "Mùa N", when no season is active). A player without a

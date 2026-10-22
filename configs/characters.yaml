@@ -10,6 +10,10 @@
   difficulty: 1
   weaponId: basic_rocket
   skillId: triple_shot
+  roleName: "Cân bằng"
+  playstyle: "Không nổi bật hẳn mặt nào nhưng cũng chẳng có điểm yếu rõ ràng: máu, sát thương và tầm di chuyển đều vừa phải, đạn chịu gió bình thường. Hợp để tập căn góc và lực; khi đầy năng lượng, Mưa tên lửa trút xuống cả một vùng quanh pháo hiệu, khó né và đốt máu đối thủ ở lượt sau. Đổi lại, Rookie đánh không đau bằng Spark và không lì bằng Flora."
+  gunKind: bazooka
+  sortOrder: 1
 
 - characterId: tanko
   name: Tanko
@@ -23,6 +27,10 @@
   difficulty: 2
   weaponId: cannon_ball
   skillId: heavy_bomb
+  roleName: "Phá địa hình"
+  playstyle: "Chuyên phá địa hình: đại pháo khoét hố sâu hơn hẳn mọi người, phá chỗ nấp và đào đất ngay dưới chân đối thủ. Đạn nặng ít bị gió đẩy nên vẫn bắn chuẩn khi trời gió lớn; để dành Bom liên hoàn bắn thẳng vào địch: từng quả đào sâu thêm, địch rơi xuống đáy hố, trúng tiếp và bị cầm chân. Bù lại mỗi phát gây ít sát thương và Tanko đi được ngắn nhất, khó thoát khỏi chỗ đứng xấu."
+  gunKind: cannon
+  sortOrder: 2
 
 - characterId: spark
   name: Spark
@@ -36,6 +44,10 @@
   difficulty: 2
   weaponId: electric_orb
   skillId: shock_field
+  roleName: "Sát thương"
+  playstyle: "Đánh đau nhất: chỉ vài phát trúng là hạ được đối thủ, còn Tia laze xuyên địa hình, trúng mọi địch trên đường và làm họ mất lượt sau. Spark chạy xa nhất nên dễ đổi chỗ tìm góc bắn hoặc né khỏi tầm ngắm. Điểm yếu là máu và phòng thủ mỏng nhất, đạn nhẹ bị gió đẩy mạnh nên phải tính gió thật kỹ."
+  gunKind: shock_rifle
+  sortOrder: 3
 
 - characterId: flora
   name: Flora
@@ -49,3 +61,7 @@
   difficulty: 1
   weaponId: seed_bomb
   skillId: healing_bloom
+  roleName: "Bền bỉ"
+  playstyle: "Lì đòn nhất: máu và phòng thủ cao nhất, lại có Hoa hồi xuân hồi máu cả đội, máu dư thành khiên, nên càng đánh lâu càng có lợi. Hãy đứng vững, bắn chắc tay và kéo trận dài để đối thủ cạn máu trước. Bù lại sát thương thấp và đạn gần như không khoét đất, nên khó kết thúc trận nhanh."
+  gunKind: seed_launcher
+  sortOrder: 4

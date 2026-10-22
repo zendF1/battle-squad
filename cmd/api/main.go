@@ -14,6 +14,7 @@ import (
 	"battle-squad/internal/api/dev"
 	"battle-squad/internal/api/economy"
 	"battle-squad/internal/api/equipment"
+	gamedataapi "battle-squad/internal/api/gamedata"
 	"battle-squad/internal/api/giftcode"
 	"battle-squad/internal/api/iap"
 	"battle-squad/internal/api/inventory"
@@ -129,6 +130,7 @@ func main() {
 	appconfigHandler := appconfig.NewHandler(appconfigService)
 
 	mapsHandler := maps.NewHandler(maps.NewService(maps.NewRepository(db)))
+	gamedataHandler := gamedataapi.NewHandler(gamedataapi.NewService(gamedataapi.NewRepository(db)))
 
 	matchhistoryRepo := matchhistory.NewRepository(db)
 	matchhistoryService := matchhistory.NewService(matchhistoryRepo)
@@ -191,6 +193,10 @@ func main() {
 	// Map catalogue (public: the client syncs it before login, config_maps is the source)
 	r.Get("/maps", mapsHandler.List)
 	r.Get("/maps/{mapId}", mapsHandler.Get)
+
+	// Game data (public: every rule, number and text the client needs, loaded on launch and
+	// cached; docs/gamedata-contract.md)
+	r.Get("/gamedata", gamedataHandler.Get)
 
 	// 9. Protected Endpoints (Auth Required)
 	r.Group(func(r chi.Router) {

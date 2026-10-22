@@ -144,13 +144,15 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 
 	// Seed characters
 	charQuery := `INSERT INTO config_characters
-		(character_id, name, role, hp, damage, mobility, defense, skill_power, terrain_damage, difficulty, weapon_id, skill_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		(character_id, name, role, hp, damage, mobility, defense, skill_power, terrain_damage, difficulty, weapon_id, skill_id,
+		 role_name, playstyle, gun_kind, sort_order)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		ON CONFLICT (character_id) DO NOTHING`
 	for _, c := range data.Characters {
 		if _, err := db.Pool.Exec(ctx, charQuery,
 			c.CharacterID, c.Name, c.Role, c.HP, c.Damage, c.Mobility,
 			c.Defense, c.SkillPower, c.TerrainDamage, c.Difficulty, c.WeaponID, c.SkillID,
+			c.RoleName, c.Playstyle, c.GunKind, c.SortOrder,
 		); err != nil {
 			return fmt.Errorf("insert character %s: %w", c.CharacterID, err)
 		}
@@ -174,13 +176,14 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 
 	// Seed skills
 	skillQuery := `INSERT INTO config_skills
-		(skill_id, character_id, name, cooldown_turn, effect_type, projectile_count, status_effect_id, damage_multiplier, description)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		(skill_id, character_id, name, cooldown_turn, effect_type, projectile_count, status_effect_id, damage_multiplier, description,
+		 description_template)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (skill_id) DO NOTHING`
 	for _, s := range data.Skills {
 		if _, err := db.Pool.Exec(ctx, skillQuery,
 			s.SkillID, s.CharacterID, s.Name, s.CooldownTurn, s.EffectType,
-			s.ProjectileCount, s.StatusEffectID, s.DamageMultiplier, s.Description,
+			s.ProjectileCount, s.StatusEffectID, s.DamageMultiplier, s.Description, s.DescriptionTemplate,
 		); err != nil {
 			return fmt.Errorf("insert skill %s: %w", s.SkillID, err)
 		}
@@ -189,13 +192,13 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 
 	// Seed items
 	itemQuery := `INSERT INTO config_items
-		(item_id, name, type, target_type, value, max_use_per_match, cooldown)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		(item_id, name, type, target_type, value, max_use_per_match, cooldown, display_name, sort_order)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (item_id) DO NOTHING`
 	for _, i := range data.Items {
 		if _, err := db.Pool.Exec(ctx, itemQuery,
 			i.ItemID, i.Name, i.Type, i.TargetType, i.Value,
-			i.MaxUsePerMatch, i.Cooldown,
+			i.MaxUsePerMatch, i.Cooldown, i.DisplayName, i.SortOrder,
 		); err != nil {
 			return fmt.Errorf("insert item %s: %w", i.ItemID, err)
 		}

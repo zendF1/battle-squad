@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"strconv"
 	"time"
 
 	"battle-squad/internal/api/economy"
@@ -49,13 +48,9 @@ func (s *Service) getMergeRatePerItem(ctx context.Context) float64 {
 	err := s.db.Pool.QueryRow(ctx,
 		`SELECT value FROM game_settings WHERE key = 'equipment.merge_rate_per_item'`).Scan(&val)
 	if err != nil {
-		return 25.0 // default
+		return DefaultMergeRatePerItem
 	}
-	rate, err := strconv.ParseFloat(val, 64)
-	if err != nil {
-		return 25.0
-	}
-	return rate
+	return ParseMergeRatePerItem(val)
 }
 
 // getSellRate reads game_settings "equipment.sell_rate" (ParseSellRate).
@@ -610,7 +605,7 @@ func (s *Service) UpgradeEquipment(ctx context.Context, playerID string, req Upg
 	if req.ExpectedLevel != nil && *req.ExpectedLevel != equip.UpgradeLevel {
 		return nil, model.ErrEquipmentModified
 	}
-	if equip.UpgradeLevel >= 16 {
+	if equip.UpgradeLevel >= MaxUpgradeLevel {
 		return nil, model.ErrEquipmentMaxUpgrade
 	}
 	if len(req.Stones) == 0 {
@@ -1058,13 +1053,13 @@ func (s *Service) UnsocketGem(ctx context.Context, playerID string, req Unsocket
 // ---------------------------------------------------------------------------
 
 func (s *Service) MergeStones(ctx context.Context, playerID string, req MergeStoneRequest) (*MergeResult, error) {
-	if req.Count < 2 {
+	if req.Count < MergeMinCount {
 		return nil, model.ErrMergeMinCount
 	}
-	if req.Count > 4 {
+	if req.Count > MergeMaxCount {
 		return nil, model.ErrMergeMaxCount
 	}
-	if req.StoneLevel >= 12 {
+	if req.StoneLevel >= MaxStoneLevel {
 		return nil, model.ErrMergeMaxLevel
 	}
 

@@ -102,6 +102,7 @@ internal/
 │   ├── moderation/       Player reports, ban/unban (admin only)
 │   ├── appconfig/        Version policy, remote config
 │   ├── maps/             GET /maps, /maps/{id}: map catalogue cho client sync
+│   ├── gamedata/         GET /gamedata: mọi luật / số / text client cần (docs/gamedata-contract.md)
 │   ├── matchhistory/     Match history query
 │   ├── rooms/            Room listing (đọc từ Redis)
 │   └── dev/              Dev tools (clear rooms, reset data)
@@ -169,6 +170,7 @@ Mọi response REST (trừ `/healthz`, `/readyz`, `/livez`, `/metrics`) đều c
 | GET | `/app/version-policy?platform=` | GetVersionPolicy | Policy version cho android/ios |
 | GET | `/app/config` | GetRemoteConfig | Remote config (API URL, WS URL, features) |
 | GET | `/maps` | maps.List | Danh sách map để client sync (nguồn: `config_maps` + `config_brick_types`), xem **Maps** ở mục 7. Header `ETag` = `version`; gửi `If-None-Match` với ETag đã cache → `304` khi không đổi |
+| GET | `/gamedata` | gamedata.Get | Public. Mọi luật, số và text tiếng Việt client cần (vật lý, aim aid, vũ khí, skill + template mô tả, nhân vật, item, status effect, rank, level, trang bị, matchmaking, mode, theme) để client không hardcode gì; hợp đồng đầy đủ ở `docs/gamedata-contract.md`. `version` = hash nội dung = `ETag`; `If-None-Match` khớp → `304` |
 | GET | `/maps/{mapId}` | maps.Get | Một map kèm `tiles` (lưới brick id, `[]` với map legacy) và `spawnPoints`, để vẽ preview; không có → `MAP_NOT_FOUND` 404 |
 | GET | `/healthz` | Healthz | Health check |
 | GET | `/readyz` | Readyz | Readiness check (DB + Redis) |
@@ -1171,7 +1173,8 @@ State-based decision making, difficulty theo rank tier:
 | Table | PK | Mô tả |
 |-------|-----|-------|
 | `game_settings` | `key` | Key-value config (matchmaking, elo, bot_difficulty) |
-| `config_characters/weapons/skills/items/maps` | `*_id` | Game data (admin editable); `config_maps.theme` (036) |
+| `config_characters/weapons/skills/items/maps` | `*_id` | Game data (admin editable); `config_maps.theme` (036); 040: `config_characters.role_name / playstyle / gun_kind / sort_order`, `config_items.display_name / sort_order`, `config_skills.description_template` |
+| `config_status_effects`, `config_rank_tiers`, `config_equipment_tiers`, `config_game_modes`, `config_tips` | `effect_id` / `tier` / `tier` / `mode_id` / `tip_id` | 040: text tiếng Việt + thứ tự hiển thị cho `GET /gamedata` |
 | `config_brick_types` | `brick_type_id` | Brick của map tile: tên, `destructible`, `border` polygon, `color`; id 1..19 do 036 tạo |
 
 ---

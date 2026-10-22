@@ -10,6 +10,9 @@ import (
 // Matches the character body drawn by the client (~40px above the feet).
 const PlayerHeight = 40
 
+// maxClimbPerStep is the most pixels a player climbs up per 1 px horizontal step (~72°).
+const maxClimbPerStep = 3
+
 type TerrainZone struct {
 	Type string // "lava", "ice", "fragile"
 	MinX float64
@@ -361,7 +364,6 @@ func (t *Terrain) SpawnY(x, y float64) float64 {
 // (walls, crater edges). Going downward is always allowed. The surface is searched
 // locally around the current height, so roofs and platforms above the player are ignored.
 func (t *Terrain) WalkTo(startX, startY, targetX float64) (float64, float64) {
-	const maxClimbPerStep = 3 // max pixels the player can climb up per 1px horizontal step (~72°)
 
 	curX := int(math.Round(startX))
 	curY := int(math.Round(startY))

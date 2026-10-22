@@ -37,6 +37,15 @@ const (
 
 	defaultMedkitHeal = 450.0 // medkit heal when config_items has no value
 	lavaDamage        = 75    // HP lost at the start of a turn on lava (ignores defense)
+
+	turnSeconds     = 20  // a turn's time (TurnTimeLeft at its start)
+	movePxPerEnergy = 2.0 // a player walks at most MoveEnergy × movePxPerEnergy px a turn
+	moveEnergyPerPx = 0.5 // a walk costs round(px walked × moveEnergyPerPx) move energy
+	// An air strike falls from (targetX, 0) straight down at a fixed power, whatever the aim.
+	airStrikeAngle = 270.0
+	airStrikePower = 80.0
+	// powerShotFactor multiplies the damage of a shot (or skill) armed with power_shot.
+	powerShotFactor = 1.5
 )
 
 type Match struct {
@@ -172,7 +181,7 @@ func NewMatch(
 		Players:       mPlayers,
 		Status:        "in_progress",
 		TurnOrder:     turnOrder,
-		TurnTimeLeft:  20,
+		TurnTimeLeft:  turnSeconds,
 		ActiveEffects: []StatusEffect{},
 	}
 
@@ -438,7 +447,7 @@ func turnMoveEnergy(p *BattlePlayerState) int {
 }
 
 func (m *Match) startTurn(ctx context.Context) {
-	m.State.TurnTimeLeft = 20
+	m.State.TurnTimeLeft = turnSeconds
 	m.turnSeq++
 	m.resolving = false
 	clear(m.lastMoveSeq) // a new turn starts a new replay on the mover's client
@@ -622,7 +631,7 @@ func (m *Match) processMove(ctx context.Context, client *ws.Client, action MoveA
 	}
 
 	// Clamp target by max energy range
-	maxDist := float64(player.MoveEnergy * 2) // 1 energy per 2 pixels
+	maxDist := float64(player.MoveEnergy) * movePxPerEnergy // 1 energy per 2 pixels
 	if math.Abs(action.TargetX-player.Position.X) > maxDist {
 		if action.TargetX > player.Position.X {
 			action.TargetX = player.Position.X + maxDist
@@ -636,7 +645,7 @@ func (m *Match) processMove(ctx context.Context, client *ws.Client, action MoveA
 
 	// Calculate energy cost based on actual horizontal distance moved
 	actualDist := math.Abs(finalX - player.Position.X)
-	energyCost := int(math.Round(actualDist * 0.5))
+	energyCost := int(math.Round(actualDist * moveEnergyPerPx))
 	if energyCost > player.MoveEnergy {
 		energyCost = player.MoveEnergy
 	}
@@ -743,8 +752,8 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 	// air_strike: fire from top of map straight down at TargetX
 	if HasEffect(player, "air_strike") {
 		shootOrigin = Vector2{X: m.airStrikeX(player, action, weaponConfig), Y: 0}
-		shootAngle = 270.0 // straight down in Y-down coords (270° = negative Y direction conventionally, handled by sin)
-		shootPower = 80.0  // fixed high power for airstrike
+		shootAngle = airStrikeAngle // straight down in Y-down coords (270° = negative Y direction conventionally, handled by sin)
+		shootPower = airStrikePower // fixed high power for airstrike
 	}
 
 	// drill_bomb: projectile drills through the first terrain block it meets
@@ -771,7 +780,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 	// Calculate base damage multiplication factor (e.g. from Power Shot item)
 	damageFactor := 1.0
 	if HasEffect(player, "power_shot") {
-		damageFactor = 1.5
+		damageFactor = powerShotFactor
 	}
 
 	// 2. Resolve explosion, damage and falls

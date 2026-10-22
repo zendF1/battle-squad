@@ -27,6 +27,12 @@ type CharacterConfig struct {
 	Difficulty    int    `yaml:"difficulty"`
 	WeaponID      string `yaml:"weaponId"`
 	SkillID       string `yaml:"skillId"`
+	// Display only (admin seed → config_characters; GET /gamedata reads the table): the
+	// Vietnamese role label and play style, the gun art kind, the list order.
+	RoleName  string `yaml:"roleName,omitempty"`
+	Playstyle string `yaml:"playstyle,omitempty"`
+	GunKind   string `yaml:"gunKind,omitempty"`
+	SortOrder int    `yaml:"sortOrder,omitempty"`
 }
 
 type WeaponConfig struct {
@@ -50,6 +56,9 @@ type SkillConfig struct {
 	StatusEffectID   string  `yaml:"statusEffectId,omitempty"`
 	DamageMultiplier float64 `yaml:"damageMultiplier"`
 	Description      string  `yaml:"description,omitempty"` // shown to players (admin seed); the game server does not read it
+	// DescriptionTemplate is the description with {placeholders} for the rank numbers
+	// (GET /gamedata skills[].ranks); admin seed only.
+	DescriptionTemplate string `yaml:"descriptionTemplate,omitempty"`
 }
 
 type ItemConfig struct {
@@ -60,6 +69,8 @@ type ItemConfig struct {
 	Value          float64 `yaml:"value"`
 	MaxUsePerMatch int     `yaml:"maxUsePerMatch"`
 	Cooldown       int     `yaml:"cooldown"`
+	DisplayName    string  `yaml:"displayName,omitempty"` // the Vietnamese name (admin seed; GET /gamedata)
+	SortOrder      int     `yaml:"sortOrder,omitempty"`
 }
 
 type SpawnPoint struct {
@@ -496,7 +507,13 @@ func loadPhysicsFromDB(ctx context.Context, db *database.PostgresDB) (*PhysicsCo
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating game_settings: %w", err)
 	}
+	return PhysicsFromSettings(settings), nil
+}
 
+// PhysicsFromSettings maps game_settings rows (key → value) to a PhysicsConfig; a key that is
+// missing or does not parse keeps its DefaultPhysics() value. The match loads it at start
+// (LoadGameDataFromDB) and GET /gamedata reads it per request, so both parse the same rows.
+func PhysicsFromSettings(settings map[string]string) *PhysicsConfig {
 	p := DefaultPhysics()
 
 	if v, ok := physicsSetting(settings, "gravity"); ok {
@@ -569,8 +586,7 @@ func loadPhysicsFromDB(ctx context.Context, db *database.PostgresDB) (*PhysicsCo
 			p.DefenseK = f
 		}
 	}
-
-	return p, nil
+	return p
 }
 
 // physicsSetting is the game_settings row physics.<name> (the key the admin seed and the

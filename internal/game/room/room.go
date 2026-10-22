@@ -412,7 +412,7 @@ func (r *Room) processSelectCharacter(client *ws.Client, characterID string) {
 }
 
 func (r *Room) processSelectItems(client *ws.Client, items []string) {
-	if len(items) > maxLoadoutItems {
+	if len(items) > MaxLoadoutItems {
 		return
 	}
 	if err := checkItemSelection(items); err != nil {

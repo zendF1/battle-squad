@@ -4,10 +4,23 @@ import (
 	"math"
 	"sort"
 	"strconv"
+
+	"battle-squad/internal/game/battlestats"
 )
 
 // logic.go contains all pure gameplay calculation functions.
 // These are extracted from service.go for testability without DB dependencies.
+
+// Equipment rules (GET /gamedata sends them to the client).
+const (
+	// MaxUpgradeLevel is the highest +level a piece can be upgraded to.
+	MaxUpgradeLevel = 16
+	// MaxStoneLevel is the highest stone level; stones below it merge into the next level.
+	MaxStoneLevel = 12
+	// A merge takes MergeMinCount..MergeMaxCount stones (or gems) of one level.
+	MergeMinCount = 2
+	MergeMaxCount = 4
+)
 
 // StonePowers maps stone level (1-12) to its seeded power value.
 // Power follows geometric progression ×3. Runtime code must read config_stones
@@ -28,6 +41,19 @@ func CalculateUpgradePercent(totalPower, upgradeCost int, maxPercent float64) fl
 		percent = 0
 	}
 	return percent
+}
+
+// DefaultMergeRatePerItem is the merge success chance (%) each stone or gem adds, used when
+// game_settings "equipment.merge_rate_per_item" is missing or not a number.
+const DefaultMergeRatePerItem = 25.0
+
+// ParseMergeRatePerItem reads "equipment.merge_rate_per_item", else DefaultMergeRatePerItem.
+func ParseMergeRatePerItem(raw string) float64 {
+	rate, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return DefaultMergeRatePerItem
+	}
+	return rate
 }
 
 // DefaultWeaponUpgradeCostMultiplier is the weapon stone-cost multiplier used
@@ -86,7 +112,7 @@ func CalculateFinalUpgradePercent(totalPower, upgradeCost int, costMultiplier, m
 // Formula: 1 + level*0.02 + milestone bonuses
 // Milestones: level>=6 +0.10, level>=10 +0.20, level>=14 +0.40, level>=16 +1.00
 func CalculateUpgradeMultiplier(upgradeLevel int) float64 {
-	m := 1.0 + float64(upgradeLevel)*0.02
+	m := 1.0 + float64(upgradeLevel)*battlestats.UpgradeStepPerLevel
 	if upgradeLevel >= 6 {
 		m += 0.10
 	}
@@ -212,16 +238,16 @@ func CalculateMergeSuccessRate(count int) float64 {
 // ValidateMergeStone checks merge stone request parameters.
 // Returns error string or "" if valid.
 func ValidateMergeStone(stoneLevel, count int) string {
-	if count < 2 {
+	if count < MergeMinCount {
 		return "minimum 2 stones required"
 	}
-	if count > 4 {
+	if count > MergeMaxCount {
 		return "maximum 4 stones allowed"
 	}
-	if stoneLevel < 1 || stoneLevel > 12 {
+	if stoneLevel < 1 || stoneLevel > MaxStoneLevel {
 		return "invalid stone level"
 	}
-	if stoneLevel >= 12 {
+	if stoneLevel >= MaxStoneLevel {
 		return "already at max level"
 	}
 	return ""

@@ -79,7 +79,7 @@ func resolveSingleProjectile(m *Match, s *skillShot) {
 func skillBaseDamage(player *BattlePlayerState, skill gamedata.SkillConfig, weapon gamedata.WeaponConfig) float64 {
 	factor := 1.0
 	if HasEffect(player, "power_shot") {
-		factor = 1.5
+		factor = powerShotFactor
 	}
 	if skill.DamageMultiplier > 0 {
 		factor *= skill.DamageMultiplier

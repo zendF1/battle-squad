@@ -11,6 +11,7 @@
   statusEffectId: burn
   damageMultiplier: 1.0
   description: "Bắn pháo hiệu; tên lửa rơi xuống quanh chỗ nó đáp (12 quả, +4 mỗi cấp súng), mỗi quả 25% sát thương; địch trúng bị bỏng: mất 10% máu tối đa đầu lượt sau."
+  descriptionTemplate: "Bắn pháo hiệu, {count} tên lửa rơi quanh chỗ đáp (+{countPerRank} mỗi cấp súng), mỗi quả {damagePct}% sát thương; địch trúng bị bỏng: mất {burnPct}% máu tối đa đầu lượt sau."
 
 - skillId: heavy_bomb
   characterId: tanko
@@ -21,6 +22,7 @@
   statusEffectId: root
   damageMultiplier: 1.0
   description: "Bắn liên tiếp bom lớn cùng một đường bay (2 quả, +1 mỗi cấp súng), đào sâu một hố; mỗi quả 60% sát thương (34% ở cấp súng 4), mỗi địch nhận tối đa 120% (+15% mỗi cấp); địch trúng bị cầm chân lượt sau."
+  descriptionTemplate: "Bắn {count} quả bom lớn liên tiếp cùng đường bay (+{countPerRank} mỗi cấp súng), đào sâu một hố; mỗi quả {eachPct}% sát thương, mỗi địch nhận tối đa {capPct}%; địch trúng bị cầm chân lượt sau."
 
 - skillId: shock_field
   characterId: spark
@@ -31,6 +33,7 @@
   statusEffectId: stun
   damageMultiplier: 1.0
   description: "Tia thẳng xuyên địa hình tới mép bản đồ, trúng mọi địch trên đường: 150% sát thương (+10% mỗi cấp súng), mỗi địch sau giảm 20%; địch trúng bị choáng, mất lượt sau."
+  descriptionTemplate: "Tia thẳng xuyên địa hình tới mép bản đồ, trúng mọi địch trên đường: {firstPct}% sát thương, mỗi địch sau giảm {decayPct}%; địch trúng bị choáng, mất lượt sau."
 
 - skillId: healing_bloom
   characterId: flora
@@ -41,3 +44,4 @@
   statusEffectId: ""
   damageMultiplier: 1.0
   description: "Hồi máu cả đội theo máu tối đa: Flora 40%, đồng đội 30% (+5% mỗi cấp súng); máu dư thành khiên (tối đa 50% máu); giải mọi hiệu ứng xấu."
+  descriptionTemplate: "Hồi máu cả đội: Flora {selfPct}%, đồng đội {allyPct}% máu tối đa (+{perRankPct}% mỗi cấp súng); máu dư thành khiên (tối đa {shieldCapPct}% máu); giải mọi hiệu ứng xấu."

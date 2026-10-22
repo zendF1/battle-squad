@@ -139,7 +139,7 @@ func SimulateProjectile(
 		}
 
 		// Check out of bounds
-		if position.X < -100 || position.X > float64(terrain.Width)+100 || position.Y > float64(terrain.Height)+50 {
+		if position.X < -outOfBoundsSide || position.X > float64(terrain.Width)+outOfBoundsSide || position.Y > float64(terrain.Height)+outOfBoundsBelow {
 			break
 		}
 	}
@@ -181,7 +181,7 @@ func checkSegmentCollisions(
 	dy := curr.Y - prev.Y
 	dist := math.Sqrt(dx*dx + dy*dy)
 
-	steps := int(math.Ceil(dist / 4.0)) // check every 4 pixels
+	steps := int(math.Ceil(dist / collisionStepPx)) // check every 4 pixels
 	if steps < 1 {
 		steps = 1
 	}
@@ -230,6 +230,13 @@ func checkSegmentCollisions(
 const (
 	maxShotPower    = 100.0
 	drillPierceDist = 50.0 // default drill_bomb pierce distance when not configured
+
+	// A flight ends once the shell is more than outOfBoundsSide px left or right of the map or
+	// outOfBoundsBelow px under its bottom.
+	outOfBoundsSide  = 100.0
+	outOfBoundsBelow = 50.0
+	// collisionStepPx is how finely each flight step is checked for hits.
+	collisionStepPx = 4.0
 )
 
 // validShotInput reports whether a client-supplied angle/power can be simulated.

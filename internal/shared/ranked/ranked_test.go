@@ -116,3 +116,43 @@ func TestLoadEloConfig(t *testing.T) {
 		t.Fatalf("%+v %v", c, err)
 	}
 }
+
+// oldTierAndDivision is the switch TierAndDivision was before ranked.Bands (and the Godot
+// client's rank_model.of_rating): the table must keep every rating's rank.
+func oldTierAndDivision(rating int) (string, int) {
+	div := func(base, width int) int {
+		return min(max(3-(rating-base)/width, 1), 3)
+	}
+	switch {
+	case rating < 1000:
+		return "bronze", div(0, 333)
+	case rating < 1200:
+		return "silver", div(1000, 66)
+	case rating < 1500:
+		return "gold", div(1200, 100)
+	case rating < 1800:
+		return "platinum", div(1500, 100)
+	case rating < 2200:
+		return "diamond", div(1800, 133)
+	default:
+		return "master", 1
+	}
+}
+
+func TestBandsKeepEveryRank(t *testing.T) {
+	for rating := -1000; rating <= 4000; rating++ {
+		gotTier, gotDiv := ranked.TierAndDivision(rating)
+		wantTier, wantDiv := oldTierAndDivision(rating)
+		if gotTier != wantTier || gotDiv != wantDiv {
+			t.Fatalf("rating %d: %s %d, want %s %d", rating, gotTier, gotDiv, wantTier, wantDiv)
+		}
+	}
+	if len(ranked.Bands) != len(ranked.Tiers) {
+		t.Fatal("a band per tier")
+	}
+	for i, b := range ranked.Bands {
+		if b.Tier != ranked.Tiers[i] {
+			t.Fatalf("band %d is %s, tier %s", i, b.Tier, ranked.Tiers[i])
+		}
+	}
+}
