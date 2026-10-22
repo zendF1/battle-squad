@@ -283,8 +283,13 @@ func TestGameDataFromDB(t *testing.T) {
 		len(mm.Tips) != 12 || !strings.HasPrefix(mm.Tips[0], "Gió mạnh") {
 		t.Fatalf("matchmaking %+v", mm)
 	}
-	if len(g.Modes.Lobby) != 3 || g.Modes.Lobby[1] != (LobbyMode{ModeID: "ranked", Name: "Xếp hạng 2v2", Description: "Ghép 2v2, tính điểm hạng", Queue: "ranked_2v2"}) ||
-		g.Modes.Lobby[2].Bot != "ai" || len(g.Modes.Match) != 3 || g.Modes.Match[0] != (MatchMode{ModeID: "pvp_1v1", Name: "Đấu 1v1"}) {
+	if !reflect.DeepEqual(g.Modes.Lobby, []LobbyMode{
+		{ModeID: "casual", Name: "Đấu thường 2vs2", Description: "Ghép 2v2, không tính điểm hạng", Queue: "casual_2v2", Category: "pvp", Icon: "swords", PartySize: 2},
+		{ModeID: "ranked", Name: "Đấu hạng 2vs2", Description: "Ghép 2v2, tính điểm hạng", Queue: "ranked_2v2", Category: "pvp", Icon: "trophy", PartySize: 2, Ranked: true},
+		{ModeID: "bot", Name: "Đấu máy", Description: "Đấu 1v1 với máy biết bắn", Bot: "ai", Category: "pvp", Icon: "robot", PartySize: 1},
+		{ModeID: "practice", Name: "Luyện tập", Description: "Tập bắn với bia đứng yên", Category: "pvp", Icon: "target", PartySize: 1},
+	}) || !reflect.DeepEqual(g.Modes.Categories, []ModeCategory{{"pvp", "PvP"}, {"boss", "Boss"}}) ||
+		!reflect.DeepEqual(g.Modes.Match, []MatchMode{{"pvp_1v1", "Đấu 1v1"}, {"pvp_2v2", "Đấu 2v2"}, {"ranked_2v2", "Đấu hạng 2vs2"}, {"casual_2v2", "Đấu thường 2vs2"}}) {
 		t.Fatalf("modes %+v", g.Modes)
 	}
 	if g.MapThemes.Default != "grassland" || len(g.MapThemes.Themes) != 11 {
@@ -365,6 +370,7 @@ func TestGameDataMigrationDownUpAndSeed(t *testing.T) {
 	}
 	runMigration(t, db, "040_gamedata_texts.up.sql")
 	runMigration(t, db, "041_gamedata_rules.up.sql") // cmd/migrate reruns every file
+	runMigration(t, db, "044_mode_select.up.sql")
 	if after, _ := fetch(t, h); !reflect.DeepEqual(after, before) {
 		t.Fatal("down / up changed the payload")
 	}

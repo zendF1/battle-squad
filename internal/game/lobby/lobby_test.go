@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"battle-squad/internal/game/matchmaker"
 	"battle-squad/internal/game/ws"
 )
 
@@ -95,25 +96,25 @@ func TestNotifySkipsClientsInARoom(t *testing.T) {
 
 func TestReuseForHost(t *testing.T) {
 	_, l, clients := newTestLobby(t, "preparing", "p1", "p2")
-	if !l.reuseForHost(clients["p1"]) || l.reuseForHost(clients["p2"]) {
+	if !l.reuseForHost(clients["p1"], matchmaker.RankedQueue) || l.reuseForHost(clients["p2"], matchmaker.RankedQueue) {
 		t.Fatal("preparing lobby: host reuses, member does not")
 	}
 	l.State.Status = "in_queue"
-	if l.reuseForHost(clients["p1"]) {
+	if l.reuseForHost(clients["p1"], matchmaker.RankedQueue) {
 		t.Fatal("queued lobby reused")
 	}
 	l.State.Status = "in_match"
-	if l.reuseForHost(clients["p1"]) {
+	if l.reuseForHost(clients["p1"], matchmaker.RankedQueue) {
 		t.Fatal("party lobby in a match reused")
 	}
 
 	_, solo, sc := newTestLobby(t, "in_match", "p1")
 	sc["p1"].RoomID = "r1"
-	if solo.reuseForHost(sc["p1"]) {
+	if solo.reuseForHost(sc["p1"], matchmaker.RankedQueue) {
 		t.Fatal("reused while still in the match")
 	}
 	sc["p1"].RoomID = ""
-	if !solo.reuseForHost(sc["p1"]) || solo.State.Status != "preparing" {
+	if !solo.reuseForHost(sc["p1"], matchmaker.RankedQueue) || solo.State.Status != "preparing" {
 		t.Fatalf("solo who left the match: status %s", solo.State.Status)
 	}
 }

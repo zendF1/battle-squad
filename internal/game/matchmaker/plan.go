@@ -5,7 +5,7 @@ import (
 	"sort"
 )
 
-// TeamSlots is how many players a ranked 2v2 team has.
+// TeamSlots is how many players a 2v2 team has (every queue).
 const TeamSlots = 2
 
 // maxCandidates bounds how many in-range entries one entry's search looks at
@@ -28,12 +28,21 @@ func (t MatchTeam) Humans() int {
 	return n
 }
 
-// MatchResult is a formed ranked 2v2 game: Teams[0] plays as team 1,
-// Teams[1] as team 2; each team has TeamSlots players (humans + bots).
+// MatchResult is a formed 2v2 game of a queue (its mode): Teams[0] plays as
+// team 1, Teams[1] as team 2; each team has TeamSlots players (humans + bots).
 type MatchResult struct {
+	Queue  string
 	Teams  [2]MatchTeam
 	MapID  string
 	HasBot bool
+}
+
+// Mode is the match's mode: its queue (ranked_2v2 when unset).
+func (r MatchResult) Mode() string {
+	if r.Queue == "" {
+		return RankedQueue
+	}
+	return r.Queue
 }
 
 // Entries lists every queue entry of the match.
@@ -84,7 +93,8 @@ func avgRating(ratings map[string]int) int {
 	return int(math.Round(float64(sum) / float64(len(ratings))))
 }
 
-// planMatches forms the matches of one tick from the queued entries.
+// planMatches forms the matches of one tick from the entries of one queue (every
+// queue plans the same way; the caller sets the results' Queue).
 //
 // Entries are served oldest first. Two entries may share a match when their
 // party ratings differ by at most the smaller of their allowed ranges

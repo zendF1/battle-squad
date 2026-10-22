@@ -539,13 +539,26 @@ func LoadFromDB(ctx context.Context, db *database.PostgresDB) (*Snapshot, error)
 		return nil, err
 	}
 
-	if err := each("config_game_modes", `SELECT mode_id, kind, name, description, queue, bot, sort_order FROM config_game_modes
-		ORDER BY sort_order, mode_id`, func(rows pgx.Rows) error {
+	if err := each("config_game_modes", `SELECT mode_id, kind, name, description, queue, bot, category, icon, party_size,
+		ranked, enabled, sort_order FROM config_game_modes ORDER BY sort_order, mode_id`, func(rows pgx.Rows) error {
 		var m GameModeConfig
-		if err := rows.Scan(&m.ModeID, &m.Kind, &m.Name, &m.Description, &m.Queue, &m.Bot, &m.SortOrder); err != nil {
+		if err := rows.Scan(&m.ModeID, &m.Kind, &m.Name, &m.Description, &m.Queue, &m.Bot, &m.Category, &m.Icon, &m.PartySize,
+			&m.Ranked, &m.Enabled, &m.SortOrder); err != nil {
 			return err
 		}
 		s.Modes = append(s.Modes, m)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := each("config_mode_categories", `SELECT category_id, name, sort_order FROM config_mode_categories
+		ORDER BY sort_order, category_id`, func(rows pgx.Rows) error {
+		var c ModeCategoryConfig
+		if err := rows.Scan(&c.ID, &c.Name, &c.SortOrder); err != nil {
+			return err
+		}
+		s.ModeCategories = append(s.ModeCategories, c)
 		return nil
 	}); err != nil {
 		return nil, err

@@ -367,11 +367,27 @@ catalog endpoints.
   strings shown while searching, in order). `botFillAfterSec`, `matchStartDelaySec` and
   `inviteTimeoutSec` come from `game_settings matchmaking` (admin: Matchmaking page), `slots`
   and `teamSize` from Go `matchmaker.TeamSlots`, `tips` from `config_tips`.
-- `modes.lobby[]` `{modeId, name, description, queue, bot}`: the mode choices on Home, in order.
-  A non-empty `queue` joins that matchmaking queue. A non-empty `bot` sends QuickPlay with
-  `bot: <value>`. Neither means practice.
+- `modes.categories[]` `{categoryId, name}`: the sections (tabs) of the mode select screen, in
+  order (`pvp` "PvP", `boss` "Boss"). A category with no `modes.lobby` entry shows the "Sắp ra
+  mắt" placeholder. Source `config_mode_categories` (admin: Texts → Mode Categories).
+- `modes.lobby[]` `{modeId, name, description, queue, bot, category, icon, partySize, ranked}`:
+  the enabled mode choices of the mode select screen, in order (group them by `category`).
+  A non-empty `queue` joins that matchmaking queue (`CreateLobby {queue}` / `SetLobbyQueue
+  {queue}`, then `StartQueue`); the server runs `ranked_2v2` and `casual_2v2`. A non-empty `bot`
+  sends QuickPlay with `bot: <value>`. Neither means practice.
+  - `category` (string): a `modes.categories[].categoryId`.
+  - `icon` (string): an icon key the client maps to its own icon (`swords`, `trophy`, `robot`,
+    `target`); `""` or an unknown key → the generic icon.
+  - `partySize` (int, ≥ 1): the most lobby members; 2 shows the teammate slot and the party flow,
+    1 means solo (bot, practice).
+  - `ranked` (bool): its matches change rating / rank points (only the `ranked_2v2` queue): show
+    the rank line and the result's rating row only then.
+  - Source `config_game_modes` (kind `lobby`, `enabled` true; admin: Texts → Game Modes, which
+    rejects a queue the server does not run, a `ranked` flag that does not match the queue, or
+    an unknown category).
 - `modes.match[]` `{modeId, name}`: a match's mode (MatchStarted `mode`, match history) and its
-  Vietnamese name.
+  Vietnamese name. A matchmade match's mode is its queue: `ranked_2v2` "Đấu hạng 2vs2",
+  `casual_2v2` "Đấu thường 2vs2".
 - `mapThemes`: `default` (string) and `themes` (array of theme ids the server accepts, from Go
   `gamedata.MapThemes`). The art per theme stays in the client; an unknown theme draws as
   `default`.
@@ -400,6 +416,17 @@ catalog endpoints.
 - The texts come from the Godot client at 935c5af. The migration fills a column only while it is
   empty and inserts rows with `ON CONFLICT DO NOTHING`, so reruns keep admin edits.
   `configs/*.yaml` carries the same texts for the admin seed of a fresh DB.
+
+## 6a. Mode select (migration 044_mode_select)
+
+- `config_game_modes`: + `category` (a `config_mode_categories` id), `icon`, `party_size` (int,
+  default 1), `ranked` (bool), `enabled` (bool, default true; false → not in `modes.lobby`).
+  Added with their seed values once, so reruns keep admin edits; the old default names change
+  only while unedited (`ranked` "Xếp hạng 2v2" → "Đấu hạng 2vs2", `bot` "Đấu với máy" → "Đấu
+  máy"); practice moves last (sort 4). New rows `casual` (lobby, queue `casual_2v2`, sort 1) and
+  `casual_2v2` (match).
+- New table `config_mode_categories (category_id, name, sort_order)`: `pvp` "PvP" 1, `boss`
+  "Boss" 2.
 
 ## 6b. DB behind it since S2 (migration 041_gamedata_rules)
 
@@ -1160,33 +1187,61 @@ The full response (`200`, `ETag: "4eedfeb2e6a5a751"`):
       ]
     },
     "modes": {
+      "categories": [
+        {"categoryId": "pvp", "name": "PvP"},
+        {"categoryId": "boss", "name": "Boss"}
+      ],
       "lobby": [
+        {
+          "modeId": "casual",
+          "name": "Đấu thường 2vs2",
+          "description": "Ghép 2v2, không tính điểm hạng",
+          "queue": "casual_2v2",
+          "bot": "",
+          "category": "pvp",
+          "icon": "swords",
+          "partySize": 2,
+          "ranked": false
+        },
+        {
+          "modeId": "ranked",
+          "name": "Đấu hạng 2vs2",
+          "description": "Ghép 2v2, tính điểm hạng",
+          "queue": "ranked_2v2",
+          "bot": "",
+          "category": "pvp",
+          "icon": "trophy",
+          "partySize": 2,
+          "ranked": true
+        },
+        {
+          "modeId": "bot",
+          "name": "Đấu máy",
+          "description": "Đấu 1v1 với máy biết bắn",
+          "queue": "",
+          "bot": "ai",
+          "category": "pvp",
+          "icon": "robot",
+          "partySize": 1,
+          "ranked": false
+        },
         {
           "modeId": "practice",
           "name": "Luyện tập",
           "description": "Tập bắn với bia đứng yên",
           "queue": "",
-          "bot": ""
-        },
-        {
-          "modeId": "ranked",
-          "name": "Xếp hạng 2v2",
-          "description": "Ghép 2v2, tính điểm hạng",
-          "queue": "ranked_2v2",
-          "bot": ""
-        },
-        {
-          "modeId": "bot",
-          "name": "Đấu với máy",
-          "description": "Đấu 1v1 với máy biết bắn",
-          "queue": "",
-          "bot": "ai"
+          "bot": "",
+          "category": "pvp",
+          "icon": "target",
+          "partySize": 1,
+          "ranked": false
         }
       ],
       "match": [
         {"modeId": "pvp_1v1", "name": "Đấu 1v1"},
         {"modeId": "pvp_2v2", "name": "Đấu 2v2"},
-        {"modeId": "ranked_2v2", "name": "Xếp hạng 2v2"}
+        {"modeId": "ranked_2v2", "name": "Đấu hạng 2vs2"},
+        {"modeId": "casual_2v2", "name": "Đấu thường 2vs2"}
       ]
     },
     "mapThemes": {

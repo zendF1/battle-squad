@@ -1,6 +1,7 @@
 package lobby
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -23,7 +24,7 @@ type LobbyHub struct {
 	redis   *database.RedisClient
 	nodeID  string
 	// matchmaker queues the lobbies (set by NewWSHandler)
-	matchmaker *matchmaker.Matchmaker
+	matchmaker queuer
 	// store reads the players' names, loadouts, ratings and guns (the DB)
 	store memberStore
 
@@ -35,6 +36,14 @@ type LobbyHub struct {
 	invites map[string]*invite
 	// inviteTTL overrides the matchmaking config's inviteTimeoutSec (tests)
 	inviteTTL time.Duration
+}
+
+// queuer is what the lobbies need of the matchmaker (*matchmaker.Matchmaker).
+type queuer interface {
+	EnqueueLobby(ctx context.Context, queue, lobbyID string, playerIDs []string, playerRatings map[string]int,
+		playerChars map[string]string, playerItems map[string][]string, playerNames map[string]string) (*matchmaker.QueueEntry, error)
+	CancelQueue(ctx context.Context, playerID string) (*matchmaker.QueueEntry, error)
+	GetConfig() matchmaker.MatchmakingConfig
 }
 
 // NewLobbyHub constructs a LobbyHub.
@@ -50,8 +59,8 @@ func NewLobbyHub(db *database.PostgresDB, redis *database.RedisClient, nodeID st
 	}
 }
 
-// CreateLobby creates a new lobby hosted by host (ready) and starts its goroutine.
-func (h *LobbyHub) CreateLobby(host LobbyMember) (*LobbyRoom, error) {
+// CreateLobby creates a new lobby of queue hosted by host (ready) and starts its goroutine.
+func (h *LobbyHub) CreateLobby(host LobbyMember, queue string) (*LobbyRoom, error) {
 	h.Lock()
 	defer h.Unlock()
 
@@ -71,6 +80,7 @@ func (h *LobbyHub) CreateLobby(host LobbyMember) (*LobbyRoom, error) {
 	state := LobbyState{
 		LobbyID:      lobbyID,
 		HostPlayerID: host.PlayerID,
+		Queue:        queue,
 		Status:       "preparing",
 		Members:      []LobbyMember{host},
 	}

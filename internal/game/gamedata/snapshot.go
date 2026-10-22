@@ -24,11 +24,13 @@ type Snapshot struct {
 	RankTiers  []RankTierConfig // one per ranked.Tiers, lowest first
 	EquipTiers []EquipmentTierConfig
 	Modes      []GameModeConfig
-	Tips       []string
-	GunKinds   []GunKindConfig       // config_gun_kinds in order
-	Slots      []EquipmentSlotConfig // config_equipment_slots in order
-	TypeWords  []TypeWordConfig      // config_item_type_words in order
-	Settings   map[string]string     // every game_settings row (key → value)
+	// ModeCategories are the config_mode_categories rows in order (the mode select sections)
+	ModeCategories []ModeCategoryConfig
+	Tips           []string
+	GunKinds       []GunKindConfig       // config_gun_kinds in order
+	Slots          []EquipmentSlotConfig // config_equipment_slots in order
+	TypeWords      []TypeWordConfig      // config_item_type_words in order
+	Settings       map[string]string     // every game_settings row (key → value)
 
 	// Version is GET /gamedata's version of this snapshot (set before it is published), "" for
 	// a snapshot no payload was built for (tests).
@@ -113,10 +115,21 @@ type TypeWordConfig struct {
 	SortOrder           int
 }
 
-// GameModeConfig is a config_game_modes row (kind lobby or match).
+// GameModeConfig is a config_game_modes row (kind lobby or match). A lobby mode sits in
+// Category (a ModeCategoryConfig), shows Icon (a client icon key), takes up to PartySize
+// lobby members and changes rating when Ranked; a disabled one is not offered.
 type GameModeConfig struct {
 	ModeID, Kind, Name, Description, Queue, Bot string
+	Category, Icon                              string
+	PartySize                                   int
+	Ranked, Enabled                             bool
 	SortOrder                                   int
+}
+
+// ModeCategoryConfig is a config_mode_categories row: a section of the mode select screen.
+type ModeCategoryConfig struct {
+	ID, Name  string
+	SortOrder int
 }
 
 var current atomic.Pointer[Snapshot]

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	mrand "math/rand/v2"
 	"sync"
 	"time"
@@ -21,8 +22,8 @@ type RoomCreator interface {
 	CreateBattleFromMatch(ctx context.Context, result MatchResult, botDiffConfig BotDifficultyConfig, eloConfig EloConfig, mmConfig MatchmakingConfig) error
 }
 
-// Matchmaker is a background service that periodically scans the queue,
-// forms ranked 2v2 matches (planMatches), and creates battle rooms.  Only the
+// Matchmaker is a background service that periodically scans the queues
+// (Queues), forms their 2v2 matches (planMatches), and creates battle rooms.  Only the
 // leader node (determined via a Redis lock) runs the matching logic.
 type Matchmaker struct {
 	queue       *Queue
@@ -202,25 +203,30 @@ func (m *Matchmaker) GetConfig() MatchmakingConfig {
 // Core matching tick
 // ---------------------------------------------------------------------------
 
-// tick is called every TickInterval seconds on the leader node. It plans the
-// matches of the queued entries (planMatches), claims each match's entries and
-// hands the match to the room creator.
+// tick is called every TickInterval seconds on the leader node. For every queue
+// (Queues) it plans the matches of the queued entries (planMatches), claims each
+// match's entries and hands the match to the room creator.
 func (m *Matchmaker) tick() {
 	m.mu.RLock()
 	cfg := m.cfg
 	m.mu.RUnlock()
 
-	entries, err := m.queue.GetAllEntries(m.ctx)
-	if err != nil {
-		observability.Log.Error().Err(err).Msg("matchmaker: tick GetAllEntries error")
-		return
+	if err := m.queue.MigrateLegacy(m.ctx); err != nil {
+		observability.Log.Warn().Err(err).Msg("matchmaker: tick MigrateLegacy error")
 	}
-	if len(entries) == 0 {
-		return
-	}
-
-	for _, result := range planMatches(entries, time.Now().Unix(), cfg) {
-		m.startMatch(m.ctx, result)
+	for _, queue := range Queues {
+		entries, err := m.queue.GetAllEntries(m.ctx, queue)
+		if err != nil {
+			observability.Log.Error().Err(err).Str("queue", queue).Msg("matchmaker: tick GetAllEntries error")
+			continue
+		}
+		if len(entries) == 0 {
+			continue
+		}
+		for _, result := range planMatches(entries, time.Now().Unix(), cfg) {
+			result.Queue = queue
+			m.startMatch(m.ctx, result)
+		}
 	}
 }
 
@@ -270,6 +276,7 @@ func (m *Matchmaker) startMatch(ctx context.Context, result MatchResult) {
 	}
 
 	observability.Log.Info().
+		Str("queue", result.Mode()).
 		Int("team1Humans", result.Teams[0].Humans()).
 		Int("team2Humans", result.Teams[1].Humans()).
 		Bool("hasBot", result.HasBot).
@@ -281,10 +288,15 @@ func (m *Matchmaker) startMatch(ctx context.Context, result MatchResult) {
 // Public queue API
 // ---------------------------------------------------------------------------
 
+// ErrUnknownQueue: EnqueueLobby was given a queue the matchmaker does not run.
+var ErrUnknownQueue = errors.New("matchmaker: unknown queue")
+
 // EnqueueLobby builds a QueueEntry from the provided lobby details, calculates
-// the party rating, and enqueues it.  Returns the created entry on success.
+// the party rating, and enqueues it in the queue (ErrUnknownQueue unless one of
+// Queues).  Returns the created entry on success.
 func (m *Matchmaker) EnqueueLobby(
 	ctx context.Context,
+	queue string,
 	lobbyID string,
 	playerIDs []string,
 	playerRatings map[string]int,
@@ -292,6 +304,9 @@ func (m *Matchmaker) EnqueueLobby(
 	playerItems map[string][]string,
 	playerNames map[string]string,
 ) (*QueueEntry, error) {
+	if !KnownQueue(queue) {
+		return nil, ErrUnknownQueue
+	}
 	m.mu.RLock()
 	cfg := m.cfg
 	m.mu.RUnlock()
@@ -300,6 +315,7 @@ func (m *Matchmaker) EnqueueLobby(
 
 	entry := QueueEntry{
 		EntryID:       entryID,
+		Queue:         queue,
 		LobbyID:       lobbyID,
 		PlayerIDs:     playerIDs,
 		Rating:        calculatePartyRating(playerRatings, cfg),
@@ -318,6 +334,7 @@ func (m *Matchmaker) EnqueueLobby(
 
 	observability.Log.Info().
 		Str("entryID", entryID).
+		Str("queue", queue).
 		Str("lobbyID", lobbyID).
 		Int("rating", entry.Rating).
 		Int("teamSize", entry.TeamSize).

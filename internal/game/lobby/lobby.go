@@ -180,6 +180,8 @@ func (l *LobbyRoom) handleEvent(ctx context.Context, client *ws.Client, msg ws.M
 		l.processKick(ctx, client, msg)
 	case "SetReady":
 		l.processSetReady(ctx, client, msg)
+	case "SetLobbyQueue":
+		l.processSetLobbyQueue(ctx, client, msg)
 	default:
 		observability.Log.Debug().
 			Str("lobby_id", l.ID).
@@ -372,7 +374,7 @@ func (l *LobbyRoom) processUpdateLoadout(ctx context.Context, client *ws.Client,
 
 // processStartQueue (host only, lobby preparing, the member ready: else
 // MEMBER_NOT_READY) refreshes the members' ratings
-// and enqueues the lobby: LobbyUpdated (in_queue), then QueueStarted
+// and enqueues the lobby in its queue: LobbyUpdated (in_queue), then QueueStarted
 // {estimatedWait: botFillAfter seconds}. The lock is held until the lobby is
 // queued, so a MatchFound (Notify) always follows QueueStarted.
 func (l *LobbyRoom) processStartQueue(ctx context.Context, client *ws.Client) {
@@ -415,7 +417,7 @@ func (l *LobbyRoom) processStartQueue(ctx context.Context, client *ws.Client) {
 		playerNames[m.PlayerID] = m.DisplayName
 	}
 
-	entry, err := l.hub.matchmaker.EnqueueLobby(ctx, l.ID, playerIDs, playerRatings, playerChars, playerItems, playerNames)
+	entry, err := l.hub.matchmaker.EnqueueLobby(ctx, l.State.Queue, l.ID, playerIDs, playerRatings, playerChars, playerItems, playerNames)
 	if err != nil {
 		l.sendError(client, "QUEUE_FAILED", err.Error())
 		return
@@ -537,6 +539,34 @@ func (l *LobbyRoom) processSetReady(ctx context.Context, client *ws.Client, msg 
 	l.broadcastLobbyUpdatedLocked()
 }
 
+// processSetLobbyQueue is SetLobbyQueue {queue} from the host (NOT_HOST) while the
+// lobby is preparing (INVALID_STATUS): a queue the matchmaker runs (INVALID_QUEUE)
+// becomes the lobby's, and everyone gets LobbyUpdated.
+func (l *LobbyRoom) processSetLobbyQueue(ctx context.Context, client *ws.Client, msg ws.Message) {
+	var payload SetLobbyQueuePayload
+	if err := json.Unmarshal(msg.Data, &payload); err != nil || payload.Queue == "" {
+		l.sendError(client, "INVALID_PAYLOAD", "Invalid payload")
+		return
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	switch {
+	case l.State.HostPlayerID != client.PlayerID:
+		l.sendError(client, "NOT_HOST", "Only the host can change the mode")
+		return
+	case l.State.Status != "preparing":
+		l.sendError(client, "INVALID_STATUS", "The mode can only change while the lobby is preparing")
+		return
+	case !matchmaker.KnownQueue(payload.Queue):
+		sendInvalidQueue(client, payload.Queue)
+		return
+	}
+	l.State.Queue = payload.Queue
+	l.broadcastLobbyUpdatedLocked()
+}
+
 // statusAndSize is the lobby's status and member count.
 func (l *LobbyRoom) statusAndSize() (string, int) {
 	l.mu.RLock()
@@ -552,10 +582,11 @@ func (l *LobbyRoom) soloHost(client *ws.Client) bool {
 	return l.State.HostPlayerID == client.PlayerID && len(l.State.Members) == 1 && l.State.Status != "in_queue"
 }
 
-// reuseForHost reports whether the client's CreateLobby can return this lobby:
-// it hosts it and the lobby is open (preparing), or it is alone in it and has
-// left its match (the lobby then opens again).
-func (l *LobbyRoom) reuseForHost(client *ws.Client) bool {
+// reuseForHost reports whether the client's CreateLobby {queue} can return this
+// lobby: it hosts it and the lobby is open (preparing), or it is alone in it and
+// has left its match (the lobby then opens again). A returned lobby switches to
+// queue.
+func (l *LobbyRoom) reuseForHost(client *ws.Client, queue string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.State.HostPlayerID != client.PlayerID {
@@ -563,12 +594,13 @@ func (l *LobbyRoom) reuseForHost(client *ws.Client) bool {
 	}
 	switch {
 	case l.State.Status == "preparing":
-		return true
 	case l.State.Status == "in_match" && client.RoomID == "" && len(l.State.Members) == 1:
 		l.State.Status = "preparing"
-		return true
+	default:
+		return false
 	}
-	return false
+	l.State.Queue = queue
+	return true
 }
 
 // ---------------------------------------------------------------------------

@@ -6,7 +6,6 @@ import (
 	"math"
 	"time"
 
-	"battle-squad/internal/game/match"
 	"battle-squad/internal/game/matchmaker"
 	"battle-squad/internal/game/ws"
 	"battle-squad/internal/shared/observability"
@@ -187,7 +186,7 @@ func (l *LobbyRoom) processInvite(ctx context.Context, client *ws.Client, msg ws
 	expiresIn := int(math.Ceil(ttl.Seconds()))
 	l.sendEvent(client, "InviteSent", InviteSentPayload{PlayerID: payload.PlayerID, ExpiresInSec: expiresIn})
 	l.sendEvent(invitee, "LobbyInvite", LobbyInvitePayload{
-		InviteID: inv.ID, LobbyID: l.ID, Mode: match.RankedMode, ExpiresInSec: expiresIn,
+		InviteID: inv.ID, LobbyID: l.ID, Mode: l.State.Queue, ExpiresInSec: expiresIn,
 		From: OnlinePlayer{PlayerID: from.PlayerID, DisplayName: from.DisplayName, Level: from.Level, Tier: from.Tier,
 			Division: from.Division, CharacterID: from.CharacterID, Status: StatusIdle},
 	})

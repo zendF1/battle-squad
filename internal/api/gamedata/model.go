@@ -348,18 +348,31 @@ type Matchmaking struct {
 }
 
 type Modes struct {
-	Lobby []LobbyMode `json:"lobby"`
-	Match []MatchMode `json:"match"`
+	Categories []ModeCategory `json:"categories"`
+	Lobby      []LobbyMode    `json:"lobby"`
+	Match      []MatchMode    `json:"match"`
 }
 
-// LobbyMode is a mode choice on Home: Queue joins that matchmaking queue, Bot plays QuickPlay
-// against that bot, neither is practice.
+// ModeCategory is a section of the mode select screen (PvP, Boss, …), in order.
+type ModeCategory struct {
+	CategoryID string `json:"categoryId"`
+	Name       string `json:"name"`
+}
+
+// LobbyMode is an enabled mode choice of the mode select screen: Queue joins that matchmaking
+// queue, Bot plays QuickPlay against that bot, neither is practice. Category is a
+// ModeCategory id, Icon a client icon key ("" = the generic one), PartySize the most lobby
+// members (2: the teammate slot), Ranked whether its matches change rating.
 type LobbyMode struct {
 	ModeID      string `json:"modeId"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Queue       string `json:"queue"`
 	Bot         string `json:"bot"`
+	Category    string `json:"category"`
+	Icon        string `json:"icon"`
+	PartySize   int    `json:"partySize"`
+	Ranked      bool   `json:"ranked"`
 }
 
 // MatchMode is a match's mode (MatchStarted.mode, match history).

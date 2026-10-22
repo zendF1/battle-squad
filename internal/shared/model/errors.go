@@ -77,6 +77,10 @@ var (
 	ErrShopAlreadyOwned     = AppError{Code: "SHOP_ALREADY_OWNED", Message: "You already own this character", Status: http.StatusConflict}
 	ErrIdempotencyKeyReused = AppError{Code: "IDEMPOTENCY_KEY_REUSED", Message: "Idempotency key was already used for a different request", Status: http.StatusConflict}
 
+	// ErrInvalidQueue: a lobby's CreateLobby {queue} / SetLobbyQueue {queue} names a queue the
+	// matchmaker does not run (LobbyError)
+	ErrInvalidQueue = AppError{Code: "INVALID_QUEUE", Message: "Unknown matchmaking queue", Status: http.StatusBadRequest}
+
 	ErrIAPStoreNotConfigured  = AppError{Code: "IAP_STORE_NOT_CONFIGURED", Message: "Store receipt verification is not available", Status: http.StatusServiceUnavailable}
 	ErrIAPProductInactive     = AppError{Code: "IAP_PRODUCT_INACTIVE", Message: "Product is not active or does not exist", Status: http.StatusNotFound}
 	ErrIAPReceiptInvalid      = AppError{Code: "IAP_VERIFICATION_FAILED", Message: "The store rejected this receipt", Status: http.StatusBadRequest}

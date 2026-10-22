@@ -52,10 +52,13 @@ type BotDifficultyConfig struct {
 }
 
 // QueueEntry represents a single matchmaking queue entry. A solo player has
-// one element in PlayerIDs; a party has two. Rating is the party rating
-// (partyRatingStrategy), PlayerRatings the members' own ratings.
+// one element in PlayerIDs; a party has two. Queue is the queue it waits in
+// (Queues; "" = ranked_2v2, an entry stored before there were several). Rating
+// is the party rating (partyRatingStrategy), PlayerRatings the members' own
+// ratings (the hidden rating, ranked's, in every queue).
 type QueueEntry struct {
 	EntryID       string              `json:"entryId"`
+	Queue         string              `json:"queue"`
 	LobbyID       string              `json:"lobbyId"`
 	PlayerIDs     []string            `json:"playerIds"`
 	Rating        int                 `json:"rating"`

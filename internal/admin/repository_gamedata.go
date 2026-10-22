@@ -190,14 +190,25 @@ func (r *Repository) UpsertTextRow(ctx context.Context, spec *textTable, key str
 	return tx.Commit(ctx)
 }
 
-// DeleteTextRow deletes one row of a text table.
+// DeleteTextRow deletes one row of a text table, then runs the table's whole-table check in
+// the same transaction.
 func (r *Repository) DeleteTextRow(ctx context.Context, spec *textTable, key string) error {
-	tag, err := r.db.Pool.Exec(ctx, fmt.Sprintf(`DELETE FROM %s WHERE %s = $1`, spec.Table, spec.Key), key)
+	tx, err := r.db.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	tag, err := tx.Exec(ctx, fmt.Sprintf(`DELETE FROM %s WHERE %s = $1`, spec.Table, spec.Key), key)
 	if err != nil {
 		return fmt.Errorf("delete %s %s: %w", spec.Table, key, err)
 	}
 	if tag.RowsAffected() != 1 {
 		return fmt.Errorf("%s %s not found", spec.Table, key)
 	}
-	return nil
+	if spec.Check != nil {
+		if err := spec.Check(ctx, tx); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }

@@ -123,13 +123,23 @@ func TestRankedRewards(t *testing.T) {
 	}
 	elo := EloParams{KFactor: 32, DefaultRating: 1000, BotModifier: 1}
 
-	// Unranked modes never touch rating: no rank fields, no player_ranks row
-	for _, mode := range []string{"pvp_1v1", "pvp_2v2"} {
+	// Unranked modes (casual_2v2 too) never touch rating: no rank fields, no player_ranks
+	// row, the same coin / EXP as any match
+	for _, mode := range []string{"pvp_1v1", "pvp_2v2", "casual_2v2"} {
 		res := rankedRewards(t, db, "u_"+mode, mode, map[int]int{1: 1000, 2: 1000}, elo,
 			&PlayerStats{PlayerID: "p1", TeamID: 1, IsWinner: true}, &PlayerStats{PlayerID: "p2", TeamID: 2})
 		raw, _ := json.Marshal(res["p1"])
 		if res["p1"].RatingChange != 0 || res["p1"].RankChange != nil || strings.Contains(string(raw), "Rating\"") || strings.Contains(string(raw), "Tier") {
 			t.Fatalf("%s rewards %s", mode, raw)
+		}
+		if res["p1"].CoinGained != 50 || res["p1"].ExpGained != 80 || res["p2"].CoinGained != 30 || res["p2"].ExpGained != 50 {
+			t.Fatalf("%s coin / EXP %+v %+v", mode, res["p1"], res["p2"])
+		}
+		var histMode string
+		var change int
+		if err := db.Pool.QueryRow(ctx, `SELECT mode, rating_change FROM match_histories WHERE match_id = $1 AND player_id = 'p1'`, "u_"+mode).
+			Scan(&histMode, &change); err != nil || histMode != mode || change != 0 {
+			t.Fatalf("%s history %q %d %v", mode, histMode, change, err)
 		}
 	}
 	if rows() != 0 {

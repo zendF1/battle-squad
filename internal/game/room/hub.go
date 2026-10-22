@@ -160,7 +160,8 @@ func (h *Hub) saveToRedis(ctx context.Context, state *RoomState) {
 	h.redis.Client.HSet(ctx, "rooms:active", state.RoomID, data)
 }
 
-// CreateBattleFromMatch creates the battle room of a matchmade ranked 2v2 game:
+// CreateBattleFromMatch creates the battle room of a matchmade 2v2 game, of the
+// match's queue as its mode (ranked_2v2 changes rating, casual_2v2 does not):
 // bots fill the free slots, every human's items are reserved, every human's
 // lobby gets MatchFound (and its clients join the room), and the match starts
 // mmConfig.MatchStartDelay seconds later with MatchStarted.
@@ -192,7 +193,7 @@ func (h *Hub) CreateBattleFromMatch(ctx context.Context, result matchmaker.Match
 	roomState := RoomState{
 		RoomID:       roomID,
 		HostPlayerID: roster.Players[0].PlayerID,
-		Mode:         RankedMode,
+		Mode:         result.Mode(),
 		MapID:        result.MapID,
 		MaxPlayers:   4,
 		Players:      roster.Players,
@@ -246,9 +247,10 @@ func (h *Hub) CreateBattleFromMatch(ctx context.Context, result matchmaker.Match
 	observability.Log.Info().
 		Str("roomId", roomID).
 		Str("matchId", matchID).
+		Str("mode", result.Mode()).
 		Str("botTier", tierName).
 		Bool("hasBot", result.HasBot).
-		Msg("ranked battle created")
+		Msg("matchmade battle created")
 	return nil
 }
 

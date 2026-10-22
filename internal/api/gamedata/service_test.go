@@ -3,6 +3,7 @@ package gamedata
 import (
 	"encoding/json"
 	"math"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -45,7 +46,10 @@ func testSnapshot() *gd.Snapshot {
 			snap.RankTiers[i].Name = "Vàng"
 		}
 	}
-	snap.Modes = []gd.GameModeConfig{{ModeID: "bot", Kind: "lobby", Name: "Đấu với máy", Bot: "ai"}, {ModeID: "pvp_1v1", Kind: "match", Name: "Đấu 1v1"}}
+	snap.Modes = []gd.GameModeConfig{{ModeID: "bot", Kind: "lobby", Name: "Đấu với máy", Bot: "ai", Category: "pvp", Icon: "robot", PartySize: 1, Enabled: true},
+		{ModeID: "hidden", Kind: "lobby", Name: "Ẩn", Queue: "casual_2v2", Category: "pvp", PartySize: 2},
+		{ModeID: "pvp_1v1", Kind: "match", Name: "Đấu 1v1"}}
+	snap.ModeCategories = []gd.ModeCategoryConfig{{ID: "pvp", Name: "PvP", SortOrder: 1}, {ID: "boss", Name: "Boss", SortOrder: 2}}
 	snap.GunKinds = []gd.GunKindConfig{{ID: "cannon", Name: "Đại pháo"}}
 	snap.Slots = []gd.EquipmentSlotConfig{{ID: "helmet", Name: "Mũ"}}
 	snap.TypeWords = []gd.TypeWordConfig{{Word: "shock rifle", Name: "Súng điện", GunKind: "shock_rifle"}}
@@ -97,7 +101,9 @@ func TestBuild(t *testing.T) {
 	if g.Equipment.SellRate != 0.25 || g.Equipment.MergeRatePerItem != 25 || g.Equipment.WeaponUpgradeCostMultiplier != 3 {
 		t.Fatalf("equipment settings %+v", g.Equipment)
 	}
-	if len(g.Modes.Lobby) != 1 || g.Modes.Lobby[0].Bot != "ai" || len(g.Modes.Match) != 1 {
+	// a disabled lobby mode is left out
+	if len(g.Modes.Lobby) != 1 || g.Modes.Lobby[0] != (LobbyMode{ModeID: "bot", Name: "Đấu với máy", Bot: "ai", Category: "pvp", Icon: "robot", PartySize: 1}) ||
+		len(g.Modes.Match) != 1 || !reflect.DeepEqual(g.Modes.Categories, []ModeCategory{{"pvp", "PvP"}, {"boss", "Boss"}}) {
 		t.Fatalf("modes %+v", g.Modes)
 	}
 	// no null arrays: a client can index every list

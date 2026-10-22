@@ -168,10 +168,17 @@ func Build(snap *gd.Snapshot) *GameData {
 	out.Matchmaking = Matchmaking{Queue: match.RankedMode, Slots: 2 * slots, TeamSize: slots,
 		BotFillAfterSec: mm.BotFillAfter, MatchStartDelaySec: mm.MatchStartDelay,
 		InviteTimeoutSec: mm.InviteTimeoutSec, Tips: nonNil(append([]string(nil), snap.Tips...))}
-	out.Modes = Modes{Lobby: []LobbyMode{}, Match: []MatchMode{}}
+	out.Modes = Modes{Categories: []ModeCategory{}, Lobby: []LobbyMode{}, Match: []MatchMode{}}
+	for _, c := range snap.ModeCategories {
+		out.Modes.Categories = append(out.Modes.Categories, ModeCategory{CategoryID: c.ID, Name: c.Name})
+	}
 	for _, m := range snap.Modes {
 		if m.Kind == "lobby" {
-			out.Modes.Lobby = append(out.Modes.Lobby, LobbyMode{ModeID: m.ModeID, Name: m.Name, Description: m.Description, Queue: m.Queue, Bot: m.Bot})
+			if !m.Enabled {
+				continue
+			}
+			out.Modes.Lobby = append(out.Modes.Lobby, LobbyMode{ModeID: m.ModeID, Name: m.Name, Description: m.Description, Queue: m.Queue,
+				Bot: m.Bot, Category: m.Category, Icon: m.Icon, PartySize: max(m.PartySize, 1), Ranked: m.Ranked})
 		} else {
 			out.Modes.Match = append(out.Modes.Match, MatchMode{ModeID: m.ModeID, Name: m.Name})
 		}

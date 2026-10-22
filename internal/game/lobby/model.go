@@ -1,8 +1,11 @@
 package lobby
 
 type LobbyState struct {
-	LobbyID      string        `json:"lobbyId"`
-	HostPlayerID string        `json:"hostPlayerId"`
+	LobbyID      string `json:"lobbyId"`
+	HostPlayerID string `json:"hostPlayerId"`
+	// Queue is the matchmaking queue StartQueue joins (matchmaker.Queues): CreateLobby
+	// {queue?} (ranked_2v2 by default) or the host's SetLobbyQueue
+	Queue        string        `json:"queue"`
 	Members      []LobbyMember `json:"members"`
 	Status       string        `json:"status"` // preparing, in_queue, in_match
 	QueueEntryID string        `json:"-"`
@@ -60,6 +63,16 @@ type InvitePayload struct {
 	PlayerID string `json:"playerId"`
 }
 
+// CreateLobbyPayload is CreateLobby {queue?}; "" is ranked_2v2.
+type CreateLobbyPayload struct {
+	Queue string `json:"queue"`
+}
+
+// SetLobbyQueuePayload is SetLobbyQueue {queue}.
+type SetLobbyQueuePayload struct {
+	Queue string `json:"queue"`
+}
+
 type JoinLobbyPayload struct {
 	LobbyID string `json:"lobbyId"`
 }
@@ -96,7 +109,8 @@ type InviteSentPayload struct {
 	ExpiresInSec int    `json:"expiresInSec"`
 }
 
-// LobbyInvitePayload is the invite the invitee answers with RespondInvite.
+// LobbyInvitePayload is the invite the invitee answers with RespondInvite; Mode is the
+// lobby's queue.
 type LobbyInvitePayload struct {
 	InviteID     string       `json:"inviteId"`
 	LobbyID      string       `json:"lobbyId"`

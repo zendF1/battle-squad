@@ -102,8 +102,9 @@ type SelectItemsPayload struct {
 	Items []string `json:"items"`
 }
 
-// MatchFound is sent to every human of a ranked match (same payload) before the
-// match starts: the room and match ids, map, mode and both teams.
+// MatchFound is sent to every human of a matchmade match (same payload) before the
+// match starts: the room and match ids, map, mode (the queue: ranked_2v2, casual_2v2)
+// and both teams.
 type MatchFound struct {
 	RoomID   string           `json:"roomId"`
 	MatchID  string           `json:"matchId"`
@@ -135,10 +136,11 @@ type MatchFoundPlayer struct {
 	TitleID     string `json:"titleId"`
 }
 
-// newMatchFound is a MatchFound for mapID with the map's name and theme (teams still empty).
-func newMatchFound(mapID string) MatchFound {
+// newMatchFound is a MatchFound of a match of mode on mapID with the map's name and theme
+// (teams still empty).
+func newMatchFound(mapID, mode string) MatchFound {
 	name, theme := gamedata.MapDisplay(mapID)
-	return MatchFound{MapID: mapID, MapName: name, MapTheme: theme, Mode: RankedMode}
+	return MatchFound{MapID: mapID, MapName: name, MapTheme: theme, Mode: mode}
 }
 
 // PracticeMapID is the map of a QuickPlay against the idle bot (the target dummy).

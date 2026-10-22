@@ -16,7 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// RankedMode is the mode of matchmade games; only it changes rating.
+// RankedMode is the mode of ranked matchmade games; only it changes rating.
 const RankedMode = match.RankedMode
 
 // rankedProfile is what a MatchFound card shows of a human.
@@ -92,7 +92,7 @@ func buildRankedRoster(result matchmaker.MatchResult, profiles map[string]ranked
 
 	ro := rankedRoster{
 		LobbyMapping: map[string]string{},
-		Found:        newMatchFound(result.MapID),
+		Found:        newMatchFound(result.MapID, result.Mode()),
 		TeamRatings:  map[int]int{},
 		BotRating:    botRating,
 		Bots:         map[string]botLoadout{},

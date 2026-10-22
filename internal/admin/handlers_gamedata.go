@@ -15,6 +15,7 @@ import (
 	apigamedata "battle-squad/internal/api/gamedata"
 	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/game/match"
+	"battle-squad/internal/game/matchmaker"
 	"battle-squad/internal/gamedatasync"
 	"battle-squad/internal/shared/observability"
 	"battle-squad/internal/shared/ranked"
@@ -470,11 +471,20 @@ var textTables = []*textTable{
 		Cols: []textCol{{Name: "name", Label: "Tên", Kind: "text", Required: true}, {Name: "gun_kind", Label: "Gun kind", Kind: "text"},
 			{Name: "sort_order", Label: "Thứ tự", Kind: "int", Min: 0, Max: 10000}}},
 	{Path: "game-modes", Title: "Game Modes", Table: "config_game_modes", Key: "mode_id", KeyLabel: "Mode ID",
-		Order: "sort_order, mode_id", CanAdd: true, CanDelete: true,
-		Desc: "Chế độ: lobby = lựa chọn ở Home (queue: hàng chờ ghép trận; bot: QuickPlay với bot); match = chế độ của trận (lịch sử, kết quả).",
+		Order: "sort_order, mode_id", CanAdd: true, CanDelete: true, Check: checkGameModes,
+		Desc: "Chế độ: lobby = một lựa chọn ở màn Chọn chế độ, trong mục Category (Mode Categories), theo Thứ tự (queue: hàng chờ ghép trận, chỉ " +
+			strings.Join(matchmaker.Queues, " / ") + "; bot: QuickPlay với bot; cả hai trống = luyện tập; Icon: mã icon của client, trống = icon chung; " +
+			"Số người: tối đa trong đội, 1 khi không có queue; Xếp hạng: bật đúng khi queue là " + matchmaker.RankedQueue + "; tắt Bật = ẩn khỏi GET /gamedata). " +
+			"match = chế độ của trận (lịch sử, kết quả; mode id = queue của trận ghép).",
 		Cols: []textCol{{Name: "kind", Label: "Loại", Kind: "select", Options: []string{"lobby", "match"}}, {Name: "name", Label: "Tên", Kind: "text", Required: true},
-			{Name: "description", Label: "Mô tả", Kind: "text"}, {Name: "queue", Label: "Queue", Kind: "text"}, {Name: "bot", Label: "Bot", Kind: "text"},
-			{Name: "sort_order", Label: "Thứ tự", Kind: "int", Min: 0, Max: 10000}}},
+			{Name: "description", Label: "Mô tả", Kind: "text"}, {Name: "category", Label: "Category", Kind: "text"}, {Name: "icon", Label: "Icon", Kind: "text"},
+			{Name: "queue", Label: "Queue", Kind: "select", Options: append([]string{""}, matchmaker.Queues...)}, {Name: "bot", Label: "Bot", Kind: "text"},
+			{Name: "party_size", Label: "Số người", Kind: "int", Min: 1, Max: matchmaker.TeamSlots}, {Name: "ranked", Label: "Xếp hạng", Kind: "bool"},
+			{Name: "enabled", Label: "Bật", Kind: "bool"}, {Name: "sort_order", Label: "Thứ tự", Kind: "int", Min: 0, Max: 10000}}},
+	{Path: "mode-categories", Title: "Mode Categories", Table: "config_mode_categories", Key: "category_id", KeyLabel: "Category ID",
+		Order: "sort_order, category_id", CanAdd: true, CanDelete: true, Check: checkGameModes,
+		Desc: "Các mục (tab) của màn Chọn chế độ, theo thứ tự; mỗi chế độ lobby ở Game Modes thuộc một mục. Mục chưa có chế độ nào: client hiện \"Sắp ra mắt\".",
+		Cols: []textCol{{Name: "name", Label: "Tên", Kind: "text", Required: true}, {Name: "sort_order", Label: "Thứ tự", Kind: "int", Min: 0, Max: 10000}}},
 	{Path: "tips", Title: "Tips", Table: "config_tips", Key: "tip_id", KeyLabel: "Tip ID", Order: "sort_order, tip_id", CanAdd: true, CanDelete: true,
 		Desc: "Mẹo hiển thị khi tìm trận, theo thứ tự.",
 		Cols: []textCol{{Name: "text", Label: "Nội dung", Kind: "textarea", Required: true}, {Name: "sort_order", Label: "Thứ tự", Kind: "int", Min: 0, Max: 10000}}},
@@ -516,6 +526,60 @@ func checkRankBands(ctx context.Context, tx pgx.Tx) error {
 		}
 	}
 	return ranked.ValidateBands(bands)
+}
+
+// checkGameModes rejects a lobby mode the server cannot run: a queue the matchmaker does not
+// run, ranked other than the queue's (only ranked_2v2 changes rating), a party bigger than 1
+// without a queue (or than a team), or a category that is not a config_mode_categories row.
+func checkGameModes(ctx context.Context, tx pgx.Tx) error {
+	cats := map[string]bool{}
+	rows, err := tx.Query(ctx, `SELECT category_id FROM config_mode_categories`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		cats[id] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	rows, err = tx.Query(ctx, `SELECT mode_id, queue, category, party_size, ranked FROM config_game_modes
+		WHERE kind = 'lobby' ORDER BY sort_order, mode_id`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, queue, category string
+		var party int
+		var isRanked bool
+		if err := rows.Scan(&id, &queue, &category, &party, &isRanked); err != nil {
+			return err
+		}
+		bad := func(format string, args ...any) error {
+			return fmt.Errorf("%s: "+format, append([]any{id}, args...)...)
+		}
+		switch {
+		case queue != "" && !matchmaker.KnownQueue(queue):
+			return bad("queue %q không có, server chỉ chạy %s", queue, strings.Join(matchmaker.Queues, ", "))
+		case isRanked != matchmaker.IsRankedQueue(queue):
+			return bad("Xếp hạng phải %s với queue %q", map[bool]string{true: "bật", false: "tắt"}[matchmaker.IsRankedQueue(queue)], queue)
+		case party < 1 || party > matchmaker.TeamSlots:
+			return bad("Số người %d ngoài khoảng 1..%d", party, matchmaker.TeamSlots)
+		case queue == "" && party != 1:
+			return bad("Số người phải là 1 khi không có queue")
+		case !cats[category]:
+			return bad("category %q không có trong Mode Categories", category)
+		}
+	}
+	return rows.Err()
 }
 
 // checkTypeWordGunKinds rejects a type word whose gun kind is not a config_gun_kinds row.
