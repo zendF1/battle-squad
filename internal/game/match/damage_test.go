@@ -54,21 +54,19 @@ func TestCalculateFallDamage(t *testing.T) {
 
 // K comes from combat.defense_k: damage taken = raw × K / (K + defense).
 func TestReduceByDefenseUsesConfiguredK(t *testing.T) {
-	prev := gamedata.Physics
-	t.Cleanup(func() { gamedata.Physics = prev })
 
-	gamedata.Physics = nil
+	usePhysics(t, nil)
 	if got := ReduceByDefense(650, 50); math.Abs(got-600) > 1e-9 {
 		t.Fatalf("default K 600: 650 × 600/650 = 600, got %v", got)
 	}
-	gamedata.Physics = &gamedata.PhysicsConfig{DefenseK: 100}
+	usePhysics(t, &gamedata.PhysicsConfig{DefenseK: 100})
 	if got := ReduceByDefense(60, 50); math.Abs(got-40) > 1e-9 {
 		t.Fatalf("K 100: 60 × 100/150 = 40, got %v", got)
 	}
 	if got := CalculateExplosionDamage(Vector2{}, Vector2{}, 60, 40, 50); got != 40 {
 		t.Fatalf("explosion damage with K 100: got %d, want 40", got)
 	}
-	gamedata.Physics = &gamedata.PhysicsConfig{DefenseK: 0}
+	usePhysics(t, &gamedata.PhysicsConfig{DefenseK: 0})
 	if got := ReduceByDefense(650, 50); math.Abs(got-600) > 1e-9 {
 		t.Fatalf("K 0 falls back to 600, got %v", got)
 	}

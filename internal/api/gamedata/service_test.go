@@ -5,35 +5,57 @@ import (
 	"math"
 	"strings"
 	"testing"
+
+	gd "battle-squad/internal/game/gamedata"
 )
 
-func testSource() *source {
-	return &source{
-		Settings: map[string]string{
-			"physics.gravity": "445", "physics.wind_scale": "67", "physics.projectile_speed_multiplier": "9.6",
-			"character_levels":    `{"levels":[{"level":3,"expRequired":400},{"level":2,"expRequired":200}]}`,
-			"equipment.sell_rate": "2", // out of (0, 1]: the default
+func testSnapshot() *gd.Snapshot {
+	snap := gd.NewSnapshot(&gd.GameData{
+		Characters: map[string]gd.CharacterConfig{"rookie": {CharacterID: "rookie", Name: "Rookie", WeaponID: "basic_rocket", SkillID: "triple_shot"}},
+		Weapons: map[string]gd.WeaponConfig{
+			"basic_rocket": {WeaponID: "basic_rocket", ExplosionRadius: 40, TerrainDamage: 20},
+			"no_crater":    {WeaponID: "no_crater", ExplosionRadius: 33},
 		},
-		Characters: []Character{{CharacterID: "rookie", Name: "Rookie", WeaponID: "basic_rocket", SkillID: "triple_shot"}},
-		Weapons: []Weapon{
-			{WeaponID: "basic_rocket", ExplosionRadius: 40, TerrainDamage: 20},
-			{WeaponID: "no_crater", ExplosionRadius: 33},
+		Skills: map[string]gd.SkillConfig{
+			"heavy_bomb": {SkillID: "heavy_bomb", EffectType: "bomb_chain", Description: "{count} quả, mỗi quả {eachPct}%"},
+			"new_skill":  {SkillID: "new_skill", EffectType: "unknown_effect"},
 		},
-		Skills: []Skill{
-			{SkillID: "heavy_bomb", EffectType: "bomb_chain", Description: "{count} quả, mỗi quả {eachPct}%"},
-			{SkillID: "new_skill", EffectType: "unknown_effect"},
-		},
-		Items:         []Item{{ItemID: "medkit"}, {ItemID: "freeze_bomb"}, {ItemID: "air_strike"}, {ItemID: "brand_new"}},
-		StatusEffects: []statusText{{EffectID: "freeze", Name: "Bị đóng băng"}, {EffectID: "admin_effect", Name: "Mới"}},
-		RankTiers:     map[string]string{"gold": "Vàng"},
-		Modes:         []modeRow{{ModeID: "bot", Kind: "lobby", Name: "Đấu với máy", Bot: "ai"}, {ModeID: "pvp_1v1", Kind: "match", Name: "Đấu 1v1"}},
+		Items: map[string]gd.ItemConfig{"medkit": {ItemID: "medkit", SortOrder: 1}, "freeze_bomb": {ItemID: "freeze_bomb", SortOrder: 2},
+			"air_strike": {ItemID: "air_strike", SortOrder: 3}, "brand_new": {ItemID: "brand_new", SortOrder: 4}},
+	})
+	snap.Settings = map[string]string{
+		"physics.gravity": "445", "physics.wind_scale": "67", "physics.projectile_speed_multiplier": "9.6",
+		"character_levels":    `{"levels":[{"level":3,"expRequired":400},{"level":2,"expRequired":200}]}`,
+		"equipment.sell_rate": "2", // out of (0, 1]: the default
 	}
+	snap.Physics = gd.PhysicsFromSettings(snap.Settings)
+	snap.Status = []gd.StatusEffectConfig{
+		{EffectID: "freeze", Name: "Bị đóng băng", SortOrder: 1, Bad: true, SkipsTurn: true, BlocksMove: true},
+		{EffectID: "admin_effect", Name: "Mới", SortOrder: 2},
+	}
+	for _, d := range gd.DefaultStatusEffects {
+		if d.EffectID != "freeze" {
+			snap.Status = append(snap.Status, gd.StatusEffectConfig{EffectID: d.EffectID, Name: d.EffectID, SortOrder: 20 + d.SortOrder,
+				Bad: d.Bad, SkipsTurn: d.SkipsTurn, BlocksMove: d.BlocksMove})
+		}
+	}
+	for i := range snap.RankTiers {
+		snap.RankTiers[i].Name = ""
+		if snap.RankTiers[i].Tier == "gold" {
+			snap.RankTiers[i].Name = "Vàng"
+		}
+	}
+	snap.Modes = []gd.GameModeConfig{{ModeID: "bot", Kind: "lobby", Name: "Đấu với máy", Bot: "ai"}, {ModeID: "pvp_1v1", Kind: "match", Name: "Đấu 1v1"}}
+	snap.GunKinds = []gd.GunKindConfig{{ID: "cannon", Name: "Đại pháo"}}
+	snap.Slots = []gd.EquipmentSlotConfig{{ID: "helmet", Name: "Mũ"}}
+	snap.TypeWords = []gd.TypeWordConfig{{Word: "shock rifle", Name: "Súng điện", GunKind: "shock_rifle"}}
+	return snap.WithData(snap.Data) // re-indexed
 }
 
-// build joins the rows with the match's rules; unknown ids (an admin's new skill, item or
+// Build joins the rows with the match's rules; unknown ids (an admin's new skill, item or
 // effect) still come out, with neutral rules.
 func TestBuild(t *testing.T) {
-	g := build(testSource())
+	g := Build(testSnapshot())
 	if g.Weapons[0].CraterRadius != 12 || g.Weapons[1].CraterRadius != 33 {
 		t.Fatalf("craters %+v", g.Weapons)
 	}
@@ -79,7 +101,11 @@ func TestBuild(t *testing.T) {
 		t.Fatalf("modes %+v", g.Modes)
 	}
 	// no null arrays: a client can index every list
-	body, _ := json.Marshal(build(&source{Settings: map[string]string{}, RankTiers: map[string]string{}}))
+	if g.GunKinds[0] != (GunKind{ID: "cannon", Name: "Đại pháo"}) || g.Equipment.Slots[0] != (EquipmentSlot{ID: "helmet", Name: "Mũ"}) ||
+		g.Equipment.TypeWords[0] != (TypeWord{Word: "shock rifle", Name: "Súng điện", GunKind: "shock_rifle"}) {
+		t.Fatalf("texts %+v %+v %+v", g.GunKinds, g.Equipment.Slots, g.Equipment.TypeWords)
+	}
+	body, _ := json.Marshal(Build(gd.NewSnapshot(nil)))
 	if strings.Contains(string(body), "null") {
 		t.Fatalf("null in an empty payload: %s", body)
 	}
@@ -87,7 +113,7 @@ func TestBuild(t *testing.T) {
 
 // The version is a content hash: equal content, equal version; any change, a new one.
 func TestVersion(t *testing.T) {
-	a, b := build(testSource()), build(testSource())
+	a, b := Build(testSnapshot()), Build(testSnapshot())
 	if version(a) != version(b) || len(version(a)) != 16 {
 		t.Fatalf("%s %s", version(a), version(b))
 	}
@@ -95,14 +121,14 @@ func TestVersion(t *testing.T) {
 	if version(a) != version(b) {
 		t.Fatal("the version hashes itself")
 	}
-	src := testSource()
-	src.Settings["physics.gravity"] = "446"
-	if version(build(src)) == version(b) {
+	src := testSnapshot()
+	src.Physics.Gravity = 446
+	if version(Build(src)) == version(b) {
 		t.Fatal("a gravity change kept the version")
 	}
-	src = testSource()
-	src.Items[0].Name = "Hộp cứu thương"
-	if version(build(src)) == version(b) {
+	src = testSnapshot()
+	src.Data.Items["medkit"] = gd.ItemConfig{ItemID: "medkit", DisplayName: "Hộp cứu thương", SortOrder: 1}
+	if version(Build(src)) == version(b) {
 		t.Fatal("a name change kept the version")
 	}
 }

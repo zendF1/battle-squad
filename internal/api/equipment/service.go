@@ -605,7 +605,7 @@ func (s *Service) UpgradeEquipment(ctx context.Context, playerID string, req Upg
 	if req.ExpectedLevel != nil && *req.ExpectedLevel != equip.UpgradeLevel {
 		return nil, model.ErrEquipmentModified
 	}
-	if equip.UpgradeLevel >= MaxUpgradeLevel {
+	if equip.UpgradeLevel >= MaxUpgradeLevel() {
 		return nil, model.ErrEquipmentMaxUpgrade
 	}
 	if len(req.Stones) == 0 {
@@ -1053,13 +1053,13 @@ func (s *Service) UnsocketGem(ctx context.Context, playerID string, req Unsocket
 // ---------------------------------------------------------------------------
 
 func (s *Service) MergeStones(ctx context.Context, playerID string, req MergeStoneRequest) (*MergeResult, error) {
-	if req.Count < MergeMinCount {
+	if req.Count < MergeMinCount() {
 		return nil, model.ErrMergeMinCount
 	}
-	if req.Count > MergeMaxCount {
+	if req.Count > MergeMaxCount() {
 		return nil, model.ErrMergeMaxCount
 	}
-	if req.StoneLevel >= MaxStoneLevel {
+	if req.StoneLevel >= MaxStoneLevel() {
 		return nil, model.ErrMergeMaxLevel
 	}
 
@@ -1102,10 +1102,10 @@ func (s *Service) MergeStones(ctx context.Context, playerID string, req MergeSto
 // ---------------------------------------------------------------------------
 
 func (s *Service) MergeGems(ctx context.Context, playerID string, req MergeGemRequest) (*MergeResult, error) {
-	if req.Count < 2 {
+	if req.Count < MergeMinCount() {
 		return nil, model.ErrMergeMinCount
 	}
-	if req.Count > 4 {
+	if req.Count > MergeMaxCount() {
 		return nil, model.ErrMergeMaxCount
 	}
 	if req.GemLevel >= 10 {

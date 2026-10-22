@@ -6,12 +6,10 @@ import (
 	"battle-squad/internal/game/gamedata"
 )
 
-// PlayerHeight is the clearance in pixels a player needs above the surface they stand on.
-// Matches the character body drawn by the client (~40px above the feet).
-const PlayerHeight = 40
-
-// maxClimbPerStep is the most pixels a player climbs up per 1 px horizontal step (~72°).
-const maxClimbPerStep = 3
+// The terrain rules (rules.terrain of the game data the terrain was built with): the clearance
+// a player needs above the surface (playerHeight, the character body drawn by the client, ~40
+// px), the most it climbs per 1 px step (maxClimbPerStep, 3: ~72°), the crater bowl's depth and
+// ceiling (bowlDepth, bowlCeiling).
 
 type TerrainZone struct {
 	Type string // "lava", "ice", "fragile"
@@ -28,7 +26,21 @@ type Terrain struct {
 	DestructibleMask []uint64
 	Zones            []TerrainZone
 	Version          uint64 // incremented by every crater (CarveBowl, DestroyCircle); clients use it to skip operations already in a snapshot
+	// gd is the game data the terrain plays by (the match's snapshot); nil (a Terrain built by
+	// hand in a test) uses gamedata.Current().
+	gd *gamedata.Snapshot
 }
+
+// data is the game data the terrain plays by.
+func (t *Terrain) data() *gamedata.Snapshot {
+	if t != nil && t.gd != nil {
+		return t.gd
+	}
+	return gamedata.Current()
+}
+
+// rules are the terrain rules the terrain plays by.
+func (t *Terrain) rules() gamedata.TerrainRules { return t.data().Rules.Terrain }
 
 func maskSize(width, height int) int {
 	return (width*height + 63) / 64
@@ -54,13 +66,25 @@ func clearBit(mask []uint64, x, y, width int) {
 	mask[word] &^= bit
 }
 
+// NewTerrain builds the terrain of mapCfg with the current game data's brick types and rules.
 func NewTerrain(mapCfg gamedata.MapConfig) *Terrain {
-	return NewTerrainWithBricks(mapCfg, gamedata.BrickTypes)
+	gd := gamedata.Current()
+	return newTerrain(gd, mapCfg, gd.Bricks)
 }
 
-// NewTerrainWithBricks builds terrain using the given brick types instead of the globally
-// loaded ones. Unknown brick IDs fill their whole cell and are destructible.
+// NewTerrainFor builds the terrain of mapCfg with gd's brick types, playing by gd's rules.
+func NewTerrainFor(gd *gamedata.Snapshot, mapCfg gamedata.MapConfig) *Terrain {
+	return newTerrain(gd, mapCfg, gd.Bricks)
+}
+
+// NewTerrainWithBricks builds terrain using the given brick types instead of the loaded ones
+// (and the current game data's rules). Unknown brick IDs fill their whole cell and are
+// destructible.
 func NewTerrainWithBricks(mapCfg gamedata.MapConfig, bricks map[int]gamedata.BrickTypeConfig) *Terrain {
+	return newTerrain(gamedata.Current(), mapCfg, bricks)
+}
+
+func newTerrain(gd *gamedata.Snapshot, mapCfg gamedata.MapConfig, bricks map[int]gamedata.BrickTypeConfig) *Terrain {
 	hasTiles := mapCfg.HasTiles()
 	width, height := mapCfg.PixelSize()
 
@@ -73,6 +97,7 @@ func NewTerrainWithBricks(mapCfg gamedata.MapConfig, bricks map[int]gamedata.Bri
 		Height:           height,
 		Mask:             make([]uint64, maskSize(width, height)),
 		DestructibleMask: make([]uint64, maskSize(width, height)),
+		gd:               gd,
 	}
 
 	if hasTiles {
@@ -243,16 +268,12 @@ const (
 	CraterCircle = "circle" // DestroyCircle: no explosion carves it now (the bomb chain did before playtest 5)
 )
 
-// bowlCeiling is how far above the impact point, in crater radii, a bowl carves (its flat top).
-// High enough that on an uphill slope up to ~40° the floor meets the surface below it, so the
-// uphill rim leaves no overhang.
-const bowlCeiling = 1.5
-
-// bowlDepth is how deep the bowl's floor lies under the impact point, in crater radii
-// (playtest 5: 0.72, was 0.5). On flat ground, measured from the surface to where a player
-// standing at the impact lands (the shell explodes ~3 px inside the ground): Rookie and Spark
-// (20 px crater) 17 px, Flora (24) 20, Tanko (52) 40 (with 0.5: 13, 15, 29).
-const bowlDepth = 0.72
+// bowlCeiling (rules.terrain, 1.5) is how far above the impact point, in crater radii, a bowl
+// carves (its flat top). High enough that on an uphill slope up to ~40° the floor meets the
+// surface below it, so the uphill rim leaves no overhang.
+//
+// bowlDepth (rules.terrain, 0.72; playtest 5, was 0.5) is how deep the bowl's floor lies under
+// the impact point, in crater radii.
 
 // Carve cuts the crater of the given shape (CraterBowl or CraterCircle; "" is CraterBowl).
 func (t *Terrain) Carve(shape string, cx, cy, radius float64) bool {
@@ -279,6 +300,8 @@ func (t *Terrain) CarveBowl(cx, cy, radius float64) bool {
 	if radius <= 0 {
 		return false
 	}
+	tr := t.rules()
+	bowlCeiling, bowlDepth := tr.BowlCeiling, tr.BowlDepth
 
 	icx := int(math.Round(cx))
 	icy := int(math.Round(cy))
@@ -378,13 +401,14 @@ func (t *Terrain) WalkTo(startX, startY, targetX float64) (float64, float64) {
 		dir = -1
 	}
 
+	maxClimb := t.rules().MaxClimbPerStep
 	for curX != endX {
 		nextX := curX + dir
 		if nextX < 0 || nextX >= t.Width {
 			break
 		}
 
-		nextY, ok := t.stepSurface(nextX, curY, maxClimbPerStep)
+		nextY, ok := t.stepSurface(nextX, curY, maxClimb)
 		if !ok {
 			break
 		}
@@ -406,10 +430,10 @@ func (t *Terrain) CanStandAt(x, y float64) bool {
 	return t.hasHeadroom(int(math.Round(x)), sy)
 }
 
-// hasHeadroom reports whether the PlayerHeight pixels above surfaceY in column x are free.
+// hasHeadroom reports whether the playerHeight pixels above surfaceY in column x are free.
 // Pixels above the top of the map count as free.
 func (t *Terrain) hasHeadroom(x, surfaceY int) bool {
-	top := surfaceY - PlayerHeight
+	top := surfaceY - t.rules().PlayerHeight
 	if top < 0 {
 		top = 0
 	}

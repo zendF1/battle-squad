@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"path/filepath"
-	"runtime"
 	"testing"
 
 	"battle-squad/internal/game/gamedata"
@@ -18,12 +16,7 @@ import (
 // loadConfigs installs configs/*.yaml (maps.yaml and bricks.yaml included) as the game data.
 func loadConfigs(t *testing.T) {
 	t.Helper()
-	prevData, prevBricks := gamedata.Data, gamedata.BrickTypes
-	t.Cleanup(func() { gamedata.Data, gamedata.BrickTypes = prevData, prevBricks })
-	_, self, _, _ := runtime.Caller(0)
-	if err := gamedata.LoadGameData(filepath.Join(filepath.Dir(self), "..", "..", "..", "configs")); err != nil {
-		t.Fatal(err)
-	}
+	useConfigDir(t)
 }
 
 // The brick shapes fill their cells as drawn: slopes are 45° staircases a player can walk
@@ -119,11 +112,11 @@ func TestGeneratedMapsAreSound(t *testing.T) {
 	}
 	for _, d := range mapgen.Defs {
 		t.Run(d.ID, func(t *testing.T) {
-			cfg, ok := gamedata.Data.Maps[d.ID]
+			cfg, ok := gamedata.Current().Data.Maps[d.ID]
 			if !ok {
 				t.Fatal("not in configs/maps.yaml")
 			}
-			if err := gamedata.ValidateMap(cfg, gamedata.BrickTypes); err != nil {
+			if err := gamedata.ValidateMap(cfg, gamedata.Current().Bricks); err != nil {
 				t.Fatal(err)
 			}
 			if !gamedata.KnownMapTheme(cfg.Theme) || cfg.Theme != d.Theme || cfg.Name != d.Name {
@@ -202,7 +195,7 @@ func TestGeneratedMapsAreSound(t *testing.T) {
 // or the first two 1v1), each a bot of tier.
 func mapMatch(t *testing.T, mapID string, players int, tier matchmaker.BotTierConfig) *Match {
 	t.Helper()
-	cfg := gamedata.Data.Maps[mapID]
+	cfg := gamedata.Current().Data.Maps[mapID]
 	team1, team2 := cfg.TeamSpawns()
 	chars := []string{"rookie", "tanko", "spark", "flora"}
 	var ps []*BattlePlayerState
@@ -211,7 +204,7 @@ func mapMatch(t *testing.T, mapID string, players int, tier matchmaker.BotTierCo
 		if i%2 == 1 {
 			team, sp = 2, team2[(i/2)%len(team2)]
 		}
-		ch := gamedata.Data.Characters[chars[i]]
+		ch := gamedata.Current().Data.Characters[chars[i]]
 		ps = append(ps, &BattlePlayerState{PlayerID: fmt.Sprintf("bot_%d", i), TeamID: team, CharacterID: ch.CharacterID,
 			HP: ch.HP, MaxHP: ch.HP, Defense: ch.Defense, Position: Vector2{X: sp.X, Y: sp.Y}, IsAlive: true, IsBot: true})
 	}
@@ -230,7 +223,7 @@ func TestGeneratedMapsHaveShotsBetweenSides(t *testing.T) {
 	loadConfigs(t)
 	for _, d := range mapgen.Defs {
 		t.Run(d.ID, func(t *testing.T) {
-			cfg := gamedata.Data.Maps[d.ID]
+			cfg := gamedata.Current().Data.Maps[d.ID]
 			team1, team2 := cfg.TeamSpawns()
 			canHit := func(from, to gamedata.SpawnPoint) bool {
 				m := mapMatch(t, d.ID, 2, perfectAim)
@@ -244,7 +237,7 @@ func TestGeneratedMapsHaveShotsBetweenSides(t *testing.T) {
 				}
 				shooter.Position = Vector2{X: from.X, Y: m.Terrain.SpawnY(from.X, from.Y)}
 				target.Position = Vector2{X: to.X, Y: m.Terrain.SpawnY(to.X, to.Y)}
-				weapon, _ := botWeapon(shooter)
+				weapon, _ := botWeapon(gamedata.Current(), shooter)
 				return NewBotBrain(perfectAim).bestShot(m, shooter, shooter.Position, weapon).damage > 0
 			}
 			hits := map[[2]int]bool{} // [from, to] spawn indexes 0..3 (team 1: 0, 1)
@@ -291,7 +284,7 @@ func reachShot(tr *Terrain, from, to Vector2) (angle, power float64, ok bool) {
 			if r.HitPlayerID == "target" {
 				return a, p, true
 			}
-			if e := r.ExplosionPoint; e != nil && math.Hypot(e.X-body.X, e.Y-body.Y) <= physics().PlayerHitRadius {
+			if e := r.ExplosionPoint; e != nil && math.Hypot(e.X-body.X, e.Y-body.Y) <= gamedata.Current().Physics.PlayerHitRadius {
 				return a, p, true
 			}
 		}
@@ -306,7 +299,7 @@ func TestGeneratedMapsEveryEnemyReachable(t *testing.T) {
 	for _, d := range mapgen.Defs {
 		t.Run(d.ID, func(t *testing.T) {
 			t.Parallel()
-			cfg := gamedata.Data.Maps[d.ID]
+			cfg := gamedata.Current().Data.Maps[d.ID]
 			tr := NewTerrain(cfg)
 			team1, team2 := cfg.TeamSpawns()
 			feet := func(sp gamedata.SpawnPoint) Vector2 { return Vector2{X: sp.X, Y: tr.SpawnY(sp.X, sp.Y)} }
@@ -353,7 +346,7 @@ func TestGeneratedMapsSpawnsHaveWideFloor(t *testing.T) {
 	loadConfigs(t)
 	for _, d := range mapgen.Defs {
 		t.Run(d.ID, func(t *testing.T) {
-			cfg := gamedata.Data.Maps[d.ID]
+			cfg := gamedata.Current().Data.Maps[d.ID]
 			tr := NewTerrain(cfg)
 			for i, sp := range cfg.SpawnPoints {
 				feet := Vector2{X: sp.X, Y: tr.SpawnY(sp.X, sp.Y)}
@@ -374,11 +367,11 @@ func TestGeneratedMapsSpawnsHaveWideFloor(t *testing.T) {
 // chain's bombs carve the weapon's bowl, the missile rain's missiles rainCrater × Rookie's.
 func tankoMaxCrater(t *testing.T) float64 {
 	t.Helper()
-	w, ok := gamedata.Data.Weapons["cannon_ball"]
+	w, ok := gamedata.Current().Data.Weapons["cannon_ball"]
 	if !ok {
 		t.Fatal("no cannon_ball")
 	}
-	return craterRadius(&BattlePlayerState{TerrainDamageBonus: 1000}, weaponCraterRadius(w))
+	return craterRadius(&BattlePlayerState{TerrainDamageBonus: 1000}, weaponCraterRadius(gamedata.Current(), w), MaxTerrainDamageBonus)
 }
 
 // shotsToFallOut digs at a player standing at feet: each shot explodes 3 px into the ground
@@ -410,7 +403,7 @@ func TestGeneratedMapsGroundHoldsTankoCraters(t *testing.T) {
 	crater := tankoMaxCrater(t)
 	for _, d := range mapgen.Defs {
 		t.Run(d.ID, func(t *testing.T) {
-			cfg := gamedata.Data.Maps[d.ID]
+			cfg := gamedata.Current().Data.Maps[d.ID]
 			tr := NewTerrain(cfg)
 			for i, sp := range cfg.SpawnPoints {
 				feet := Vector2{X: sp.X, Y: tr.SpawnY(sp.X, sp.Y)}
@@ -466,7 +459,7 @@ func TestExplosionOnHardGroundStillSplashes(t *testing.T) {
 	at := Vector2{X: feet.X + 20, Y: feet.Y + 3} // in the crate, 20 px from the target
 	r := &ProjectileResult{ProjectileID: "p", ExplosionPoint: &at, ExplosionRadius: 60, CraterRadius: 52}
 	hp := target.HP
-	hit := m.explodeProjectile(shooter, r, 420, &shotTimeline{})
+	hit := m.explodeProjectile(shooter, r, 420, m.newTimeline())
 	for i := range before.Mask {
 		if before.Mask[i] != m.Terrain.Mask[i] {
 			t.Fatal("hard ground carved")

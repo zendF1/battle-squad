@@ -18,7 +18,7 @@ import (
 func newReservedMatch(t *testing.T, db *database.PostgresDB, matchID string) (*Match, *ws.Client) {
 	t.Helper()
 	ctx := context.Background()
-	setFlowGameData()
+	setFlowGameData(t)
 	if _, err := db.Pool.Exec(ctx, `INSERT INTO inventory_items (player_id, item_id, quantity, source) VALUES ('p1', 'medkit', 2, 'test')
 		ON CONFLICT (player_id, item_id) DO UPDATE SET quantity = 2`); err != nil {
 		t.Fatal(err)

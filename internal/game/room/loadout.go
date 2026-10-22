@@ -8,11 +8,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// MaxLoadoutItems is how many items a player may bring into a match.
-const MaxLoadoutItems = 3
+// MaxLoadoutItems is how many items a player may bring into a match (rules.items maxLoadout of
+// the current game data).
+func MaxLoadoutItems() int { return gamedata.Current().Rules.Items.MaxLoadout }
 
-// DefaultCharacterID is the character every player owns and plays when none is picked.
-const DefaultCharacterID = "rookie"
+// DefaultCharacterID is the character every player owns and plays when none is picked
+// (rules.player defaultCharacterId of the current game data).
+func DefaultCharacterID() string { return gamedata.Current().Rules.Player.DefaultCharacterID }
 
 // loadoutOwnership reports which characters and items a player owns.
 type loadoutOwnership interface {
@@ -55,19 +57,17 @@ func (o poolOwnership) ownedItems(ctx context.Context, playerID string, items []
 	return owned, rows.Err()
 }
 
-// validCharacterID reports whether characterID is a playable character.
+// validCharacterID reports whether characterID is a playable character (one of the game
+// data's characters).
 func validCharacterID(characterID string) bool {
-	switch characterID {
-	case "rookie", "tanko", "spark", "flora":
-		return true
-	}
-	return false
+	_, ok := gamedata.Current().Data.Characters[characterID]
+	return ok
 }
 
 // checkCharacterOwned returns a LoadoutError when the player has not unlocked
-// characterID. Rookie is the default character and always available.
+// characterID. The default character (Rookie) is always available.
 func checkCharacterOwned(ctx context.Context, own loadoutOwnership, playerID, characterID string) error {
-	if characterID == DefaultCharacterID {
+	if characterID == DefaultCharacterID() {
 		return nil
 	}
 	ok, err := own.ownsCharacter(ctx, playerID, characterID)
@@ -82,8 +82,8 @@ func checkCharacterOwned(ctx context.Context, own loadoutOwnership, playerID, ch
 
 // checkItemSelection enforces the item count and per-match use limits.
 func checkItemSelection(items []string) error {
-	if len(items) > MaxLoadoutItems {
-		return &LoadoutError{Reason: fmt.Sprintf("You can bring at most %d items", MaxLoadoutItems)}
+	if limit := MaxLoadoutItems(); len(items) > limit {
+		return &LoadoutError{Reason: fmt.Sprintf("You can bring at most %d items", limit)}
 	}
 	if _, err := itemCounts(items); err != nil {
 		return &LoadoutError{Reason: err.Error()}
@@ -94,7 +94,7 @@ func checkItemSelection(items []string) error {
 // checkItemsKnown rejects item ids missing from the game data.
 func checkItemsKnown(items []string) error {
 	for _, itemID := range items {
-		if _, ok := gamedata.Data.Items[itemID]; !ok {
+		if _, ok := gamedata.Current().Data.Items[itemID]; !ok {
 			return &LoadoutError{Reason: fmt.Sprintf("Unknown item: %s", itemID)}
 		}
 	}

@@ -16,29 +16,23 @@ func generateProjectileID() string {
 	return "proj-" + hex.EncodeToString(b)
 }
 
-// defaultPhysics is used while gamedata.Physics is not loaded (tests, the client fixtures).
-var defaultPhysics = gamedata.DefaultPhysics()
+// The shot rules (rules.physics of the terrain's game data): a shot starts shotOriginLift px
+// above the feet (20: the body centre, PlayerHeight / 2, the same point projectile hits are
+// measured against); each flight step is checked for hits every collisionStepPx (4); a flight
+// ends outOfBoundsLeft / outOfBoundsRight px beside the map (100) or outOfBoundsBelow px under
+// it (50).
 
-// physics returns the loaded physics constants (gamedata.Physics), or gamedata.DefaultPhysics().
-func physics() *gamedata.PhysicsConfig {
-	if gamedata.Physics != nil {
-		return gamedata.Physics
-	}
-	return defaultPhysics
-}
-
-// ShotOriginLift is how far above the feet a shot starts: the body centre, the same point
-// projectile hits are measured against (PlayerHeight / 2).
-const ShotOriginLift = PlayerHeight / 2
+// shotOriginLift is the terrain's game data's shotOriginLift (px).
+func shotOriginLift(t *Terrain) float64 { return float64(t.data().Rules.Physics.ShotOriginLift) }
 
 // shotOriginAt returns where a shot fired by a player standing at feet (the solid pixel under
-// the feet) starts: the body centre feet − (0, ShotOriginLift). When terrain sits in that
+// the feet) starts: the body centre feet − (0, shotOriginLift). When terrain sits in that
 // column below the body centre (a low ceiling), it falls back to the highest free point above
 // the feet: pixels feet.Y−1, feet.Y−2, … are scanned upwards and the scan stops before the
 // first solid one. If feet.Y−1 is already solid the origin is feet itself.
 func shotOriginAt(t *Terrain, feet Vector2) Vector2 {
 	lift := 0
-	for k := 1; k <= ShotOriginLift; k++ {
+	for k := 1; k <= t.data().Rules.Physics.ShotOriginLift; k++ {
 		if t != nil && t.IsSolid(feet.X, feet.Y-float64(k)) {
 			break
 		}
@@ -64,9 +58,11 @@ func SimulateProjectile(
 	players map[string]*BattlePlayerState,
 	pierceDistance float64, // terrain (px) the projectile may drill through; 0 = none
 ) *ProjectileResult {
-	ph := physics()
+	gd := terrain.data()
+	ph, sr := gd.Physics, gd.Rules.Physics
 	timeStep, gravity, windScale, hitRadius, recordStep, maxFlight :=
 		ph.TimeStep, ph.Gravity, ph.WindScale, ph.PlayerHitRadius, ph.PathRecordStep, ph.MaxFlightSeconds
+	lift := float64(sr.ShotOriginLift)
 
 	angleRad := angleDeg * math.Pi / 180.0
 	initialSpeed := power * ph.ProjectileSpeedMultiplier
@@ -88,7 +84,7 @@ func SimulateProjectile(
 		ProjectileID:    generateProjectileID(),
 		OwnerPlayerID:   ownerID,
 		ExplosionRadius: float64(weapon.ExplosionRadius),
-		CraterRadius:    weaponCraterRadius(weapon),
+		CraterRadius:    weaponCraterRadius(gd, weapon),
 		Path:            []ProjectileStep{},
 	}
 
@@ -120,7 +116,7 @@ func SimulateProjectile(
 
 		// --- Sub-step collision along movement segment ---
 		hit, hitPos, hitPlayer := checkSegmentCollisions(
-			prevPos, position, ownerID, ownerTeamID, t, terrain, players, drill, hitRadius,
+			prevPos, position, ownerID, ownerTeamID, terrain, players, drill, hitRadius, lift, sr.CollisionStepPx,
 		)
 
 		if hit {
@@ -139,7 +135,7 @@ func SimulateProjectile(
 		}
 
 		// Check out of bounds
-		if position.X < -outOfBoundsSide || position.X > float64(terrain.Width)+outOfBoundsSide || position.Y > float64(terrain.Height)+outOfBoundsBelow {
+		if position.X < -sr.OutOfBoundsLeft || position.X > float64(terrain.Width)+sr.OutOfBoundsRight || position.Y > float64(terrain.Height)+sr.OutOfBoundsBelow {
 			break
 		}
 	}
@@ -165,23 +161,23 @@ type drillState struct {
 	inside    bool    // currently inside the block being drilled
 }
 
-// checkSegmentCollisions checks for terrain and player hits along the line from prev to curr.
-// Uses sub-sampling with 4-pixel steps for precision.
+// checkSegmentCollisions checks for terrain and player hits along the line from prev to curr,
+// sampled every stepPx px; a player is hit within hitRadius of its body centre (lift px above
+// its feet).
 func checkSegmentCollisions(
 	prev, curr Vector2,
 	ownerID string,
 	ownerTeamID int,
-	t float64,
 	terrain *Terrain,
 	players map[string]*BattlePlayerState,
 	drill *drillState,
-	hitRadius float64,
+	hitRadius, lift, stepPx float64,
 ) (hit bool, hitPos Vector2, hitPlayerID string) {
 	dx := curr.X - prev.X
 	dy := curr.Y - prev.Y
 	dist := math.Sqrt(dx*dx + dy*dy)
 
-	steps := int(math.Ceil(dist / collisionStepPx)) // check every 4 pixels
+	steps := int(math.Ceil(dist / stepPx))
 	if steps < 1 {
 		steps = 1
 	}
@@ -201,7 +197,7 @@ func checkSegmentCollisions(
 				continue // skip all teammates (including self)
 			}
 			ddx := px - p.Position.X
-			ddy := py - (p.Position.Y - ShotOriginLift) // centre of the player body
+			ddy := py - (p.Position.Y - lift) // centre of the player body
 			d := math.Sqrt(ddx*ddx + ddy*ddy)
 			if d <= hitRadius {
 				return true, Vector2{X: px, Y: py}, p.PlayerID
@@ -227,22 +223,10 @@ func checkSegmentCollisions(
 	return false, Vector2{}, ""
 }
 
-const (
-	maxShotPower    = 100.0
-	drillPierceDist = 50.0 // default drill_bomb pierce distance when not configured
-
-	// A flight ends once the shell is more than outOfBoundsSide px left or right of the map or
-	// outOfBoundsBelow px under its bottom.
-	outOfBoundsSide  = 100.0
-	outOfBoundsBelow = 50.0
-	// collisionStepPx is how finely each flight step is checked for hits.
-	collisionStepPx = 4.0
-)
-
 // validShotInput reports whether a client-supplied angle/power can be simulated.
-// Power is bounded so a single shot cannot monopolise the match loop.
-func validShotInput(angle, power float64) bool {
-	return isFinite(angle) && isFinite(power) && power >= 0 && power <= maxShotPower
+// Power is bounded (rules.aim.powerMax) so a single shot cannot monopolise the match loop.
+func validShotInput(angle, power, maxPower float64) bool {
+	return isFinite(angle) && isFinite(power) && power >= 0 && power <= maxPower
 }
 
 func isFinite(v float64) bool {

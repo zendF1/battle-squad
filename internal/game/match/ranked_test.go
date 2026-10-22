@@ -16,7 +16,7 @@ import (
 // A player who left is never a winner (nor in a draw) even when their team wins;
 // the teammate who stayed wins.
 func TestLeaverNeverWins(t *testing.T) {
-	setFlowGameData()
+	setFlowGameData(t)
 	players := []*BattlePlayerState{
 		{PlayerID: "p1", TeamID: 1, CharacterID: "c1", HP: 1500, MaxHP: 1500, Position: Vector2{X: 200, Y: 300}, IsAlive: true},
 		{PlayerID: "p3", TeamID: 1, CharacterID: "c1", HP: 1500, MaxHP: 1500, Position: Vector2{X: 300, Y: 300}, IsAlive: true},
@@ -51,7 +51,7 @@ func TestLeaverNeverWins(t *testing.T) {
 // A matchmade match waits StartDelay before MatchStarted; a Leave sent meanwhile
 // is handled after the start.
 func TestStartDelay(t *testing.T) {
-	setFlowGameData()
+	setFlowGameData(t)
 	players := []*BattlePlayerState{
 		{PlayerID: "p1", TeamID: 1, CharacterID: "c1", HP: 1500, MaxHP: 1500, Position: Vector2{X: 200, Y: 300}, IsAlive: true},
 		{PlayerID: "p2", TeamID: 2, CharacterID: "c1", HP: 1500, MaxHP: 1500, Position: Vector2{X: 1400, Y: 300}, IsAlive: true},

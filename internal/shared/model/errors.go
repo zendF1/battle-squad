@@ -128,4 +128,6 @@ var (
 	ErrTitleNotOwned = AppError{Code: "TITLE_NOT_OWNED", Message: "You do not own this title", Status: http.StatusForbidden}
 
 	ErrMapNotFound = AppError{Code: "MAP_NOT_FOUND", Message: "Map not found", Status: http.StatusNotFound}
+
+	ErrGameDataVersionNotFound = AppError{Code: "GAMEDATA_VERSION_NOT_FOUND", Message: "No game data was published with this version", Status: http.StatusNotFound}
 )

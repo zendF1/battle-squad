@@ -14,11 +14,15 @@ type ClientVersionPolicy struct {
 }
 
 type RemoteConfig struct {
-	APIUrl                 string            `json:"apiUrl"`
-	GameWSUrl              string            `json:"gameWsUrl"`
-	DefaultCharacterSelect string            `json:"defaultCharacterSelect"`
-	ShopEnabled            bool              `json:"shopEnabled"`
-	ActiveItems            []string          `json:"activeItems"`
-	MaintenanceMode        bool              `json:"maintenanceMode"`
-	ClientParams           map[string]string `json:"clientParams"`
+	APIUrl                 string   `json:"apiUrl"`
+	GameWSUrl              string   `json:"gameWsUrl"`
+	DefaultCharacterSelect string   `json:"defaultCharacterSelect"`
+	ShopEnabled            bool     `json:"shopEnabled"`
+	ActiveItems            []string `json:"activeItems"`
+	MaintenanceMode        bool     `json:"maintenanceMode"`
+	// ClientParams are kept for old clients: windScaleFactor and physicsTimeStep of the game
+	// data (physics.wind_scale, physics.time_step). The rules are GET /gamedata.
+	ClientParams map[string]string `json:"clientParams"`
+	// GamedataVersion is the GET /gamedata version of the game data the API serves.
+	GamedataVersion string `json:"gamedataVersion"`
 }

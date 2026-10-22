@@ -147,10 +147,10 @@ func TestBandsKeepEveryRank(t *testing.T) {
 			t.Fatalf("rating %d: %s %d, want %s %d", rating, gotTier, gotDiv, wantTier, wantDiv)
 		}
 	}
-	if len(ranked.Bands) != len(ranked.Tiers) {
+	if len(ranked.Bands()) != len(ranked.Tiers) {
 		t.Fatal("a band per tier")
 	}
-	for i, b := range ranked.Bands {
+	for i, b := range ranked.Bands() {
 		if b.Tier != ranked.Tiers[i] {
 			t.Fatalf("band %d is %s, tier %s", i, b.Tier, ranked.Tiers[i])
 		}

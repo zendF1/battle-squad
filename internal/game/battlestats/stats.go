@@ -66,27 +66,27 @@ type Multipliers struct {
 	TerrainDamage int `json:"terrainDamage"`
 }
 
-// Base returns a character's config HP, defense and move energy with no bonuses.
-func Base(characterID string) Stats {
-	s := Stats{HP: defaultHP, Defense: defaultDefense, MoveEnergy: gamedata.BaseMoveEnergy(characterID)}
-	if gamedata.Data != nil {
-		if c, ok := gamedata.Data.Characters[characterID]; ok {
-			s.HP, s.Defense = c.HP, c.Defense
-		}
+// Base returns a character's config HP, defense and move energy with no bonuses (the current
+// game data).
+func Base(characterID string) Stats { return BaseIn(gamedata.Current(), characterID) }
+
+// BaseIn is Base with the game data gd.
+func BaseIn(gd *gamedata.Snapshot, characterID string) Stats {
+	s := Stats{HP: defaultHP, Defense: defaultDefense, MoveEnergy: gd.BaseMoveEnergy(characterID)}
+	if c, ok := gd.Data.Characters[characterID]; ok {
+		s.HP, s.Defense = c.HP, c.Defense
 	}
 	return s
 }
 
 // WeaponDamage returns the damage of the character's weapon (0 when unknown).
 func WeaponDamage(characterID string) int {
-	if gamedata.Data == nil {
-		return 0
-	}
-	c, ok := gamedata.Data.Characters[characterID]
+	gd := gamedata.Current()
+	c, ok := gd.Data.Characters[characterID]
 	if !ok {
 		return 0
 	}
-	return gamedata.Data.Weapons[c.WeaponID].Damage
+	return gd.Data.Weapons[c.WeaponID].Damage
 }
 
 // FromPoints converts allocated points to battle stats.
@@ -137,12 +137,13 @@ func DefaultMilestones() Milestones {
 	return Milestones{Bonus6: 0.10, Bonus10: 0.20, Bonus14: 0.40, Bonus16: 1.00}
 }
 
-// UpgradeStepPerLevel is what each +level of a piece adds to its stat multiplier (2 %).
-const UpgradeStepPerLevel = 0.02
+// UpgradeStepPerLevel is what each +level of a piece adds to its stat multiplier
+// (rules.equipment upgradeStepPerLevel of the current game data, 2 %).
+func UpgradeStepPerLevel() float64 { return gamedata.Current().Rules.Equipment.UpgradeStepPerLevel }
 
-// upgradeMultiplier is 1 + 2% per upgrade level + reached milestone bonuses.
+// upgradeMultiplier is 1 + UpgradeStepPerLevel per upgrade level + reached milestone bonuses.
 func (ms Milestones) upgradeMultiplier(level int) float64 {
-	mul := 1.0 + float64(level)*UpgradeStepPerLevel
+	mul := 1.0 + float64(level)*UpgradeStepPerLevel()
 	if level >= 6 {
 		mul += ms.Bonus6
 	}

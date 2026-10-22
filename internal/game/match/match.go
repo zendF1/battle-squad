@@ -28,25 +28,18 @@ type matchEvent struct {
 }
 
 const (
-	actionRateLimit = 150 * time.Millisecond // min interval between player actions
-	maxDroppedMsgs  = 10                     // kick client after N consecutive dropped broadcasts
+	maxDroppedMsgs = 10 // kick client after N consecutive dropped broadcasts
 
 	// reservationReleaseTimeout bounds releasing a match's reservations; it runs on a fresh
 	// context because the match context is usually already cancelled by then.
 	reservationReleaseTimeout = 5 * time.Second
-
-	defaultMedkitHeal = 450.0 // medkit heal when config_items has no value
-	lavaDamage        = 75    // HP lost at the start of a turn on lava (ignores defense)
-
-	turnSeconds     = 20  // a turn's time (TurnTimeLeft at its start)
-	movePxPerEnergy = 2.0 // a player walks at most MoveEnergy × movePxPerEnergy px a turn
-	moveEnergyPerPx = 0.5 // a walk costs round(px walked × moveEnergyPerPx) move energy
-	// An air strike falls from (targetX, 0) straight down at a fixed power, whatever the aim.
-	airStrikeAngle = 270.0
-	airStrikePower = 80.0
-	// powerShotFactor multiplies the damage of a shot (or skill) armed with power_shot.
-	powerShotFactor = 1.5
 )
+
+// Every rule and number the match plays with comes from its game data snapshot (gd), captured
+// when the match is created and never swapped: a reload of the game data reaches new matches
+// only, so the server and the clients of a running match agree on it for the whole match.
+// MatchStarted and MatchStateSync carry its version (gamedataVersion), the GET /gamedata
+// version of the same snapshot.
 
 type Match struct {
 	State        MatchState
@@ -61,10 +54,12 @@ type Match struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	el           *EventLogger
-	MatchDone    chan struct{}
-	doneOnce     sync.Once
-	TeamRatings  map[int]int // teamID → avg rating for Elo
-	EloParams    EloParams   // Elo configuration
+	// gd is the game data the match plays with, from start to end.
+	gd          *gamedata.Snapshot
+	MatchDone   chan struct{}
+	doneOnce    sync.Once
+	TeamRatings map[int]int // teamID → avg rating for Elo
+	EloParams   EloParams   // Elo configuration
 	// StartDelay: Run waits this long before MatchStarted (matchmade games: the
 	// clients' MatchFound reveal)
 	StartDelay  time.Duration
@@ -117,7 +112,25 @@ type RoomHubInterface interface {
 	UnregisterRoom(ctx context.Context, roomID string)
 }
 
+// NewMatch is NewMatchWithData with the current game data.
 func NewMatch(
+	matchID string,
+	roomID string,
+	mode string,
+	mapID string,
+	players []*BattlePlayerState,
+	clients map[string]*ws.Client,
+	db *database.PostgresDB,
+	redis *database.RedisClient,
+	economyRepo *economy.Repository,
+	hub interface{},
+) *Match {
+	return NewMatchWithData(gamedata.Current(), matchID, roomID, mode, mapID, players, clients, db, redis, economyRepo, hub)
+}
+
+// NewMatchWithData creates a match that plays with the game data gd for its whole life.
+func NewMatchWithData(
+	gd *gamedata.Snapshot,
 	matchID string,
 	roomID string,
 	mode string,
@@ -141,7 +154,7 @@ func NewMatch(
 	for _, idx := range indices {
 		p := players[idx]
 		p.Items = append([]string(nil), p.Items...) // don't share the room's backing array
-		p.SkillRank = WeaponSkillRank(p.WeaponItemID)
+		p.SkillRank = weaponSkillRank(gd, p.WeaponItemID)
 		mPlayers[p.PlayerID] = p
 		turnOrder = append(turnOrder, p.PlayerID)
 	}
@@ -152,19 +165,17 @@ func NewMatch(
 		Width:  gamedata.DefaultMapWidth,
 		Height: gamedata.DefaultMapHeight,
 	}
-	if gamedata.Data != nil {
-		if mc, ok := gamedata.Data.Maps[mapID]; ok {
-			mapCfgForTerrain = mc
-		}
+	if mc, ok := gd.Data.Maps[mapID]; ok {
+		mapCfgForTerrain = mc
 	}
-	terrain := NewTerrain(mapCfgForTerrain)
+	terrain := NewTerrainFor(gd, mapCfgForTerrain)
 
 	// Land players on the surface nearest their configured spawn height
 	for _, p := range mPlayers {
 		p.Position.Y = terrain.SpawnY(p.Position.X, p.Position.Y)
 	}
 
-	mapName, mapTheme := gamedata.MapDisplay(mapID)
+	mapName, mapTheme := gd.MapDisplay(mapID)
 	mState := MatchState{
 		MatchID:         matchID,
 		RoomID:          roomID,
@@ -181,7 +192,7 @@ func NewMatch(
 		Players:       mPlayers,
 		Status:        "in_progress",
 		TurnOrder:     turnOrder,
-		TurnTimeLeft:  turnSeconds,
+		TurnTimeLeft:  gd.Physics.TurnTimeSeconds,
 		ActiveEffects: []StatusEffect{},
 	}
 
@@ -198,6 +209,7 @@ func NewMatch(
 		ctx:          ctx,
 		cancel:       cancel,
 		el:           NewEventLogger(matchID, db),
+		gd:           gd,
 		MatchDone:    make(chan struct{}),
 		TeamRatings:  map[int]int{},
 		EloParams:    EloParams{},
@@ -207,7 +219,8 @@ func NewMatch(
 		selectSentAt: make(map[string]time.Time),
 	}
 	m.processRewards = func(ctx context.Context, stats map[string]*PlayerStats, usedItems map[string][]string) (map[string]RewardResult, error) {
-		return ProcessMatchRewards(ctx, m.db, m.economyRepo, m.State.MatchID, m.State.Mode, m.State.MapID, stats, usedItems, m.TeamRatings, m.EloParams)
+		return processMatchRewards(ctx, m.db, m.economyRepo, m.State.MatchID, m.State.Mode, m.State.MapID, stats, usedItems, m.TeamRatings, m.EloParams,
+			m.gd.Rules.Player.ExpPerLevel)
 	}
 	if db != nil {
 		m.releaseReservations = func(ctx context.Context) error {
@@ -308,9 +321,9 @@ func (m *Match) Run() {
 				return
 			}
 
-			// Pattern 10: Watchdog Timer to prevent stuck zombie matches
-			if time.Since(m.lastActivity) > 2*time.Minute {
-				observability.Log.Warn().Str("matchId", m.State.MatchID).Msg("match stuck with no activity for 2 mins, terminating")
+			// Pattern 10: Watchdog Timer to prevent stuck zombie matches (match.idle_timeout_minutes)
+			if time.Since(m.lastActivity) > time.Duration(m.gd.Physics.IdleTimeoutMinutes)*time.Minute {
+				observability.Log.Warn().Str("matchId", m.State.MatchID).Int("minutes", m.gd.Physics.IdleTimeoutMinutes).Msg("match stuck with no activity, terminating")
 				m.endAsNoContest()
 				return
 			}
@@ -384,7 +397,7 @@ func (m *Match) handleEvent(ev matchEvent) {
 		switch msg.Event {
 		case "Move", "Shoot", "UseItem", "EndTurn":
 			now := time.Now()
-			if last, ok := m.lastAction[actorID]; ok && now.Sub(last) < actionRateLimit {
+			if last, ok := m.lastAction[actorID]; ok && now.Sub(last) < m.actionInterval() {
 				log.Debug().Str("playerId", actorID).Str("event", msg.Event).Msg("action rate limited")
 				return
 			}
@@ -436,36 +449,45 @@ func (m *Match) handleEvent(ev matchEvent) {
 	}
 }
 
+// GameData is the game data the match plays with.
+func (m *Match) GameData() *gamedata.Snapshot { return m.gd }
+
+// actionInterval is the least time between two actions of a player (rules.timings).
+func (m *Match) actionInterval() time.Duration {
+	return time.Duration(m.gd.Rules.Timings.ActionIntervalSec * float64(time.Second))
+}
+
 // turnMoveEnergy is the move energy p gets at the start of each turn: MaxMoveEnergy, or, for
 // a state built without it (tests, a snapshot from before it existed), the character's base
 // move energy + MoveEnergyBonus, which is then stored in MaxMoveEnergy.
-func turnMoveEnergy(p *BattlePlayerState) int {
+func (m *Match) turnMoveEnergy(p *BattlePlayerState) int {
 	if p.MaxMoveEnergy <= 0 {
-		p.MaxMoveEnergy = gamedata.BaseMoveEnergy(p.CharacterID) + p.MoveEnergyBonus
+		p.MaxMoveEnergy = m.gd.BaseMoveEnergy(p.CharacterID) + p.MoveEnergyBonus
 	}
 	return p.MaxMoveEnergy
 }
 
 func (m *Match) startTurn(ctx context.Context) {
-	m.State.TurnTimeLeft = turnSeconds
+	m.State.TurnTimeLeft = m.gd.Physics.TurnTimeSeconds
 	m.turnSeq++
 	m.resolving = false
 	clear(m.lastMoveSeq) // a new turn starts a new replay on the mover's client
 	m.resetSelection()   // clients hide the badge at TurnStarted
 
 	player := m.State.Players[m.State.CurrentPlayerID]
-	player.MoveEnergy = turnMoveEnergy(player) // Reset move energy to full
-	ApplyTurnStartEffects(player)              // net / root / stun / freeze limit this turn's movement
+	player.MoveEnergy = m.turnMoveEnergy(player) // Reset move energy to full
+	ApplyTurnStartEffects(m.gd, player)          // net / root / stun / freeze limit this turn's movement
 
 	// Skill energy is incremented at end of turn, not start
 
 	// Damage at the start of the turn: lava under the feet, then burn. Shield absorbs first;
 	// a player it kills loses the turn.
+	combat := m.gd.Rules.Combat
 	if m.Terrain.GetTerrainTypeAt(player.Position.X, player.Position.Y) == "lava" {
-		m.turnStartDamage(player, lavaDamage, "lava")
+		m.turnStartDamage(player, combat.LavaDamage, "lava")
 	}
 	if player.IsAlive && HasEffect(player, "burn") {
-		m.turnStartDamage(player, int(math.Round(float64(player.MaxHP)*burnMaxHPPercent/100)), "burn")
+		m.turnStartDamage(player, int(math.Round(float64(player.MaxHP)*float64(combat.BurnMaxHPPercent)/100)), "burn")
 	}
 	if !player.IsAlive {
 		m.checkWinCondition(ctx)
@@ -478,7 +500,7 @@ func (m *Match) startTurn(ctx context.Context) {
 	// Update wind: direction (-1 to 1), power (0 to 4)
 	m.updateWind()
 
-	// Broadcast TurnStarted
+	// Broadcast TurnStarted (turnTimeLeft: the turn's seconds, match.turn_time_seconds)
 	skillEnergy := make(map[string]int, len(m.State.Players))
 	for id, p := range m.State.Players {
 		skillEnergy[id] = p.SkillEnergy
@@ -490,8 +512,9 @@ func (m *Match) startTurn(ctx context.Context) {
 		"moveEnergy":      player.MoveEnergy,
 		"maxMoveEnergy":   player.MaxMoveEnergy,
 		"skillEnergy":     skillEnergy,
+		"turnTimeLeft":    m.State.TurnTimeLeft,
 	}
-	skip := skipsTurn(player)
+	skip := skipsTurn(m.gd, player)
 	if skip != "" {
 		started["skipped"] = skip
 	}
@@ -503,7 +526,7 @@ func (m *Match) startTurn(ctx context.Context) {
 
 	// Stunned or frozen: the whole turn is lost; the server ends it after a short pause
 	if skip != "" {
-		m.resolveTurnAfter(ctx, skipTurnDelay, m.endTurn)
+		m.resolveTurnAfter(ctx, m.gd.Rules.Timings.SkipTurnDelaySec, m.endTurn)
 		return
 	}
 
@@ -517,10 +540,10 @@ func (m *Match) startTurn(ctx context.Context) {
 }
 
 func (m *Match) endTurn(ctx context.Context) {
-	// Add skill energy to current player (+skillEnergyPerTurn per turn, max skillEnergyMax)
+	// Add skill energy to current player (rules.skill_energy: +perTurn per turn, at most max)
 	currentPlayer := m.State.Players[m.State.CurrentPlayerID]
 	if currentPlayer != nil && currentPlayer.IsAlive {
-		addSkillEnergy(currentPlayer, skillEnergyPerTurn)
+		addSkillEnergy(currentPlayer, m.gd.Rules.SkillEnergy.PerTurn, m.gd.Rules.SkillEnergy.Max)
 	}
 
 	// Effects count down at the end of their target's turn; global ones every turn
@@ -626,12 +649,12 @@ func (m *Match) processMove(ctx context.Context, client *ws.Client, action MoveA
 	}
 
 	player := m.State.Players[m.State.CurrentPlayerID]
-	if !player.IsAlive || !isFinite(action.TargetX) || !canMove(player) {
+	if !player.IsAlive || !isFinite(action.TargetX) || !canMove(m.gd, player) {
 		return
 	}
 
-	// Clamp target by max energy range
-	maxDist := float64(player.MoveEnergy) * movePxPerEnergy // 1 energy per 2 pixels
+	// Clamp target by max energy range (move.step_pixels px per move.energy_cost_per_2px energy)
+	maxDist := float64(player.MoveEnergy) * m.gd.Physics.PxPerEnergy()
 	if math.Abs(action.TargetX-player.Position.X) > maxDist {
 		if action.TargetX > player.Position.X {
 			action.TargetX = player.Position.X + maxDist
@@ -645,7 +668,7 @@ func (m *Match) processMove(ctx context.Context, client *ws.Client, action MoveA
 
 	// Calculate energy cost based on actual horizontal distance moved
 	actualDist := math.Abs(finalX - player.Position.X)
-	energyCost := int(math.Round(actualDist * moveEnergyPerPx))
+	energyCost := int(math.Round(actualDist * m.gd.Physics.EnergyPerPx()))
 	if energyCost > player.MoveEnergy {
 		energyCost = player.MoveEnergy
 	}
@@ -688,7 +711,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 	if client != nil && client.PlayerID != m.State.CurrentPlayerID {
 		return
 	}
-	if !validShotInput(action.Angle, action.Power) {
+	if !validShotInput(action.Angle, action.Power, m.gd.Rules.Aim.PowerMax) {
 		return
 	}
 
@@ -698,16 +721,16 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 	}
 
 	// Stunned / frozen players lose the turn (the server ends it)
-	if skipsTurn(player) != "" {
+	if skipsTurn(m.gd, player) != "" {
 		return
 	}
 
-	charConfig, exists := gamedata.Data.Characters[player.CharacterID]
+	charConfig, exists := m.gd.Data.Characters[player.CharacterID]
 	if !exists {
 		return
 	}
 
-	weaponConfig, exists := gamedata.Data.Weapons[charConfig.WeaponID]
+	weaponConfig, exists := m.gd.Data.Weapons[charConfig.WeaponID]
 	if !exists {
 		return
 	}
@@ -733,7 +756,7 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 		if !IsShotModifierItem(itemID) {
 			return
 		}
-		if err := ApplyImmediateItem(ctx, &m.State, player.PlayerID, itemID, nil, m.Terrain); err != nil {
+		if err := ApplyImmediateItem(ctx, m.gd, &m.State, player.PlayerID, itemID, nil, m.Terrain); err != nil {
 			log := observability.FromContext(ctx)
 			log.Warn().Err(err).Str("itemId", itemID).Msg("failed to apply shot item")
 			return
@@ -749,15 +772,16 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 	shootAngle := action.Angle
 	shootPower := action.Power
 
-	// air_strike: fire from top of map straight down at TargetX
+	// air_strike: fire from top of map at TargetX, at the fixed rules.items angle (270: straight
+	// down in Y-down coords, handled by sin) and power
 	if HasEffect(player, "air_strike") {
 		shootOrigin = Vector2{X: m.airStrikeX(player, action, weaponConfig), Y: 0}
-		shootAngle = airStrikeAngle // straight down in Y-down coords (270° = negative Y direction conventionally, handled by sin)
-		shootPower = airStrikePower // fixed high power for airstrike
+		shootAngle = m.gd.Rules.Items.AirStrikeAngle
+		shootPower = m.gd.Rules.Items.AirStrikePower
 	}
 
 	// drill_bomb: projectile drills through the first terrain block it meets
-	pierce := drillPierce(player)
+	pierce := m.drillPierce(player)
 
 	// 1. Simulate Projectile Trajectory
 	result := SimulateProjectile(
@@ -780,11 +804,11 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 	// Calculate base damage multiplication factor (e.g. from Power Shot item)
 	damageFactor := 1.0
 	if HasEffect(player, "power_shot") {
-		damageFactor = powerShotFactor
+		damageFactor = m.gd.PowerShotFactor()
 	}
 
 	// 2. Resolve explosion, damage and falls
-	tl := &shotTimeline{}
+	tl := m.newTimeline()
 	if result.ExplosionPoint != nil {
 		// Fragile terrain: double the explosion radius and the crater
 		if m.Terrain.GetTerrainTypeAt(result.ExplosionPoint.X, result.ExplosionPoint.Y) == "fragile" {
@@ -802,10 +826,10 @@ func (m *Match) processShoot(ctx context.Context, client *ws.Client, action Shoo
 				continue
 			}
 			if HasEffect(player, "spider_net") {
-				applyShotStatus(tl, flightEnd(result), player, target, "net", 1)
+				m.applyShotStatus(tl, flightEnd(result), player, target, "net", 1)
 			}
 			if HasEffect(player, "freeze_bomb") {
-				applyShotStatus(tl, flightEnd(result), player, target, "freeze", int(itemValue("freeze_bomb", 1)))
+				m.applyShotStatus(tl, flightEnd(result), player, target, "freeze", int(m.gd.ItemValue("freeze_bomb", gamedata.DefaultFreezeTurns)))
 			}
 		}
 	}
@@ -822,7 +846,7 @@ func (m *Match) processUseItem(ctx context.Context, client *ws.Client, action Us
 	log := observability.FromContext(ctx)
 
 	player := m.State.Players[m.State.CurrentPlayerID]
-	if !player.IsAlive || skipsTurn(player) != "" {
+	if !player.IsAlive || skipsTurn(m.gd, player) != "" {
 		return
 	}
 	// Teleport is fired as a projectile (Shoot with actionMode "item") so it follows
@@ -832,7 +856,7 @@ func (m *Match) processUseItem(ctx context.Context, client *ws.Client, action Us
 		return
 	}
 
-	err := ApplyImmediateItem(ctx, &m.State, m.State.CurrentPlayerID, action.ItemID, action.TargetPosition, m.Terrain)
+	err := ApplyImmediateItem(ctx, m.gd, &m.State, m.State.CurrentPlayerID, action.ItemID, action.TargetPosition, m.Terrain)
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to apply item")
 		return
@@ -858,7 +882,7 @@ func (m *Match) broadcastItemUsed(playerID, itemID string) {
 // shootTeleport fires the teleport projectile and moves the player to its landing
 // point once the flight animation has played, then ends the turn.
 func (m *Match) shootTeleport(ctx context.Context, player *BattlePlayerState, action ShootAction, weaponConfig gamedata.WeaponConfig) {
-	if !canMove(player) {
+	if !canMove(m.gd, player) {
 		return // rooted: no teleport
 	}
 	itemIdx := -1
@@ -892,7 +916,7 @@ func (m *Match) shootTeleport(ctx context.Context, player *BattlePlayerState, ac
 	consumeItem(player, itemIdx)
 	m.broadcastItemUsed(player.PlayerID, "teleport")
 
-	tl := &shotTimeline{}
+	tl := m.newTimeline()
 	if result.ExplosionPoint != nil && result.ExplosionPoint.Y < float64(m.Terrain.Height) {
 		landY := m.Terrain.GetLandingY(result.ExplosionPoint.X, result.ExplosionPoint.Y)
 		if landY < float64(m.Terrain.Height) {
@@ -940,10 +964,11 @@ func (m *Match) airStrikeX(player *BattlePlayerState, action ShootAction, weapon
 	return math.Max(0, math.Min(x, float64(m.Terrain.Width)))
 }
 
-// drillPierce returns how much terrain the player's shot may drill through this turn.
-func drillPierce(player *BattlePlayerState) float64 {
+// drillPierce returns how much terrain the player's shot may drill through this turn: the
+// drill_bomb item value (50 px) when armed with it.
+func (m *Match) drillPierce(player *BattlePlayerState) float64 {
 	if HasEffect(player, "drill_bomb") {
-		return itemValue("drill_bomb", drillPierceDist)
+		return m.gd.ItemValue("drill_bomb", gamedata.DefaultDrillPierce)
 	}
 	return 0
 }
@@ -1115,7 +1140,7 @@ func (m *Match) updateWind() {
 	var windMin, windMax float64
 	windMin = 0
 	windMax = 4
-	if mapCfg, ok := gamedata.Data.Maps[m.State.MapID]; ok && len(mapCfg.DefaultWindPowerRange) == 2 {
+	if mapCfg, ok := m.gd.Data.Maps[m.State.MapID]; ok && len(mapCfg.DefaultWindPowerRange) == 2 {
 		windMin = mapCfg.DefaultWindPowerRange[0]
 		windMax = mapCfg.DefaultWindPowerRange[1]
 	}

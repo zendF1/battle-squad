@@ -45,7 +45,7 @@ func TestMissileRain(t *testing.T) {
 		t.Fatalf("%d missiles, want 28 at rank 4", len(missiles))
 	}
 	launches := map[int]bool{}
-	w := gamedata.Data.Weapons["basic_rocket"]
+	w := gamedata.Current().Data.Weapons["basic_rocket"]
 	lastEnd := 0.0
 	for _, r := range missiles {
 		k := int(math.Round((r.LaunchDelay - rain[0].T) / rainInterval))
@@ -63,7 +63,7 @@ func TestMissileRain(t *testing.T) {
 		if math.Abs(end.X-r.Path[0].Position.X) > 0.5 {
 			t.Fatalf("missile drifted from %v to %v: not straight down", r.Path[0].Position.X, end.X)
 		}
-		if r.ExplosionRadius != float64(w.ExplosionRadius)*rainBlast || r.CraterRadius != weaponCraterRadius(w)*rainCrater || r.CraterRadius != 12 { // 12 px since before 039
+		if r.ExplosionRadius != float64(w.ExplosionRadius)*rainBlast || r.CraterRadius != weaponCraterRadius(gamedata.Current(), w)*rainCrater || r.CraterRadius != 12 { // 12 px since before 039
 			t.Fatalf("missile blast %v crater %v", r.ExplosionRadius, r.CraterRadius)
 		}
 		if flightEnd(r) < lastEnd {
@@ -72,7 +72,7 @@ func TestMissileRain(t *testing.T) {
 		lastEnd = flightEnd(r)
 	}
 	got := totalDamage(s, "p2")
-	limit := capOfBase(rainCap * 480)(enemy)
+	limit := testCapOfBase(rainCap * 480)(enemy)
 	t.Logf("rank 4 rain: %d damage to the enemy 60 px from the flare (cap %d), hp %d", got, limit, enemy.HP)
 	if got <= 0 || got > limit {
 		t.Fatalf("rain damage %d, want 1..%d", got, limit)
@@ -86,7 +86,7 @@ func TestMissileRain(t *testing.T) {
 func TestMissileRainColumnsAreDeterministic(t *testing.T) {
 	cols := func(match string, turn int) []float64 {
 		m := &Match{State: MatchState{MatchID: match, TurnIndex: turn}}
-		return rainColumns(m.skillRNG(), 10, 800, 135, 1600)
+		return rainColumns(m.skillRNG(), 10, 800, 135, 1600, rainFocus)
 	}
 	a, b, c := cols("m1", 3), cols("m1", 3), cols("m1", 4)
 	same := func(x, y []float64) bool {
@@ -123,7 +123,7 @@ func TestBotRainAimedLikeItsBestShot(t *testing.T) {
 	for _, char := range []string{"rookie"} {
 		m, bot := botSkillMatch(t, skillPlayer{"b", 1, char, 300}, skillPlayer{"e1", 2, "rookie", 900})
 		brain := NewBotBrain(perfectAim)
-		w, _ := botWeapon(bot)
+		w, _ := botWeapon(gamedata.Current(), bot)
 		best := brain.bestShot(m, bot, bot.Position, w)
 		act, ok := brain.DecideAction(m, bot, botTurnState{}).(ShootAction)
 		if !ok || act.ActionMode != "skill" || act.Angle != best.angle || act.Power != best.power {
@@ -134,10 +134,10 @@ func TestBotRainAimedLikeItsBestShot(t *testing.T) {
 
 func TestRainCountsPerRank(t *testing.T) {
 	for rank := 0; rank <= 4; rank++ {
-		if got, want := rainCount(rank), 12+4*rank; got != want {
+		if got, want := rainCount(defRain, rank), 12+4*rank; got != want {
 			t.Errorf("rain count rank %d = %d, want %d", rank, got, want)
 		}
-		if got, want := rainSpread(rank), 90+15*float64(rank); got != want {
+		if got, want := rainSpread(defRain, rank), 90+15*float64(rank); got != want {
 			t.Errorf("rain spread rank %d = %v, want %v", rank, got, want)
 		}
 	}
@@ -147,8 +147,8 @@ func TestRainCountsPerRank(t *testing.T) {
 // 2), stay within the spread and the map, and the outermost slices still reach out.
 func TestRainColumnsFocus(t *testing.T) {
 	for rank := 0; rank <= 4; rank++ {
-		n, spread := rainCount(rank), rainSpread(rank)
-		xs := rainColumns(rand.New(rand.NewSource(int64(rank))), n, 800, spread, 1600)
+		n, spread := rainCount(defRain, rank), rainSpread(defRain, rank)
+		xs := rainColumns(rand.New(rand.NewSource(int64(rank))), n, 800, spread, 1600, rainFocus)
 		inner, far := 0, 0.0
 		for _, x := range xs {
 			d := math.Abs(x - 800)
@@ -165,7 +165,7 @@ func TestRainColumnsFocus(t *testing.T) {
 			t.Fatalf("rank %d: %d of %d columns within ± %v (want %d ± 1), farthest %v", rank, inner, n, spread/4, n/2, far)
 		}
 	}
-	edge := rainColumns(rand.New(rand.NewSource(1)), 28, 20, 150, 1600)
+	edge := rainColumns(rand.New(rand.NewSource(1)), 28, 20, 150, 1600, rainFocus)
 	for _, x := range edge {
 		if x < 2 {
 			t.Fatalf("column %v off the map", x)
@@ -217,7 +217,7 @@ func rainMapMatch(t *testing.T, id, weapon string, enemies ...skillPlayer) (*Mat
 func TestMissileRainOnRealMap(t *testing.T) {
 	useConfigGameData(t)
 	const runs = 20
-	base := float64(gamedata.Data.Weapons["basic_rocket"].Damage)
+	base := float64(gamedata.Current().Data.Weapons["basic_rocket"].Damage)
 	for _, c := range []struct {
 		rank           int
 		weapon         string
@@ -231,7 +231,7 @@ func TestMissileRainOnRealMap(t *testing.T) {
 			if p.SkillRank != c.rank {
 				t.Fatalf("rank %d, want %d", p.SkillRank, c.rank)
 			}
-			w, _ := botWeapon(p)
+			w, _ := botWeapon(gamedata.Current(), p)
 			best := NewBotBrain(perfectAim).bestShot(m, p, p.Position, w)
 			s := fireSkill(t, m, cl, "rookie", best.angle, best.power)
 			aimed += totalDamage(s, "e1")
@@ -241,7 +241,7 @@ func TestMissileRainOnRealMap(t *testing.T) {
 					burned++
 				}
 			}
-			limit := capOfBase(rainCap * base)(m.State.Players["e1"])
+			limit := testCapOfBase(rainCap * base)(m.State.Players["e1"])
 			if totalDamage(s, "e1") > limit {
 				t.Fatalf("rank %d: %d damage over the cap %d", c.rank, totalDamage(s, "e1"), limit)
 			}
@@ -288,7 +288,7 @@ func TestExportRainFixture(t *testing.T) {
 	}
 	c := skillFixtureCase{MapID: m.State.MapID, Shooter: "rookie", Players: players, Terrain: m.Terrain.Snapshot()}
 	p := m.State.Players["rookie"]
-	w, _ := botWeapon(p)
+	w, _ := botWeapon(gamedata.Current(), p)
 	best := NewBotBrain(perfectAim).bestShot(m, p, p.Position, w)
 	p.SkillEnergy = 100
 	send(m, cl["rookie"], "Shoot", ShootAction{Angle: best.angle, Power: best.power, ActionMode: "skill"})

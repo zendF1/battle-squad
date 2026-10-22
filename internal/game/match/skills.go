@@ -14,10 +14,10 @@ import (
 // per skill: skill_rain.go, skill_bombchain.go, skill_laser.go, skill_bloom.go). An effect
 // type without a resolver fires one normal projectile with the skill's damage.
 const (
-	effectMissileRain = "missile_rain" // Rookie, triple_shot
-	effectBombChain   = "bomb_chain"   // Tanko, heavy_bomb
-	effectLaser       = "laser"        // Spark, shock_field
-	effectBloom       = "bloom"        // Flora, healing_bloom
+	effectMissileRain = gamedata.EffectMissileRain // Rookie, triple_shot
+	effectBombChain   = gamedata.EffectBombChain   // Tanko, heavy_bomb
+	effectLaser       = gamedata.EffectLaser       // Spark, shock_field
+	effectBloom       = gamedata.EffectBloom       // Flora, healing_bloom
 )
 
 // skillShot is what a skill resolver works with: the shooter, its Shoot action, the skill's
@@ -45,12 +45,12 @@ func registerSkill(effectType string, r skillResolver) { skillResolvers[effectTy
 
 // shootSkill fires the character's skill at full skill energy and resets the energy.
 func (m *Match) shootSkill(ctx context.Context, player *BattlePlayerState, action ShootAction, skillID string, weapon gamedata.WeaponConfig) {
-	skill, ok := gamedata.Data.Skills[skillID]
-	if !ok || player.SkillEnergy < skillEnergyMax {
+	skill, ok := m.gd.Data.Skills[skillID]
+	if !ok || player.SkillEnergy < m.gd.Rules.SkillEnergy.Max {
 		return
 	}
-	s := &skillShot{Player: player, Action: action, Skill: skill, Weapon: weapon, Base: skillBaseDamage(player, skill, weapon),
-		Shot: &ShotResolved{ShooterID: player.PlayerID, ActionMode: "skill", SkillID: skillID}, TL: &shotTimeline{}}
+	s := &skillShot{Player: player, Action: action, Skill: skill, Weapon: weapon, Base: skillBaseDamage(player, skill, weapon, m.gd.PowerShotFactor()),
+		Shot: &ShotResolved{ShooterID: player.PlayerID, ActionMode: "skill", SkillID: skillID}, TL: m.newTimeline()}
 	if resolve, ok := skillResolvers[skill.EffectType]; ok {
 		resolve(m, s)
 	} else {
@@ -65,7 +65,7 @@ func (m *Match) shootSkill(ctx context.Context, player *BattlePlayerState, actio
 // fallback for an effect type without a resolver.
 func resolveSingleProjectile(m *Match, s *skillShot) {
 	p := s.Player
-	r := m.fireProjectile(p, shotOrigin(m.Terrain, p), s.Action.Angle, s.Action.Power, s.Weapon, m.State.Wind, drillPierce(p))
+	r := m.fireProjectile(p, shotOrigin(m.Terrain, p), s.Action.Angle, s.Action.Power, s.Weapon, m.State.Wind, m.drillPierce(p))
 	r.SkillID = s.Skill.SkillID
 	s.Shot.Projectiles = append(s.Shot.Projectiles, r)
 	if r.ExplosionPoint != nil {
@@ -74,12 +74,12 @@ func resolveSingleProjectile(m *Match, s *skillShot) {
 	}
 }
 
-// skillBaseDamage is the skill's base damage: (weapon damage + damage bonus) × power_shot ×
-// the config damage_multiplier (≤ 0 counts as 1) × skill power.
-func skillBaseDamage(player *BattlePlayerState, skill gamedata.SkillConfig, weapon gamedata.WeaponConfig) float64 {
+// skillBaseDamage is the skill's base damage: (weapon damage + damage bonus) × powerShot (when
+// armed with power_shot) × the config damage_multiplier (≤ 0 counts as 1) × skill power.
+func skillBaseDamage(player *BattlePlayerState, skill gamedata.SkillConfig, weapon gamedata.WeaponConfig, powerShot float64) float64 {
 	factor := 1.0
 	if HasEffect(player, "power_shot") {
-		factor = powerShotFactor
+		factor = powerShot
 	}
 	if skill.DamageMultiplier > 0 {
 		factor *= skill.DamageMultiplier
@@ -103,13 +103,13 @@ func delayPath(r *ProjectileResult, delay float64) {
 
 // applyOnce applies effectID for turns to every target still alive that was not given it yet
 // by this skill (seen), at time t.
-func applyOnce(tl *shotTimeline, t float64, source *BattlePlayerState, targets []*BattlePlayerState, seen map[string]bool, effectID string, turns int) {
+func (m *Match) applyOnce(tl *shotTimeline, t float64, source *BattlePlayerState, targets []*BattlePlayerState, seen map[string]bool, effectID string, turns int) {
 	for _, p := range targets {
 		if !p.IsAlive || seen[p.PlayerID] {
 			continue
 		}
 		seen[p.PlayerID] = true
-		applyShotStatus(tl, t, source, p, effectID, turns)
+		m.applyShotStatus(tl, t, source, p, effectID, turns)
 	}
 }
 
@@ -127,10 +127,10 @@ func angleDir(angle float64) Vector2 {
 	return Vector2{X: math.Cos(rad), Y: -math.Sin(rad)}
 }
 
-// addShield adds amount shield to p, capped at shieldCapPercent % of its max HP (the excess
-// is lost), and returns the shield gained.
-func addShield(p *BattlePlayerState, amount int) int {
-	shield := min(p.Shield+max(amount, 0), p.MaxHP*shieldCapPercent/100)
+// addShield adds amount shield to p, capped at capPercent % of its max HP (rules.combat
+// shieldCapPercent; the excess is lost), and returns the shield gained.
+func addShield(p *BattlePlayerState, amount, capPercent int) int {
+	shield := min(p.Shield+max(amount, 0), p.MaxHP*capPercent/100)
 	if shield <= p.Shield {
 		return 0
 	}
@@ -149,8 +149,8 @@ func healPlayer(p *BattlePlayerState, amount int) int {
 
 // cleanseEvent removes p's bad effects (Cleanse) and records a cleanse event at t when any
 // were removed.
-func cleanseEvent(tl *shotTimeline, t float64, p *BattlePlayerState) {
-	if removed := Cleanse(p); len(removed) > 0 {
+func cleanseEvent(gd *gamedata.Snapshot, tl *shotTimeline, t float64, p *BattlePlayerState) {
+	if removed := Cleanse(gd, p); len(removed) > 0 {
 		tl.add(ShotEvent{T: t, Type: "cleanse", PlayerID: p.PlayerID, EffectIDs: removed})
 	}
 }

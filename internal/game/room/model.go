@@ -147,11 +147,12 @@ const PracticeMapID = "grassland_valley"
 // quickPlayMapID is the map of a QuickPlay: a random loaded map against the AI bot ("Đấu với
 // máy"), PracticeMapID against the idle one. intn(n) draws in [0, n).
 func quickPlayMapID(p QuickPlayPayload, intn func(n int) int) string {
-	if !p.AIBot() || gamedata.Data == nil || len(gamedata.Data.Maps) == 0 {
+	maps := gamedata.Current().Data.Maps
+	if !p.AIBot() || len(maps) == 0 {
 		return PracticeMapID
 	}
-	ids := make([]string, 0, len(gamedata.Data.Maps))
-	for id := range gamedata.Data.Maps {
+	ids := make([]string, 0, len(maps))
+	for id := range maps {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)

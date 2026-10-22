@@ -11,8 +11,10 @@ import (
 
 // shotTimeline collects the events of one shot and the time the last of them ends.
 type shotTimeline struct {
-	events []ShotEvent
-	end    float64
+	// gravity is the match's physics.gravity (the falls' free-fall time).
+	gravity float64
+	events  []ShotEvent
+	end     float64
 	// landing is when each player's last fall of the shot ends: a later fall of the same
 	// player starts then, so falls play in order (bomb chain).
 	landing map[string]float64
@@ -24,10 +26,13 @@ type shotTimeline struct {
 // fallTime is how long a fall of distance px takes in this shot.
 func (tl *shotTimeline) fallTime(distance float64) float64 {
 	if tl.fallSpeed > 1 {
-		return fallDuration(distance) / tl.fallSpeed
+		return fallDuration(distance, tl.gravity) / tl.fallSpeed
 	}
-	return fallDuration(distance)
+	return fallDuration(distance, tl.gravity)
 }
+
+// newTimeline is an empty timeline of a shot of m.
+func (m *Match) newTimeline() *shotTimeline { return &shotTimeline{gravity: m.gd.Physics.Gravity} }
 
 // landed is when the last fall of the shot so far ends (0: nobody fell).
 func (tl *shotTimeline) landed() float64 {
@@ -62,9 +67,8 @@ func flightEnd(r *ProjectileResult) float64 {
 	return r.Path[len(r.Path)-1].Time
 }
 
-// fallDuration is the time a body takes to free-fall distance px under the configured gravity.
-func fallDuration(distance float64) float64 {
-	gravity := physics().Gravity
+// fallDuration is the time a body takes to free-fall distance px under gravity.
+func fallDuration(distance, gravity float64) float64 {
 	if distance <= 0 || gravity <= 0 {
 		return 0
 	}
@@ -144,8 +148,9 @@ func (c *skillCap) clamp(p *BattlePlayerState, damage int) int {
 }
 
 // capOfBase is a skillCap limit of factor × base damage, reduced by the target's defense.
-func capOfBase(base float64) func(p *BattlePlayerState) int {
-	return func(p *BattlePlayerState) int { return int(math.Round(ReduceByDefense(base, p.Defense))) }
+func (m *Match) capOfBase(base float64) func(p *BattlePlayerState) int {
+	k := m.gd.Physics.DefenseKOrDefault()
+	return func(p *BattlePlayerState) int { return int(math.Round(reduceByDefense(base, p.Defense, k))) }
 }
 
 // explodeProjectile resolves r's explosion at the end of its flight: it carves the crater (a bowl) and
@@ -158,7 +163,8 @@ func (m *Match) explodeProjectile(shooter *BattlePlayerState, r *ProjectileResul
 // none).
 func (m *Match) explodeCapped(shooter *BattlePlayerState, r *ProjectileResult, baseDamage float64, tl *shotTimeline, limit *skillCap) []*BattlePlayerState {
 	t := flightEnd(r)
-	crater := craterRadius(shooter, r.CraterRadius)
+	crater := craterRadius(shooter, r.CraterRadius, m.gd.Rules.Terrain.MaxTerrainDamageBonusPercent)
+	k, crit := m.gd.Physics.DefenseKOrDefault(), m.gd.Rules.Combat.CritMultiplier
 	m.Terrain.CarveBowl(r.ExplosionPoint.X, r.ExplosionPoint.Y, crater)
 	tl.add(ShotEvent{
 		T: t, Type: "explode", ProjectileID: r.ProjectileID,
@@ -178,8 +184,8 @@ func (m *Match) explodeCapped(shooter *BattlePlayerState, r *ProjectileResult, b
 			explosionCenter = p.Position
 		}
 
-		damage := CalculateExplosionDamage(p.Position, explosionCenter, baseDamage, r.ExplosionRadius, p.Defense)
-		damage, critical := ApplyCritical(damage, shooter.CritChance)
+		damage := calculateExplosionDamage(p.Position, explosionCenter, baseDamage, r.ExplosionRadius, p.Defense, k)
+		damage, critical := applyCritical(damage, shooter.CritChance, crit)
 		damage = limit.clamp(p, damage)
 		if damage <= 0 {
 			continue
@@ -240,7 +246,7 @@ func (m *Match) settleFalls(shooter *BattlePlayerState, t float64, tl *shotTimel
 			continue
 		}
 
-		if damage := CalculateFallDamage(distance); damage > 0 {
+		if damage := calculateFallDamage(m.gd.Physics, distance); damage > 0 {
 			shieldBefore := p.Shield
 			killed := hurtPlayer(p, damage)
 			tl.add(damageEvent(landed, p, damage, shieldBefore, "fall"))
@@ -252,8 +258,8 @@ func (m *Match) settleFalls(shooter *BattlePlayerState, t float64, tl *shotTimel
 }
 
 // applyShotStatus applies a status effect caused by the shot and records it at time t.
-func applyShotStatus(tl *shotTimeline, t float64, source, target *BattlePlayerState, effectID string, turns int) {
-	ApplyStatusEffect(target, StatusEffect{
+func (m *Match) applyShotStatus(tl *shotTimeline, t float64, source, target *BattlePlayerState, effectID string, turns int) {
+	ApplyStatusEffect(m.gd, target, StatusEffect{
 		EffectID:       effectID,
 		TargetPlayerID: target.PlayerID,
 		DurationTurn:   turns,
@@ -262,8 +268,8 @@ func applyShotStatus(tl *shotTimeline, t float64, source, target *BattlePlayerSt
 	tl.add(ShotEvent{T: t, Type: "status", PlayerID: target.PlayerID, EffectID: effectID, Turns: turns})
 }
 
-// grantHitEnergy gives skillEnergyOnHit, once for the whole shot, to every living enemy of the
-// shooter the shot took HP or shield from.
+// grantHitEnergy gives rules.skill_energy onHit, once for the whole shot, to every living enemy
+// of the shooter the shot took HP or shield from.
 func (m *Match) grantHitEnergy(shooter *BattlePlayerState, tl *shotTimeline) {
 	hit := map[string]bool{}
 	for _, e := range tl.events {
@@ -276,13 +282,13 @@ func (m *Match) grantHitEnergy(shooter *BattlePlayerState, tl *shotTimeline) {
 		if !ok || !p.IsAlive || p.TeamID == shooter.TeamID {
 			continue
 		}
-		addSkillEnergy(p, skillEnergyOnHit)
+		addSkillEnergy(p, m.gd.Rules.SkillEnergy.OnHit, m.gd.Rules.SkillEnergy.Max)
 	}
 }
 
-// addSkillEnergy adds n skill energy to p, capped at skillEnergyMax.
-func addSkillEnergy(p *BattlePlayerState, n int) {
-	p.SkillEnergy = min(p.SkillEnergy+n, skillEnergyMax)
+// addSkillEnergy adds n skill energy to p, capped at maxEnergy.
+func addSkillEnergy(p *BattlePlayerState, n, maxEnergy int) {
+	p.SkillEnergy = min(p.SkillEnergy+n, maxEnergy)
 }
 
 // broadcastShot finalizes shot from tl and sends it to every client.

@@ -36,7 +36,7 @@ func (s *Server) handleBrickTypesList(w http.ResponseWriter, r *http.Request) {
 		"Items":         items,
 		"BorderMapJSON": string(borderMapJSON),
 		"Flash":         r.URL.Query().Get("flash"),
-		"Error":      r.URL.Query().Get("error"),
+		"Error":         r.URL.Query().Get("error"),
 	})
 }
 
@@ -328,7 +328,7 @@ func (s *Server) handleMapSave(w http.ResponseWriter, r *http.Request) {
 	terrain := match.NewTerrainWithBricks(cfg, brickTypes)
 	for i, sp := range cfg.SpawnPoints {
 		if !terrain.CanStandAt(sp.X, sp.Y) {
-			writeMapSaveError(w, fmt.Sprintf("spawn point %d (%v,%v) has no ground below it or less than %dpx of headroom", i, sp.X, sp.Y, match.PlayerHeight))
+			writeMapSaveError(w, fmt.Sprintf("spawn point %d (%v,%v) has no ground below it or less than %dpx of headroom", i, sp.X, sp.Y, gamedata.Current().Rules.Terrain.PlayerHeight))
 			return
 		}
 	}

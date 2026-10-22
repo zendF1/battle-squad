@@ -29,6 +29,7 @@ import (
 	"battle-squad/internal/api/shop"
 	"battle-squad/internal/api/title"
 	"battle-squad/internal/game/gamedata"
+	"battle-squad/internal/gamedatasync"
 	sharedAuth "battle-squad/internal/shared/auth"
 	"battle-squad/internal/shared/config"
 	"battle-squad/internal/shared/database"
@@ -62,17 +63,23 @@ func main() {
 	}
 	defer db.Close()
 
-	// Game data (characters, weapons) for the battle stats GET /player/characters
-	// reports — same DB-then-YAML load as the game server.
-	if err := gamedata.Load(db, "configs"); err != nil {
-		log.Fatal().Err(err).Msg("failed to load game data")
-	}
-
 	redisClient, err := database.NewRedisClient(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB, cfg.RedisPoolSize, cfg.RedisMinIdle)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect to Redis")
 	}
 	defer redisClient.Close()
+
+	// Game data (GET /gamedata, the battle stats of GET /player/characters, the equipment
+	// rules) — same DB-then-YAML load as the game server, reloaded when an admin saves.
+	nodeID := os.Getenv("NODE_ID")
+	if nodeID == "" {
+		nodeID = "node-api-1"
+	}
+	reloadCtx, stopReload := context.WithCancel(context.Background())
+	defer stopReload()
+	if err := gamedatasync.New(db, redisClient, "api", nodeID, "configs").Start(reloadCtx); err != nil {
+		log.Fatal().Err(err).Msg("failed to load game data")
+	}
 
 	// 4. Init JWT Managers
 	jwtAccess := sharedAuth.NewJWTManager(cfg.JWTSecret, 15*time.Minute)
@@ -130,7 +137,7 @@ func main() {
 	appconfigHandler := appconfig.NewHandler(appconfigService)
 
 	mapsHandler := maps.NewHandler(maps.NewService(maps.NewRepository(db)))
-	gamedataHandler := gamedataapi.NewHandler(gamedataapi.NewService(gamedataapi.NewRepository(db)))
+	gamedataHandler := gamedataapi.NewHandler(gamedataapi.NewService(gamedataapi.NewRepository(db)).WithSnapshots(gamedata.Current))
 
 	matchhistoryRepo := matchhistory.NewRepository(db)
 	matchhistoryService := matchhistory.NewService(matchhistoryRepo)

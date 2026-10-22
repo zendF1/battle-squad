@@ -43,11 +43,9 @@ func TestRankedRosterOneHuman(t *testing.T) {
 		},
 		MapID: "grassland_valley", HasBot: true,
 	}
-	prev := gamedata.Data
-	t.Cleanup(func() { gamedata.Data = prev })
-	gamedata.Data = &gamedata.GameData{Maps: map[string]gamedata.MapConfig{
+	gamedata.UseData(t, &gamedata.GameData{Maps: map[string]gamedata.MapConfig{
 		"grassland_valley": {MapID: "grassland_valley", Name: "Thung lũng cỏ"},
-	}}
+	}})
 	profiles := map[string]rankedProfile{"p1": {DisplayName: "Smoke", Level: 40, TitleID: "first_blood"}}
 	ro := buildRankedRoster(result, profiles, botIDs())
 	ro.Found.RoomID, ro.Found.MatchID = "r1", "m1"

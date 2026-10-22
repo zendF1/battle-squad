@@ -1,8 +1,14 @@
 package match
 
-const netMoveEnergyCap = 50
+import "battle-squad/internal/game/gamedata"
 
-func ApplyStatusEffect(player *BattlePlayerState, effect StatusEffect) {
+// How a status effect acts comes from the game data (config_status_effects: bad, skips_turn,
+// blocks_move): an effect that skips the turn or blocks moving leaves no move energy, net caps
+// it at the spider_net item value (Snapshot.NetMoveEnergyCap, 50).
+
+// ApplyStatusEffect puts effect on player (a repeat only renews the duration) and applies its
+// immediate part: an effect that blocks moving leaves no move energy, net caps it.
+func ApplyStatusEffect(gd *gamedata.Snapshot, player *BattlePlayerState, effect StatusEffect) {
 	// Check if player already has this effect. If so, merge or override duration
 	found := false
 	for idx, e := range player.StatusEffects {
@@ -18,31 +24,41 @@ func ApplyStatusEffect(player *BattlePlayerState, effect StatusEffect) {
 	}
 
 	// Apply immediate effects if any
-	switch effect.EffectID {
-	case "heal":
+	switch {
+	case effect.EffectID == "heal":
 		player.HP += int(effect.Value)
 		if player.HP > player.MaxHP {
 			player.HP = player.MaxHP
 		}
-	case "freeze", "stun", "root":
+	case gd.StatusRule(effect.EffectID).BlocksMove:
 		player.MoveEnergy = 0
-	case "net":
+	case effect.EffectID == "net":
 		// net slows the target: MoveEnergy capped on their next turn (see ApplyTurnStartEffects)
-		if player.MoveEnergy > netMoveEnergyCap {
-			player.MoveEnergy = netMoveEnergyCap
+		if limit := gd.NetMoveEnergyCap(); player.MoveEnergy > limit {
+			player.MoveEnergy = limit
 		}
 	}
 }
 
-// ApplyTurnStartEffects re-applies movement control after the player's move
-// energy has been reset at the start of their turn: freeze, stun and root leave no move
-// energy, net caps it.
-func ApplyTurnStartEffects(player *BattlePlayerState) {
-	if HasEffect(player, "freeze") || HasEffect(player, "stun") || HasEffect(player, "root") {
+// ApplyTurnStartEffects re-applies movement control after the player's move energy has been
+// reset at the start of their turn: an effect that blocks moving (freeze, stun, root) leaves no
+// move energy, net caps it.
+func ApplyTurnStartEffects(gd *gamedata.Snapshot, player *BattlePlayerState) {
+	if blocksMove(gd, player) {
 		player.MoveEnergy = 0
-	} else if HasEffect(player, "net") && player.MoveEnergy > netMoveEnergyCap {
-		player.MoveEnergy = netMoveEnergyCap
+	} else if limit := gd.NetMoveEnergyCap(); HasEffect(player, "net") && player.MoveEnergy > limit {
+		player.MoveEnergy = limit
 	}
+}
+
+// blocksMove reports whether an active effect of the player blocks moving.
+func blocksMove(gd *gamedata.Snapshot, player *BattlePlayerState) bool {
+	for _, e := range player.StatusEffects {
+		if e.DurationTurn > 0 && gd.StatusRule(e.EffectID).BlocksMove {
+			return true
+		}
+	}
+	return false
 }
 
 // TickPlayerStatusEffects runs at the end of the player's own turn: each effect
@@ -75,9 +91,10 @@ func HasEffect(player *BattlePlayerState, effectID string) bool {
 }
 
 // skipsTurn is the effect that skips the player's whole turn (no move, shot or item; the
-// server ends it after skipTurnDelay): "stun" or "freeze", "" for none.
-func skipsTurn(player *BattlePlayerState) string {
-	for _, id := range skipTurnEffects {
+// server ends it after rules.timings skipTurnDelaySec): the first active one of
+// gd.SkipTurnEffects (stun, then freeze), "" for none.
+func skipsTurn(gd *gamedata.Snapshot, player *BattlePlayerState) string {
+	for _, id := range gd.SkipTurnEffects() {
 		if HasEffect(player, id) {
 			return id
 		}
@@ -85,24 +102,18 @@ func skipsTurn(player *BattlePlayerState) string {
 	return ""
 }
 
-// skipTurnEffects skip the player's whole turn, in the order skipsTurn checks them.
-var skipTurnEffects = []string{"stun", "freeze"}
-
-// rootEffect keeps the player from walking or teleporting without skipping its turn.
-const rootEffect = "root"
-
 // canMove reports whether the player's effects let it walk or teleport (root, stun and
 // freeze do not).
-func canMove(player *BattlePlayerState) bool {
-	return skipsTurn(player) == "" && !HasEffect(player, rootEffect)
+func canMove(gd *gamedata.Snapshot, player *BattlePlayerState) bool {
+	return !blocksMove(gd, player)
 }
 
-// Cleanse removes the badEffects from the player and returns their ids, in list order.
-func Cleanse(player *BattlePlayerState) []string {
+// Cleanse removes the bad effects from the player and returns their ids, in list order.
+func Cleanse(gd *gamedata.Snapshot, player *BattlePlayerState) []string {
 	var removed []string
 	kept := player.StatusEffects[:0:0]
 	for _, e := range player.StatusEffects {
-		if badEffects[e.EffectID] {
+		if gd.StatusRule(e.EffectID).Bad {
 			removed = append(removed, e.EffectID)
 			continue
 		}

@@ -412,7 +412,7 @@ func (r *Room) processSelectCharacter(client *ws.Client, characterID string) {
 }
 
 func (r *Room) processSelectItems(client *ws.Client, items []string) {
-	if len(items) > MaxLoadoutItems {
+	if len(items) > MaxLoadoutItems() {
 		return
 	}
 	if err := checkItemSelection(items); err != nil {
@@ -740,7 +740,7 @@ func itemCounts(items []string) (map[string]int, error) {
 	for _, itemID := range items {
 		counts[itemID]++
 		limit := 1
-		if it, ok := gamedata.Data.Items[itemID]; ok && it.MaxUsePerMatch > 0 {
+		if it, ok := gamedata.Current().Data.Items[itemID]; ok && it.MaxUsePerMatch > 0 {
 			limit = it.MaxUsePerMatch
 		}
 		if counts[itemID] > limit {
@@ -775,7 +775,7 @@ func (r *Room) broadcastRoomUpdated() {
 // teamSpawns returns the spawn queues for the room's map, with fallbacks sized to the map.
 // A missing map uses the same default size as the match's fallback terrain.
 func (r *Room) teamSpawns() (team1, team2 []gamedata.SpawnPoint) {
-	mapCfg, ok := gamedata.Data.Maps[r.State.MapID]
+	mapCfg, ok := gamedata.Current().Data.Maps[r.State.MapID]
 	if !ok {
 		mapCfg = gamedata.MapConfig{MapID: r.State.MapID, Width: gamedata.DefaultMapWidth, Height: gamedata.DefaultMapHeight}
 	}

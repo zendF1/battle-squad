@@ -13,28 +13,20 @@ var botSkillPlanners = map[string]botSkillPlanner{}
 // registerBotSkill makes the bot plan effectType's skill with p.
 func registerBotSkill(effectType string, p botSkillPlanner) { botSkillPlanners[effectType] = p }
 
-// NoAimAngle / NoAimPower are what a skill that ignores the aim (bloom; the laser ignores the
-// power) is sent with: the server still validates them.
-const (
-	NoAimAngle = 90.0
-	NoAimPower = 50.0
-)
-
-// botSkillEffect is the effect type of the bot's character skill, "" when none.
-func botSkillEffect(bot *BattlePlayerState) string {
-	if gamedata.Data == nil {
-		return ""
-	}
-	char, ok := gamedata.Data.Characters[bot.CharacterID]
+// botSkillEffect is the effect type of the bot's character skill, "" when none. A skill that
+// ignores the aim (bloom; the laser ignores the power) is sent with rules.aim noAimAngle /
+// noAimPower: the server still validates them.
+func botSkillEffect(gd *gamedata.Snapshot, bot *BattlePlayerState) string {
+	char, ok := gd.Data.Characters[bot.CharacterID]
 	if !ok {
 		return ""
 	}
-	return gamedata.Data.Skills[char.SkillID].EffectType
+	return gd.Data.Skills[char.SkillID].EffectType
 }
 
 // skillAction asks the bot's skill planner whether and how to use the skill now.
 func (b *BotBrain) skillAction(m *Match, bot *BattlePlayerState, weapon gamedata.WeaponConfig, now int64) (ShootAction, bool) {
-	plan, ok := botSkillPlanners[botSkillEffect(bot)]
+	plan, ok := botSkillPlanners[botSkillEffect(m.gd, bot)]
 	if !ok {
 		return ShootAction{}, false
 	}

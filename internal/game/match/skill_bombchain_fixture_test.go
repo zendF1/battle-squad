@@ -71,7 +71,7 @@ func fireChainFixture(t *testing.T, m *Match, clients map[string]*ws.Client, ang
 // (lobShot) at the enemies, with perfect aim.
 func chainAims(m *Match) (flat, lob shotPlan) {
 	p := m.State.Players["tanko"]
-	w, _ := botWeapon(p)
+	w, _ := botWeapon(gamedata.Current(), p)
 	b := NewBotBrain(perfectAim)
 	return b.bestShot(m, p, p.Position, w), b.lobShot(m, p, w)
 }
@@ -132,7 +132,7 @@ func TestBombChainOnRealMap(t *testing.T) {
 			}
 		}
 		for _, e := range eventsOf(s, "explode", "") {
-			if e.Crater != CraterBowl || math.Abs(e.Radius-weaponCraterRadius(gamedata.Data.Weapons["cannon_ball"])) > 1e-9 {
+			if e.Crater != CraterBowl || math.Abs(e.Radius-weaponCraterRadius(gamedata.Current(), gamedata.Current().Data.Weapons["cannon_ball"])) > 1e-9 {
 				t.Fatalf("%s: explode %+v, want the cannon's own bowl", k, e)
 			}
 		}
@@ -143,8 +143,8 @@ func TestBombChainOnRealMap(t *testing.T) {
 	}
 	// Both aims reach the per-target cap (1.8 × base at rank 4, after the Rookie's defense).
 	tanko := cases["lob"].Players["tanko"]
-	w, _ := botWeapon(tanko)
-	limit := capOfBase(chainCap(4) * skillBaseDamage(tanko, gamedata.Data.Skills["heavy_bomb"], w))(cases["lob"].Players["e1"])
+	w, _ := botWeapon(gamedata.Current(), tanko)
+	limit := testCapOfBase(chainCap(defChain, 4) * skillBaseDamage(tanko, gamedata.Current().Data.Skills["heavy_bomb"], w, gamedata.Current().PowerShotFactor()))(cases["lob"].Players["e1"])
 	for _, k := range []string{"flat", "lob"} {
 		if d := damage[k]["e1"]; hits[k]["e1"] < 5 || d > limit || d < limit-1 {
 			t.Fatalf("%s chain hits %d times for %d, want the cap %d", k, hits[k]["e1"], d, limit)
@@ -189,7 +189,7 @@ func deepestDig(t *testing.T, c skillFixtureCase) float64 {
 func TestBotBombChainLobs(t *testing.T) {
 	m, _ := chainFixtureMatch(t, skillPlayer{"e1", 2, "rookie", 1050})
 	p := m.State.Players["tanko"]
-	w, _ := botWeapon(p)
+	w, _ := botWeapon(gamedata.Current(), p)
 	angle, _, ok := botBombChain(NewBotBrain(perfectAim), m, p, w)
 	if !ok || math.Abs(angle-90) > chainBotLobSpan {
 		t.Fatalf("bot chain at %v° (ok %v), want a lob", angle, ok)

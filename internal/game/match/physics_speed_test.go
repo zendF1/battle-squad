@@ -10,20 +10,18 @@ import (
 // SimulateProjectile launches at power × physics.projectile_speed_multiplier (it was a fixed
 // power × 6 whatever the setting) and flies at most physics.max_flight_seconds.
 func TestSimulateProjectileUsesThePhysicsSettings(t *testing.T) {
-	prev := gamedata.Physics
-	t.Cleanup(func() { gamedata.Physics = prev })
 	terrain := emptyTerrain(400, 300)
 	weapon := gamedata.WeaponConfig{ExplosionRadius: 20, ProjectileWeight: 1, WindInfluence: 1}
 	for _, mult := range []float64{6, 9.6, 12} {
 		p := *gamedata.DefaultPhysics()
 		p.ProjectileSpeedMultiplier = mult
-		gamedata.Physics = &p
+		usePhysics(t, &p)
 		r := SimulateProjectile("p", 1, Vector2{X: 200, Y: 100}, 0, 50, weapon, WindState{}, terrain, nil, 0)
 		if v := r.Path[0].Velocity.X; math.Abs(v-50*mult) > 1e-9 {
 			t.Fatalf("multiplier %v: launch speed %v, want %v", mult, v, 50*mult)
 		}
 	}
-	gamedata.Physics = nil
+	usePhysics(t, nil)
 	d := gamedata.DefaultPhysics()
 	if d.ProjectileSpeedMultiplier != 9.6 || d.Gravity != 445 || d.WindScale != 67 || d.MaxFlightSeconds != 4.5 {
 		t.Fatalf("defaults %+v", d)

@@ -59,8 +59,7 @@ func TestAPICharacterStatsMatchBattle(t *testing.T) {
 	db := dbtest.NewSchema(t, 0,
 		"001_init_schema.up.sql", "004_admin_config_tables.up.sql", "006_character_progression.up.sql",
 		"010_equipment_system.up.sql", "011_equipment_slot_unique.up.sql")
-	prev := gamedata.Data
-	gamedata.Data = &gamedata.GameData{
+	gamedata.UseData(t, &gamedata.GameData{
 		Characters: map[string]gamedata.CharacterConfig{
 			"rookie": {CharacterID: "rookie", HP: 100, Defense: 50, WeaponID: "basic_rocket"},
 			"tanko":  {CharacterID: "tanko", HP: 130, Defense: 80, WeaponID: "cannon_ball"},
@@ -70,8 +69,7 @@ func TestAPICharacterStatsMatchBattle(t *testing.T) {
 		Weapons: map[string]gamedata.WeaponConfig{
 			"basic_rocket": {Damage: 60}, "cannon_ball": {Damage: 75}, "electric_orb": {Damage: 55}, "seed_bomb": {Damage: 45},
 		},
-	}
-	t.Cleanup(func() { gamedata.Data = prev })
+	})
 
 	ctx := context.Background()
 	if _, err := db.Pool.Exec(ctx, `
@@ -143,7 +141,7 @@ func TestAPICharacterStatsMatchBattle(t *testing.T) {
 			if api.MaxHP != tt.wantMaxHP {
 				t.Fatalf("maxHp %d, want %d", api.MaxHP, tt.wantMaxHP)
 			}
-			if want := gamedata.Data.Weapons[gamedata.Data.Characters[tt.character].WeaponID].Damage; api.WeaponDamage != want {
+			if want := gamedata.Current().Data.Weapons[gamedata.Current().Data.Characters[tt.character].WeaponID].Damage; api.WeaponDamage != want {
 				t.Fatalf("weaponDamage %d, want %d", api.WeaponDamage, want)
 			}
 			// total = base + fromPoints + fromEquipment
@@ -178,11 +176,11 @@ func TestAPICharacterStatsMatchBattle(t *testing.T) {
 	if len(resp.BaseStats) != 4 {
 		t.Fatalf("baseStats %+v", resp.BaseStats)
 	}
-	for id := range gamedata.Data.Characters {
+	for id := range gamedata.Current().Data.Characters {
 		bp := newBattlePlayer(RoomPlayer{CharacterID: id}, match.Vector2{}, baseStats(id), cosmetics{}, true)
 		got := resp.BaseStats[id]
 		if got.MaxHP != bp.MaxHP || got.Defense != bp.Defense || got.MoveEnergy != bp.MoveEnergy || got.DamageBonus != 0 ||
-			got.WeaponDamage != gamedata.Data.Weapons[gamedata.Data.Characters[id].WeaponID].Damage {
+			got.WeaponDamage != gamedata.Current().Data.Weapons[gamedata.Current().Data.Characters[id].WeaponID].Damage {
 			t.Fatalf("baseStats[%s] %+v, bot %+v", id, got, bp)
 		}
 	}

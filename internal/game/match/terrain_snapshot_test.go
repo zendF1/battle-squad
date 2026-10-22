@@ -35,10 +35,10 @@ func decodeMaskRLE(t *testing.T, s string, n int) []bool {
 }
 
 func TestTerrainSnapshotRoundTrip(t *testing.T) {
-	gamedata.BrickTypes = map[int]gamedata.BrickTypeConfig{
+	useBricks(t, map[int]gamedata.BrickTypeConfig{
 		1: {BrickTypeID: 1, Destructible: true},
 		2: {BrickTypeID: 2, Destructible: false},
-	}
+	})
 	terrain := NewTerrain(gamedata.MapConfig{
 		MapID: "test_snap", GridWidth: 4, GridHeight: 3, CellSize: 16,
 		Tiles: [][]int{{0, 0, 0, 0}, {0, 1, 1, 0}, {2, 2, 1, 1}},

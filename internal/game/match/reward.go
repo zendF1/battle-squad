@@ -1,6 +1,7 @@
 package match
 
 import (
+	"battle-squad/internal/game/gamedata"
 	"context"
 	"encoding/json"
 	"errors"
@@ -85,6 +86,7 @@ type RewardResult struct {
 	CharLevelsGained int  `json:"charLevelsGained"`
 }
 
+// ProcessMatchRewards is processMatchRewards with the current game data's player EXP curve.
 func ProcessMatchRewards(
 	ctx context.Context,
 	db *database.PostgresDB,
@@ -96,6 +98,25 @@ func ProcessMatchRewards(
 	usedItems map[string][]string, // playerID → items spent during the match
 	teamRatings map[int]int,
 	eloParams EloParams,
+) (map[string]RewardResult, error) {
+	return processMatchRewards(ctx, db, economyRepo, matchID, mode, mapID, stats, usedItems, teamRatings, eloParams,
+		gamedata.Current().Rules.Player.ExpPerLevel)
+}
+
+// processMatchRewards settles a match: rewards, ratings, consumed items. A player at level N
+// needs N × expPerLevel EXP (rules.player) for N + 1.
+func processMatchRewards(
+	ctx context.Context,
+	db *database.PostgresDB,
+	economyRepo *economy.Repository,
+	matchID string,
+	mode string,
+	mapID string,
+	stats map[string]*PlayerStats,
+	usedItems map[string][]string, // playerID → items spent during the match
+	teamRatings map[int]int,
+	eloParams EloParams,
+	expPerLevel int,
 ) (map[string]RewardResult, error) {
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
@@ -184,7 +205,7 @@ func ProcessMatchRewards(
 		}
 
 		// 3. Update player profile: add exp and coins
-		levelUp, newLevel, err := updateProfilePostMatch(ctx, tx, economyRepo, p.PlayerID, expGained, coinGained)
+		levelUp, newLevel, err := updateProfilePostMatch(ctx, tx, economyRepo, p.PlayerID, expGained, coinGained, expPerLevel)
 		if err != nil {
 			return nil, fmt.Errorf("failed to update player profile: %w", err)
 		}
@@ -348,7 +369,10 @@ func ProcessMatchRewards(
 	return results, nil
 }
 
-func updateProfilePostMatch(ctx context.Context, tx pgx.Tx, economyRepo *economy.Repository, playerID string, expGained, coinGained int) (bool, int, error) {
+func updateProfilePostMatch(ctx context.Context, tx pgx.Tx, economyRepo *economy.Repository, playerID string, expGained, coinGained, expPerLevel int) (bool, int, error) {
+	if expPerLevel <= 0 {
+		expPerLevel = gamedata.DefaultRules().Player.ExpPerLevel
+	}
 	// Query current level, exp
 	var level, exp int
 	query := "SELECT level, exp FROM player_profiles WHERE player_id = $1 FOR UPDATE"
@@ -357,11 +381,11 @@ func updateProfilePostMatch(ctx context.Context, tx pgx.Tx, economyRepo *economy
 		return false, 0, err
 	}
 
-	// Calculate exp curve: level N requires N * PlayerExpPerLevel exp to level up
+	// Calculate exp curve: level N requires N * expPerLevel exp to level up
 	nextExp := exp + expGained
 	levelUp := false
-	for nextExp >= level*PlayerExpPerLevel {
-		nextExp -= level * PlayerExpPerLevel
+	for nextExp >= level*expPerLevel {
+		nextExp -= level * expPerLevel
 		level++
 		levelUp = true
 	}
@@ -386,9 +410,6 @@ func updateProfilePostMatch(ctx context.Context, tx pgx.Tx, economyRepo *economy
 
 // RankedMode is the only mode that changes rating.
 const RankedMode = "ranked_2v2"
-
-// PlayerExpPerLevel: a player at level N needs N × PlayerExpPerLevel EXP to reach N + 1.
-const PlayerExpPerLevel = 100
 
 // updatePlayerRank applies a ranked result to the player's row of the active
 // season (created, as "Mùa N", when no season is active). A player without a

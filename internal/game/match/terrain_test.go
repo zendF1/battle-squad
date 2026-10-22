@@ -19,17 +19,17 @@ func TestNewTerrainFromTiles(t *testing.T) {
 		},
 	}
 
-	gamedata.Data = &gamedata.GameData{
+	useData(t, &gamedata.GameData{
 		Maps:       map[string]gamedata.MapConfig{"test_map": cfg},
 		Characters: map[string]gamedata.CharacterConfig{},
 		Weapons:    map[string]gamedata.WeaponConfig{},
 		Skills:     map[string]gamedata.SkillConfig{},
 		Items:      map[string]gamedata.ItemConfig{},
-	}
-	gamedata.BrickTypes = map[int]gamedata.BrickTypeConfig{
+	})
+	useBricks(t, map[int]gamedata.BrickTypeConfig{
 		1: {BrickTypeID: 1, Destructible: true},
 		2: {BrickTypeID: 2, Destructible: false},
-	}
+	})
 
 	terrain := NewTerrain(cfg)
 
@@ -62,17 +62,17 @@ func TestDestroyCircleRespectsDestructible(t *testing.T) {
 		},
 	}
 
-	gamedata.Data = &gamedata.GameData{
+	useData(t, &gamedata.GameData{
 		Maps:       map[string]gamedata.MapConfig{"test_destroy": cfg},
 		Characters: map[string]gamedata.CharacterConfig{},
 		Weapons:    map[string]gamedata.WeaponConfig{},
 		Skills:     map[string]gamedata.SkillConfig{},
 		Items:      map[string]gamedata.ItemConfig{},
-	}
-	gamedata.BrickTypes = map[int]gamedata.BrickTypeConfig{
+	})
+	useBricks(t, map[int]gamedata.BrickTypeConfig{
 		1: {BrickTypeID: 1, Destructible: true},
 		2: {BrickTypeID: 2, Destructible: false},
-	}
+	})
 
 	terrain := NewTerrain(cfg)
 	terrain.DestroyCircle(32, 16, 50)
@@ -96,14 +96,14 @@ func TestNewTerrainLegacyFallback(t *testing.T) {
 		Height:     900,
 	}
 
-	gamedata.Data = &gamedata.GameData{
+	useData(t, &gamedata.GameData{
 		Maps:       map[string]gamedata.MapConfig{"grassland_valley": cfg},
 		Characters: map[string]gamedata.CharacterConfig{},
 		Weapons:    map[string]gamedata.WeaponConfig{},
 		Skills:     map[string]gamedata.SkillConfig{},
 		Items:      map[string]gamedata.ItemConfig{},
-	}
-	gamedata.BrickTypes = nil
+	})
+	useBricks(t, nil)
 
 	terrain := NewTerrain(cfg)
 
@@ -125,7 +125,7 @@ func TestNewTerrainPolygonBorder(t *testing.T) {
 		Tiles:      [][]int{{1}},
 	}
 
-	gamedata.BrickTypes = map[int]gamedata.BrickTypeConfig{
+	useBricks(t, map[int]gamedata.BrickTypeConfig{
 		1: {
 			BrickTypeID:  1,
 			Destructible: true,
@@ -136,7 +136,7 @@ func TestNewTerrainPolygonBorder(t *testing.T) {
 				Left:   []gamedata.BorderPoint{{X: 0, Y: 16}, {X: 0, Y: 0}},
 			},
 		},
-	}
+	})
 
 	terrain := NewTerrain(cfg)
 
@@ -161,9 +161,9 @@ func squareBorder() gamedata.BrickBorder {
 }
 
 func TestPolygonBorderScalesWithCellSize(t *testing.T) {
-	gamedata.BrickTypes = map[int]gamedata.BrickTypeConfig{
+	useBricks(t, map[int]gamedata.BrickTypeConfig{
 		1: {BrickTypeID: 1, Destructible: true, Border: squareBorder()},
-	}
+	})
 	terrain := NewTerrain(gamedata.MapConfig{
 		MapID: "test_scale", GridWidth: 1, GridHeight: 1, CellSize: 32,
 		Tiles: [][]int{{1}},
@@ -177,9 +177,9 @@ func TestPolygonBorderScalesWithCellSize(t *testing.T) {
 }
 
 func TestNewTerrainIgnoresTilesOutsideGrid(t *testing.T) {
-	gamedata.BrickTypes = map[int]gamedata.BrickTypeConfig{
+	useBricks(t, map[int]gamedata.BrickTypeConfig{
 		1: {BrickTypeID: 1, Destructible: true, Border: squareBorder()},
-	}
+	})
 	// GridHeight=1 but two rows of tiles: the second row must not be written past the mask.
 	terrain := NewTerrain(gamedata.MapConfig{
 		MapID: "test_oob", GridWidth: 2, GridHeight: 1, CellSize: 16,
@@ -194,7 +194,7 @@ func TestNewTerrainIgnoresTilesOutsideGrid(t *testing.T) {
 }
 
 func TestSpawnYKeepsLowerFloor(t *testing.T) {
-	gamedata.BrickTypes = map[int]gamedata.BrickTypeConfig{1: {BrickTypeID: 1, Destructible: true}}
+	useBricks(t, map[int]gamedata.BrickTypeConfig{1: {BrickTypeID: 1, Destructible: true}})
 	// Platform at row 1, floor at row 4.
 	terrain := NewTerrain(gamedata.MapConfig{
 		MapID: "test_spawn", GridWidth: 2, GridHeight: 5, CellSize: 16,
@@ -214,7 +214,7 @@ func TestSpawnYKeepsLowerFloor(t *testing.T) {
 }
 
 func TestWalkToUnderRoof(t *testing.T) {
-	gamedata.BrickTypes = map[int]gamedata.BrickTypeConfig{1: {BrickTypeID: 1, Destructible: true}}
+	useBricks(t, map[int]gamedata.BrickTypeConfig{1: {BrickTypeID: 1, Destructible: true}})
 	// Roof at row 1, floor at row 5: a 48px tall tunnel, enough for the player.
 	terrain := NewTerrain(gamedata.MapConfig{
 		MapID: "test_cave", GridWidth: 4, GridHeight: 6, CellSize: 16,
@@ -228,7 +228,7 @@ func TestWalkToUnderRoof(t *testing.T) {
 }
 
 func TestWalkToBlockedByLowCeiling(t *testing.T) {
-	gamedata.BrickTypes = map[int]gamedata.BrickTypeConfig{1: {BrickTypeID: 1, Destructible: true}}
+	useBricks(t, map[int]gamedata.BrickTypeConfig{1: {BrickTypeID: 1, Destructible: true}})
 	// Open area on the left; from column 2 a roof at row 2 leaves a 16px gap above the floor.
 	terrain := NewTerrain(gamedata.MapConfig{
 		MapID: "test_low", GridWidth: 4, GridHeight: 5, CellSize: 16,
@@ -242,7 +242,7 @@ func TestWalkToBlockedByLowCeiling(t *testing.T) {
 }
 
 func TestCanStandAt(t *testing.T) {
-	gamedata.BrickTypes = map[int]gamedata.BrickTypeConfig{1: {BrickTypeID: 1, Destructible: true}}
+	useBricks(t, map[int]gamedata.BrickTypeConfig{1: {BrickTypeID: 1, Destructible: true}})
 	// Column 0: floor only. Column 1: nothing. Column 2: floor under a low roof.
 	terrain := NewTerrain(gamedata.MapConfig{
 		MapID: "test_stand", GridWidth: 3, GridHeight: 5, CellSize: 16,
@@ -261,7 +261,7 @@ func TestCanStandAt(t *testing.T) {
 }
 
 func TestWalkToBlockedByWall(t *testing.T) {
-	gamedata.BrickTypes = map[int]gamedata.BrickTypeConfig{1: {BrickTypeID: 1, Destructible: true}}
+	useBricks(t, map[int]gamedata.BrickTypeConfig{1: {BrickTypeID: 1, Destructible: true}})
 	terrain := NewTerrain(gamedata.MapConfig{
 		MapID: "test_wall", GridWidth: 3, GridHeight: 3, CellSize: 16,
 		Tiles: [][]int{{0, 0, 0}, {0, 0, 1}, {1, 1, 1}},

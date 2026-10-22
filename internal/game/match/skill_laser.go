@@ -7,24 +7,15 @@ import (
 	"battle-squad/internal/game/gamedata"
 )
 
-// Laser (Spark, skill shock_field, effect laser): a straight beam from the shot origin along
-// the aim to the map edge, through terrain (no gravity, wind, crater, knockback or falls;
-// power ignored); it hits every enemy whose body is within laserHalfWidth + the player hit
-// radius of it, nearest first: (laserFirstBase + laserFirstPerRank × rank) × base, each next
-// one × laserDecay of the previous. Every enemy hit is stunned.
-// Timeline: the gun charges for laserChargeTime, then the beam (event at laserChargeTime, shown
-// laserBeamTime s) sweeps out from the muzzle at laserSweepSpeed; each enemy is hit when its
-// front reaches them (the client draws the same sweep).
-const (
-	laserHalfWidth    = 10.0
-	laserFirstBase    = 1.5
-	laserFirstPerRank = 0.1
-	laserDecay        = 0.8
-	laserChargeTime   = 0.3     // s the gun charges before the beam (the beam event's t)
-	laserBeamTime     = 0.6     // s the beam shows (the beam event's duration)
-	laserSweepSpeed   = 12000.0 // px/s the beam's front travels from the muzzle (was 6000)
-	stunTurns         = 1
-)
+// Laser (Spark, skill shock_field, effect laser; the numbers are the skill's
+// gamedata.LaserTuning): a straight beam from the shot origin along the aim to the map edge,
+// through terrain (no gravity, wind, crater, knockback or falls; power ignored); it hits every
+// enemy whose body is within halfWidth (10) + the player hit radius of it, nearest first:
+// (firstBase + firstPerRank × rank) × base (1.5 + 0.1 × rank), each next one × decay (0.8) of
+// the previous. Every enemy hit is stunned.
+// Timeline: the gun charges for chargeTime (0.3 s), then the beam (event at chargeTime, shown
+// beamTime, 0.6 s) sweeps out from the muzzle at sweepSpeed (12000 px/s); each enemy is hit
+// when its front reaches them (the client draws the same sweep).
 
 func init() {
 	registerSkill(effectLaser, resolveLaser)
@@ -34,7 +25,18 @@ func init() {
 // botLaserMiss is how far (degrees) the bot turns the beam off when its hit roll misses.
 const botLaserMiss = 10.0
 
-func laserFirst(rank int) float64 { return laserFirstBase + laserFirstPerRank*float64(rank) }
+func laserFirst(t gamedata.LaserTuning, rank int) float64 {
+	return t.FirstBase + t.FirstPerRank*float64(rank)
+}
+
+// laserTuningOf is the tuning of p's character skill when it is a laser (the defaults
+// otherwise).
+func (m *Match) laserTuningOf(p *BattlePlayerState) gamedata.LaserTuning {
+	if c, ok := m.gd.Data.Characters[p.CharacterID]; ok {
+		return gamedata.LaserTuningOf(m.gd.Data.Skills[c.SkillID])
+	}
+	return gamedata.DefaultLaserTuning()
+}
 
 // beamEnd is where a beam from origin along dir leaves the map rectangle [0, width] × [0, height].
 func beamEnd(origin, dir Vector2, width, height int) Vector2 {
@@ -59,24 +61,24 @@ type laserHit struct {
 	s float64
 }
 
-// laserHits returns the living enemies of shooter whose body the beam from origin to end
-// crosses (within laserHalfWidth + the player hit radius of it), nearest to origin first.
-// Terrain does not stop the beam.
-func laserHits(players map[string]*BattlePlayerState, shooter *BattlePlayerState, origin, end Vector2) []laserHit {
-	hitRadius := physics().PlayerHitRadius
+// laserHits returns the living enemies of shooter whose body (lift px above the feet) the beam
+// from origin to end crosses (within halfWidth + the player hit radius of it), nearest to origin
+// first. Terrain does not stop the beam.
+func (m *Match) laserHits(shooter *BattlePlayerState, halfWidth float64, origin, end Vector2) []laserHit {
+	players, lift := m.State.Players, shotOriginLift(m.Terrain)
 	dx, dy := end.X-origin.X, end.Y-origin.Y
 	length := math.Hypot(dx, dy)
 	if length <= 0 {
 		return nil
 	}
 	ux, uy := dx/length, dy/length
-	reach := laserHalfWidth + hitRadius
+	reach := halfWidth + m.gd.Physics.PlayerHitRadius
 	var hits []laserHit
 	for _, p := range players {
 		if !p.IsAlive || p.TeamID == shooter.TeamID {
 			continue
 		}
-		cx, cy := p.Position.X-origin.X, p.Position.Y-ShotOriginLift-origin.Y
+		cx, cy := p.Position.X-origin.X, p.Position.Y-lift-origin.Y
 		s := cx*ux + cy*uy // along the beam
 		if s < -reach || s > length+reach {
 			continue
@@ -96,26 +98,28 @@ func laserHits(players map[string]*BattlePlayerState, shooter *BattlePlayerState
 }
 
 // laserHitTime is when the beam's front reaches a body s px along it (s since the shot).
-func laserHitTime(s float64) float64 {
-	return laserChargeTime + math.Max(s, 0)/laserSweepSpeed
+func laserHitTime(t gamedata.LaserTuning, s float64) float64 {
+	return t.ChargeTime + math.Max(s, 0)/t.SweepSpeed
 }
 
 // laser: the beam from the shot origin along the aim to the map edge. No gravity, wind,
 // terrain, crater, knockback or falls; power is ignored. The nearest enemy takes laserFirst ×
-// base, each next one laserDecay × the previous (also past a kill); every enemy hit is stunned.
+// base, each next one decay × the previous (also past a kill); every enemy hit is stunned.
 func resolveLaser(m *Match, s *skillShot) {
 	player, action, base, tl := s.Player, s.Action, s.Base, s.TL
+	tu := gamedata.LaserTuningOf(s.Skill)
+	k, crit := m.gd.Physics.DefenseKOrDefault(), m.gd.Rules.Combat.CritMultiplier
 	player.ShotsFired++
 	origin := shotOrigin(m.Terrain, player)
 	end := beamEnd(origin, angleDir(action.Angle), m.Terrain.Width, m.Terrain.Height)
-	tl.add(ShotEvent{T: laserChargeTime, Type: "beam", PlayerID: player.PlayerID, From: vecPtr(origin), To: vecPtr(end), Duration: laserBeamTime})
+	tl.add(ShotEvent{T: tu.ChargeTime, Type: "beam", PlayerID: player.PlayerID, From: vecPtr(origin), To: vecPtr(end), Duration: tu.BeamTime})
 
-	raw := laserFirst(player.SkillRank) * base
-	for _, h := range laserHits(m.State.Players, player, origin, end) {
-		p, t := h.p, laserHitTime(h.s)
-		damage := int(math.Round(ReduceByDefense(raw, p.Defense)))
-		damage, critical := ApplyCritical(damage, player.CritChance)
-		raw *= laserDecay
+	raw := laserFirst(tu, player.SkillRank) * base
+	for _, h := range m.laserHits(player, tu.HalfWidth, origin, end) {
+		p, t := h.p, laserHitTime(tu, h.s)
+		damage := int(math.Round(reduceByDefense(raw, p.Defense, k)))
+		damage, critical := applyCritical(damage, player.CritChance, crit)
+		raw *= tu.Decay
 		if damage <= 0 {
 			continue
 		}
@@ -131,7 +135,7 @@ func resolveLaser(m *Match, s *skillShot) {
 			tl.add(ShotEvent{T: t, Type: "die", PlayerID: p.PlayerID, Cause: "laser"})
 			continue
 		}
-		applyShotStatus(tl, t, player, p, "stun", stunTurns)
+		m.applyShotStatus(tl, t, player, p, "stun", tu.StunTurns)
 	}
 }
 
@@ -150,25 +154,25 @@ func botLaser(b *BotBrain, m *Match, bot *BattlePlayerState, _ gamedata.WeaponCo
 			}
 		}
 	}
-	return angle, NoAimPower, true
+	return angle, m.gd.Rules.Aim.NoAimPower, true
 }
 
 // laserHitCount is how many enemies the bot's laser fired at angle would hit.
 func laserHitCount(m *Match, bot *BattlePlayerState, angle float64) int {
 	origin := shotOrigin(m.Terrain, bot)
 	end := beamEnd(origin, angleDir(angle), m.Terrain.Width, m.Terrain.Height)
-	return len(laserHits(m.State.Players, bot, origin, end))
+	return len(m.laserHits(bot, m.laserTuningOf(bot).HalfWidth, origin, end))
 }
 
 // bestLaser returns the laser angle hitting the most enemies (lines through two preferred)
 // and that count: every whole degree, ties broken by the angle closest to straight at an
 // enemy's body (the beam's centre on it).
 func bestLaser(m *Match, bot *BattlePlayerState) (float64, int) {
-	origin := shotOrigin(m.Terrain, bot)
+	origin, lift := shotOrigin(m.Terrain, bot), shotOriginLift(m.Terrain)
 	var aims []float64 // straight at each enemy's body
 	for _, p := range m.playersByID() {
 		if p.IsAlive && p.TeamID != bot.TeamID {
-			dx, dy := p.Position.X-origin.X, p.Position.Y-ShotOriginLift-origin.Y
+			dx, dy := p.Position.X-origin.X, p.Position.Y-lift-origin.Y
 			aims = append(aims, math.Atan2(-dy, dx)*180/math.Pi)
 		}
 	}

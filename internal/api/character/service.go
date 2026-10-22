@@ -90,10 +90,7 @@ func (s *Service) GetCharacters(ctx context.Context, playerID string) (Character
 // allBaseStats returns the base stats of every character in the game data.
 func allBaseStats() map[string]BaseStats {
 	out := map[string]BaseStats{}
-	if gamedata.Data == nil {
-		return out
-	}
-	for id := range gamedata.Data.Characters {
+	for id := range gamedata.Current().Data.Characters {
 		out[id] = BaseStats{StatValues: statValues(battlestats.Base(id)), WeaponDamage: battlestats.WeaponDamage(id)}
 	}
 	return out

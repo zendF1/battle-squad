@@ -74,15 +74,13 @@ func TestGetCharactersFallsBackToDefaultResetCost(t *testing.T) {
 // The response carries each owned character's battle stats, every character's
 // base stats and the per-point multipliers, with the documented JSON keys.
 func TestGetCharactersJSONIncludesStats(t *testing.T) {
-	prev := gamedata.Data
-	gamedata.Data = &gamedata.GameData{
+	gamedata.UseData(t, &gamedata.GameData{
 		Characters: map[string]gamedata.CharacterConfig{
 			"tanko": {CharacterID: "tanko", HP: 1950, Defense: 80, Mobility: 80, WeaponID: "cannon_ball"},
 			"spark": {CharacterID: "spark", HP: 1350, Defense: 40, Mobility: 120, WeaponID: "electric_orb"},
 		},
 		Weapons: map[string]gamedata.WeaponConfig{"cannon_ball": {Damage: 600}, "electric_orb": {Damage: 440}},
-	}
-	t.Cleanup(func() { gamedata.Data = prev })
+	})
 
 	svc, db := newCharacterService(t, 1)
 	dbtest.CreatePlayer(t, db, "p1", 0, 0)

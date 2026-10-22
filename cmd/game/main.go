@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"battle-squad/internal/game/matchmaker"
 	"battle-squad/internal/game/room"
 	"battle-squad/internal/game/ws"
+	"battle-squad/internal/gamedatasync"
 	sharedAuth "battle-squad/internal/shared/auth"
 	"battle-squad/internal/shared/config"
 	"battle-squad/internal/shared/database"
@@ -49,6 +51,22 @@ func (c *CompositeWSHandler) Unregister(client *ws.Client) {
 	c.roomHandler.Unregister(client)
 }
 
+// matchMaps are the snapshot's map ids and their minimum rank tiers (bronze when unset).
+func matchMaps(s *gamedata.Snapshot) ([]string, map[string]string) {
+	ids := make([]string, 0, len(s.Data.Maps))
+	tiers := make(map[string]string, len(s.Data.Maps))
+	for mapID, mapCfg := range s.Data.Maps {
+		ids = append(ids, mapID)
+		tier := mapCfg.MinRankTier
+		if tier == "" {
+			tier = "bronze"
+		}
+		tiers[mapID] = tier
+	}
+	sort.Strings(ids)
+	return ids, tiers
+}
+
 func main() {
 	// 1. Load config
 	cfg := config.LoadConfig()
@@ -68,27 +86,32 @@ func main() {
 	}
 	defer db.Close()
 
-	// 4. Load static game data configurations — try DB first, fall back to YAML
-	if err := gamedata.Load(db, "configs"); err != nil {
-		log.Fatal().Err(err).Msg("failed to load game data")
-	}
-	log.Info().Msg("game configurations loaded successfully")
-
 	redisClient, err := database.NewRedisClient(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB, cfg.RedisPoolSize, cfg.RedisMinIdle)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect to Redis")
 	}
 	defer redisClient.Close()
 
-	// 5. Init JWT Access Manager
-	jwtAccess := sharedAuth.NewJWTManager(cfg.JWTSecret, 15*time.Minute)
-
-	// 6. Init WS Handlers and Hub
 	// Generate unique node ID for clustering / redis tracking
 	nodeID := os.Getenv("NODE_ID")
 	if nodeID == "" {
 		nodeID = "node-game-1"
 	}
+
+	// 4. Game data: the DB (YAML files as the fallback), reloaded when an admin saves (Redis
+	// gamedata:changed, or the revision poll). Every match keeps the snapshot it started with.
+	reloadCtx, stopReload := context.WithCancel(context.Background())
+	defer stopReload()
+	reloader := gamedatasync.New(db, redisClient, "game", nodeID, "configs")
+	if err := reloader.Start(reloadCtx); err != nil {
+		log.Fatal().Err(err).Msg("failed to load game data")
+	}
+	log.Info().Str("version", gamedata.Current().Version).Msg("game configurations loaded successfully")
+
+	// 5. Init JWT Access Manager
+	jwtAccess := sharedAuth.NewJWTManager(cfg.JWTSecret, 15*time.Minute)
+
+	// 6. Init WS Handlers and Hub
 
 	// Room hub
 	roomHub := room.NewHub(redisClient, db, nodeID)
@@ -101,20 +124,10 @@ func main() {
 	// Lobby hub
 	lobbyHub := lobby.NewLobbyHub(db, redisClient, nodeID)
 
-	// Collect available map IDs and their tier restrictions
-	mapIDs := make([]string, 0)
-	mapTiers := make(map[string]string)
-	for mapID, mapCfg := range gamedata.Data.Maps {
-		mapIDs = append(mapIDs, mapID)
-		tier := mapCfg.MinRankTier
-		if tier == "" {
-			tier = "bronze"
-		}
-		mapTiers[mapID] = tier
-	}
-
-	// Matchmaker
+	// Matchmaker, with the available map IDs and their tier restrictions (refreshed on reload)
+	mapIDs, mapTiers := matchMaps(gamedata.Current())
 	mm := matchmaker.NewMatchmaker(db, redisClient, nodeID, roomHub, mapIDs, mapTiers)
+	reloader.OnPublish(func(s *gamedata.Snapshot) { mm.SetMaps(matchMaps(s)) })
 	go mm.Run()
 
 	// Lobby WS handler

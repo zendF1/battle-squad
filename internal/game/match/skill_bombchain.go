@@ -6,15 +6,17 @@ import (
 	"battle-squad/internal/game/gamedata"
 )
 
-// Bomb chain (Tanko, skill heavy_bomb, effect bomb_chain): chainBaseCount + chainCountPerRank
-// × rank bombs on the same trajectory, at least chainLaunchGap s apart; each deals chainEach(rank)
-// × base: (chainTotalBase + chainTotalPerRank × rank) split over one bomb more than it fires
-// (playtest 6 dropped a bomb to weaken the chain, keeping each bomb's damage); one target takes at most
-// (chainCapBase + chainCapPerRank × rank) × base (before defense) from the whole chain.
+// Bomb chain (Tanko, skill heavy_bomb, effect bomb_chain; the numbers are the skill's
+// gamedata.ChainTuning): baseCount + countPerRank × rank bombs on the same trajectory, at least
+// launchGap s apart; each deals chainEach(rank) × base: (totalBase + totalPerRank × rank) split
+// over one bomb more than it fires (playtest 6 dropped a bomb to weaken the chain, keeping each
+// bomb's damage); one target takes at most (capBase + capPerRank × rank) × base (before
+// defense) from the whole chain (playtest round 2: was the total). Defaults: 2 + rank bombs
+// 0.1 s apart, total 1.8 + 0.15 × rank, cap 1.2 + 0.15 × rank, blast 1.3 ×.
 // Every bomb flies the normal ballistic path of the shot (nothing steers it): a later one flies
 // on through the craters of the earlier ones and explodes where that same arc now meets the
 // terrain or a player, so a steep (lobbed) shot digs one deep shaft and a flat one carves a
-// trench along its arc. Blast chainBlast × the weapon's; every bomb carves the same bowl as a
+// trench along its arc. Blast blast × the weapon's; every bomb carves the same bowl as a
 // normal shot of the weapon (playtest 5: was a circle 1.4 × the weapon's crater), and nothing
 // caps how deep the chain digs (the bottom 48 px of the map were kept before): a column dug
 // through to the bottom of the map lets a player standing in it fall out (out_of_map). Every
@@ -22,75 +24,66 @@ import (
 //
 // Replay coherence: the bombs are resolved one after another on the state the previous ones
 // left (craters, landed positions), so each bomb explodes only once every fall started so far
-// has landed (+ chainHitGap): a later bomb leaves late enough for that (pacedLaunch). The
-// falls of the shot play chainFallSpeed × faster than free fall (slammed down the shaft), so
+// has landed (+ hitGap, 0.08 s): a later bomb leaves late enough for that (pacedLaunch). The
+// falls of the shot play fallSpeed (3) × faster than free fall (slammed down the shaft), so
 // the bombs keep a quick rhythm; the fall distance (and its damage) is the real one.
-const (
-	chainBaseCount    = 2 // playtest 6: was 3
-	chainCountPerRank = 1
-	chainLaunchGap    = 0.1
-	chainTotalBase    = 1.8
-	chainTotalPerRank = 0.15
-	// Per-target cap of the whole chain (playtest round 2: was the total, 1.8 + 0.15 × rank).
-	chainCapBase    = 1.2
-	chainCapPerRank = 0.15
-	chainBlast      = 1.3
-	// The shot's falls play chainFallSpeed × faster than free fall; a bomb explodes at least
-	// chainHitGap s after the last fall so far landed.
-	chainFallSpeed = 3.0
-	chainHitGap    = 0.08
-	rootTurns      = 1
-)
 
 func init() {
 	registerSkill(effectBombChain, resolveBombChain)
 	registerBotSkill(effectBombChain, botBombChain)
 }
 
-func chainCount(rank int) int     { return chainBaseCount + chainCountPerRank*rank }
-func chainTotal(rank int) float64 { return chainTotalBase + chainTotalPerRank*float64(rank) }
+func chainCount(t gamedata.ChainTuning, rank int) int { return t.BaseCount + t.CountPerRank*rank }
+func chainTotal(t gamedata.ChainTuning, rank int) float64 {
+	return t.TotalBase + t.TotalPerRank*float64(rank)
+}
 
 // chainEach is one bomb's damage (× base): chainTotal split over chainCount + 1 bombs, the share
 // each had before playtest 6 removed one.
-func chainEach(rank int) float64 { return chainTotal(rank) / float64(chainCount(rank)+1) }
-func chainCap(rank int) float64   { return chainCapBase + chainCapPerRank*float64(rank) }
+func chainEach(t gamedata.ChainTuning, rank int) float64 {
+	return chainTotal(t, rank) / float64(chainCount(t, rank)+1)
+}
+func chainCap(t gamedata.ChainTuning, rank int) float64 {
+	return t.CapBase + t.CapPerRank*float64(rank)
+}
 
 // bombChain: chainCount bombs on the same trajectory (same origin, angle, power and wind),
-// launched at least chainLaunchGap s apart (pacedLaunch) and resolved in order, each on the
+// launched at least launchGap s apart (pacedLaunch) and resolved in order, each on the
 // terrain the previous ones left, each carving the weapon's own bowl.
 func resolveBombChain(m *Match, s *skillShot) {
 	player, action, skillID, weapon, base, shot, tl := s.Player, s.Action, s.Skill.SkillID, s.Weapon, s.Base, s.Shot, s.TL
-	n := chainCount(player.SkillRank)
-	each := chainEach(player.SkillRank) * base
-	limit := newSkillCap(capOfBase(chainCap(player.SkillRank) * base))
+	tu := gamedata.ChainTuningOf(s.Skill)
+	n := chainCount(tu, player.SkillRank)
+	each := chainEach(tu, player.SkillRank) * base
+	limit := newSkillCap(m.capOfBase(chainCap(tu, player.SkillRank) * base))
 	rooted := map[string]bool{}
 	origin := shotOrigin(m.Terrain, player)
-	pierce := drillPierce(player)
-	tl.fallSpeed = chainFallSpeed
+	pierce := m.drillPierce(player)
+	tl.fallSpeed = tu.FallSpeed
 	launch := 0.0
 	for i := 0; i < n; i++ {
 		r := m.fireProjectile(player, origin, action.Angle, action.Power, weapon, m.State.Wind, pierce)
 		if i > 0 {
-			launch = pacedLaunch(launch, flightEnd(r), tl.landed())
+			launch = pacedLaunch(tu, launch, flightEnd(r), tl.landed())
 		}
 		delayPath(r, launch)
 		r.SkillID, r.Kind = skillID, "bomb"
-		r.ExplosionRadius = float64(weapon.ExplosionRadius) * chainBlast
+		r.ExplosionRadius = float64(weapon.ExplosionRadius) * tu.Blast
 		shot.Projectiles = append(shot.Projectiles, r)
 		if r.ExplosionPoint == nil {
 			continue
 		}
 		hit := m.explodeCapped(player, r, each, tl, limit)
-		applyOnce(tl, flightEnd(r), player, hit, rooted, "root", rootTurns)
+		m.applyOnce(tl, flightEnd(r), player, hit, rooted, "root", tu.RootTurns)
 		m.settleFalls(player, flightEnd(r), tl)
 	}
 }
 
-// pacedLaunch is when the next chain bomb leaves: chainLaunchGap after the previous one (which
+// pacedLaunch is when the next chain bomb leaves: launchGap after the previous one (which
 // left at prev), or later when it would otherwise explode (flight s after leaving) before
-// chainHitGap after landed, the end of the last fall so far.
-func pacedLaunch(prev, flight, landed float64) float64 {
-	return math.Max(prev+chainLaunchGap, landed+chainHitGap-flight)
+// hitGap after landed, the end of the last fall so far.
+func pacedLaunch(t gamedata.ChainTuning, prev, flight, landed float64) float64 {
+	return math.Max(prev+t.LaunchGap, landed+t.HitGap-flight)
 }
 
 // The bot's chain: every bomb flies the same arc, so a steep (lobbed) shot keeps hitting a
@@ -108,7 +101,9 @@ const (
 )
 
 // chainBotMaxFlight is the longest first flight of the bot's lobbed chain (s): 3.5 s.
-func chainBotMaxFlight() float64 { return physics().MaxFlightSeconds - chainBotFlightMargin }
+func chainBotMaxFlight(ph *gamedata.PhysicsConfig) float64 {
+	return ph.MaxFlightSeconds - chainBotFlightMargin
+}
 
 // shaftMiss is how far (x) from the enemy the shot hits, or else lands nearest, its arc flown
 // without the players meets the terrain: where the later bombs dig the shaft the enemy falls
@@ -117,7 +112,7 @@ func chainBotMaxFlight() float64 { return physics().MaxFlightSeconds - chainBotF
 // from one passing beside them.
 func shaftMiss(m *Match, bot *BattlePlayerState, s shotPlan, weapon gamedata.WeaponConfig) float64 {
 	origin := shotOrigin(m.Terrain, bot)
-	r := SimulateProjectile(bot.PlayerID, bot.TeamID, origin, s.angle, s.power, weapon, m.State.Wind, m.Terrain, m.State.Players, drillPierce(bot))
+	r := SimulateProjectile(bot.PlayerID, bot.TeamID, origin, s.angle, s.power, weapon, m.State.Wind, m.Terrain, m.State.Players, m.drillPierce(bot))
 	if r.ExplosionPoint == nil {
 		return math.MaxFloat64
 	}
@@ -134,7 +129,7 @@ func shaftMiss(m *Match, bot *BattlePlayerState, s shotPlan, weapon gamedata.Wea
 	if target == nil {
 		return math.MaxFloat64
 	}
-	ground := SimulateProjectile(bot.PlayerID, bot.TeamID, origin, s.angle, s.power, weapon, m.State.Wind, m.Terrain, nil, drillPierce(bot))
+	ground := SimulateProjectile(bot.PlayerID, bot.TeamID, origin, s.angle, s.power, weapon, m.State.Wind, m.Terrain, nil, m.drillPierce(bot))
 	if ground.ExplosionPoint == nil {
 		return math.MaxFloat64
 	}
@@ -168,6 +163,7 @@ func botBombChain(b *BotBrain, m *Match, bot *BattlePlayerState, weapon gamedata
 func (b *BotBrain) lobShot(m *Match, bot *BattlePlayerState, weapon gamedata.WeaponConfig) shotPlan {
 	var plans []shotPlan
 	top := 0.0
+	maxShotPower := m.gd.Rules.Aim.PowerMax
 	for off := 5.0; off <= chainBotLobSpan; off += 2.5 {
 		for _, angle := range []float64{90 - off, 90 + off} {
 			best := shotPlan{}
@@ -201,8 +197,8 @@ func (b *BotBrain) lobShot(m *Match, bot *BattlePlayerState, weapon gamedata.Wea
 			}
 			best = pick
 			r := SimulateProjectile(bot.PlayerID, bot.TeamID, shotOrigin(m.Terrain, bot), best.angle, best.power, weapon,
-				m.State.Wind, m.Terrain, m.State.Players, drillPierce(bot))
-			if flightEnd(r) > chainBotMaxFlight() {
+				m.State.Wind, m.Terrain, m.State.Players, m.drillPierce(bot))
+			if flightEnd(r) > chainBotMaxFlight(m.gd.Physics) {
 				continue
 			}
 			plans = append(plans, best)

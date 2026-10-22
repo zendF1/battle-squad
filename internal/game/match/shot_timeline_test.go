@@ -1,6 +1,7 @@
 package match
 
 import (
+	"battle-squad/internal/game/gamedata"
 	"encoding/json"
 	"math"
 	"testing"
@@ -146,7 +147,7 @@ func TestFallEventsMatchLandingTime(t *testing.T) {
 	if *f.From != start || *f.To != shooter.Position {
 		t.Fatalf("fall %v -> %v, want %v -> %v", *f.From, *f.To, start, shooter.Position)
 	}
-	gravity := physics().Gravity
+	gravity := gamedata.Current().Physics.Gravity
 	if want := math.Sqrt(2 * (f.To.Y - f.From.Y) / gravity); math.Abs(f.Duration-want) > 1e-9 {
 		t.Fatalf("fall duration %v, want %v", f.Duration, want)
 	}

@@ -55,8 +55,8 @@ func TestValidShotInput(t *testing.T) {
 		{45, -1, false},
 	}
 	for _, c := range cases {
-		if got := validShotInput(c.angle, c.power); got != c.want {
-			t.Errorf("validShotInput(%v, %v) = %v, want %v", c.angle, c.power, got, c.want)
+		if got := validShotInput(c.angle, c.power, maxShotPower); got != c.want {
+			t.Errorf("validShotInput(%v, %v, maxShotPower) = %v, want %v", c.angle, c.power, got, c.want)
 		}
 	}
 }

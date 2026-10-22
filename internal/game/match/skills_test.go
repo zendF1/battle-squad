@@ -133,7 +133,7 @@ func TestSkillCapClampsPerTarget(t *testing.T) {
 	if none.clamp(a, 999) != 999 {
 		t.Fatal("nil cap limits")
 	}
-	if got := capOfBase(1200)(&BattlePlayerState{Defense: 600}); got != 600 {
+	if got := testCapOfBase(1200)(&BattlePlayerState{Defense: 600}); got != 600 {
 		t.Fatalf("cap of 1200 against defense 600 = %d, want 600", got)
 	}
 }
@@ -314,7 +314,7 @@ func init() {
 // once; capped at 100; the shooter itself and dead players get nothing.
 func TestHitEnergyOncePerEnemyAction(t *testing.T) {
 	m, clients := flatSkillMatch(t, skillPlayer{"p1", 1, "rookie", 400}, skillPlayer{"p2", 2, "rookie", 415})
-	gamedata.Data.Skills["triple_shot"] = gamedata.SkillConfig{SkillID: "triple_shot", EffectType: testDoubleHit, DamageMultiplier: 0.2}
+	gamedata.Current().Data.Skills["triple_shot"] = gamedata.SkillConfig{SkillID: "triple_shot", EffectType: testDoubleHit, DamageMultiplier: 0.2}
 	enemy := m.State.Players["p2"]
 	enemy.SkillEnergy = 40
 	s := fireSkill(t, m, clients, "p1", 90, 10)
@@ -349,7 +349,7 @@ func TestHitEnergyOncePerEnemyAction(t *testing.T) {
 func TestCleanseOnlyBadEffects(t *testing.T) {
 	p := &BattlePlayerState{StatusEffects: []StatusEffect{{EffectID: "burn"}, {EffectID: "power_shot"}, {EffectID: "freeze"},
 		{EffectID: "drill_bomb"}, {EffectID: "root"}, {EffectID: "net"}, {EffectID: "stun"}}}
-	removed := Cleanse(p)
+	removed := Cleanse(gamedata.Current(), p)
 	if len(removed) != 5 || len(p.StatusEffects) != 2 || p.StatusEffects[0].EffectID != "power_shot" || p.StatusEffects[1].EffectID != "drill_bomb" {
 		t.Fatalf("removed %v kept %+v", removed, p.StatusEffects)
 	}

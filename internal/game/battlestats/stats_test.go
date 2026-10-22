@@ -9,12 +9,10 @@ import (
 
 func withGameData(t *testing.T) {
 	t.Helper()
-	prev := gamedata.Data
-	gamedata.Data = &gamedata.GameData{
+	gamedata.UseData(t, &gamedata.GameData{
 		Characters: map[string]gamedata.CharacterConfig{"tanko": {CharacterID: "tanko", HP: 1950, Defense: 80, Mobility: 80, WeaponID: "cannon_ball"}},
 		Weapons:    map[string]gamedata.WeaponConfig{"cannon_ball": {WeaponID: "cannon_ball", Damage: 600}},
-	}
-	t.Cleanup(func() { gamedata.Data = prev })
+	})
 }
 
 func TestBaseAndWeaponDamage(t *testing.T) {

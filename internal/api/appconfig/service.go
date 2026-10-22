@@ -4,8 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"sort"
+	"strconv"
 	"time"
 
+	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/shared/config"
 	"battle-squad/internal/shared/database"
 
@@ -69,18 +72,37 @@ func (s *Service) GetVersionPolicy(ctx context.Context, platform string) (*Clien
 	return &p, nil
 }
 
+// GetRemoteConfig is the remote config. Its game values come from the game data snapshot the
+// API serves (the same one GET /gamedata is built from, whose version it carries); the full
+// rules are GET /gamedata.
 func (s *Service) GetRemoteConfig(ctx context.Context) (*RemoteConfig, error) {
+	gd := gamedata.Current()
+	items := make([]gamedata.ItemConfig, 0, len(gd.Data.Items))
+	for _, it := range gd.Data.Items {
+		items = append(items, it)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].SortOrder != items[j].SortOrder {
+			return items[i].SortOrder < items[j].SortOrder
+		}
+		return items[i].ItemID < items[j].ItemID
+	})
+	active := make([]string, 0, len(items))
+	for _, it := range items {
+		active = append(active, it.ItemID)
+	}
 	// Expose current backend API and WS connection endpoints
 	return &RemoteConfig{
 		APIUrl:                 "http://localhost:" + s.cfg.APIPort,
 		GameWSUrl:              "ws://localhost:" + s.cfg.GamePort + "/ws",
-		DefaultCharacterSelect: "rookie",
+		DefaultCharacterSelect: gd.Rules.Player.DefaultCharacterID,
 		ShopEnabled:            true,
-		ActiveItems:            []string{"medkit", "teleport", "power_shot", "drill_bomb", "spider_net", "freeze_bomb", "air_strike", "wind_stopper"},
+		ActiveItems:            active,
 		MaintenanceMode:        false,
 		ClientParams: map[string]string{
-			"windScaleFactor": "30.0",
-			"physicsTimeStep": "0.05",
+			"windScaleFactor": strconv.FormatFloat(gd.Physics.WindScale, 'f', -1, 64),
+			"physicsTimeStep": strconv.FormatFloat(gd.Physics.TimeStep, 'f', -1, 64),
 		},
+		GamedataVersion: gd.Version,
 	}, nil
 }

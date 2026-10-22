@@ -25,6 +25,24 @@ var milestoneKeys = []string{
 
 // LoadMilestones reads the milestone bonuses; absent or unparsable keys keep
 // their defaults.
+// MilestoneKeys are the game_settings rows of the milestone bonuses (+6, +10, +14, +16).
+func MilestoneKeys() []string { return append([]string(nil), milestoneKeys...) }
+
+// MilestonesFromSettings reads the milestone bonuses from game_settings rows (key → value); a
+// missing or unparsable row keeps its default.
+func MilestonesFromSettings(settings map[string]string) Milestones {
+	ms := DefaultMilestones()
+	targets := []*float64{&ms.Bonus6, &ms.Bonus10, &ms.Bonus14, &ms.Bonus16}
+	for i, key := range milestoneKeys {
+		if v, ok := settings[key]; ok {
+			if parsed, err := strconv.ParseFloat(v, 64); err == nil {
+				*targets[i] = parsed
+			}
+		}
+	}
+	return ms
+}
+
 func LoadMilestones(ctx context.Context, q Querier) (Milestones, error) {
 	ms := DefaultMilestones()
 	targets := map[string]*float64{

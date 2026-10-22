@@ -21,7 +21,7 @@ const botTestCell = 16
 // [col, col+2] from row top down to the ground.
 func newBotMatch(t *testing.T, botX, enemyX float64, wall *[2]int) (*Match, *BattlePlayerState, *BattlePlayerState) {
 	t.Helper()
-	gamedata.Data = &gamedata.GameData{
+	useData(t, &gamedata.GameData{
 		Maps: map[string]gamedata.MapConfig{},
 		Characters: map[string]gamedata.CharacterConfig{
 			"c1": {CharacterID: "c1", WeaponID: "w1"},
@@ -31,7 +31,7 @@ func newBotMatch(t *testing.T, botX, enemyX float64, wall *[2]int) (*Match, *Bat
 		},
 		Skills: map[string]gamedata.SkillConfig{},
 		Items:  map[string]gamedata.ItemConfig{},
-	}
+	})
 
 	tiles := make([][]int, 56)
 	for r := range tiles {
@@ -65,7 +65,7 @@ func newBotMatch(t *testing.T, botX, enemyX float64, wall *[2]int) (*Match, *Bat
 // assertShotLands fires act from the bot and checks it explodes within the blast radius of target.
 func assertShotLands(t *testing.T, m *Match, bot, target *BattlePlayerState, act ShootAction) {
 	t.Helper()
-	weapon := gamedata.Data.Weapons["w1"]
+	weapon := gamedata.Current().Data.Weapons["w1"]
 	r := SimulateProjectile(bot.PlayerID, bot.TeamID, shotOrigin(m.Terrain, bot), act.Angle, act.Power, weapon,
 		m.State.Wind, m.Terrain, m.State.Players, 0)
 	if r.ExplosionPoint == nil {
@@ -132,7 +132,7 @@ func TestBotMissRollFiresHarmlessNearbyShot(t *testing.T) {
 			m, bot, enemy := newBotMatch(t, tc.botX, tc.enemyX, nil)
 			m.BotTier.HitChance = 0
 			brain := NewBotBrain(m.BotTier)
-			weapon := gamedata.Data.Weapons["w1"]
+			weapon := gamedata.Current().Data.Weapons["w1"]
 			for i := 0; i < 20; i++ {
 				act := brain.DecideAction(m, bot, botTurnState{}).(ShootAction)
 				if act.Angle < botMinAngle || act.Angle > botMaxAngle || act.Power < botMinPower || act.Power > maxShotPower {
@@ -152,7 +152,7 @@ func TestBotMissRollFiresHarmlessNearbyShot(t *testing.T) {
 
 func TestBotHitRollThreshold(t *testing.T) {
 	m, bot, enemy := newBotMatch(t, 400, 1000, nil)
-	weapon := gamedata.Data.Weapons["w1"]
+	weapon := gamedata.Current().Data.Weapons["w1"]
 	for _, tc := range []struct {
 		chance  float64
 		roll    int

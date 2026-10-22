@@ -25,7 +25,7 @@ func migrationsDir() string {
 	return filepath.Join(filepath.Dir(self), "..", "..", "..", "migrations")
 }
 
-// registeredMigrations are the files cmd/migrate runs, in its order (040 must be one of them).
+// registeredMigrations are the files cmd/migrate runs, in its order (041 the last).
 func registeredMigrations(t *testing.T) []string {
 	t.Helper()
 	_, self, _, _ := runtime.Caller(0)
@@ -40,8 +40,8 @@ func registeredMigrations(t *testing.T) []string {
 			names = append(names, rest[:strings.Index(rest, `"`)])
 		}
 	}
-	if len(names) == 0 || names[len(names)-1] != "040_gamedata_texts.up.sql" {
-		t.Fatalf("cmd/migrate does not end with 040: %v", names)
+	if len(names) == 0 || names[len(names)-1] != "041_gamedata_rules.up.sql" {
+		t.Fatalf("cmd/migrate does not end with 041: %v", names)
 	}
 	return names
 }
@@ -151,7 +151,7 @@ func TestGameDataFromDB(t *testing.T) {
 		g.AimAid.HitTolerance != (HitTolerance{Max: 20, MinPart: 0.2, FarPx: 1200, HighPx: 700}) {
 		t.Fatalf("aim aid %+v", g.AimAid)
 	}
-	if g.Combat != (Combat{DefenseK: 600, PowerShotFactor: 1.5, LavaDamage: 75}) {
+	if g.Combat != (Combat{DefenseK: 600, PowerShotFactor: 1.5, LavaDamage: 75, CritMultiplier: 1.5}) {
 		t.Fatalf("combat %+v", g.Combat)
 	}
 	if g.Terrain != (Terrain{PlayerHeight: 40, MaxClimbPerStep: 3, CraterPxPerTerrainDamage: 0.6, BowlDepth: 0.72, BowlCeiling: 1.5,
@@ -363,29 +363,29 @@ func TestGameDataMigrationDownUpAndSeed(t *testing.T) {
 		t.Fatal("served without the 040 tables")
 	}
 	runMigration(t, db, "040_gamedata_texts.up.sql")
+	runMigration(t, db, "041_gamedata_rules.up.sql") // cmd/migrate reruns every file
 	if after, _ := fetch(t, h); !reflect.DeepEqual(after, before) {
 		t.Fatal("down / up changed the payload")
 	}
 
 	_, self, _, _ := runtime.Caller(0)
-	prev := gd.Data
-	t.Cleanup(func() { gd.Data = prev })
-	if err := gd.LoadGameData(filepath.Join(filepath.Dir(self), "..", "..", "..", "configs")); err != nil {
+	yaml, err := gd.LoadYAML(filepath.Join(filepath.Dir(self), "..", "..", "..", "configs"))
+	if err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range before.Characters {
-		y := gd.Data.Characters[c.CharacterID]
+		y := yaml.Data.Characters[c.CharacterID]
 		if y.RoleName != c.RoleName || y.Playstyle != c.Playstyle || y.GunKind != c.GunKind {
 			t.Fatalf("configs/characters.yaml %s differs from 040", c.CharacterID)
 		}
 	}
 	for i, it := range before.Items {
-		if y := gd.Data.Items[it.ItemID]; y.DisplayName != it.Name || y.SortOrder != i+1 {
+		if y := yaml.Data.Items[it.ItemID]; y.DisplayName != it.Name || y.SortOrder != i+1 {
 			t.Fatalf("configs/items.yaml %s differs from 040", it.ItemID)
 		}
 	}
 	for _, s := range before.Skills {
-		if gd.Data.Skills[s.SkillID].DescriptionTemplate != s.Description {
+		if yaml.Data.Skills[s.SkillID].DescriptionTemplate != s.Description {
 			t.Fatalf("configs/skills.yaml %s differs from 040", s.SkillID)
 		}
 	}

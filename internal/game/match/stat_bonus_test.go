@@ -13,7 +13,7 @@ func TestTerrainDamageBonusIsCapped(t *testing.T) {
 		bonus int
 		want  float64
 	}{{0, 52}, {30, 67.6}, {50, 78}, {120, 78}, {790, 78}, {-20, 52}} {
-		if got := craterRadius(&BattlePlayerState{TerrainDamageBonus: c.bonus}, 52); math.Abs(got-c.want) > 1e-9 {
+		if got := craterRadius(&BattlePlayerState{TerrainDamageBonus: c.bonus}, 52, MaxTerrainDamageBonus); math.Abs(got-c.want) > 1e-9 {
 			t.Errorf("bonus %d: crater %v, want %v", c.bonus, got, c.want)
 		}
 	}
@@ -56,8 +56,8 @@ func TestTerrainDamageBonusGrowsCraterOnly(t *testing.T) {
 func skillDamage(t *testing.T, skillPowerBonus int) int {
 	t.Helper()
 	m, clients := newFlowMatch(t)
-	gamedata.Data.Characters["c1"] = gamedata.CharacterConfig{CharacterID: "c1", WeaponID: "w1", SkillID: "zap"}
-	gamedata.Data.Skills["zap"] = gamedata.SkillConfig{SkillID: "zap", EffectType: "debuff", DamageMultiplier: 1}
+	gamedata.Current().Data.Characters["c1"] = gamedata.CharacterConfig{CharacterID: "c1", WeaponID: "w1", SkillID: "zap"}
+	gamedata.Current().Data.Skills["zap"] = gamedata.SkillConfig{SkillID: "zap", EffectType: "debuff", DamageMultiplier: 1}
 	cur := m.State.CurrentPlayerID
 	shooter, target := m.State.Players[cur], m.State.Players[m.other(cur)]
 	shooter.SkillEnergy = 100
@@ -85,8 +85,8 @@ func TestSkillPowerBonusScalesSkillDamage(t *testing.T) {
 // TestBloomIgnoresSkillPower: bloom heals a percent of max HP, not scaled by skill power.
 func TestBloomIgnoresSkillPower(t *testing.T) {
 	m, clients := newFlowMatch(t)
-	gamedata.Data.Characters["c1"] = gamedata.CharacterConfig{CharacterID: "c1", WeaponID: "w1", SkillID: "bloom"}
-	gamedata.Data.Skills["bloom"] = gamedata.SkillConfig{SkillID: "bloom", EffectType: effectBloom}
+	gamedata.Current().Data.Characters["c1"] = gamedata.CharacterConfig{CharacterID: "c1", WeaponID: "w1", SkillID: "bloom"}
+	gamedata.Current().Data.Skills["bloom"] = gamedata.SkillConfig{SkillID: "bloom", EffectType: effectBloom}
 	cur := m.State.CurrentPlayerID
 	p := m.State.Players[cur]
 	p.SkillEnergy = 100

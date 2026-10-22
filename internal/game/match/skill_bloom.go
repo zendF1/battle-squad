@@ -2,34 +2,26 @@ package match
 
 import (
 	"math"
+	"math/big"
+	"strconv"
 
 	"battle-squad/internal/game/gamedata"
 )
 
-// Bloom (Flora, skill healing_bloom, effect bloom): no aim. A seed per living ally (Flora too)
-// rises with the others out of the top of the map, splits up there and falls straight onto its
-// ally, landing at bloomSeedTime: it heals a percent of the ally's max HP (Flora bloomSelfBase +
-// bloomPerRank × rank, a teammate bloomAllyBase + bloomPerRank × rank; not scaled by skill
-// power), the overflow becomes shield (addShield, capped at shieldCapPercent % of max HP) and
-// its bad effects are cleansed.
-const (
-	bloomSelfBase = 40
-	bloomAllyBase = 30
-	bloomPerRank  = 5
-
-	// The seeds' flight (visual only: what the bloom does does not depend on it). They rise
-	// together above Flora to bloomSkyY (above the top of the map, y 0) for bloomRiseTime, cross
-	// over to their ally up there, out of view, for bloomCrossTime, then fall straight down onto
-	// the ally's body for bloomFallTime, already falling at up to bloomFallSpeed when they leave
-	// the sky. The heal lands at bloomSeedTime; the replay lasts bloomLinger more for the bloom.
-	bloomRiseTime  = 0.55
-	bloomCrossTime = 0.2
-	bloomFallTime  = 0.65
-	bloomSeedTime  = bloomRiseTime + bloomCrossTime + bloomFallTime
-	bloomSkyY      = -140.0
-	bloomFallSpeed = 400.0
-	bloomLinger    = 0.9
-)
+// Bloom (Flora, skill healing_bloom, effect bloom; the numbers are the skill's
+// gamedata.BloomTuning): no aim. A seed per living ally (Flora too) rises with the others out
+// of the top of the map, splits up there and falls straight onto its ally, landing at the seed
+// time: it heals a percent of the ally's max HP (Flora selfBase + perRank × rank, 40 + 5r, a
+// teammate allyBase + perRank × rank, 30 + 5r; not scaled by skill power), the overflow becomes
+// shield (addShield, capped at rules.combat shieldCapPercent % of max HP) and its bad effects
+// are cleansed.
+//
+// The seeds' flight (visual only: what the bloom does does not depend on it). They rise
+// together above Flora to skyY (-140, above the top of the map, y 0) for riseTime (0.55 s),
+// cross over to their ally up there, out of view, for crossTime (0.2 s), then fall straight
+// down onto the ally's body for fallTime (0.65 s), already falling at up to fallSpeed (400 px/s)
+// when they leave the sky. The heal lands at the seed time (their sum); the replay lasts
+// linger (0.9 s) more for the bloom.
 
 func init() {
 	registerSkill(effectBloom, resolveBloom)
@@ -43,19 +35,21 @@ const (
 	botBloomAllyHP = 0.5
 )
 
-func bloomSelfPercent(rank int) int { return bloomSelfBase + bloomPerRank*rank }
-func bloomAllyPercent(rank int) int { return bloomAllyBase + bloomPerRank*rank }
+func bloomSelfPercent(t gamedata.BloomTuning, rank int) int { return t.SelfBase + t.PerRank*rank }
+func bloomAllyPercent(t gamedata.BloomTuning, rank int) int { return t.AllyBase + t.PerRank*rank }
 
 // seedPath is a bloom seed's flight from origin (Flora's gun) to an ally's body at to: up to
 // sky above origin (easing out), across to above the ally (out of view), then down onto it,
-// landing at bloomSeedTime. Sampled every 0.05 s and at the phase ends, with exact velocities.
-func seedPath(origin, sky, to Vector2) []ProjectileStep {
+// landing at the seed time. Sampled every 0.05 s and at the phase ends, with exact velocities.
+func seedPath(tu gamedata.BloomTuning, origin, sky, to Vector2) []ProjectileStep {
 	const step = 0.05
+	bloomRiseTime, bloomCrossTime, bloomFallTime, bloomFallSpeed := tu.RiseTime, tu.CrossTime, tu.FallTime, tu.FallSpeed
+	bloomSeedTime := tu.SeedTime()
 	rise := origin.Y - sky.Y
 	cross := to.X - origin.X
 	drop := to.Y - sky.Y
 	v0 := math.Max(0, math.Min(bloomFallSpeed, drop/bloomFallTime))
-	g := 2 * (drop - v0*bloomFallTime) / (bloomFallTime * bloomFallTime)
+	g := 2 * (drop - v0*bloomFallTime) / decimalSquare(bloomFallTime)
 	at := func(t float64) ProjectileStep {
 		switch {
 		case t <= bloomRiseTime:
@@ -88,11 +82,26 @@ func seedPath(origin, sky, to Vector2) []ProjectileStep {
 	return append(path, last)
 }
 
+// decimalSquare is x² computed on x's shortest decimal form and rounded once, as Go folds a
+// constant expression: the seeds' paths stay bit for bit what they were while the bloom's
+// times were constants (0.65 × 0.65 rounded once differs from the float product in the last
+// bit).
+func decimalSquare(x float64) float64 {
+	r, ok := new(big.Rat).SetString(strconv.FormatFloat(x, 'g', -1, 64))
+	if !ok {
+		return x * x
+	}
+	sq, _ := r.Mul(r, r).Float64()
+	return sq
+}
+
 // bloom heals every living ally (Flora too) by a percent of their max HP, turns the overflow
 // into shield (capped at shieldCapPercent % of max HP) and cleanses their bad effects, when
 // the seed lands on them. Not scaled by skill power.
 func resolveBloom(m *Match, s *skillShot) {
 	player, skillID, shot, tl := s.Player, s.Skill.SkillID, s.Shot, s.TL
+	tu := gamedata.BloomTuningOf(s.Skill)
+	lift, shieldCap := shotOriginLift(m.Terrain), m.gd.Rules.Combat.ShieldCapPercent
 	player.ShotsFired++
 	origin := shotOrigin(m.Terrain, player)
 	var allies []*BattlePlayerState
@@ -101,33 +110,34 @@ func resolveBloom(m *Match, s *skillShot) {
 			allies = append(allies, p)
 		}
 	}
-	sky := Vector2{X: origin.X, Y: bloomSkyY}
-	t := bloomSeedTime
+	sky := Vector2{X: origin.X, Y: tu.SkyY}
+	t := tu.SeedTime()
 	for _, p := range allies {
-		to := Vector2{X: p.Position.X, Y: p.Position.Y - ShotOriginLift}
+		to := Vector2{X: p.Position.X, Y: p.Position.Y - lift}
 		shot.Projectiles = append(shot.Projectiles, &ProjectileResult{
 			ProjectileID: generateProjectileID(), OwnerPlayerID: player.PlayerID, SkillID: skillID, Kind: "seed",
-			Path: seedPath(origin, sky, to), HitPlayerID: p.PlayerID,
+			Path: seedPath(tu, origin, sky, to), HitPlayerID: p.PlayerID,
 		})
 
-		percent := bloomAllyPercent(player.SkillRank)
+		percent := bloomAllyPercent(tu, player.SkillRank)
 		if p.PlayerID == player.PlayerID {
-			percent = bloomSelfPercent(player.SkillRank)
+			percent = bloomSelfPercent(tu, player.SkillRank)
 		}
 		heal := int(math.Round(float64(p.MaxHP) * float64(percent) / 100))
 		gained := healPlayer(p, heal)
 		tl.add(ShotEvent{T: t, Type: "heal", PlayerID: p.PlayerID, Amount: gained, HP: intPtr(p.HP)})
-		if shield := addShield(p, heal-gained); shield > 0 {
+		if shield := addShield(p, heal-gained, shieldCap); shield > 0 {
 			tl.add(ShotEvent{T: t, Type: "shield", PlayerID: p.PlayerID, Amount: shield, Shield: intPtr(p.Shield)})
 		}
-		cleanseEvent(tl, t, p)
+		cleanseEvent(m.gd, tl, t, p)
 	}
-	tl.reach(t + bloomLinger) // the blooms play before the turn moves on
+	tl.reach(t + tu.Linger) // the blooms play before the turn moves on
 }
 
 // botBloom: bloom (no aim) when wantsBloom.
 func botBloom(_ *BotBrain, m *Match, bot *BattlePlayerState, _ gamedata.WeaponConfig) (float64, float64, bool) {
-	return NoAimAngle, NoAimPower, wantsBloom(m, bot)
+	aim := m.gd.Rules.Aim
+	return aim.NoAimAngle, aim.NoAimPower, wantsBloom(m, bot)
 }
 
 // wantsBloom: the bot is below botBloomSelfHP of its max HP, a teammate below botBloomAllyHP,
@@ -145,7 +155,7 @@ func wantsBloom(m *Match, bot *BattlePlayerState) bool {
 			return true
 		}
 		for _, e := range p.StatusEffects {
-			if badEffects[e.EffectID] && e.DurationTurn > 0 {
+			if m.gd.StatusRule(e.EffectID).Bad && e.DurationTurn > 0 {
 				return true
 			}
 		}

@@ -113,8 +113,8 @@ func TestBotBloomWhenHurtOrAfflicted(t *testing.T) {
 
 func TestBloomPercentPerRank(t *testing.T) {
 	for rank := 0; rank <= 4; rank++ {
-		if bloomSelfPercent(rank) != 40+5*rank || bloomAllyPercent(rank) != 30+5*rank {
-			t.Errorf("bloom rank %d: self %d ally %d", rank, bloomSelfPercent(rank), bloomAllyPercent(rank))
+		if bloomSelfPercent(defBloom, rank) != 40+5*rank || bloomAllyPercent(defBloom, rank) != 30+5*rank {
+			t.Errorf("bloom rank %d: self %d ally %d", rank, bloomSelfPercent(defBloom, rank), bloomAllyPercent(defBloom, rank))
 		}
 	}
 }

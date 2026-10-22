@@ -47,12 +47,8 @@ func TestSkillRedesignMigrationMatchesSeed(t *testing.T) {
 	}
 
 	_, self, _, _ := runtime.Caller(0)
-	prev := gamedata.Data
-	t.Cleanup(func() { gamedata.Data = prev })
-	if err := gamedata.LoadGameData(filepath.Join(filepath.Dir(self), "..", "..", "configs")); err != nil {
-		t.Fatal(err)
-	}
-	for id, s := range gamedata.Data.Skills {
+	gamedata.UseYAML(t, filepath.Join(filepath.Dir(self), "..", "..", "configs"))
+	for id, s := range gamedata.Current().Data.Skills {
 		var name, effect, status, desc string
 		var count int
 		var mult float64

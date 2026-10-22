@@ -14,7 +14,7 @@ import (
 // client per player, and starts the first turn.
 func newFlowMatch(t *testing.T) (*Match, map[string]*ws.Client) {
 	t.Helper()
-	setFlowGameData()
+	setFlowGameData(t)
 
 	players := []*BattlePlayerState{
 		{PlayerID: "p1", TeamID: 1, CharacterID: "c1", HP: 1500, MaxHP: 1500, Position: Vector2{X: 200, Y: 300}, IsAlive: true},
@@ -31,8 +31,8 @@ func newFlowMatch(t *testing.T) (*Match, map[string]*ws.Client) {
 }
 
 // setFlowGameData installs the minimal game data the flow matches use.
-func setFlowGameData() {
-	gamedata.Data = &gamedata.GameData{
+func setFlowGameData(t testing.TB) {
+	useData(t, &gamedata.GameData{
 		Maps: map[string]gamedata.MapConfig{},
 		Characters: map[string]gamedata.CharacterConfig{
 			"c1": {CharacterID: "c1", WeaponID: "w1"},
@@ -42,7 +42,7 @@ func setFlowGameData() {
 		},
 		Skills: map[string]gamedata.SkillConfig{},
 		Items:  map[string]gamedata.ItemConfig{},
-	}
+	})
 }
 
 func (m *Match) other(playerID string) string {
@@ -162,7 +162,7 @@ func TestNetAndFreezeLastThroughTargetTurn(t *testing.T) {
 	target := m.State.Players[m.other(cur)]
 	ctx := context.Background()
 
-	ApplyStatusEffect(target, StatusEffect{EffectID: "net", TargetPlayerID: target.PlayerID, DurationTurn: 1})
+	ApplyStatusEffect(gamedata.Current(), target, StatusEffect{EffectID: "net", TargetPlayerID: target.PlayerID, DurationTurn: 1})
 	m.endTurn(ctx) // target's turn
 	if target.MoveEnergy != netMoveEnergyCap || !HasEffect(target, "net") {
 		t.Fatalf("net not active on target turn: energy=%d", target.MoveEnergy)
@@ -174,7 +174,7 @@ func TestNetAndFreezeLastThroughTargetTurn(t *testing.T) {
 	}
 
 	m.endTurn(ctx) // shooter's turn
-	ApplyStatusEffect(target, StatusEffect{EffectID: "freeze", TargetPlayerID: target.PlayerID, DurationTurn: 1})
+	ApplyStatusEffect(gamedata.Current(), target, StatusEffect{EffectID: "freeze", TargetPlayerID: target.PlayerID, DurationTurn: 1})
 	m.endTurn(ctx) // target's turn
 	if target.MoveEnergy != 0 || !HasEffect(target, "freeze") {
 		t.Fatalf("freeze not active on target turn: energy=%d", target.MoveEnergy)
@@ -187,7 +187,7 @@ func TestWindStopperExpires(t *testing.T) {
 	cur := m.State.CurrentPlayerID
 	m.State.Players[cur].Items = []string{"wind_stopper"}
 
-	if err := ApplyImmediateItem(ctx, &m.State, cur, "wind_stopper", nil, m.Terrain); err != nil {
+	if err := ApplyImmediateItem(ctx, gamedata.Current(), &m.State, cur, "wind_stopper", nil, m.Terrain); err != nil {
 		t.Fatal(err)
 	}
 	m.endTurn(ctx)
@@ -247,7 +247,7 @@ func TestFrozenPlayerCannotMove(t *testing.T) {
 	m, clients := newFlowMatch(t)
 	cur := m.State.CurrentPlayerID
 	p := m.State.Players[cur]
-	ApplyStatusEffect(p, StatusEffect{EffectID: "freeze", TargetPlayerID: cur, DurationTurn: 1})
+	ApplyStatusEffect(gamedata.Current(), p, StatusEffect{EffectID: "freeze", TargetPlayerID: cur, DurationTurn: 1})
 	p.MoveEnergy = 100 // even with energy left
 	start := p.Position
 

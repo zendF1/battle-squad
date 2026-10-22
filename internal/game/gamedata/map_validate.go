@@ -144,18 +144,3 @@ func (m MapConfig) ThemeOrDefault() string {
 	}
 	return DefaultMapTheme
 }
-
-// MapDisplay is the name and theme clients show for mapID (MatchStarted mapName / mapTheme,
-// MatchFound): the loaded map's, else the id itself and DefaultMapTheme.
-func MapDisplay(mapID string) (name, theme string) {
-	if Data != nil {
-		if m, ok := Data.Maps[mapID]; ok {
-			name = m.Name
-			if name == "" {
-				name = mapID
-			}
-			return name, m.ThemeOrDefault()
-		}
-	}
-	return mapID, DefaultMapTheme
-}

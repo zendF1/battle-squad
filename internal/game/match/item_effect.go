@@ -8,8 +8,12 @@ import (
 	"battle-squad/internal/shared/observability"
 )
 
+// ApplyImmediateItem uses an item of the player's hand: medkit heals (its value, 450 HP),
+// wind_stopper stops the wind (its value, 2 turns), the shot modifiers arm the next shot
+// (power_shot × its value, 1.5). gd is the match's game data.
 func ApplyImmediateItem(
 	ctx context.Context,
+	gd *gamedata.Snapshot,
 	match *MatchState,
 	playerID string,
 	itemID string,
@@ -39,7 +43,7 @@ func ApplyImmediateItem(
 
 	switch itemID {
 	case "medkit":
-		player.HP += int(itemValue("medkit", defaultMedkitHeal))
+		player.HP += int(gd.ItemValue("medkit", gamedata.DefaultMedkitHeal))
 		if player.HP > player.MaxHP {
 			player.HP = player.MaxHP
 		}
@@ -50,7 +54,7 @@ func ApplyImmediateItem(
 		effect := StatusEffect{
 			EffectID:       "wind_stop",
 			TargetPlayerID: "",
-			DurationTurn:   int(itemValue("wind_stopper", 2)),
+			DurationTurn:   int(gd.ItemValue("wind_stopper", gamedata.DefaultWindStopTurns)),
 			SourcePlayerID: playerID,
 		}
 		match.ActiveEffects = append(match.ActiveEffects, effect)
@@ -64,15 +68,15 @@ func ApplyImmediateItem(
 		var duration = 1 // lasts 1 turn (current turn)
 		switch itemID {
 		case "power_shot":
-			ApplyStatusEffect(player, StatusEffect{EffectID: "power_shot", TargetPlayerID: playerID, DurationTurn: duration, Value: powerShotFactor, SourcePlayerID: playerID})
+			ApplyStatusEffect(gd, player, StatusEffect{EffectID: "power_shot", TargetPlayerID: playerID, DurationTurn: duration, Value: gd.PowerShotFactor(), SourcePlayerID: playerID})
 		case "drill_bomb":
-			ApplyStatusEffect(player, StatusEffect{EffectID: "drill_bomb", TargetPlayerID: playerID, DurationTurn: duration, SourcePlayerID: playerID})
+			ApplyStatusEffect(gd, player, StatusEffect{EffectID: "drill_bomb", TargetPlayerID: playerID, DurationTurn: duration, SourcePlayerID: playerID})
 		case "spider_net":
-			ApplyStatusEffect(player, StatusEffect{EffectID: "spider_net", TargetPlayerID: playerID, DurationTurn: duration, SourcePlayerID: playerID})
+			ApplyStatusEffect(gd, player, StatusEffect{EffectID: "spider_net", TargetPlayerID: playerID, DurationTurn: duration, SourcePlayerID: playerID})
 		case "freeze_bomb":
-			ApplyStatusEffect(player, StatusEffect{EffectID: "freeze_bomb", TargetPlayerID: playerID, DurationTurn: duration, SourcePlayerID: playerID})
+			ApplyStatusEffect(gd, player, StatusEffect{EffectID: "freeze_bomb", TargetPlayerID: playerID, DurationTurn: duration, SourcePlayerID: playerID})
 		case "air_strike":
-			ApplyStatusEffect(player, StatusEffect{EffectID: "air_strike", TargetPlayerID: playerID, DurationTurn: duration, SourcePlayerID: playerID})
+			ApplyStatusEffect(gd, player, StatusEffect{EffectID: "air_strike", TargetPlayerID: playerID, DurationTurn: duration, SourcePlayerID: playerID})
 		default:
 			return errors.New("unsupported item type")
 		}
@@ -103,14 +107,4 @@ func IsShotModifierItem(itemID string) bool {
 func consumeItem(player *BattlePlayerState, idx int) {
 	player.UsedItems = append(player.UsedItems, player.Items[idx])
 	player.Items = append(player.Items[:idx], player.Items[idx+1:]...)
-}
-
-// itemValue returns the configured value of an item, or fallback if it isn't configured.
-func itemValue(itemID string, fallback float64) float64 {
-	if gamedata.Data != nil {
-		if it, ok := gamedata.Data.Items[itemID]; ok && it.Value > 0 {
-			return it.Value
-		}
-	}
-	return fallback
 }

@@ -165,8 +165,8 @@ func TestRewardsRecordMilestoneCounters(t *testing.T) {
 // A fired skill counts for the daily missions; a skill refused for lack of energy does not.
 func TestSkillUsesCounted(t *testing.T) {
 	m, clients := newFlowMatch(t)
-	gamedata.Data.Characters["c1"] = gamedata.CharacterConfig{CharacterID: "c1", WeaponID: "w1", SkillID: "s1"}
-	gamedata.Data.Skills["s1"] = gamedata.SkillConfig{SkillID: "s1"}
+	gamedata.Current().Data.Characters["c1"] = gamedata.CharacterConfig{CharacterID: "c1", WeaponID: "w1", SkillID: "s1"}
+	gamedata.Current().Data.Skills["s1"] = gamedata.SkillConfig{SkillID: "s1"}
 	cur := m.State.CurrentPlayerID
 	send(m, clients[cur], "Shoot", ShootAction{Angle: 90, Power: 10, ActionMode: "skill"})
 	if m.State.Players[cur].SkillUses != 0 {

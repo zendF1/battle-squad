@@ -72,6 +72,13 @@ func NewMatchmaker(
 	}
 }
 
+// SetMaps replaces the maps eligible for random selection (after a game data reload).
+func (m *Matchmaker) SetMaps(mapIDs []string, mapTiers map[string]string) {
+	m.mu.Lock()
+	m.mapIDs, m.mapTiers = mapIDs, mapTiers
+	m.mu.Unlock()
+}
+
 // Run starts the matchmaker goroutine.  It should be called with `go`.
 // The goroutine runs three independent tickers:
 //

@@ -38,14 +38,14 @@ func (f *fakeOwnership) ownedItems(_ context.Context, _ string, items []string) 
 
 func setLoadoutGameData(t *testing.T) {
 	t.Helper()
-	prev := gamedata.Data
-	gamedata.Data = &gamedata.GameData{Items: map[string]gamedata.ItemConfig{
+	gamedata.UseData(t, &gamedata.GameData{Items: map[string]gamedata.ItemConfig{
 		"medkit":     {ItemID: "medkit", MaxUsePerMatch: 1},
 		"teleport":   {ItemID: "teleport", MaxUsePerMatch: 1},
 		"power_shot": {ItemID: "power_shot", MaxUsePerMatch: 2},
 		"air_strike": {ItemID: "air_strike", MaxUsePerMatch: 1},
-	}}
-	t.Cleanup(func() { gamedata.Data = prev })
+	}, Characters: map[string]gamedata.CharacterConfig{
+		"rookie": {CharacterID: "rookie"}, "tanko": {CharacterID: "tanko"}, "spark": {CharacterID: "spark"}, "flora": {CharacterID: "flora"},
+	}})
 }
 
 func TestValidateQuickPlayLoadout(t *testing.T) {

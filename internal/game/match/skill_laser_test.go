@@ -48,7 +48,7 @@ func TestLaserHitsThroughTerrainInOrder(t *testing.T) {
 	if len(d1) != 1 || len(d2) != 1 || d1[0].Cause != "laser" || d2[0].T <= d1[0].T {
 		t.Fatalf("laser damage e1 %+v e2 %+v", d1, d2)
 	}
-	base := 620.0 * laserFirst(4)
+	base := 620.0 * laserFirst(defLaser, 4)
 	if want := int(math.Round(ReduceByDefense(base, 50))); d1[0].Amount != want {
 		t.Fatalf("first hit %d, want %d", d1[0].Amount, want)
 	}
@@ -74,10 +74,10 @@ func TestLaserHitsThroughTerrainInOrder(t *testing.T) {
 		t.Fatalf("laser projectiles %+v", s.Projectiles)
 	}
 	// Timeline: the gun charges, then the beam sweeps out; each hit when its front gets there.
-	if beams[0].T != laserChargeTime || d1[0].T != laserHitTime(400) || d2[0].T != laserHitTime(800) || d2[0].T > beams[0].T+beams[0].Duration {
+	if beams[0].T != laserChargeTime || d1[0].T != laserHitTime(defLaser, 400) || d2[0].T != laserHitTime(defLaser, 800) || d2[0].T > beams[0].T+beams[0].Duration {
 		t.Fatalf("timing: beam %v, hits %v %v", beams[0].T, d1[0].T, d2[0].T)
 	}
-	if got := laserHitTime(1200); math.Abs(got-0.4) > 1e-9 { // 0.3 s charge + 1200 px at 12000 px/s
+	if got := laserHitTime(defLaser, 1200); math.Abs(got-0.4) > 1e-9 { // 0.3 s charge + 1200 px at 12000 px/s
 		t.Fatalf("a hit 1200 px out at %v s, want 0.4", got)
 	}
 }
@@ -102,7 +102,7 @@ func TestBotLaserLinesUpTwoEnemies(t *testing.T) {
 
 func TestLaserFirstHitPerRank(t *testing.T) {
 	for rank := 0; rank <= 4; rank++ {
-		if got, want := laserFirst(rank), 1.5+0.1*float64(rank); math.Abs(got-want) > 1e-9 {
+		if got, want := laserFirst(defLaser, rank), 1.5+0.1*float64(rank); math.Abs(got-want) > 1e-9 {
 			t.Errorf("laser first rank %d = %v, want %v", rank, got, want)
 		}
 	}
@@ -177,8 +177,8 @@ func TestLaserOnGrassland(t *testing.T) {
 	if len(d1) != 1 || len(d2) != 1 || d2[0].T <= d1[0].T {
 		t.Fatalf("hits e1 %+v e2 %+v", d1, d2)
 	}
-	weapon, _ := botWeapon(spark)
-	base := skillBaseDamage(spark, gamedata.Data.Skills["shock_field"], weapon) * laserFirst(4)
+	weapon, _ := botWeapon(gamedata.Current(), spark)
+	base := skillBaseDamage(spark, gamedata.Current().Data.Skills["shock_field"], weapon, gamedata.Current().PowerShotFactor()) * laserFirst(defLaser, 4)
 	if want := int(math.Round(ReduceByDefense(base, m.State.Players["e1"].Defense))); d1[0].Amount != want && !d1[0].Critical {
 		t.Fatalf("first %d, want %d", d1[0].Amount, want)
 	}

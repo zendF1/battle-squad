@@ -154,6 +154,14 @@ func LoadConfigFromDB(ctx context.Context, db *database.PostgresDB, key string, 
 
 // LoadMatchmakingConfig loads MatchmakingConfig from the DB. On any error it
 // logs a warning and returns the hard-coded defaults.
+// ParseMatchmakingConfig reads a "matchmaking" row value over the defaults (as
+// LoadMatchmakingConfig does; a broken value keeps what it could read).
+func ParseMatchmakingConfig(raw string) MatchmakingConfig {
+	cfg := DefaultMatchmakingConfig()
+	_ = json.Unmarshal([]byte(raw), &cfg)
+	return cfg
+}
+
 func LoadMatchmakingConfig(ctx context.Context, db *database.PostgresDB) MatchmakingConfig {
 	cfg := DefaultMatchmakingConfig()
 	if err := LoadConfigFromDB(ctx, db, "matchmaking", &cfg); err != nil {

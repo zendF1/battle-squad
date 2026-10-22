@@ -3,8 +3,6 @@ package match
 import (
 	"context"
 	"math"
-	"path/filepath"
-	"runtime"
 	"testing"
 
 	"battle-squad/internal/game/battlestats"
@@ -23,12 +21,7 @@ const identitySurface = 31 * botTestCell
 // useConfigGameData loads configs/*.yaml as the game data for the test.
 func useConfigGameData(t *testing.T) {
 	t.Helper()
-	prev := gamedata.Data
-	_, self, _, _ := runtime.Caller(0)
-	if err := gamedata.LoadGameData(filepath.Join(filepath.Dir(self), "..", "..", "..", "configs")); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { gamedata.Data = prev })
+	useConfigDir(t)
 }
 
 // identityMatch is a 1v1 on flat ground 400 px thick (surface at identitySurface): the
@@ -92,7 +85,7 @@ func TestCraterDepthByCharacter(t *testing.T) {
 		}
 		p := *ex[0].Position
 		depth[id] = m.Terrain.GetLandingY(p.X, 0) - identitySurface
-		w := gamedata.Data.Weapons[gamedata.Data.Characters[id].WeaponID]
+		w := gamedata.Current().Data.Weapons[gamedata.Current().Data.Characters[id].WeaponID]
 		t.Logf("%-6s blast %3d px, terrain damage %3d, crater radius %5.1f px, depth below the surface %5.1f px",
 			id, w.ExplosionRadius, w.TerrainDamage, ex[0].Radius, depth[id])
 		if ex[0].Radius != float64(w.TerrainDamage)*craterPxPerTerrainDamage {
@@ -174,7 +167,7 @@ func TestBotAimsWithEveryCharacter(t *testing.T) {
 			bot := m.State.Players["p1"]
 			bot.IsBot = true
 			act := decideShot(t, m, bot)
-			weapon := gamedata.Data.Weapons[gamedata.Data.Characters[id].WeaponID]
+			weapon := gamedata.Current().Data.Weapons[gamedata.Current().Data.Characters[id].WeaponID]
 			r := SimulateProjectile(bot.PlayerID, bot.TeamID, shotOrigin(m.Terrain, bot), act.Angle, act.Power, weapon,
 				m.State.Wind, m.Terrain, m.State.Players, 0)
 			target := m.State.Players["p2"]
@@ -191,7 +184,7 @@ func TestBotAimsWithEveryCharacter(t *testing.T) {
 // hitsToKill is how many direct hits (no wind, no crit) attacker's shot needs to kill
 // defender, with their base stats plus the given flat bonuses.
 func hitsToKill(attacker, defender string, damageBonus, hpBonus, defenseBonus int) int {
-	w := gamedata.Data.Weapons[gamedata.Data.Characters[attacker].WeaponID]
+	w := gamedata.Current().Data.Weapons[gamedata.Current().Data.Characters[attacker].WeaponID]
 	d := battlestats.Base(defender)
 	hit := CalculateExplosionDamage(Vector2{}, Vector2{}, float64(w.Damage+damageBonus), float64(w.ExplosionRadius), d.Defense+defenseBonus)
 	return int(math.Ceil(float64(d.HP+hpBonus) / float64(hit)))

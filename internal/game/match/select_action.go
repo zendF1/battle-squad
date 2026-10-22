@@ -52,23 +52,23 @@ func isShotItem(itemID string) bool {
 // validSelection checks sel for player and returns it as an ActionSelected: the weapon always
 // (unless the player cannot act), the skill at full skill energy with a configured skill, a shot
 // item the player still holds (the teleport only while it can move). false for anything else.
-func validSelection(player *BattlePlayerState, sel SelectAction) (ActionSelected, bool) {
+func validSelection(gd *gamedata.Snapshot, player *BattlePlayerState, sel SelectAction) (ActionSelected, bool) {
 	out := ActionSelected{PlayerID: player.PlayerID, ActionMode: sel.ActionMode}
-	if !player.IsAlive || skipsTurn(player) != "" {
+	if !player.IsAlive || skipsTurn(gd, player) != "" {
 		return out, false
 	}
 	switch sel.ActionMode {
 	case "weapon":
 		return out, true
 	case "skill":
-		if player.SkillEnergy < skillEnergyMax || gamedata.Data == nil {
+		if player.SkillEnergy < gd.Rules.SkillEnergy.Max {
 			return out, false
 		}
-		char, ok := gamedata.Data.Characters[player.CharacterID]
+		char, ok := gd.Data.Characters[player.CharacterID]
 		if !ok {
 			return out, false
 		}
-		if _, ok := gamedata.Data.Skills[char.SkillID]; !ok {
+		if _, ok := gd.Data.Skills[char.SkillID]; !ok {
 			return out, false
 		}
 		out.SkillID = char.SkillID
@@ -77,7 +77,7 @@ func validSelection(player *BattlePlayerState, sel SelectAction) (ActionSelected
 		if sel.ItemID == nil || !isShotItem(*sel.ItemID) || !hasItem(player, *sel.ItemID) {
 			return out, false
 		}
-		if *sel.ItemID == "teleport" && !canMove(player) {
+		if *sel.ItemID == "teleport" && !canMove(gd, player) {
 			return out, false
 		}
 		out.ItemID = *sel.ItemID
@@ -105,7 +105,7 @@ func (m *Match) processSelectAction(ctx context.Context, client *ws.Client, sel 
 	if player == nil {
 		return
 	}
-	next, ok := validSelection(player, sel)
+	next, ok := validSelection(m.gd, player, sel)
 	if !ok || sameSelection(next, m.selection) {
 		return
 	}
@@ -169,7 +169,7 @@ func (m *Match) selectBotAction(bot *BattlePlayerState, act ShootAction) {
 	if act.ActionMode != "skill" && act.ActionMode != "item" {
 		return
 	}
-	sel, ok := validSelection(bot, SelectAction{ActionMode: act.ActionMode, ItemID: act.ItemID})
+	sel, ok := validSelection(m.gd, bot, SelectAction{ActionMode: act.ActionMode, ItemID: act.ItemID})
 	if !ok {
 		return
 	}

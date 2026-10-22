@@ -31,10 +31,10 @@ var defaultSettings = []settingDef{
 	{"physics.max_flight_seconds", "4.5", "number", "Thời gian bay tối đa của đạn trước khi biến mất", "physics"},
 	{"match.turn_time_seconds", "20", "number", "Thời gian mỗi lượt (giây). Hết = tự động kết thúc lượt", "match"},
 	{"match.idle_timeout_minutes", "2", "number", "Phút không hoạt động trước khi match bị hủy", "match"},
-	{"move.step_pixels", "10", "number", "Số pixel di chuyển mỗi tick khi giữ nút move", "movement"},
-	{"move.energy_cost_per_2px", "0.5", "number", "Năng lượng tiêu hao mỗi 2 pixel di chuyển", "movement"},
-	{"fall.damage_threshold", "30", "number", "Khoảng rơi tối thiểu (pixels) trước khi nhận fall damage", "physics"},
-	{"fall.damage_per_pixel", "0.5", "number", "Damage mỗi pixel rơi vượt ngưỡng", "physics"},
+	{"move.step_pixels", "2", "number", "Đi chừng này px tốn move.energy_cost_per_2px năng lượng", "movement"},
+	{"move.energy_cost_per_2px", "1", "number", "Năng lượng tốn cho mỗi move.step_pixels px đi được", "movement"},
+	{"fall.damage_threshold", "150", "number", "Rơi tới chừng này px không mất máu", "physics"},
+	{"fall.damage_per_pixel", "3.75", "number", "Máu mất mỗi px rơi vượt ngưỡng (bỏ qua phòng thủ)", "physics"},
 	{"combat.defense_k", "600", "number", "Hằng số phòng thủ K: sát thương nhận = sát thương × K / (K + phòng thủ)", "combat"},
 	{"equipment.merge_rate_per_item", "25", "number", "Tỷ lệ ghép mỗi viên (%). 4 viên = 4 × giá trị này", "equipment"},
 	{"equipment.milestone_6_bonus", "0.10", "number", "Bonus stat khi trang bị đạt +6 (10%)", "equipment"},
@@ -129,18 +129,26 @@ func SeedSettings(ctx context.Context, db *database.PostgresDB) error {
 			return fmt.Errorf("insert setting %s: %w", s.Key, err)
 		}
 	}
+	// The rules rows (as migrations/041): every group with its defaults
+	rules := gamedata.DefaultRules()
+	for _, g := range gamedata.RuleGroups {
+		if _, err := db.Pool.Exec(ctx, query, g.Key, g.Encode(rules), "json", g.Title, "rules"); err != nil {
+			return fmt.Errorf("insert setting %s: %w", g.Key, err)
+		}
+	}
 
-	observability.Log.Info().Int("count", len(defaultSettings)).Msg("seeded game_settings")
+	observability.Log.Info().Int("count", len(defaultSettings)+len(gamedata.RuleGroups)).Msg("seeded game_settings")
 	return nil
 }
 
 // SeedConfigFromYAML loads YAML config files via gamedata.LoadGameData and inserts
 // the data into config_* tables. Uses ON CONFLICT DO NOTHING so re-running is safe.
 func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir string) error {
-	if err := gamedata.LoadGameData(configDir); err != nil {
+	snap, err := gamedata.LoadYAML(configDir)
+	if err != nil {
 		return fmt.Errorf("load game data: %w", err)
 	}
-	data := gamedata.Data
+	data := snap.Data
 
 	// Seed characters
 	charQuery := `INSERT INTO config_characters
@@ -177,13 +185,24 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 	// Seed skills
 	skillQuery := `INSERT INTO config_skills
 		(skill_id, character_id, name, cooldown_turn, effect_type, projectile_count, status_effect_id, damage_multiplier, description,
-		 description_template)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		 description_template, params)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
 		ON CONFLICT (skill_id) DO NOTHING`
 	for _, s := range data.Skills {
+		params := s.Params
+		if params == nil {
+			params = gamedata.DefaultSkillParams(s.EffectType)
+		}
+		if params == nil {
+			params = map[string]float64{}
+		}
+		rawParams, err := json.Marshal(params)
+		if err != nil {
+			return err
+		}
 		if _, err := db.Pool.Exec(ctx, skillQuery,
 			s.SkillID, s.CharacterID, s.Name, s.CooldownTurn, s.EffectType,
-			s.ProjectileCount, s.StatusEffectID, s.DamageMultiplier, s.Description, s.DescriptionTemplate,
+			s.ProjectileCount, s.StatusEffectID, s.DamageMultiplier, s.Description, s.DescriptionTemplate, string(rawParams),
 		); err != nil {
 			return fmt.Errorf("insert skill %s: %w", s.SkillID, err)
 		}

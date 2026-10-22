@@ -4,13 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
 
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/observability"
+	"battle-squad/internal/shared/ranked"
 
+	"github.com/jackc/pgx/v5"
 	"gopkg.in/yaml.v3"
 )
 
@@ -55,10 +60,13 @@ type SkillConfig struct {
 	ProjectileCount  int     `yaml:"projectileCount"`
 	StatusEffectID   string  `yaml:"statusEffectId,omitempty"`
 	DamageMultiplier float64 `yaml:"damageMultiplier"`
-	Description      string  `yaml:"description,omitempty"` // shown to players (admin seed); the game server does not read it
+	Description      string  `yaml:"description,omitempty"` // the old fixed description (GET /gamedata sends it when there is no template)
 	// DescriptionTemplate is the description with {placeholders} for the rank numbers
-	// (GET /gamedata skills[].ranks); admin seed only.
+	// (GET /gamedata skills[].ranks).
 	DescriptionTemplate string `yaml:"descriptionTemplate,omitempty"`
+	// Params is the effect type's tuning (config_skills.params): a missing or invalid number
+	// keeps its default (RainTuningOf, ...).
+	Params map[string]float64 `yaml:"params,omitempty"`
 }
 
 type ItemConfig struct {
@@ -134,10 +142,9 @@ type BrickTypeConfig struct {
 	Color        string      `yaml:"color"`
 }
 
-// BrickTypes is loaded from config_brick_types table.
-var BrickTypes map[int]BrickTypeConfig
-
-// PhysicsConfig holds physics constants loaded from game_settings table
+// PhysicsConfig holds the scalar game_settings rows (ScalarSettings): the shell flight
+// (physics.*), the turn and idle times (match.*), walking (move.*), falls (fall.*) and the
+// defense constant (combat.defense_k).
 type PhysicsConfig struct {
 	Gravity                   float64
 	ProjectileSpeedMultiplier float64
@@ -146,25 +153,29 @@ type PhysicsConfig struct {
 	TimeStep                  float64
 	PathRecordStep            float64
 	MaxFlightSeconds          float64
-	TurnTimeSeconds           int
-	IdleTimeoutMinutes        int
-	MoveStepPixels            int
-	MoveEnergyCostPer2px      float64
-	FallDamageThreshold       float64
-	FallDamagePerPixel        float64
+	TurnTimeSeconds           int     // match.turn_time_seconds: a turn's length
+	IdleTimeoutMinutes        int     // match.idle_timeout_minutes: a match with no activity this long ends
+	MoveStepPixels            float64 // move.step_pixels: a walk of this many px …
+	MoveEnergyCostPer2px      float64 // move.energy_cost_per_2px: … costs this much move energy
+	FallDamageThreshold       float64 // fall.damage_threshold: falls up to this (px) deal no damage
+	FallDamagePerPixel        float64 // fall.damage_per_pixel: HP per px beyond it (no defense)
 	// DefenseK is K in damage taken = raw × K / (K + defense)
 	// (game_settings combat.defense_k).
 	DefenseK float64
 }
 
-var Data *GameData
-var Physics *PhysicsConfig
+// PxPerEnergy is how far one move energy walks: move.step_pixels / move.energy_cost_per_2px.
+func (p *PhysicsConfig) PxPerEnergy() float64 { return p.MoveStepPixels / p.MoveEnergyCostPer2px }
 
-// DefaultPhysics is the physics used when a game_settings row is missing (and by the match when
-// Physics is not loaded). The shell physics (playtest round 3, migration 032_faster_shells):
-// speed power × 9.6 px/s (was 6), gravity 445 px/s² (was 200), wind W × 67 × influence /
-// weight px/s² (was 30), at most 4.5 s of flight (was 6). The Godot client mirrors them
-// (match/aim/trajectory_predictor.gd, aim_aid.gd).
+// EnergyPerPx is what one px of walking costs: move.energy_cost_per_2px / move.step_pixels.
+func (p *PhysicsConfig) EnergyPerPx() float64 { return p.MoveEnergyCostPer2px / p.MoveStepPixels }
+
+// DefaultPhysics is the physics used when a game_settings row is missing. The shell physics
+// (playtest round 3, migration 032_faster_shells): speed power × 9.6 px/s (was 6), gravity 445
+// px/s² (was 200), wind W × 67 × influence / weight px/s² (was 30), at most 4.5 s of flight
+// (was 6). A turn lasts 20 s; 2 px of walking cost 1 move energy; falls up to 150 px are free,
+// then 3.75 HP per px (the values the match played with while the match.*, move.* and fall.*
+// rows were not read; migration 041 corrects the rows to them).
 func DefaultPhysics() *PhysicsConfig {
 	return &PhysicsConfig{
 		Gravity:                   445.0,
@@ -178,26 +189,15 @@ func DefaultPhysics() *PhysicsConfig {
 		IdleTimeoutMinutes:        2,
 		MoveStepPixels:            2,
 		MoveEnergyCostPer2px:      1.0,
-		FallDamageThreshold:       50.0,
-		FallDamagePerPixel:        0.5,
+		FallDamageThreshold:       150.0,
+		FallDamagePerPixel:        3.75,
 		DefenseK:                  DefaultDefenseK,
 	}
 }
 
-// DefaultMoveEnergy is the base move energy per turn of a character missing
-// from the game data or configured with mobility <= 0.
+// DefaultMoveEnergy is the base move energy per turn of a character missing from the game data
+// or configured with mobility <= 0 (rules.movement.defaultMoveEnergy's default).
 const DefaultMoveEnergy = 100
-
-// BaseMoveEnergy is a character's move energy per turn before stat points and
-// equipment: its config mobility, or DefaultMoveEnergy.
-func BaseMoveEnergy(characterID string) int {
-	if Data != nil {
-		if c, ok := Data.Characters[characterID]; ok && c.Mobility > 0 {
-			return c.Mobility
-		}
-	}
-	return DefaultMoveEnergy
-}
 
 // SettingDefenseK is the game_settings key of PhysicsConfig.DefenseK.
 const SettingDefenseK = "combat.defense_k"
@@ -206,15 +206,68 @@ const SettingDefenseK = "combat.defense_k"
 // defense 50 takes 600/650 ≈ 92% of the raw damage, defense 600 half of it.
 const DefaultDefenseK = 600.0
 
-// DefenseK returns the loaded combat.defense_k, or DefaultDefenseK.
-func DefenseK() float64 {
-	if Physics != nil && Physics.DefenseK > 0 {
-		return Physics.DefenseK
-	}
-	return DefaultDefenseK
+// ScalarSetting is a game_settings row holding one number: its admin label, help and valid
+// range (inclusive). Whole: it must be a whole number.
+type ScalarSetting struct {
+	Key, Label, Desc string
+	Min, Max         float64
+	Whole            bool
 }
 
-func LoadGameData(configDir string) error {
+// ScalarSettings are the one-number game_settings rows the game reads, in admin order.
+var ScalarSettings = []ScalarSetting{
+	{"physics.gravity", "Trọng lực (px/s²)", "Lực hấp dẫn kéo đạn xuống", 0.1, 100000, false},
+	{"physics.projectile_speed_multiplier", "Tốc độ đạn mỗi điểm lực (px/s)", "Tốc độ = lực × giá trị này", 0.01, 1000, false},
+	{"physics.wind_scale", "Hệ số gió (px/s²)", "Gió đẩy = hướng × sức gió × giá trị này × ảnh hưởng gió / trọng lượng đạn", 0, 100000, false},
+	{"physics.player_hit_radius", "Bán kính va chạm (px)", "Đạn trúng địch trong chừng này px quanh tâm thân", 0, 1000, false},
+	{"physics.time_step", "Bước mô phỏng (giây)", "", 0.001, 0.5, false},
+	{"physics.path_record_step", "Bước ghi đường bay (giây)", "Khoảng ghi điểm đường bay gửi client", 0.001, 5, false},
+	{"physics.max_flight_seconds", "Thời gian bay tối đa (giây)", "", 0.1, 60, false},
+	{SettingDefenseK, "Hằng số phòng thủ K", "Sát thương nhận = sát thương × K / (K + phòng thủ)", 1, 10000000, false},
+	{"match.turn_time_seconds", "Thời gian mỗi lượt (giây)", "Hết giờ thì tự kết thúc lượt", 1, 600, true},
+	{"match.idle_timeout_minutes", "Hủy trận khi không hoạt động (phút)", "", 1, 1440, true},
+	{"move.step_pixels", "Bước đi (px)", "Đi chừng này px tốn move.energy_cost_per_2px năng lượng", 0.01, 1000, false},
+	{"move.energy_cost_per_2px", "Năng lượng mỗi bước đi", "Năng lượng tốn cho mỗi move.step_pixels px đi được", 0.01, 1000, false},
+	{"fall.damage_threshold", "Ngưỡng rơi (px)", "Rơi tới chừng này px không mất máu", 0, 100000, false},
+	{"fall.damage_per_pixel", "Sát thương rơi mỗi px", "Máu mất mỗi px rơi vượt ngưỡng (bỏ qua phòng thủ)", 0, 10000, false},
+	{"equipment.merge_rate_per_item", "Tỉ lệ ghép mỗi viên (%)", "4 viên = 4 × giá trị này", 0, 100, false},
+	{"equipment.milestone_6_bonus", "Bonus mốc +6", "Cộng vào hệ số chỉ số khi đạt +6 (0.1 = 10%)", 0, 100, false},
+	{"equipment.milestone_10_bonus", "Bonus mốc +10", "", 0, 100, false},
+	{"equipment.milestone_14_bonus", "Bonus mốc +14", "", 0, 100, false},
+	{"equipment.milestone_16_bonus", "Bonus mốc +16", "", 0, 100, false},
+	{"equipment.sell_rate", "Tỉ lệ hoàn tiền khi bán", "Nhận floor(giá mua × tỉ lệ), trong (0, 1]", 0.0001, 1, false},
+	{"equipment.weapon_upgrade_cost_multiplier", "Hệ số đá cường hóa vũ khí", "Vũ khí cần upgrade_cost × hệ số này (>= 1)", 1, 1000, false},
+}
+
+// ScalarSettingOf returns the registered scalar row key.
+func ScalarSettingOf(key string) (ScalarSetting, bool) {
+	for _, s := range ScalarSettings {
+		if s.Key == key {
+			return s, true
+		}
+	}
+	return ScalarSetting{}, false
+}
+
+// Check validates a value for the row.
+func (s ScalarSetting) Check(text string) (float64, error) {
+	x, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %q is not a number", s.Label, text)
+	}
+	if math.IsNaN(x) || math.IsInf(x, 0) || x < s.Min || x > s.Max {
+		return 0, fmt.Errorf("%s: %v is outside %v..%v", s.Label, x, s.Min, s.Max)
+	}
+	if s.Whole && x != math.Trunc(x) {
+		return 0, fmt.Errorf("%s: %v is not a whole number", s.Label, x)
+	}
+	return x, nil
+}
+
+// LoadYAML reads the game data from the YAML files in configDir (the fallback when the DB
+// cannot be read, and the admin seed's source): the configs with the default physics, rules,
+// status effects and rank bands.
+func LoadYAML(configDir string) (*Snapshot, error) {
 	gData := &GameData{
 		Characters: make(map[string]CharacterConfig),
 		Weapons:    make(map[string]WeaponConfig),
@@ -223,82 +276,63 @@ func LoadGameData(configDir string) error {
 		Maps:       make(map[string]MapConfig),
 	}
 
-	// 1. Load characters
 	var chars []CharacterConfig
 	if err := loadYAMLFile(filepath.Join(configDir, "characters.yaml"), &chars); err != nil {
-		return err
+		return nil, err
 	}
 	for _, c := range chars {
 		gData.Characters[c.CharacterID] = c
 	}
-
-	// 2. Load weapons
 	var weapons []WeaponConfig
 	if err := loadYAMLFile(filepath.Join(configDir, "weapons.yaml"), &weapons); err != nil {
-		return err
+		return nil, err
 	}
 	for _, w := range weapons {
 		gData.Weapons[w.WeaponID] = w
 	}
-
-	// 3. Load skills
 	var skills []SkillConfig
 	if err := loadYAMLFile(filepath.Join(configDir, "skills.yaml"), &skills); err != nil {
-		return err
+		return nil, err
 	}
 	for _, s := range skills {
 		gData.Skills[s.SkillID] = s
 	}
-
-	// 4. Load items
 	var items []ItemConfig
 	if err := loadYAMLFile(filepath.Join(configDir, "items.yaml"), &items); err != nil {
-		return err
+		return nil, err
 	}
 	for _, i := range items {
 		gData.Items[i.ItemID] = i
 	}
 
-	// 5. Load maps and, when bricks.yaml exists, the brick types their tiles use (the YAML
-	// mirror of config_brick_types; without it every brick is a destructible square)
+	// Maps and, when bricks.yaml exists, the brick types their tiles use (the YAML mirror of
+	// config_brick_types; without it every brick is a destructible square)
 	var maps []MapConfig
 	if err := loadYAMLFile(filepath.Join(configDir, "maps.yaml"), &maps); err != nil {
-		return err
+		return nil, err
 	}
 	for _, m := range maps {
 		gData.Maps[m.MapID] = m
 	}
+	bricks := map[int]BrickTypeConfig{}
 	bricksPath := filepath.Join(configDir, "bricks.yaml")
 	if _, err := os.Stat(bricksPath); err == nil {
-		var bricks []BrickTypeConfig
-		if err := loadYAMLFile(bricksPath, &bricks); err != nil {
-			return err
+		var list []BrickTypeConfig
+		if err := loadYAMLFile(bricksPath, &list); err != nil {
+			return nil, err
 		}
-		BrickTypes = make(map[int]BrickTypeConfig, len(bricks))
-		for _, b := range bricks {
-			BrickTypes[b.BrickTypeID] = b
+		for _, b := range list {
+			bricks[b.BrickTypeID] = b
 		}
 	}
 
-	// Validate configuration relationships
 	if err := gData.validate(); err != nil {
-		return fmt.Errorf("game data validation failed: %w", err)
+		return nil, fmt.Errorf("game data validation failed: %w", err)
 	}
-
-	Data = gData
-	return nil
-}
-
-// Load loads the game data from the config tables and falls back to the YAML
-// files in configDir when that fails. The game server and the API both start
-// with it so they see the same character and weapon config.
-func Load(db *database.PostgresDB, configDir string) error {
-	dbErr := LoadGameDataFromDB(db)
-	if dbErr == nil {
-		return nil
-	}
-	observability.Log.Warn().Err(dbErr).Msg("failed to load config from DB, falling back to YAML")
-	return LoadGameData(configDir)
+	s := NewSnapshot(gData)
+	s.Bricks = bricks
+	s.Source = "yaml"
+	return s, nil
 }
 
 func loadYAMLFile(path string, target interface{}) error {
@@ -314,278 +348,346 @@ func loadYAMLFile(path string, target interface{}) error {
 	return nil
 }
 
-// LoadGameDataFromDB loads all game config from database tables instead of YAML files.
-// Returns error if any config table is empty so caller can fall back to YAML.
-func LoadGameDataFromDB(db *database.PostgresDB) error {
-	ctx := context.Background()
-
-	gData := &GameData{
-		Characters: make(map[string]CharacterConfig),
-		Weapons:    make(map[string]WeaponConfig),
-		Skills:     make(map[string]SkillConfig),
-		Items:      make(map[string]ItemConfig),
-		Maps:       make(map[string]MapConfig),
-	}
-
-	// 1. Load characters
-	rows, err := db.Pool.Query(ctx, `SELECT character_id, name, role, hp, damage, mobility, defense, skill_power, terrain_damage, difficulty, weapon_id, skill_id FROM config_characters`)
+// LoadFromDB reads every config table and game_settings row in one read-only REPEATABLE READ
+// transaction, so the snapshot is consistent even while an admin saves. It fails when a
+// table cannot be read, a character, weapon, skill or item table is empty, or a character
+// refers to a missing weapon or skill (an invalid map is dropped and logged instead).
+func LoadFromDB(ctx context.Context, db *database.PostgresDB) (*Snapshot, error) {
+	tx, err := db.Pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
-		return fmt.Errorf("failed to query config_characters: %w", err)
+		return nil, fmt.Errorf("begin game data read: %w", err)
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var c CharacterConfig
-		if err := rows.Scan(&c.CharacterID, &c.Name, &c.Role, &c.HP, &c.Damage, &c.Mobility, &c.Defense, &c.SkillPower, &c.TerrainDamage, &c.Difficulty, &c.WeaponID, &c.SkillID); err != nil {
-			return fmt.Errorf("failed to scan config_characters row: %w", err)
+	defer tx.Rollback(ctx)
+
+	s := &Snapshot{Source: "db", LoadedAt: time.Now()}
+	gData := &GameData{}
+	gData.fill()
+	s.Data = gData
+
+	each := func(table, query string, scan func(rows pgx.Rows) error) error {
+		rows, err := tx.Query(ctx, query)
+		if err != nil {
+			return fmt.Errorf("query %s: %w", table, err)
 		}
-		gData.Characters[c.CharacterID] = c
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error iterating config_characters: %w", err)
-	}
-	if len(gData.Characters) == 0 {
-		return fmt.Errorf("config_characters table is empty")
+		defer rows.Close()
+		for rows.Next() {
+			if err := scan(rows); err != nil {
+				return fmt.Errorf("scan %s: %w", table, err)
+			}
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("read %s: %w", table, err)
+		}
+		return nil
 	}
 
-	// 2. Load weapons
-	rows, err = db.Pool.Query(ctx, `SELECT weapon_id, name, damage, explosion_radius, terrain_damage, projectile_weight, wind_influence, multi_hit FROM config_weapons`)
-	if err != nil {
-		return fmt.Errorf("failed to query config_weapons: %w", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var w WeaponConfig
-		if err := rows.Scan(&w.WeaponID, &w.Name, &w.Damage, &w.ExplosionRadius, &w.TerrainDamage, &w.ProjectileWeight, &w.WindInfluence, &w.MultiHit); err != nil {
-			return fmt.Errorf("failed to scan config_weapons row: %w", err)
-		}
-		gData.Weapons[w.WeaponID] = w
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error iterating config_weapons: %w", err)
-	}
-	if len(gData.Weapons) == 0 {
-		return fmt.Errorf("config_weapons table is empty")
+	if err := tx.QueryRow(ctx, `SELECT revision FROM gamedata_revision WHERE id = 1`).Scan(&s.Revision); err != nil {
+		return nil, fmt.Errorf("gamedata_revision: %w", err)
 	}
 
-	// 3. Load skills
-	rows, err = db.Pool.Query(ctx, `SELECT skill_id, character_id, name, cooldown_turn, effect_type, projectile_count, status_effect_id, damage_multiplier FROM config_skills`)
-	if err != nil {
-		return fmt.Errorf("failed to query config_skills: %w", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var s SkillConfig
-		if err := rows.Scan(&s.SkillID, &s.CharacterID, &s.Name, &s.CooldownTurn, &s.EffectType, &s.ProjectileCount, &s.StatusEffectID, &s.DamageMultiplier); err != nil {
-			return fmt.Errorf("failed to scan config_skills row: %w", err)
-		}
-		gData.Skills[s.SkillID] = s
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error iterating config_skills: %w", err)
-	}
-	if len(gData.Skills) == 0 {
-		return fmt.Errorf("config_skills table is empty")
-	}
-
-	// 4. Load items
-	rows, err = db.Pool.Query(ctx, `SELECT item_id, name, type, target_type, value, max_use_per_match, cooldown FROM config_items`)
-	if err != nil {
-		return fmt.Errorf("failed to query config_items: %w", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var it ItemConfig
-		if err := rows.Scan(&it.ItemID, &it.Name, &it.Type, &it.TargetType, &it.Value, &it.MaxUsePerMatch, &it.Cooldown); err != nil {
-			return fmt.Errorf("failed to scan config_items row: %w", err)
-		}
-		gData.Items[it.ItemID] = it
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error iterating config_items: %w", err)
-	}
-	if len(gData.Items) == 0 {
-		return fmt.Errorf("config_items table is empty")
-	}
-
-	// 5. Load maps (with JSONB fields)
-	rows, err = db.Pool.Query(ctx, `SELECT map_id, name, grid_width, grid_height, cell_size,
-		default_wind_power_range, tiles, spawn_points,
-		width, height, terrain_layers, min_rank_tier, theme, description
-		FROM config_maps`)
-	if err != nil {
-		return fmt.Errorf("failed to query config_maps: %w", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var m MapConfig
-		var windRangeJSON, tilesJSON, spawnJSON, terrainJSON []byte
-		var legacyWidth, legacyHeight int
-		if err := rows.Scan(&m.MapID, &m.Name, &m.GridWidth, &m.GridHeight, &m.CellSize,
-			&windRangeJSON, &tilesJSON, &spawnJSON,
-			&legacyWidth, &legacyHeight, &terrainJSON, &m.MinRankTier, &m.Theme, &m.Description); err != nil {
-			return fmt.Errorf("failed to scan config_maps row: %w", err)
-		}
-		m.Width = legacyWidth
-		m.Height = legacyHeight
-		if err := json.Unmarshal(windRangeJSON, &m.DefaultWindPowerRange); err != nil {
-			return fmt.Errorf("failed to unmarshal wind_power_range for map %s: %w", m.MapID, err)
-		}
-		if err := json.Unmarshal(tilesJSON, &m.Tiles); err != nil {
-			// Tiles might be empty array, that's OK
-			m.Tiles = nil
-		}
-		if err := json.Unmarshal(spawnJSON, &m.SpawnPoints); err != nil {
-			return fmt.Errorf("failed to unmarshal spawn_points for map %s: %w", m.MapID, err)
-		}
-		if terrainJSON != nil {
-			json.Unmarshal(terrainJSON, &m.TerrainLayers)
-		}
-		gData.Maps[m.MapID] = m
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error iterating config_maps: %w", err)
-	}
-	if len(gData.Maps) == 0 {
-		return fmt.Errorf("config_maps table is empty")
-	}
-
-	// 6. Load brick types
-	BrickTypes = make(map[int]BrickTypeConfig)
-	rows, err = db.Pool.Query(ctx, `SELECT brick_type_id, name, image_id, destructible, border, color FROM config_brick_types`)
-	if err != nil {
-		return fmt.Errorf("failed to query config_brick_types: %w", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var bt BrickTypeConfig
-		var borderJSON []byte
-		if err := rows.Scan(&bt.BrickTypeID, &bt.Name, &bt.ImageID, &bt.Destructible, &borderJSON, &bt.Color); err != nil {
-			return fmt.Errorf("failed to scan config_brick_types row: %w", err)
-		}
-		if borderJSON != nil {
-			json.Unmarshal(borderJSON, &bt.Border)
-		}
-		BrickTypes[bt.BrickTypeID] = bt
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error iterating config_brick_types: %w", err)
-	}
-
-	// 7. Load physics settings from game_settings
-	physics, err := loadPhysicsFromDB(ctx, db)
-	if err != nil {
-		return fmt.Errorf("failed to load game_settings: %w", err)
-	}
-
-	// Validate configuration relationships
-	if err := gData.validate(); err != nil {
-		return fmt.Errorf("game data validation failed: %w", err)
-	}
-
-	Data = gData
-	Physics = physics
-	return nil
-}
-
-// loadPhysicsFromDB reads game_settings rows and maps them to PhysicsConfig.
-// Uses DefaultPhysics() for a key not found in the table.
-func loadPhysicsFromDB(ctx context.Context, db *database.PostgresDB) (*PhysicsConfig, error) {
-	settings := make(map[string]string)
-
-	rows, err := db.Pool.Query(ctx, `SELECT key, value FROM game_settings`)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query game_settings: %w", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
+	s.Settings = map[string]string{}
+	if err := each("game_settings", `SELECT key, value FROM game_settings`, func(rows pgx.Rows) error {
 		var k, v string
 		if err := rows.Scan(&k, &v); err != nil {
-			return nil, fmt.Errorf("failed to scan game_settings row: %w", err)
+			return err
 		}
-		settings[k] = v
+		s.Settings[k] = v
+		return nil
+	}); err != nil {
+		return nil, err
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating game_settings: %w", err)
+
+	if err := each("config_characters", `SELECT character_id, name, role, hp, damage, mobility, defense, skill_power,
+		terrain_damage, difficulty, weapon_id, skill_id, role_name, playstyle, gun_kind, sort_order FROM config_characters`,
+		func(rows pgx.Rows) error {
+			var c CharacterConfig
+			if err := rows.Scan(&c.CharacterID, &c.Name, &c.Role, &c.HP, &c.Damage, &c.Mobility, &c.Defense, &c.SkillPower,
+				&c.TerrainDamage, &c.Difficulty, &c.WeaponID, &c.SkillID, &c.RoleName, &c.Playstyle, &c.GunKind, &c.SortOrder); err != nil {
+				return err
+			}
+			gData.Characters[c.CharacterID] = c
+			return nil
+		}); err != nil {
+		return nil, err
 	}
-	return PhysicsFromSettings(settings), nil
+
+	if err := each("config_weapons", `SELECT weapon_id, name, damage, explosion_radius, terrain_damage, projectile_weight,
+		wind_influence, multi_hit FROM config_weapons`, func(rows pgx.Rows) error {
+		var w WeaponConfig
+		if err := rows.Scan(&w.WeaponID, &w.Name, &w.Damage, &w.ExplosionRadius, &w.TerrainDamage, &w.ProjectileWeight,
+			&w.WindInfluence, &w.MultiHit); err != nil {
+			return err
+		}
+		gData.Weapons[w.WeaponID] = w
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := each("config_skills", `SELECT skill_id, character_id, name, cooldown_turn, effect_type, projectile_count,
+		COALESCE(status_effect_id, ''), damage_multiplier, COALESCE(description, ''), description_template, params
+		FROM config_skills`, func(rows pgx.Rows) error {
+		var sk SkillConfig
+		var params []byte
+		if err := rows.Scan(&sk.SkillID, &sk.CharacterID, &sk.Name, &sk.CooldownTurn, &sk.EffectType, &sk.ProjectileCount,
+			&sk.StatusEffectID, &sk.DamageMultiplier, &sk.Description, &sk.DescriptionTemplate, &params); err != nil {
+			return err
+		}
+		sk.Params = parseParams(sk.SkillID, params)
+		gData.Skills[sk.SkillID] = sk
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := each("config_items", `SELECT item_id, name, type, target_type, value, max_use_per_match, cooldown,
+		display_name, sort_order FROM config_items`, func(rows pgx.Rows) error {
+		var it ItemConfig
+		if err := rows.Scan(&it.ItemID, &it.Name, &it.Type, &it.TargetType, &it.Value, &it.MaxUsePerMatch, &it.Cooldown,
+			&it.DisplayName, &it.SortOrder); err != nil {
+			return err
+		}
+		gData.Items[it.ItemID] = it
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := each("config_maps", `SELECT map_id, name, grid_width, grid_height, cell_size,
+		default_wind_power_range, tiles, spawn_points,
+		width, height, terrain_layers, min_rank_tier, theme, description
+		FROM config_maps`, func(rows pgx.Rows) error {
+		var m MapConfig
+		var windRangeJSON, tilesJSON, spawnJSON, terrainJSON []byte
+		if err := rows.Scan(&m.MapID, &m.Name, &m.GridWidth, &m.GridHeight, &m.CellSize,
+			&windRangeJSON, &tilesJSON, &spawnJSON,
+			&m.Width, &m.Height, &terrainJSON, &m.MinRankTier, &m.Theme, &m.Description); err != nil {
+			return err
+		}
+		if err := json.Unmarshal(windRangeJSON, &m.DefaultWindPowerRange); err != nil {
+			return fmt.Errorf("wind_power_range of map %s: %w", m.MapID, err)
+		}
+		if err := json.Unmarshal(tilesJSON, &m.Tiles); err != nil {
+			m.Tiles = nil // an empty array is fine
+		}
+		if err := json.Unmarshal(spawnJSON, &m.SpawnPoints); err != nil {
+			return fmt.Errorf("spawn_points of map %s: %w", m.MapID, err)
+		}
+		if terrainJSON != nil {
+			_ = json.Unmarshal(terrainJSON, &m.TerrainLayers)
+		}
+		gData.Maps[m.MapID] = m
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	s.Bricks = map[int]BrickTypeConfig{}
+	if err := each("config_brick_types", `SELECT brick_type_id, name, image_id, destructible, border, color FROM config_brick_types`,
+		func(rows pgx.Rows) error {
+			var bt BrickTypeConfig
+			var borderJSON []byte
+			if err := rows.Scan(&bt.BrickTypeID, &bt.Name, &bt.ImageID, &bt.Destructible, &borderJSON, &bt.Color); err != nil {
+				return err
+			}
+			if borderJSON != nil {
+				_ = json.Unmarshal(borderJSON, &bt.Border)
+			}
+			s.Bricks[bt.BrickTypeID] = bt
+			return nil
+		}); err != nil {
+		return nil, err
+	}
+
+	var status []StatusEffectConfig
+	if err := each("config_status_effects", `SELECT effect_id, name, marker, banner, sort_order, bad, skips_turn, blocks_move
+		FROM config_status_effects`, func(rows pgx.Rows) error {
+		var e StatusEffectConfig
+		if err := rows.Scan(&e.EffectID, &e.Name, &e.Marker, &e.Banner, &e.SortOrder, &e.Bad, &e.SkipsTurn, &e.BlocksMove); err != nil {
+			return err
+		}
+		status = append(status, e)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	s.Status = withDefaultStatus(status)
+
+	tiers := map[string]RankTierConfig{}
+	if err := each("config_rank_tiers", `SELECT tier, name, sort_order, min_rating, divisions, division_size FROM config_rank_tiers`,
+		func(rows pgx.Rows) error {
+			var t RankTierConfig
+			if err := rows.Scan(&t.Tier, &t.Name, &t.SortOrder, &t.MinRating, &t.Divisions, &t.DivisionSize); err != nil {
+				return err
+			}
+			tiers[t.Tier] = t
+			return nil
+		}); err != nil {
+		return nil, err
+	}
+	s.RankTiers = rankTiersWithDefaults(tiers)
+
+	if err := each("config_equipment_tiers", `SELECT tier, name, kind, id_suffix, sort_order FROM config_equipment_tiers
+		ORDER BY sort_order, tier`, func(rows pgx.Rows) error {
+		var t EquipmentTierConfig
+		if err := rows.Scan(&t.Tier, &t.Name, &t.Kind, &t.IDSuffix, &t.SortOrder); err != nil {
+			return err
+		}
+		s.EquipTiers = append(s.EquipTiers, t)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := each("config_game_modes", `SELECT mode_id, kind, name, description, queue, bot, sort_order FROM config_game_modes
+		ORDER BY sort_order, mode_id`, func(rows pgx.Rows) error {
+		var m GameModeConfig
+		if err := rows.Scan(&m.ModeID, &m.Kind, &m.Name, &m.Description, &m.Queue, &m.Bot, &m.SortOrder); err != nil {
+			return err
+		}
+		s.Modes = append(s.Modes, m)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := each("config_tips", `SELECT text FROM config_tips WHERE text <> '' ORDER BY sort_order, tip_id`, func(rows pgx.Rows) error {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			return err
+		}
+		s.Tips = append(s.Tips, t)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := each("config_gun_kinds", `SELECT gun_kind, name, sort_order FROM config_gun_kinds ORDER BY sort_order, gun_kind`,
+		func(rows pgx.Rows) error {
+			var g GunKindConfig
+			if err := rows.Scan(&g.ID, &g.Name, &g.SortOrder); err != nil {
+				return err
+			}
+			s.GunKinds = append(s.GunKinds, g)
+			return nil
+		}); err != nil {
+		return nil, err
+	}
+	if err := each("config_equipment_slots", `SELECT slot, name, sort_order FROM config_equipment_slots ORDER BY sort_order, slot`,
+		func(rows pgx.Rows) error {
+			var e EquipmentSlotConfig
+			if err := rows.Scan(&e.ID, &e.Name, &e.SortOrder); err != nil {
+				return err
+			}
+			s.Slots = append(s.Slots, e)
+			return nil
+		}); err != nil {
+		return nil, err
+	}
+	if err := each("config_item_type_words", `SELECT word, name, gun_kind, sort_order FROM config_item_type_words ORDER BY sort_order, word`,
+		func(rows pgx.Rows) error {
+			var w TypeWordConfig
+			if err := rows.Scan(&w.Word, &w.Name, &w.GunKind, &w.SortOrder); err != nil {
+				return err
+			}
+			s.TypeWords = append(s.TypeWords, w)
+			return nil
+		}); err != nil {
+		return nil, err
+	}
+
+	switch {
+	case len(gData.Characters) == 0:
+		return nil, fmt.Errorf("config_characters table is empty")
+	case len(gData.Weapons) == 0:
+		return nil, fmt.Errorf("config_weapons table is empty")
+	case len(gData.Skills) == 0:
+		return nil, fmt.Errorf("config_skills table is empty")
+	case len(gData.Items) == 0:
+		return nil, fmt.Errorf("config_items table is empty")
+	}
+	if err := gData.validate(); err != nil {
+		return nil, fmt.Errorf("game data validation failed: %w", err)
+	}
+
+	s.Physics = PhysicsFromSettings(s.Settings)
+	var ruleErrs []error
+	s.Rules, ruleErrs = RulesFromSettings(s.Settings)
+	for _, err := range ruleErrs {
+		observability.Log.Warn().Err(err).Msg("game_settings rule ignored, using its default")
+	}
+	s.index()
+	if ranked.ValidateBands(bandsFromTiers(s.RankTiers)) != nil {
+		observability.Log.Warn().Msg("config_rank_tiers bands are not valid, using the default bands")
+	}
+	return s, nil
 }
 
-// PhysicsFromSettings maps game_settings rows (key → value) to a PhysicsConfig; a key that is
-// missing or does not parse keeps its DefaultPhysics() value. The match loads it at start
-// (LoadGameDataFromDB) and GET /gamedata reads it per request, so both parse the same rows.
+func bandsFromTiers(tiers []RankTierConfig) []ranked.Band {
+	out := make([]ranked.Band, 0, len(tiers))
+	for _, t := range tiers {
+		out = append(out, ranked.Band{Tier: t.Tier, MinRating: t.MinRating, Divisions: t.Divisions, DivisionSize: t.DivisionSize})
+	}
+	return out
+}
+
+// parseParams reads config_skills.params (a JSON object name → number); anything else is
+// logged and ignored (the defaults apply).
+func parseParams(skillID string, raw []byte) map[string]float64 {
+	if len(raw) == 0 {
+		return nil
+	}
+	out := map[string]float64{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		observability.Log.Warn().Err(err).Str("skillId", skillID).Msg("config_skills.params is not an object of numbers, using the defaults")
+		return nil
+	}
+	return out
+}
+
+// PhysicsFromSettings maps the scalar game_settings rows (key → value) to a PhysicsConfig; a
+// row that is missing or does not parse (or is not positive where it must be) keeps its
+// DefaultPhysics() value. A <group>.<name> row is read first, then a bare <name> row.
 func PhysicsFromSettings(settings map[string]string) *PhysicsConfig {
 	p := DefaultPhysics()
+	float := func(dst *float64, ok func(float64) bool, keys ...string) {
+		for _, k := range keys {
+			if v, found := settings[k]; found {
+				if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && !math.IsNaN(f) && !math.IsInf(f, 0) && ok(f) {
+					*dst = f
+				}
+				return
+			}
+		}
+	}
+	whole := func(dst *int, keys ...string) {
+		for _, k := range keys {
+			if v, found := settings[k]; found {
+				if i, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && i > 0 {
+					*dst = i
+				}
+				return
+			}
+		}
+	}
+	any := func(float64) bool { return true }
+	positive := func(f float64) bool { return f > 0 }
+	nonNegative := func(f float64) bool { return f >= 0 }
 
-	if v, ok := physicsSetting(settings, "gravity"); ok {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			p.Gravity = f
-		}
-	}
-	if v, ok := physicsSetting(settings, "projectile_speed_multiplier"); ok {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			p.ProjectileSpeedMultiplier = f
-		}
-	}
-	if v, ok := physicsSetting(settings, "wind_scale"); ok {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			p.WindScale = f
-		}
-	}
-	if v, ok := physicsSetting(settings, "player_hit_radius"); ok {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			p.PlayerHitRadius = f
-		}
-	}
-	if v, ok := physicsSetting(settings, "time_step"); ok {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			p.TimeStep = f
-		}
-	}
-	if v, ok := physicsSetting(settings, "path_record_step"); ok {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			p.PathRecordStep = f
-		}
-	}
-	if v, ok := physicsSetting(settings, "max_flight_seconds"); ok {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			p.MaxFlightSeconds = f
-		}
-	}
-	if v, ok := settings["turn_time_seconds"]; ok {
-		if i, err := strconv.Atoi(v); err == nil {
-			p.TurnTimeSeconds = i
-		}
-	}
-	if v, ok := settings["idle_timeout_minutes"]; ok {
-		if i, err := strconv.Atoi(v); err == nil {
-			p.IdleTimeoutMinutes = i
-		}
-	}
-	if v, ok := settings["move_step_pixels"]; ok {
-		if i, err := strconv.Atoi(v); err == nil {
-			p.MoveStepPixels = i
-		}
-	}
-	if v, ok := settings["move_energy_cost_per_2px"]; ok {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			p.MoveEnergyCostPer2px = f
-		}
-	}
-	if v, ok := settings["fall_damage_threshold"]; ok {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			p.FallDamageThreshold = f
-		}
-	}
-	if v, ok := settings["fall_damage_per_pixel"]; ok {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			p.FallDamagePerPixel = f
-		}
-	}
-	if v, ok := settings[SettingDefenseK]; ok {
-		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
-			p.DefenseK = f
-		}
-	}
+	float(&p.Gravity, any, "physics.gravity", "gravity")
+	float(&p.ProjectileSpeedMultiplier, any, "physics.projectile_speed_multiplier", "projectile_speed_multiplier")
+	float(&p.WindScale, any, "physics.wind_scale", "wind_scale")
+	float(&p.PlayerHitRadius, any, "physics.player_hit_radius", "player_hit_radius")
+	float(&p.TimeStep, positive, "physics.time_step", "time_step")
+	float(&p.PathRecordStep, positive, "physics.path_record_step", "path_record_step")
+	float(&p.MaxFlightSeconds, any, "physics.max_flight_seconds", "max_flight_seconds")
+	whole(&p.TurnTimeSeconds, "match.turn_time_seconds", "turn_time_seconds")
+	whole(&p.IdleTimeoutMinutes, "match.idle_timeout_minutes", "idle_timeout_minutes")
+	float(&p.MoveStepPixels, positive, "move.step_pixels", "move_step_pixels")
+	float(&p.MoveEnergyCostPer2px, positive, "move.energy_cost_per_2px", "move_energy_cost_per_2px")
+	float(&p.FallDamageThreshold, nonNegative, "fall.damage_threshold", "fall_damage_threshold")
+	float(&p.FallDamagePerPixel, nonNegative, "fall.damage_per_pixel", "fall_damage_per_pixel")
+	float(&p.DefenseK, positive, SettingDefenseK)
 	return p
 }
 

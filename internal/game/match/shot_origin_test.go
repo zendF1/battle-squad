@@ -71,8 +71,8 @@ func TestShotStartsAtBodyCentre(t *testing.T) {
 
 func TestSkillShotsStartAtBodyCentre(t *testing.T) {
 	m, clients := newFlowMatch(t)
-	gamedata.Data.Characters["c1"] = gamedata.CharacterConfig{CharacterID: "c1", WeaponID: "w1", SkillID: "chain"}
-	gamedata.Data.Skills["chain"] = gamedata.SkillConfig{SkillID: "chain", EffectType: effectBombChain, DamageMultiplier: 1}
+	gamedata.Current().Data.Characters["c1"] = gamedata.CharacterConfig{CharacterID: "c1", WeaponID: "w1", SkillID: "chain"}
+	gamedata.Current().Data.Skills["chain"] = gamedata.SkillConfig{SkillID: "chain", EffectType: effectBombChain, DamageMultiplier: 1}
 	cur := m.State.CurrentPlayerID
 	shooter := m.State.Players[cur]
 	shooter.SkillEnergy = 100

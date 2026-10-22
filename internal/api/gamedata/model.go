@@ -2,12 +2,6 @@
 // client needs, so it hardcodes none of them (docs/gamedata-contract.md is the contract).
 package gamedata
 
-import (
-	"battle-squad/internal/game/battlestats"
-	"battle-squad/internal/game/matchmaker"
-	"battle-squad/internal/shared/ranked"
-)
-
 // GameData is GET /gamedata. Version is a hash of everything else (also the ETag): a client
 // with it cached sends If-None-Match and gets 304 while nothing changed.
 // Units: px, seconds (…Sec), percent (…Percent / …Pct, 0..100), ratios (0..1) as noted.
@@ -36,6 +30,14 @@ type GameData struct {
 	Matchmaking        Matchmaking    `json:"matchmaking"`
 	Modes              Modes          `json:"modes"`
 	MapThemes          MapThemes      `json:"mapThemes"`
+	// GunKinds (added in S2): the Vietnamese name of each gun kind (characters[].gunKind).
+	GunKinds []GunKind `json:"gunKinds"`
+}
+
+// GunKind is a config_gun_kinds row: a gun art kind and its Vietnamese name ("Đại pháo").
+type GunKind struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // Physics is the shell flight (SimulateProjectile): launch speed power × SpeedPerPower px/s,
@@ -90,11 +92,13 @@ type HitTolerance struct {
 }
 
 // Combat: damage taken = raw × DefenseK / (DefenseK + defense); power_shot multiplies a shot's
-// (or skill's) damage by PowerShotFactor; a player starting its turn on lava loses LavaDamage HP.
+// (or skill's) damage by PowerShotFactor; a player starting its turn on lava loses LavaDamage HP;
+// a critical hit deals CritMultiplier × the damage (added in S2).
 type Combat struct {
 	DefenseK        float64 `json:"defenseK"`
 	PowerShotFactor float64 `json:"powerShotFactor"`
 	LavaDamage      int     `json:"lavaDamage"`
+	CritMultiplier  float64 `json:"critMultiplier"`
 }
 
 // Terrain: craters, walking and falls (match/terrain.go, damage.go).
@@ -293,6 +297,25 @@ type Equipment struct {
 	SellRate                    float64         `json:"sellRate"`
 	WeaponUpgradeCostMultiplier float64         `json:"weaponUpgradeCostMultiplier"`
 	Tiers                       []EquipmentTier `json:"tiers"`
+	// Slots and TypeWords (added in S2): the slot names in display order, and the Vietnamese
+	// words of the type part of "<Tier> <Type>" equipment item names.
+	Slots     []EquipmentSlot `json:"slots"`
+	TypeWords []TypeWord      `json:"typeWords"`
+}
+
+// EquipmentSlot is a config_equipment_slots row: a slot id and its Vietnamese name ("Găng tay").
+type EquipmentSlot struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// TypeWord is a config_item_type_words row: the lower-case type part of a "<Tier> <Type>"
+// catalog name ("shock rifle"), its Vietnamese word ("Súng điện") and, for a gun, its gun kind
+// ("shock_rifle"; "" for armour).
+type TypeWord struct {
+	Word    string `json:"word"`
+	Name    string `json:"name"`
+	GunKind string `json:"gunKind"`
 }
 
 type Milestone struct {
@@ -347,29 +370,4 @@ type MatchMode struct {
 type MapThemes struct {
 	Default string   `json:"default"`
 	Themes  []string `json:"themes"`
-}
-
-// source is what the repository reads from the DB for one response.
-type source struct {
-	Settings      map[string]string // every game_settings row
-	Milestones    battlestats.Milestones
-	Elo           ranked.EloConfig
-	Matchmaking   matchmaker.MatchmakingConfig
-	Characters    []Character
-	Weapons       []Weapon
-	Skills        []Skill
-	Items         []Item
-	StatusEffects []statusText
-	RankTiers     map[string]string // tier → name
-	EquipTiers    []EquipmentTier
-	Modes         []modeRow
-	Tips          []string
-}
-
-type statusText struct {
-	EffectID, Name, Marker, Banner string
-}
-
-type modeRow struct {
-	ModeID, Kind, Name, Description, Queue, Bot string
 }

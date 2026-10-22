@@ -125,9 +125,7 @@ func TestMapThemeAndDisplay(t *testing.T) {
 		(MapConfig{Theme: "city_night"}).ThemeOrDefault() != "city_night" {
 		t.Fatal("ThemeOrDefault")
 	}
-	prev := Data
-	t.Cleanup(func() { Data = prev })
-	Data = &GameData{Maps: map[string]MapConfig{"ice_bridge": {MapID: "ice_bridge", Name: "Cầu băng", Theme: "ice"}, "x": {MapID: "x"}}}
+	UseForTest(t, NewSnapshot(&GameData{Maps: map[string]MapConfig{"ice_bridge": {MapID: "ice_bridge", Name: "Cầu băng", Theme: "ice"}, "x": {MapID: "x"}}}))
 	if n, th := MapDisplay("ice_bridge"); n != "Cầu băng" || th != "ice" {
 		t.Fatalf("ice_bridge: %q %q", n, th)
 	}
@@ -142,11 +140,11 @@ func TestMapThemeAndDisplay(t *testing.T) {
 // configs/bricks.yaml loads as the brick types (the YAML mirror of config_brick_types), and
 // the maps keep their theme.
 func TestLoadGameDataReadsBricksAndThemes(t *testing.T) {
-	prevData, prevBricks := Data, BrickTypes
-	t.Cleanup(func() { Data, BrickTypes = prevData, prevBricks })
-	if err := LoadGameData("../../../configs"); err != nil {
+	snap, err := LoadYAML("../../../configs")
+	if err != nil {
 		t.Fatal(err)
 	}
+	Data, BrickTypes := snap.Data, snap.Bricks
 	if b, ok := BrickTypes[2]; !ok || b.Destructible || len(BrickTypes) < 19 {
 		t.Fatalf("brick types %v", BrickTypes)
 	}

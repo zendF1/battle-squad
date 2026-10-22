@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -48,10 +49,11 @@ type Band struct {
 	DivisionSize int // 0 for a tier with a single division
 }
 
-// Bands are the tiers' rating ranges, lowest first (one per Tiers entry): bronze < 1000 in
-// divisions of 333, silver < 1200 / 66, gold < 1500 / 100, platinum < 1800 / 100, diamond <
-// 2200 / 133, then master (a single division). GET /gamedata sends them to the client.
-var Bands = []Band{
+// DefaultBands are the tiers' rating ranges before config_rank_tiers held them (and what
+// migration 041 seeds there), lowest first (one per Tiers entry): bronze < 1000 in divisions
+// of 333, silver < 1200 / 66, gold < 1500 / 100, platinum < 1800 / 100, diamond < 2200 / 133,
+// then master (a single division).
+var DefaultBands = []Band{
 	{Tier: "bronze", MinRating: 0, Divisions: 3, DivisionSize: 333},
 	{Tier: "silver", MinRating: 1000, Divisions: 3, DivisionSize: 66},
 	{Tier: "gold", MinRating: 1200, Divisions: 3, DivisionSize: 100},
@@ -60,20 +62,73 @@ var Bands = []Band{
 	{Tier: "master", MinRating: 2200, Divisions: 1},
 }
 
+// bands are the bands in force: the config_rank_tiers numbers of the game data snapshot last
+// published (SetBands), DefaultBands before. A player's rank is global (not per match), so the
+// bands are swapped atomically as a whole.
+var bands atomic.Pointer[[]Band]
+
+// Bands are the bands in force, lowest first (GET /gamedata sends them to the client). Do not
+// modify the result.
+func Bands() []Band {
+	if b := bands.Load(); b != nil {
+		return *b
+	}
+	return DefaultBands
+}
+
+// SetBands puts b in force (ValidateBands must accept it).
+func SetBands(b []Band) error {
+	if err := ValidateBands(b); err != nil {
+		return err
+	}
+	c := append([]Band(nil), b...)
+	bands.Store(&c)
+	return nil
+}
+
+// ValidateBands checks bands: one per Tiers entry in that order, the first from rating 0, each
+// starting above the previous one, at least one division, a positive division size for a
+// tier with more than one.
+func ValidateBands(b []Band) error {
+	if len(b) != len(Tiers) {
+		return fmt.Errorf("rank bands: %d tiers, want %d", len(b), len(Tiers))
+	}
+	for i, band := range b {
+		switch {
+		case band.Tier != Tiers[i]:
+			return fmt.Errorf("rank bands: tier %d is %q, want %q", i, band.Tier, Tiers[i])
+		case i == 0 && band.MinRating != 0:
+			return fmt.Errorf("rank bands: %s must start at rating 0", band.Tier)
+		case i > 0 && band.MinRating <= b[i-1].MinRating:
+			return fmt.Errorf("rank bands: %s must start above %s (%d)", band.Tier, b[i-1].Tier, b[i-1].MinRating)
+		case band.Divisions < 1:
+			return fmt.Errorf("rank bands: %s needs at least one division", band.Tier)
+		case band.Divisions > 1 && band.DivisionSize <= 0:
+			return fmt.Errorf("rank bands: %s has %d divisions and needs a division size", band.Tier, band.Divisions)
+		}
+	}
+	return nil
+}
+
 // Tier maps a rating to its tier: bronze < 1000, silver < 1200, gold < 1500,
-// platinum < 1800, diamond < 2200, master.
+// platinum < 1800, diamond < 2200, master (with the default bands).
 func Tier(rating int) string {
 	t, _ := TierAndDivision(rating)
 	return t
 }
 
 // TierAndDivision maps a rating to its tier and division (3 lowest .. 1 highest;
-// master is always 1): the last band whose MinRating the rating reaches (bronze below 0 too),
-// division Divisions − (rating − MinRating) / DivisionSize (integer division) clamped to
-// 1..Divisions.
+// master is always 1) with the bands in force: the last band whose MinRating the rating
+// reaches (bronze below 0 too), division Divisions − (rating − MinRating) / DivisionSize
+// (integer division) clamped to 1..Divisions.
 func TierAndDivision(rating int) (string, int) {
-	b := Bands[0]
-	for _, band := range Bands[1:] {
+	return TierAndDivisionIn(Bands(), rating)
+}
+
+// TierAndDivisionIn is TierAndDivision with the given bands.
+func TierAndDivisionIn(bands []Band, rating int) (string, int) {
+	b := bands[0]
+	for _, band := range bands[1:] {
 		if rating >= band.MinRating {
 			b = band
 		}
@@ -100,11 +155,17 @@ func DefaultEloConfig() EloConfig {
 // LoadEloConfig reads the "elo" row; a missing or broken row gives the defaults
 // (with the error, for logging). Missing fields keep their defaults.
 func LoadEloConfig(ctx context.Context, q Querier) (EloConfig, error) {
-	cfg := DefaultEloConfig()
 	var raw string
 	if err := q.QueryRow(ctx, `SELECT value FROM game_settings WHERE key = 'elo'`).Scan(&raw); err != nil {
-		return cfg, fmt.Errorf("game_settings elo: %w", err)
+		return DefaultEloConfig(), fmt.Errorf("game_settings elo: %w", err)
 	}
+	return ParseEloConfig(raw)
+}
+
+// ParseEloConfig reads an "elo" row value: missing fields keep their defaults, a broken value
+// gives the defaults (with the error).
+func ParseEloConfig(raw string) (EloConfig, error) {
+	cfg := DefaultEloConfig()
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
 		return DefaultEloConfig(), fmt.Errorf("game_settings elo: %w", err)
 	}

@@ -87,11 +87,9 @@ func TestGetActualStatsAppliesAllStatPoints(t *testing.T) {
 	db := dbtest.NewSchema(t, 0,
 		"001_init_schema.up.sql", "004_admin_config_tables.up.sql", "006_character_progression.up.sql",
 		"010_equipment_system.up.sql", "011_equipment_slot_unique.up.sql", "027_titles.up.sql")
-	prev := gamedata.Data
-	gamedata.Data = &gamedata.GameData{Characters: map[string]gamedata.CharacterConfig{
+	gamedata.UseData(t, &gamedata.GameData{Characters: map[string]gamedata.CharacterConfig{
 		"tanko": {CharacterID: "tanko", HP: 1950, Defense: 80},
-	}}
-	t.Cleanup(func() { gamedata.Data = prev })
+	}})
 
 	ctx := context.Background()
 	dbtest.CreatePlayer(t, db, "p1", 0, 0)

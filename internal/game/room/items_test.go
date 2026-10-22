@@ -7,10 +7,10 @@ import (
 )
 
 func TestItemCountsEnforcesPerMatchLimit(t *testing.T) {
-	gamedata.Data = &gamedata.GameData{Items: map[string]gamedata.ItemConfig{
+	gamedata.UseData(t, &gamedata.GameData{Items: map[string]gamedata.ItemConfig{
 		"medkit":     {ItemID: "medkit", MaxUsePerMatch: 1},
 		"power_shot": {ItemID: "power_shot", MaxUsePerMatch: 2},
-	}}
+	}})
 
 	if _, err := itemCounts([]string{"medkit", "medkit"}); err == nil {
 		t.Error("duplicate medkit accepted")

@@ -33,8 +33,7 @@ const (
 
 	botAllyBlastPenalty = 25.0 // explosion next to an ally digs out the ground under it
 
-	botMaxSteps      = 3                       // medkit, move, shoot
-	botFollowUpDelay = 1500 * time.Millisecond // let clients animate a heal or move before the next action
+	botMaxSteps = 3 // medkit, move, shoot
 
 	// Idle time from TurnStarted to the bot's first action
 	botTurnStartMinDelay = 1000 * time.Millisecond
@@ -89,7 +88,9 @@ func (m *Match) botStep(ctx context.Context, turn botTurnState, step int) {
 		return
 	}
 
-	m.runOnTurnAfter(ctx, botFollowUpDelay, func(ctx context.Context) {
+	// let clients animate a heal or move before the next action (rules.timings botFollowUpDelaySec)
+	followUp := time.Duration(m.gd.Rules.Timings.BotFollowUpDelaySec * float64(time.Second))
+	m.runOnTurnAfter(ctx, followUp, func(ctx context.Context) {
 		m.botStep(ctx, turn, step+1)
 	})
 }
@@ -198,12 +199,12 @@ func (b *BotBrain) DecideAction(m *Match, bot *BattlePlayerState, turn botTurnSt
 		return UseItemAction{ItemID: "medkit", ClientTimestamp: now}
 	}
 
-	weapon, ok := botWeapon(bot)
+	weapon, ok := botWeapon(m.gd, bot)
 	if !ok {
 		return nil
 	}
 
-	if bot.SkillEnergy >= skillEnergyMax {
+	if bot.SkillEnergy >= m.gd.Rules.SkillEnergy.Max {
 		if act, ok := b.skillAction(m, bot, weapon, now); ok {
 			return act
 		}
@@ -258,7 +259,7 @@ func (b *BotBrain) nearMiss(m *Match, bot *BattlePlayerState, best shotPlan, wea
 	closest := shotPlan{}
 	for _, off := range botMissOffsets {
 		angle := math.Max(botMinAngle, math.Min(botMaxAngle, best.angle+off[0]))
-		power := math.Max(botMinPower, math.Min(maxShotPower, best.power+off[1]))
+		power := math.Max(botMinPower, math.Min(m.gd.Rules.Aim.PowerMax, best.power+off[1]))
 		s := b.evalShot(m, bot, bot.Position, angle, power, weapon)
 		if !s.found || s.damage > 0 || s.allyRisk > 0 {
 			continue
@@ -290,15 +291,12 @@ func (b *BotBrain) wantsMedkit(bot *BattlePlayerState) bool {
 	return b.rng.Float64() < b.tier.UseItemChance
 }
 
-func botWeapon(bot *BattlePlayerState) (gamedata.WeaponConfig, bool) {
-	if gamedata.Data == nil {
-		return gamedata.WeaponConfig{}, false
-	}
-	char, ok := gamedata.Data.Characters[bot.CharacterID]
+func botWeapon(gd *gamedata.Snapshot, bot *BattlePlayerState) (gamedata.WeaponConfig, bool) {
+	char, ok := gd.Data.Characters[bot.CharacterID]
 	if !ok {
 		return gamedata.WeaponConfig{}, false
 	}
-	weapon, ok := gamedata.Data.Weapons[char.WeaponID]
+	weapon, ok := gd.Data.Weapons[char.WeaponID]
 	return weapon, ok
 }
 
@@ -306,6 +304,7 @@ func botWeapon(bot *BattlePlayerState) (gamedata.WeaponConfig, bool) {
 // candidates at 1° / 1 power resolution, for the bot standing at feet.
 func (b *BotBrain) bestShot(m *Match, bot *BattlePlayerState, feet Vector2, weapon gamedata.WeaponConfig) shotPlan {
 	var top []shotPlan // best first, at most botRefineTop
+	maxShotPower := m.gd.Rules.Aim.PowerMax
 	for angle := botMinAngle; angle <= botMaxAngle; angle += botCoarseAngleStep {
 		for power := botMinPower; power <= maxShotPower; power += botCoarsePowerStep {
 			top = insertTop(top, b.evalShot(m, bot, feet, angle, power, weapon))
@@ -356,7 +355,7 @@ func insertTop(top []shotPlan, s shotPlan) []shotPlan {
 // (the shot starts at the body centre) and scores where it explodes.
 func (b *BotBrain) evalShot(m *Match, bot *BattlePlayerState, feet Vector2, angle, power float64, weapon gamedata.WeaponConfig) shotPlan {
 	r := SimulateProjectile(bot.PlayerID, bot.TeamID, shotOriginAt(m.Terrain, feet), angle, power, weapon,
-		m.State.Wind, m.Terrain, m.State.Players, drillPierce(bot))
+		m.State.Wind, m.Terrain, m.State.Players, m.drillPierce(bot))
 	if r.ExplosionPoint == nil {
 		return shotPlan{}
 	}

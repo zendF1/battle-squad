@@ -47,15 +47,22 @@ func encodeMaskRLE(mask []uint64, n int) string {
 	return base64.StdEncoding.EncodeToString(buf)
 }
 
-// matchSnapshot is the MatchStarted / MatchStateSync payload: match state plus terrain.
+// matchSnapshot is the MatchStarted / MatchStateSync payload: match state plus terrain and
+// the version of the game data the match plays with (the GET /gamedata version of that same
+// snapshot; a client with another cached version refetches it before it lets the player act).
 type matchSnapshot struct {
 	MatchState
-	Terrain TerrainSnapshot `json:"terrain"`
+	Terrain         TerrainSnapshot `json:"terrain"`
+	GamedataVersion string          `json:"gamedataVersion"`
 }
 
 func (m *Match) snapshotPayload() []byte {
-	payload, _ := json.Marshal(matchSnapshot{MatchState: m.State, Terrain: m.Terrain.Snapshot()})
+	payload, _ := json.Marshal(m.snapshot())
 	return payload
+}
+
+func (m *Match) snapshot() matchSnapshot {
+	return matchSnapshot{MatchState: m.State, Terrain: m.Terrain.Snapshot(), GamedataVersion: m.gd.Version}
 }
 
 // matchStateSync is the MatchStateSync payload: the snapshot plus, for the requesting player,
@@ -70,7 +77,7 @@ type matchStateSync struct {
 
 func (m *Match) syncPayload(playerID string) []byte {
 	payload, _ := json.Marshal(matchStateSync{
-		matchSnapshot:  matchSnapshot{MatchState: m.State, Terrain: m.Terrain.Snapshot()},
+		matchSnapshot:  m.snapshot(),
 		LastMoveSeq:    m.lastMoveSeq[playerID],
 		SelectedAction: m.syncSelection(),
 	})

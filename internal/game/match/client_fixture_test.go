@@ -161,10 +161,8 @@ func TestExportClientFixture(t *testing.T) {
 	}
 
 	// Shots use the gamedata.DefaultPhysics() the client preview assumes.
-	savedPhysics := gamedata.Physics
-	gamedata.Physics = nil
-	defer func() { gamedata.Physics = savedPhysics }()
-	windScale, speed := physics().WindScale, physics().ProjectileSpeedMultiplier
+	usePhysics(t, nil)
+	windScale, speed := gamedata.Current().Physics.WindScale, gamedata.Current().Physics.ProjectileSpeedMultiplier
 	weapon := gamedata.WeaponConfig{ExplosionRadius: 20, ProjectileWeight: 1, WindInfluence: 1}
 	var shots []fixtureShot
 	loweredOrigins := 0 // shots whose origin sits below the body centre (low ceiling or embedded feet)

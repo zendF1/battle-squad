@@ -20,7 +20,7 @@ func TestBombChain(t *testing.T) {
 	if len(s.Projectiles) != 4 {
 		t.Fatalf("%d bombs, want 4", len(s.Projectiles))
 	}
-	w := gamedata.Data.Weapons["cannon_ball"]
+	w := gamedata.Current().Data.Weapons["cannon_ball"]
 	start := s.Projectiles[0].Path[0].Position
 	lastY := -1.0
 	for i, r := range s.Projectiles {
@@ -28,7 +28,7 @@ func TestBombChain(t *testing.T) {
 			(i == 0 && r.LaunchDelay != 0) || (i > 0 && r.LaunchDelay < s.Projectiles[i-1].LaunchDelay+chainLaunchGap-1e-9) {
 			t.Fatalf("bomb %d: kind %q start %v launch %v", i, r.Kind, r.Path[0].Position, r.LaunchDelay)
 		}
-		if r.ExplosionRadius != float64(w.ExplosionRadius)*chainBlast || r.CraterRadius != weaponCraterRadius(w) {
+		if r.ExplosionRadius != float64(w.ExplosionRadius)*chainBlast || r.CraterRadius != weaponCraterRadius(gamedata.Current(), w) {
 			t.Fatalf("bomb %d blast %v crater %v", i, r.ExplosionRadius, r.CraterRadius)
 		}
 		if r.ExplosionPoint == nil || r.ExplosionPoint.Y < lastY {
@@ -37,11 +37,11 @@ func TestBombChain(t *testing.T) {
 		lastY = r.ExplosionPoint.Y
 	}
 	for _, e := range eventsOf(s, "explode", "") {
-		if e.Crater != CraterBowl || e.Radius != craterRadius(m.State.Players["p1"], weaponCraterRadius(w)) {
+		if e.Crater != CraterBowl || e.Radius != craterRadius(m.State.Players["p1"], weaponCraterRadius(gamedata.Current(), w), MaxTerrainDamageBonus) {
 			t.Fatalf("explode %+v: want the weapon's bowl", e)
 		}
 	}
-	limit := chainCap(2) * float64(w.Damage)
+	limit := chainCap(defChain, 2) * float64(w.Damage)
 	got := totalDamage(s, "p2")
 	var blast int
 	for _, e := range eventsOf(s, "damage", "p2") {
@@ -51,10 +51,10 @@ func TestBombChain(t *testing.T) {
 	}
 	t.Logf("rank 2 chain: %d explosion damage (cap %.0f before defense), %d in all, enemy hp %d, at y %v",
 		blast, limit, got, enemy.HP, enemy.Position.Y)
-	if blast <= 0 || blast > capOfBase(limit)(enemy) {
-		t.Fatalf("chain explosion damage %d, cap %d", blast, capOfBase(limit)(enemy))
+	if blast <= 0 || blast > testCapOfBase(limit)(enemy) {
+		t.Fatalf("chain explosion damage %d, cap %d", blast, testCapOfBase(limit)(enemy))
 	}
-	if first := eventsOf(s, "damage", "p2")[0]; first.Amount > int(math.Round(ReduceByDefense(chainEach(2)*float64(w.Damage), enemy.Defense)))+1 {
+	if first := eventsOf(s, "damage", "p2")[0]; first.Amount > int(math.Round(ReduceByDefense(chainEach(defChain, 2)*float64(w.Damage), enemy.Defense)))+1 {
 		t.Fatalf("one bomb dealt %d, more than its share", first.Amount)
 	}
 	if enemy.IsAlive && (!hasStatus(s, "p2", "root") || !HasEffect(enemy, "root")) {
@@ -88,7 +88,7 @@ func assertChainCoherent(t *testing.T, s ShotResolved) {
 		}
 	}
 	for _, f := range eventsOf(s, "fall", "") {
-		if want := fallDuration(f.To.Y-f.From.Y) / chainFallSpeed; math.Abs(f.Duration-want) > 1e-9 {
+		if want := fallDuration(f.To.Y-f.From.Y, testGravity()) / chainFallSpeed; math.Abs(f.Duration-want) > 1e-9 {
 			t.Fatalf("fall of %v px takes %v, want %v", f.To.Y-f.From.Y, f.Duration, want)
 		}
 	}
@@ -97,10 +97,10 @@ func assertChainCoherent(t *testing.T, s ShotResolved) {
 // TestPacedLaunch: a chain bomb leaves chainLaunchGap after the previous one, or later so that
 // it explodes chainHitGap after the last landing.
 func TestPacedLaunch(t *testing.T) {
-	if got := pacedLaunch(0.3, 1.5, 1.0); math.Abs(got-0.4) > 1e-9 {
+	if got := pacedLaunch(defChain, 0.3, 1.5, 1.0); math.Abs(got-0.4) > 1e-9 {
 		t.Fatalf("no fall in the way: %v, want 0.4", got)
 	}
-	if got := pacedLaunch(0.3, 1.5, 2.4); math.Abs(got-(2.4+chainHitGap-1.5)) > 1e-9 {
+	if got := pacedLaunch(defChain, 0.3, 1.5, 2.4); math.Abs(got-(2.4+chainHitGap-1.5)) > 1e-9 {
 		t.Fatalf("waiting for a landing at 2.4: %v", got)
 	}
 }
@@ -157,13 +157,13 @@ func TestBombChainDigsToTheBottom(t *testing.T) {
 
 func TestChainCountsPerRank(t *testing.T) {
 	for rank := 0; rank <= 4; rank++ {
-		if got, want := chainCount(rank), 2+rank; got != want {
+		if got, want := chainCount(defChain, rank), 2+rank; got != want {
 			t.Errorf("chain count rank %d = %d, want %d", rank, got, want)
 		}
-		if got, want := chainTotal(rank), 1.8+0.15*float64(rank); math.Abs(got-want) > 1e-9 {
+		if got, want := chainTotal(defChain, rank), 1.8+0.15*float64(rank); math.Abs(got-want) > 1e-9 {
 			t.Errorf("chain total rank %d = %v, want %v", rank, got, want)
 		}
-		if got, want := chainCap(rank), 1.2+0.15*float64(rank); math.Abs(got-want) > 1e-9 {
+		if got, want := chainCap(defChain, rank), 1.2+0.15*float64(rank); math.Abs(got-want) > 1e-9 {
 			t.Errorf("chain cap rank %d = %v, want %v", rank, got, want)
 		}
 	}

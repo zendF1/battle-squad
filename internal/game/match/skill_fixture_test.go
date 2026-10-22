@@ -1,6 +1,7 @@
 package match
 
 import (
+	"battle-squad/internal/game/gamedata"
 	"context"
 	"encoding/json"
 	"os"
@@ -85,7 +86,7 @@ func TestExportSkillFixture(t *testing.T) {
 	}
 	aim := func(m *Match, shooter string) (float64, float64) {
 		p := m.State.Players[shooter]
-		w, _ := botWeapon(p)
+		w, _ := botWeapon(gamedata.Current(), p)
 		best := NewBotBrain(perfectAim).bestShot(m, p, p.Position, w)
 		return best.angle, best.power
 	}

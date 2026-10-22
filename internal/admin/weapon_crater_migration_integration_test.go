@@ -55,11 +55,7 @@ func TestWeaponCraterMigrationMatchesSeed(t *testing.T) {
 	}
 
 	_, self, _, _ := runtime.Caller(0)
-	prev := gamedata.Data
-	t.Cleanup(func() { gamedata.Data = prev })
-	if err := gamedata.LoadGameData(filepath.Join(filepath.Dir(self), "..", "..", "configs")); err != nil {
-		t.Fatal(err)
-	}
+	gamedata.UseYAML(t, filepath.Join(filepath.Dir(self), "..", "..", "configs"))
 	terrain := func(table, key, id string) int {
 		var v int
 		if err := db.Pool.QueryRow(ctx, `SELECT terrain_damage FROM `+table+` WHERE `+key+` = $1`, id).Scan(&v); err != nil {
@@ -67,12 +63,12 @@ func TestWeaponCraterMigrationMatchesSeed(t *testing.T) {
 		}
 		return v
 	}
-	for id, w := range gamedata.Data.Weapons {
+	for id, w := range gamedata.Current().Data.Weapons {
 		if got := terrain("config_weapons", "weapon_id", id); got != w.TerrainDamage {
 			t.Errorf("weapon %s: migrated terrain damage %d, yaml %d", id, got, w.TerrainDamage)
 		}
 	}
-	for id, c := range gamedata.Data.Characters {
+	for id, c := range gamedata.Current().Data.Characters {
 		if got := terrain("config_characters", "character_id", id); got != c.TerrainDamage {
 			t.Errorf("character %s: migrated terrain damage %d, yaml %d", id, got, c.TerrainDamage)
 		}

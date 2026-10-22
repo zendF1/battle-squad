@@ -50,7 +50,7 @@ func equipCatalogItem(t *testing.T, db *database.PostgresDB, playerID, character
 // directHit is the damage a direct hit (no wind, no crit) from attacker
 // stats deals to a target with defense, as the match computes it.
 func directHit(characterID string, attacker battlestats.Stats, defense int) int {
-	w := gamedata.Data.Weapons[gamedata.Data.Characters[characterID].WeaponID]
+	w := gamedata.Current().Data.Weapons[gamedata.Current().Data.Characters[characterID].WeaponID]
 	return match.CalculateExplosionDamage(match.Vector2{}, match.Vector2{},
 		float64(w.Damage+attacker.DamageBonus), float64(w.ExplosionRadius), defense)
 }
@@ -61,12 +61,8 @@ func directHit(characterID string, attacker battlestats.Stats, defense int) int 
 // configs/*.yaml base stats and the battle stats the room builds.
 func TestBalanceHitsToKill(t *testing.T) {
 	db := dbtest.NewSchema(t, 0, allMigrations(t)...)
-	prev := gamedata.Data
 	_, self, _, _ := runtime.Caller(0)
-	if err := gamedata.LoadGameData(filepath.Join(filepath.Dir(self), "..", "..", "..", "configs")); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { gamedata.Data = prev })
+	gamedata.UseYAML(t, filepath.Join(filepath.Dir(self), "..", "..", "..", "configs"))
 
 	slots := []string{"armor", "helmet", "pants", "boots", "gloves"}
 	normal := func(lv int) []string {
@@ -149,12 +145,8 @@ var identityCharacters = []string{"rookie", "tanko", "spark", "flora"}
 // Rookie in between; with no gear every matchup takes 3..8 hits.
 func TestCharacterHitsToKillMatrix(t *testing.T) {
 	db := dbtest.NewSchema(t, 0, allMigrations(t)...)
-	prev := gamedata.Data
 	_, self, _, _ := runtime.Caller(0)
-	if err := gamedata.LoadGameData(filepath.Join(filepath.Dir(self), "..", "..", "..", "configs")); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { gamedata.Data = prev })
+	gamedata.UseYAML(t, filepath.Join(filepath.Dir(self), "..", "..", "..", "configs"))
 
 	r := &Room{db: db}
 	for gi, gear := range []struct {
