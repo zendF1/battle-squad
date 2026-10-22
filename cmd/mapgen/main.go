@@ -1,5 +1,6 @@
-// Command mapgen writes the generated battle maps (internal/game/mapgen) as migrations 036 / 037
-// and configs/maps.yaml + configs/bricks.yaml. Run it from the repo root:
+// Command mapgen writes the generated battle maps (internal/game/mapgen) as migrations 036 / 038
+// and configs/maps.yaml + configs/bricks.yaml (037_battle_maps, the maps at 100 x 56, is frozen
+// as applied and no longer written). Run it from the repo root:
 //
 //	go run ./cmd/mapgen                    # rewrite the generated files
 //	go run ./cmd/mapgen -preview DIR       # also render DIR/<mapId>.png (solid mask, spawns)

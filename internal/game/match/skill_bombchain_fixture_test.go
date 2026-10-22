@@ -95,7 +95,8 @@ func chainHits(s ShotResolved) (hits, damage map[string]int) {
 // craters of 1.4 × the weapon's only the lob did: the flat shot's later bombs flew on through
 // the deeper crater). A body hit explodes at the body's centre, so its bowl (~37 px deep)
 // does not reach the feet: the lob leaves the ground as it was. Fired straight up with nobody
-// below ("vertical") the bombs dig one shaft under Tanko, ~40 px a bomb. Every bomb explodes
+// below ("vertical") the bombs dig one shaft under Tanko, ~14 px a bomb (the 18 px bowl of
+// migration 039; ~40 px with the 52 px one before). Every bomb explodes
 // (none flies past MaxFlightSeconds), every replay is coherent (assertChainCoherent) and nobody
 // leaves the map. With BOMBCHAIN_FIXTURE_OUT set it writes the Godot client's fixture
 // (tests/fixtures/skill_bombchain.json: "flat", "lob" one target, "pair" two enemies side by
@@ -149,8 +150,8 @@ func TestBombChainOnRealMap(t *testing.T) {
 			t.Fatalf("%s chain hits %d times for %d, want the cap %d", k, hits[k]["e1"], d, limit)
 		}
 	}
-	if dig := deepestDig(t, cases["vertical"]); dig < 210 {
-		t.Fatalf("the vertical chain digs %v px, want a shaft of ~6 × 40", dig)
+	if dig := deepestDig(t, cases["vertical"]); dig < 72 {
+		t.Fatalf("the vertical chain digs %v px, want a shaft of ~6 × 14", dig)
 	}
 	if out := os.Getenv("BOMBCHAIN_FIXTURE_OUT"); out != "" {
 		data, err := json.MarshalIndent(cases, "", " ")

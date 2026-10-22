@@ -1,10 +1,12 @@
 package mapgen
 
-// Map grid: every new map is GridW × GridH cells of CellSize px (1600 × 896, the client's
-// 1600 × 900 view: the match screen has no camera, so a map wider than the view would be cut).
+// Map grid: every generated map is GridW × GridH cells of CellSize px (2400 × 1120, about the
+// references' 2.1:1). It is wider and taller than the client's ~1600-2000 × 900 view: the match
+// camera pans over it (follows the aim and the shells). 2400 px is about the widest map where
+// the sides still reach each other: a full-power 45° shot carries ~2070 px on flat ground.
 const (
-	GridW    = 100
-	GridH    = 56
+	GridW    = 150
+	GridH    = 70
 	CellSize = 16
 )
 

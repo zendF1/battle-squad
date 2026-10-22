@@ -129,8 +129,9 @@ func TestGeneratedMapsAreSound(t *testing.T) {
 			if !gamedata.KnownMapTheme(cfg.Theme) || cfg.Theme != d.Theme || cfg.Name != d.Name {
 				t.Fatalf("theme %q name %q", cfg.Theme, cfg.Name)
 			}
-			if w, h := cfg.PixelSize(); w != 1600 || h != 896 {
-				t.Fatalf("size %dx%d", w, h)
+			mapW, mapH := cfg.PixelSize()
+			if mapW != 2400 || mapH != 1120 || cfg.Width != mapW || cfg.Height != mapH {
+				t.Fatalf("size %dx%d (width %d height %d)", mapW, mapH, cfg.Width, cfg.Height)
 			}
 			if r := cfg.DefaultWindPowerRange; len(r) != 2 || r[1] > 4 {
 				t.Fatalf("wind %v", r)
@@ -141,7 +142,7 @@ func TestGeneratedMapsAreSound(t *testing.T) {
 			team1, team2 := cfg.TeamSpawns()
 			tr := NewTerrain(cfg)
 			for i, sp := range append(append([]gamedata.SpawnPoint{}, team1...), team2...) {
-				if left := sp.X < 800; left != (i < 2) {
+				if left := sp.X < float64(mapW)/2; left != (i < 2) {
 					t.Errorf("spawn %d (%v,%v) on the wrong half", i, sp.X, sp.Y)
 				}
 				if !tr.CanStandAt(sp.X, sp.Y) {
@@ -159,7 +160,7 @@ func TestGeneratedMapsAreSound(t *testing.T) {
 			}
 			for i := 0; i < 2; i++ {
 				a, b := cfg.SpawnPoints[i], cfg.SpawnPoints[i+2]
-				if a.X != 1600-b.X || a.Y != b.Y {
+				if a.X != float64(mapW)-b.X || a.Y != b.Y {
 					t.Errorf("spawns %d and %d are not mirrored: %v %v", i, i+2, a, b)
 				}
 			}
@@ -268,6 +269,212 @@ func TestGeneratedMapsHaveShotsBetweenSides(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// reachShot looks for an angle / power in the bot's ranges whose shell (no wind, on the map's
+// fresh terrain) from a player standing at from hits a player standing at to: it meets the
+// body (PlayerHitRadius round the body centre) or explodes that close to it.
+func reachShot(tr *Terrain, from, to Vector2) (angle, power float64, ok bool) {
+	target := &BattlePlayerState{PlayerID: "target", TeamID: 2, IsAlive: true, Position: to}
+	players := map[string]*BattlePlayerState{"target": target}
+	body := Vector2{X: to.X, Y: to.Y - ShotOriginLift}
+	weapon := gamedata.WeaponConfig{ProjectileWeight: 1, WindInfluence: 1}
+	lo, hi := botMinAngle, 90.0
+	if to.X < from.X {
+		lo, hi = 90, botMaxAngle
+	}
+	origin := shotOriginAt(tr, from)
+	for a := lo; a <= hi; a++ {
+		for p := botMinPower; p <= maxShotPower; p++ {
+			r := SimulateProjectile("shooter", 1, origin, a, p, weapon, WindState{}, tr, players, 0)
+			if r.HitPlayerID == "target" {
+				return a, p, true
+			}
+			if e := r.ExplosionPoint; e != nil && math.Hypot(e.X-body.X, e.Y-body.Y) <= physics().PlayerHitRadius {
+				return a, p, true
+			}
+		}
+	}
+	return 0, 0, false
+}
+
+// Every spawn reaches every enemy spawn: with no wind some angle / power hits a player standing
+// there, on the real terrain (a 2400 px map is about as wide as a full-power shot carries).
+func TestGeneratedMapsEveryEnemyReachable(t *testing.T) {
+	loadConfigs(t)
+	for _, d := range mapgen.Defs {
+		t.Run(d.ID, func(t *testing.T) {
+			t.Parallel()
+			cfg := gamedata.Data.Maps[d.ID]
+			tr := NewTerrain(cfg)
+			team1, team2 := cfg.TeamSpawns()
+			feet := func(sp gamedata.SpawnPoint) Vector2 { return Vector2{X: sp.X, Y: tr.SpawnY(sp.X, sp.Y)} }
+			for _, pair := range [][2][]gamedata.SpawnPoint{{team1, team2}, {team2, team1}} {
+				for i, a := range pair[0] {
+					for j, b := range pair[1] {
+						from, to := feet(a), feet(b)
+						angle, power, ok := reachShot(tr, from, to)
+						if !ok {
+							t.Errorf("(%v,%v) cannot hit the enemy at (%v,%v), %.0f px away", from.X, from.Y, to.X, to.Y, math.Abs(to.X-from.X))
+							continue
+						}
+						t.Logf("spawn %d -> enemy %d: %.0f px, angle %.0f power %.0f", i, j, math.Abs(to.X-from.X), angle, power)
+					}
+				}
+			}
+		})
+	}
+}
+
+// minSpawnFloor is the walkable ground every spawn needs round it (12 cells).
+const minSpawnFloor = 192
+
+// walkSpan is how far a player standing at feet can walk each way with the move rules (WalkTo,
+// one pixel at a time) before a wall stops it or the ground ends (a drop of more than 4 px in
+// one pixel: off the edge).
+func walkSpan(tr *Terrain, feet Vector2) (left, right float64) {
+	walk := func(dir float64) float64 {
+		x, y := feet.X, feet.Y
+		for {
+			nx, ny := tr.WalkTo(x, y, x+dir)
+			if nx == x || ny-y > 4 || ny >= float64(tr.Height) {
+				return math.Abs(x - feet.X)
+			}
+			x, y = nx, ny
+		}
+	}
+	return walk(-1), walk(1)
+}
+
+// Every spawn stands on wide ground: at least minSpawnFloor px of continuous walkable surface
+// round it.
+func TestGeneratedMapsSpawnsHaveWideFloor(t *testing.T) {
+	loadConfigs(t)
+	for _, d := range mapgen.Defs {
+		t.Run(d.ID, func(t *testing.T) {
+			cfg := gamedata.Data.Maps[d.ID]
+			tr := NewTerrain(cfg)
+			for i, sp := range cfg.SpawnPoints {
+				feet := Vector2{X: sp.X, Y: tr.SpawnY(sp.X, sp.Y)}
+				l, r := walkSpan(tr, feet)
+				if l+r < minSpawnFloor {
+					t.Errorf("spawn %d (%v,%v): %.0f px of floor (%.0f left, %.0f right), want %d", i, sp.X, sp.Y, l+r, l, r, minSpawnFloor)
+				}
+				if i < 2 {
+					t.Logf("spawn %d: %.0f px of floor (%.0f left, %.0f right)", i, l+r, l, r)
+				}
+			}
+		})
+	}
+}
+
+// tankoMaxCrater is the biggest crater on the battle maps (no fragile bricks there): Tanko's
+// cannon ball with the terrain damage bonus at its cap. Skill shells carve no more: the bomb
+// chain's bombs carve the weapon's bowl, the missile rain's missiles rainCrater × Rookie's.
+func tankoMaxCrater(t *testing.T) float64 {
+	t.Helper()
+	w, ok := gamedata.Data.Weapons["cannon_ball"]
+	if !ok {
+		t.Fatal("no cannon_ball")
+	}
+	return craterRadius(&BattlePlayerState{TerrainDamageBonus: 1000}, weaponCraterRadius(w))
+}
+
+// shotsToFallOut digs at a player standing at feet: each shot explodes 3 px into the ground
+// under its feet (where a shell landing at the feet explodes) with the given crater, and the
+// player drops onto what is left. It returns how many shots it takes until the player falls
+// out of the map (limit + 1 when it is still standing after limit shots).
+func shotsToFallOut(tr *Terrain, feet Vector2, crater float64, limit int) int {
+	tr = cloneTerrain(tr)
+	y := feet.Y
+	for n := 1; n <= limit; n++ {
+		tr.CarveBowl(feet.X, y+3, crater)
+		y = tr.GetLandingY(feet.X, y)
+		if y >= float64(tr.Height) {
+			return n
+		}
+	}
+	return limit + 1
+}
+
+// minShotsToFallOut is how many of the biggest craters at the same spot it takes, at least,
+// before a player standing on a spawn can fall out of the map.
+const minShotsToFallOut = 3
+
+// The ground holds against Tanko: a player on a spawn falls out of the map no sooner than the
+// minShotsToFallOut-th max-bonus cannon ball at its feet, and one such crater anywhere on a
+// spawn's floor does not cut the platform through (it still has ground under the crater).
+func TestGeneratedMapsGroundHoldsTankoCraters(t *testing.T) {
+	loadConfigs(t)
+	crater := tankoMaxCrater(t)
+	for _, d := range mapgen.Defs {
+		t.Run(d.ID, func(t *testing.T) {
+			cfg := gamedata.Data.Maps[d.ID]
+			tr := NewTerrain(cfg)
+			for i, sp := range cfg.SpawnPoints {
+				feet := Vector2{X: sp.X, Y: tr.SpawnY(sp.X, sp.Y)}
+				n := shotsToFallOut(tr, feet, crater, 60)
+				if n < minShotsToFallOut {
+					t.Errorf("spawn %d (%v,%v): out of the map after %d craters of %.0f px", i, sp.X, sp.Y, n, crater)
+				}
+				if i < 2 {
+					shots := fmt.Sprint(n)
+					if n > 60 {
+						shots = "never (hard ground under it)"
+					}
+					t.Logf("spawn %d: out after %s", i, shots)
+				}
+				// one crater anywhere on the floor (but its last 32 px) leaves ground under it
+				l, r := walkSpan(tr, feet)
+				for x := feet.X - l + 32; x <= feet.X+r-32; x += 8 {
+					fy := tr.SpawnY(x, feet.Y-48)
+					c := cloneTerrain(tr)
+					c.CarveBowl(x, fy+3, crater)
+					if c.GetLandingY(x, fy) >= float64(c.Height) || !c.IsSolid(x, c.GetLandingY(x, fy)) {
+						t.Errorf("spawn %d: one crater at x=%v cuts its floor through", i, x)
+						break
+					}
+					if land := c.GetLandingY(x, fy); land-fy > 2*crater {
+						t.Errorf("spawn %d: one crater at x=%v drops a player %.0f px (through the platform)", i, x, land-fy)
+						break
+					}
+				}
+			}
+		})
+	}
+}
+
+// A shell that bursts on hard (indestructible) ground carves nothing there, and players near it
+// still take the full splash damage.
+func TestExplosionOnHardGroundStillSplashes(t *testing.T) {
+	loadConfigs(t)
+	m := mapMatch(t, "escape", 2, perfectAim) // every brick of escape is hard
+	var shooter, target *BattlePlayerState
+	for _, p := range m.State.Players {
+		if p.TeamID == 1 {
+			shooter = p
+		} else {
+			target = p
+		}
+	}
+	shooter.TerrainDamageBonus = 1000
+	feet := target.Position
+	feet.Y = m.Terrain.SpawnY(feet.X, feet.Y)
+	target.Position = feet
+	before := cloneTerrain(m.Terrain)
+	at := Vector2{X: feet.X + 20, Y: feet.Y + 3} // in the crate, 20 px from the target
+	r := &ProjectileResult{ProjectileID: "p", ExplosionPoint: &at, ExplosionRadius: 60, CraterRadius: 52}
+	hp := target.HP
+	hit := m.explodeProjectile(shooter, r, 420, &shotTimeline{})
+	for i := range before.Mask {
+		if before.Mask[i] != m.Terrain.Mask[i] {
+			t.Fatal("hard ground carved")
+		}
+	}
+	want := CalculateExplosionDamage(feet, at, 420, 60, target.Defense)
+	if len(hit) != 1 || want <= 0 || hp-target.HP != want {
+		t.Fatalf("splash on hard ground: %d hit, hp %d -> %d, want -%d", len(hit), hp, target.HP, want)
 	}
 }
 

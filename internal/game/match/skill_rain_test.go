@@ -63,7 +63,7 @@ func TestMissileRain(t *testing.T) {
 		if math.Abs(end.X-r.Path[0].Position.X) > 0.5 {
 			t.Fatalf("missile drifted from %v to %v: not straight down", r.Path[0].Position.X, end.X)
 		}
-		if r.ExplosionRadius != float64(w.ExplosionRadius)*rainBlast || r.CraterRadius != weaponCraterRadius(w)*rainCrater {
+		if r.ExplosionRadius != float64(w.ExplosionRadius)*rainBlast || r.CraterRadius != weaponCraterRadius(w)*rainCrater || r.CraterRadius != 12 { // 12 px since before 039
 			t.Fatalf("missile blast %v crater %v", r.ExplosionRadius, r.CraterRadius)
 		}
 		if flightEnd(r) < lastEnd {

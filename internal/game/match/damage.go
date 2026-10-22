@@ -20,8 +20,9 @@ func ReduceByDefense(raw float64, defense int) float64 {
 }
 
 // craterPxPerTerrainDamage converts a weapon's terrain damage to the radius (px) of the
-// crater its explosion carves: Rookie's 25 carves 20 px, Tanko's 65 52 px.
-const craterPxPerTerrainDamage = 0.8
+// crater its explosion carves: Rookie's and Spark's 20 carve 12 px, Flora's 24 14.4 px, Tanko's
+// 30 18 px (migration 039; before: 0.8 px, Rookie's 25 carved 20 px, Tanko's 65 52 px).
+const craterPxPerTerrainDamage = 0.6
 
 // weaponCraterRadius is the crater a weapon's explosion carves, before skills, fragile
 // terrain and the shooter's terrain damage bonus: terrainDamage × craterPxPerTerrainDamage,
@@ -33,10 +34,18 @@ func weaponCraterRadius(w gamedata.WeaponConfig) float64 {
 	return float64(w.TerrainDamage) * craterPxPerTerrainDamage
 }
 
+// MaxTerrainDamageBonus caps the percent the shooter's terrain damage bonus grows its craters
+// by. The bonus comes from stat points (1 % each, up to ~790 points at level 80); uncapped,
+// Tanko's 18 px crater would reach ~160 px. At the cap Tanko carves 27 px (19 px deep): the
+// battle maps keep at least 3 such craters of ground under every spawn.
+const MaxTerrainDamageBonus = 50
+
 // craterRadius is the terrain an explosion carves: the projectile's crater grown by the
-// shooter's terrain damage bonus. Damage falloff keeps the blast radius.
+// shooter's terrain damage bonus (at most MaxTerrainDamageBonus %). Damage falloff keeps the
+// blast radius.
 func craterRadius(shooter *BattlePlayerState, crater float64) float64 {
-	return crater * (1 + float64(shooter.TerrainDamageBonus)/100)
+	bonus := min(max(shooter.TerrainDamageBonus, 0), MaxTerrainDamageBonus)
+	return crater * (1 + float64(bonus)/100)
 }
 
 // skillPowerFactor scales the shooter's skill damage and healing.

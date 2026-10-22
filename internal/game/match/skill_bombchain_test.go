@@ -12,8 +12,9 @@ import (
 // column, the later ones exploding deeper; the total split evenly, one target capped at
 // chainCap × base; the enemy rooted; its falls play one after another.
 func TestBombChain(t *testing.T) {
-	m, clients := flatSkillMatch(t, skillPlayer{"p1", 1, "tanko", 400}, skillPlayer{"p2", 2, "rookie", 415})
+	m, clients := flatSkillMatch(t, skillPlayer{"p1", 1, "tanko", 400}, skillPlayer{"p2", 2, "rookie", 426})
 	m.State.Players["p1"].SkillRank = 2
+	m.State.Players["p1"].TerrainDamageBonus = MaxTerrainDamageBonus // a bowl wide enough to reach under the target
 	enemy := m.State.Players["p2"]
 	s := fireSkill(t, m, clients, "p1", 90, 10)
 	if len(s.Projectiles) != 4 {
@@ -36,7 +37,7 @@ func TestBombChain(t *testing.T) {
 		lastY = r.ExplosionPoint.Y
 	}
 	for _, e := range eventsOf(s, "explode", "") {
-		if e.Crater != CraterBowl || e.Radius != weaponCraterRadius(w) {
+		if e.Crater != CraterBowl || e.Radius != craterRadius(m.State.Players["p1"], weaponCraterRadius(w)) {
 			t.Fatalf("explode %+v: want the weapon's bowl", e)
 		}
 	}
@@ -66,8 +67,8 @@ func TestBombChain(t *testing.T) {
 		}
 		end = f.T + f.Duration
 	}
-	// The first bomb lands beside the target and drops it into its bowl; the later ones hit
-	// its body (the bowl under the body's centre does not reach its feet)
+	// The bombs land beside the target (26 px: its body is missed) and drop it into their bowls,
+	// one after another as the shaft deepens
 	if len(eventsOf(s, "fall", "p2")) < 1 {
 		t.Fatal("the enemy never fell into the hole")
 	}
@@ -104,15 +105,23 @@ func TestPacedLaunch(t *testing.T) {
 	}
 }
 
-// TestBombChainDigsToTheBottom: nothing caps how deep the chain digs. Seven bombs (a 220%
-// terrain bonus on cannon_ball's 52 px crater: 166 px bowls) fired straight up dig through all
-// 400 px of ground, the bottom row of the map included; the shell then explodes on the floor
-// under the map (IsSolid) and the players standing over the open column fall out of the map
-// (out_of_map), today's rule for a column with no ground left.
+// TestBombChainDigsToTheBottom: nothing caps how deep the chain digs. Six bombs (rank 4, the
+// terrain bonus at its cap: cannon_ball's 18 px crater grown to 27 px bowls, ~20 px deep each)
+// fired straight up dig through 96 px of ground, the bottom row of the map included; the shell
+// then explodes on the floor under the map (IsSolid) and the players standing over the open
+// column fall out of the map (out_of_map), today's rule for a column with no ground left.
 func TestBombChainDigsToTheBottom(t *testing.T) {
-	m, clients := flatSkillMatch(t, skillPlayer{"p1", 1, "tanko", 400}, skillPlayer{"p2", 2, "rookie", 415})
+	m, clients := flatSkillMatch(t, skillPlayer{"p1", 1, "tanko", 400}, skillPlayer{"p2", 2, "rookie", 426})
+	for y := 0; y < m.Terrain.Height-96; y++ {
+		for x := 0; x < m.Terrain.Width; x++ {
+			clearBit(m.Terrain.Mask, x, y, m.Terrain.Width)
+		}
+	}
+	for _, p := range m.State.Players {
+		p.Position.Y = m.Terrain.SpawnY(p.Position.X, 0)
+	}
 	m.State.Players["p1"].SkillRank = 4
-	m.State.Players["p1"].TerrainDamageBonus = 220
+	m.State.Players["p1"].TerrainDamageBonus = 220 // capped at MaxTerrainDamageBonus
 	s := fireSkill(t, m, clients, "p1", 90, 10)
 	deepest := 0.0
 	for _, e := range eventsOf(s, "explode", "") {

@@ -35,7 +35,7 @@ const (
 	rainDropSpeed = 1500.0
 	rainDamage    = 0.25
 	rainBlast     = 0.7
-	rainCrater    = 0.6
+	rainCrater    = 1.0 // migration 039: was 0.6 of the old 20 px crater; the missiles keep their 12 px
 	rainCap       = 2.0
 	burnTurns     = 1
 )

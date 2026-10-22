@@ -6,7 +6,10 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 
 	"battle-squad/internal/game/mapgen"
@@ -24,7 +27,7 @@ func mapsDB(t *testing.T) *Handler {
 		VALUES ('grassland_valley', 'Grassland Valley', 1600, 900, '[0, 4]', '[]', '[{"X": 200, "Y": 400}, {"X": 1400, "Y": 400}]')`); err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range []string{"036_map_themes.up.sql", "037_battle_maps.up.sql"} {
+	for _, f := range []string{"036_map_themes.up.sql", "037_battle_maps.up.sql", "038_wide_maps.up.sql"} {
 		if _, err := db.Pool.Exec(context.Background(), readFile(t, f)); err != nil {
 			t.Fatal(err)
 		}
@@ -34,13 +37,12 @@ func mapsDB(t *testing.T) *Handler {
 
 func readFile(t *testing.T, name string) string {
 	t.Helper()
-	for path, content := range mapgen.Files() {
-		if path == "migrations/"+name {
-			return content
-		}
+	_, self, _, _ := runtime.Caller(0)
+	b, err := os.ReadFile(filepath.Join(filepath.Dir(self), "..", "..", "..", "migrations", name))
+	if err != nil {
+		t.Fatal(err)
 	}
-	t.Fatalf("no generated %s", name)
-	return ""
+	return string(b)
 }
 
 func serve(h *Handler, req *http.Request) *httptest.ResponseRecorder {
@@ -75,8 +77,8 @@ func TestMapsEndpoints(t *testing.T) {
 		byID[m.MapID] = m
 	}
 	ice := byID["ice_bridge"]
-	if ice.Name != "Cầu băng" || ice.Theme != "ice" || ice.Width != 1600 || ice.Height != 896 || ice.CellSize != 16 ||
-		ice.GridWidth != 100 || ice.GridHeight != 56 || ice.MinRankTier != "bronze" || ice.WindRange != [2]float64{1.5, 4} ||
+	if ice.Name != "Cầu băng" || ice.Theme != "ice" || ice.Width != 2400 || ice.Height != 1120 || ice.CellSize != 16 ||
+		ice.GridWidth != 150 || ice.GridHeight != 70 || ice.MinRankTier != "bronze" || ice.WindRange != [2]float64{1.5, 4} ||
 		!ice.HasTiles || ice.Version <= 0 {
 		t.Fatalf("ice_bridge %+v", ice)
 	}
@@ -91,6 +93,13 @@ func TestMapsEndpoints(t *testing.T) {
 	req.Header.Set("If-None-Match", `"`+list.Version+`"`)
 	if rec := serve(h, req); rec.Code != http.StatusNotModified || rec.Body.Len() != 0 {
 		t.Fatalf("If-None-Match: %d", rec.Code)
+	}
+	// rerunning 038 (cmd/migrate reruns every file) leaves the maps and their version alone
+	if _, err := h.service.repo.db.Pool.Exec(context.Background(), readFile(t, "038_wide_maps.up.sql")); err != nil {
+		t.Fatal(err)
+	}
+	if again, err := h.service.List(context.Background()); err != nil || again.Version != list.Version {
+		t.Fatalf("038 rerun changed the version: %v", err)
 	}
 
 	rec = serve(h, httptest.NewRequest("GET", "/maps/pyramid", nil))

@@ -6,7 +6,7 @@
   mobility: 100
   defense: 50
   skillPower: 50
-  terrainDamage: 25
+  terrainDamage: 20
   difficulty: 1
   weaponId: basic_rocket
   skillId: triple_shot
@@ -19,7 +19,7 @@
   mobility: 80
   defense: 60
   skillPower: 65
-  terrainDamage: 65
+  terrainDamage: 30
   difficulty: 2
   weaponId: cannon_ball
   skillId: heavy_bomb
@@ -32,7 +32,7 @@
   mobility: 120
   defense: 30
   skillPower: 80
-  terrainDamage: 25
+  terrainDamage: 20
   difficulty: 2
   weaponId: electric_orb
   skillId: shock_field
@@ -45,7 +45,7 @@
   mobility: 100
   defense: 90
   skillPower: 85
-  terrainDamage: 30
+  terrainDamage: 24
   difficulty: 1
   weaponId: seed_bomb
   skillId: healing_bloom

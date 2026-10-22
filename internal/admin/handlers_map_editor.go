@@ -229,11 +229,11 @@ func (s *Server) handleMapSave(w http.ResponseWriter, r *http.Request) {
 
 	gridWidth := body.GridWidth
 	if gridWidth == 0 {
-		gridWidth = 100
+		gridWidth = 150
 	}
 	gridHeight := body.GridHeight
 	if gridHeight == 0 {
-		gridHeight = 56
+		gridHeight = 70
 	}
 	cellSize := body.CellSize
 	if cellSize == 0 {

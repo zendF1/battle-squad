@@ -84,7 +84,7 @@ cmd/
 ├── admin/main.go         Admin dashboard
 ├── worker/main.go        Background jobs
 ├── migrate/main.go       Database migration tool
-└── mapgen/main.go        Ghi migration 036 / 037 + configs/maps.yaml, bricks.yaml từ internal/game/mapgen (-preview: PNG)
+└── mapgen/main.go        Ghi migration 036 / 038 + configs/maps.yaml, bricks.yaml từ internal/game/mapgen (-preview: PNG)
 
 internal/
 ├── api/                  API server modules (handler → service → repository)
@@ -139,7 +139,7 @@ internal/
     └── jobs/             ban_expire, daily_reset, account_deletion
 
 configs/                  YAML game data (characters, weapons, skills, items, maps, bricks); mirror của DB cho test / fallback
-migrations/               SQL migration files (001-037)
+migrations/               SQL migration files (001-039)
 ```
 
 ---
@@ -648,8 +648,11 @@ Explosion damage:
   crit: ×1.5 với xác suất critChance%
 
 Crater (khoét terrain, không ảnh hưởng damage):
-  craterRadius = weapon.terrainDamage × 0.8 px      // terrainDamage ≤ 0 → explosionRadius
-               × skill (xem Kỹ năng) × fragile ×2 (đạn thường) × (1 + terrainDamageBonus/100)
+  craterRadius = weapon.terrainDamage × 0.6 px      // terrainDamage ≤ 0 → explosionRadius (039; 0.8 trước đó)
+               × skill (xem Kỹ năng) × fragile ×2 (đạn thường) × (1 + min(terrainDamageBonus, 50)/100)
+  // MaxTerrainDamageBonus = 50: điểm terrain_damage không giới hạn (tới ~790 ở level 80), không cap thì hố Tanko
+  // 18 px thành ~160 px; ở cap Tanko khoét 27 px (sâu ~19 px). Sát thương nổ không phụ thuộc hố:
+  // đạn nổ trên đất cứng không khoét gì nhưng người đứng gần vẫn chịu đủ sát thương (TestExplosionOnHardGroundStillSplashes)
   ProjectileResult.craterRadius = trước terrainDamageBonus; explode.radius = cuối cùng
   Hình hố (Terrain.CarveBowl, client TerrainMask.carve_bowl khớp từng bit), r = explode.radius,
   (dx, dy) = pixel − tâm đã làm tròn, y hướng xuống; khoét pixel destructible khi:
@@ -717,8 +720,8 @@ Mỗi nhân vật có một thế mạnh riêng. `migrations/023_character_ident
 | Damage vũ khí (cũng là `config_characters.damage`) | 480 | 600 → **420** | 440 → **620** | 360 → **380** |
 | Defense | 50 | 80 → **60** | 40 → **30** | 50 → **90** |
 | Bán kính nổ (damage) | 40 | 50 → **60** | 35 → **30** | 40 |
-| Terrain damage vũ khí (cũng là `config_characters.terrain_damage`) | 50 → **25** (029) | 85 → 130 → **65** (029) | 30 → **25** | 30 |
-| Bán kính hố (= terrain damage × 0,8) | 40 → **20** (029) | 40 → 104 → **52** (029) | 35 → **20** | 40 → **24** |
+| Terrain damage vũ khí (cũng là `config_characters.terrain_damage`) | 50 → 25 (029) → **20** (039) | 85 → 130 → 65 (029) → **30** (039) | 30 → 25 → **20** (039) | 30 → **24** (039) |
+| Bán kính hố (= terrain damage × 0,8; 039: × 0,6) | 40 → 20 (029) → **12** (039) | 40 → 104 → 52 (029) → **18** (039) | 35 → 20 → **12** | 40 → 24 → **14,4** |
 | Gió / nặng | 1,0 / 1,0 | 0,5 / 1,5 | 1,2 → **1,3** / 0,8 | 1,0 / 0,9 |
 | Năng lượng di chuyển gốc (`config_characters.mobility`) | 100 | **80** | **120** | 100 |
 | Skill (028 thay cả bốn, xem Kỹ năng) | Triple Shot ×1,25 ×3 | Heavy Bomb (bom đào): ×1,3 → **×1,1**, nổ ×1,5 → **×2**, hố **×1,8** | Shock Field ×0,9 → **×1,3** + lưới | Healing Bloom 450 → **650** HP |
@@ -728,6 +731,7 @@ Mỗi nhân vật có một thế mạnh riêng. `migrations/023_character_ident
 - **Hố lòng chảo** (playtest 4: hố tròn có vách gần thẳng đứng ở mép, ai rơi vào không đi ra được): mọi vụ nổ trừ bom liên hoàn khoét `Terrain.CarveBowl` (công thức ở Damage Calculation) thay cho hình tròn. Cùng bán kính r: rộng 2r như cũ, sâu r/2 dưới điểm nổ (tròn: r). Vách dốc nhất trên đất bằng 45° (1:1) ở mép; trên sườn 30° phía dốc lên 60° (1,73:1), gặp mặt đất cách điểm nổ ~1,73r; mọi bậc pixel ≤ 2 px, dưới 3 px người chơi leo được mỗi cột (`TestBowlWallsClimbable`: hố 12 / 20 / 24 / 40 / 52 / 104 px trên đất bằng và sườn ±30°; hố tròn cũ có bậc 8..18 px ở mép trên đất bằng, 17..110 px phía dốc lên). Rookie và Tanko tự bắn xuống chân trên đất bằng và sườn ±30°: rơi 13 / 29 px (tròn: 23 / 55; không mất máu rơi, ngưỡng 150 px), rồi đi ra hai phía bằng năng lượng một lượt (`TestWalkOutOfCrater`; hố tròn: kẹt). Nắp phẳng 1,5r đủ cao để trên sườn tới ~35° mép phía dốc lên không để lại mái nhô; sườn dốc hơn có thể còn bậc hoặc mái ở phía dốc lên, phía dốc xuống vẫn ra được. Nổ trong khối đất (vách, trần) khoét rộng hơn hình tròn: tới 4r ngang, 2r đứng, diện tích ~5,3r² (tròn 3,1r²). Trúng thẳng người (điểm nổ trên thân, ~20..40 px trên mặt đất) khoét ít hơn hẳn: Rookie gần như không chạm đất, Tanko ~5 px (tròn ~30; playtest 5 với k 0,72: ~15 px khi nổ 22 px trên đất). Mảnh đất fragile (×2) giữ ×2 trên hình mới. Bom liên hoàn giữ hình tròn (`crater: circle`): giếng/rãnh của nó vẫn có vách đứng, người rơi xuống giếng không tự đi ra được (playtest 5: bỏ, xem dưới).
 - **Hố sâu hơn, bom liên hoàn cùng hố** (playtest 5: hố lòng chảo quá nông; giếng của bom liên hoàn quá to): đáy lòng chảo sâu `bowlDepth` 0,72 × r dưới điểm nổ (0,5 trước đó), vẫn rộng 2r ở độ cao điểm nổ. Một k không cho đúng cả Rookie 18 và Tanko 40 (độ sâu đo = ⌊k·r⌋ + 3: Rookie 18 cần k ≥ 0,75, Tanko 40 cần k < 0,731); 0,72 cho Rookie 17, Tanko 40 (0,75: 18 / 42). Vách: trên đất bằng dốc nhất atan(2k) = 55° ở mép, bậc ≤ 2 px; trên sườn 30° phía dốc lên ~65° (2,1:1), gặp mặt đất cách điểm nổ ~1,48r, có bậc 3 px (vách 2,1:1 không giữ được ≤ 2 px mỗi cột), vừa bằng 3 px người chơi leo được. Rookie / Tanko tự bắn xuống chân rơi 17 / 40 px và đi ra hai phía bằng năng lượng một lượt trên đất bằng, sườn ±30° và ±35° (`TestWalkOutOfCrater`); quét sườn: ra được hai phía tới 38° (Rookie) / 39° (Tanko), với 0,5 chỉ tới 34° / 35° (nắp chạm mặt đất sớm hơn, để lại mái). Bom liên hoàn: mỗi quả khoét đúng lòng chảo của vũ khí (bán kính 52 px với `cannon_ball`, `crater: bowl`; trước: tròn 1,4 × = 73 px) và không còn giữ đáy map (`chainFloorMargin` 48 px, `floorY`, `DestroyCircleAbove` bỏ): chuỗi đào bao sâu cũng được. Đào thủng hàng cuối của map thì cột đó không còn đất: đạn sau nổ ở sàn dưới map (`IsSolid` y ≥ Height), người đứng trên cột rơi khỏi map và chết (`out_of_map`, luật hiện tại; `TestBombChainDigsToTheBottom`). Trên grassland_valley (đất legacy, toàn bộ phá được) cấp 4 không bonus: bắn thẳng đứng xuống chân Tanko ở x 450 đào giếng 282 px (~40 px mỗi quả), còn 9 px đất dưới đáy; ở x 200 (điểm spawn) và x 800 thì thủng và Tanko tự rơi khỏi map; ở x 450 từ +10% terrain damage là thủng. Phát cầu vồng 600 px trúng thân địch mọi quả (6 quả có damage là chạm trần 698, quả 7 hết trần): nổ ở tâm thân (~40 px trên chân), lòng chảo 37 px không chạm tới đất nên không đào gì; phát thẳng: quả đầu nổ cạnh chân, mục tiêu rơi 40 px, 5 quả sau trúng thân: cũng chạm trần (698 damage; trước với hố tròn chỉ quả đầu trúng, 133).
 - **Bom đào của Tanko** (thiết kế cũ, 028 thay bằng Bom liên hoàn; `single_large_bomb`, hằng số `match.heavyBombBlastScale` 2 và `heavyBombCraterScale` 1,8): nổ 120 px, hố 187 px (rộng ~374 px). Trúng thẳng một Rookie trên đất bằng (`TestDiggingBombDropsTargetIntoFallDamage`): 426 damage nổ, mục tiêu rơi 166 px (vừa quá ngưỡng 150 px) → 60 damage rơi. Phát thường của Tanko (hố 104 px) chỉ làm mục tiêu tụt 82 px, không mất máu rơi. Người bắn / đồng đội đứng trong hố cũng rơi theo. Trên frozen_peak (đất mỏng nhất ~233 px ở đáy thung lũng) một quả nổ ngay mặt đất ở bất kỳ đâu vẫn chừa ≥ 46 px đất dưới mọi cột của hố (`TestDiggingBombKeepsGroundOnThinMaps`; grassland_valley ~234 px → ≥ 47 px, steel_base 300 px → ≥ 113 px), nên một phát không thủng xuống đáy map; nhiều phát chồng lên cùng chỗ thì vẫn có thể.
+- **Hố nhỏ theo nhân vật** (`migrations/039_small_craters`, playtest: phát thường khoét hố ~200 px cạnh nhân vật cao 60 px): `match.craterPxPerTerrainDamage` 0,8 → 0,6 và terrain damage `basic_rocket` 25 → 20, `electric_orb` 25 → 20, `seed_bomb` 30 → 24, `cannon_ball` 65 → 30 (cả `config_characters.terrain_damage`; chỉ row còn giá trị cũ). Hố: Rookie = Spark 12 px (bằng hố một quả của Mưa tên lửa trước đó), Flora 14,4 px (1,2 ×), Tanko 18 px (1,5 ×); sâu trên đất bằng 11 / 15 / 11 / 13 px (`TestCraterDepthByCharacter`). Bán kính nổ (damage) không đổi. Mưa tên lửa giữ 12 px mỗi quả (`rainCrater` 0,6 → 1,0); mỗi quả bom liên hoàn khoét hố như phát thường (52 → 18 px, giếng ~14 px mỗi quả); air strike, đất fragile ×2 theo vũ khí; khoan (`drill_bomb`) vẫn xuyên 50 px. `terrainDamageBonus` trong trận cap +50 % (`MaxTerrainDamageBonus`): hố lớn nhất của phát thường / skill là Tanko 27 px.
 - **Spark** `shock_field` `damageMultiplier` 0,9 → 1,3 (config); lưới giữ nguyên. **Flora** `match.skillHealAmount` 450 → 650.
 
 Số phát hạ (trúng thẳng, không gió, không crit; `TestIdentityHitsToKillNoGear` trong `match`, `TestCharacterHitsToKillMatrix` trong `room` với DB): hàng = người bắn, cột = người chịu.
@@ -759,7 +763,7 @@ Khi trận bắt đầu, room đọc `bonus_*` của `player_characters` (nhân 
 | `bonus_damage` | `damage` | 5 | `damageBonus += điểm × 5`, cộng phẳng vào damage vũ khí (cả weapon lẫn skill) |
 | `bonus_mobility` | `mobility` | 1 | `moveEnergyBonus += điểm × 1`; đầu mỗi lượt `moveEnergy = maxMoveEnergy = gốc nhân vật + moveEnergyBonus` (1 năng lượng / 2px) |
 | `bonus_skill_power` | `skill_power` | 1 | `skillPowerBonus = điểm × 1` (%): damage skill × `(1 + skillPowerBonus/100)` (Mưa tên lửa, Bom liên hoàn, Tia laze); Hoa hồi xuân hồi theo % máu tối đa, không nhân |
-| `bonus_terrain_damage` | `terrain_damage` | 1 | `terrainDamageBonus = điểm × 1` (%): bán kính khoét terrain = `craterRadius × (1 + terrainDamageBonus/100)` (`craterRadius` = terrain damage vũ khí × 0,8 px, xem Nhân vật); vùng sát thương vẫn dùng `explosionRadius`. `radius` của event `explode` là bán kính khoét |
+| `bonus_terrain_damage` | `terrain_damage` | 1 | `terrainDamageBonus = điểm × 1` (%): bán kính khoét terrain = `craterRadius × (1 + min(terrainDamageBonus, 50)/100)` (trong trận cap +50 %; profile vẫn hiện tổng điểm) (`craterRadius` = terrain damage vũ khí × 0,6 px, xem Nhân vật); vùng sát thương vẫn dùng `explosionRadius`. `radius` của event `explode` là bán kính khoét |
 
 #### Chỉ số hiển thị (`GET /player/characters`)
 
@@ -804,13 +808,13 @@ Terrain zones đặc biệt (chỉ map legacy):
 
 Methods: `IsSolid(x,y)`, `IsDestructible(x,y)`, `CarveBowl(cx,cy,radius)` (mọi vụ nổ), `Carve(shape,cx,cy,radius)` (`bowl` / `circle` = `DestroyCircle`, chỉ test và fixture client), `GetLandingY(x,maxY)`, `SpawnY(x,y)`, `CanStandAt(x,y)`, `GetTerrainTypeAt(x,y)`
 
-### Maps (migration 036 / 037)
+### Maps (migration 036 / 037 / 038)
 
 **Nguồn**: DB (`config_maps`, `config_brick_types`) là nguồn chính; sửa được trong admin map editor (`/maps/edit`, có ô Theme). Client sync qua `GET /maps` (và `GET /maps/{id}` cho preview), terrain của trận vẫn đến trong `MatchStarted`. `configs/maps.yaml` + `configs/bricks.yaml` là bản mirror cho test và YAML fallback (`LoadGameData` đọc cả `bricks.yaml` vào `gamedata.BrickTypes`).
 
-**Generator**: 16 map được vẽ tay bằng primitive trong `internal/game/mapgen` (`Rect`, `Chamfer` = khối bo góc 45°, `Island`, `Band` = dầm 45° dày 1 ô, `Hill` / `Peak`, `Icicle`, `Paint` đổi vật liệu, `Mirror` lật nửa trái sang phải để hai đội cùng địa hình) theo vị trí bục / cầu / đảo / khe của bản đồ tham khảo (chỉ layout, không dùng ảnh của họ). `go run ./cmd/mapgen` ghi `migrations/036_*`, `037_*`, `configs/maps.yaml`, `configs/bricks.yaml` (`-preview DIR`: PNG mask cứng / mềm + spawn; `-check`: báo file lỗi thời; test `TestGeneratedFilesUpToDate` cũng kiểm tra). Sửa layout → sửa `mapgen`, chạy lại generator, rồi viết migration mới cập nhật map (chỉ khi row còn đúng bản generator cũ) vì 037 không ghi đè row đã có.
+**Generator**: 16 map được vẽ tay bằng primitive trong `internal/game/mapgen` (`Rect`, `Chamfer` = khối bo góc 45°, `Island`, `Band` = dầm 45° dày 1 ô, `Hill` / `Peak`, `Icicle`, `Paint` đổi vật liệu, `Mirror` lật nửa trái sang phải để hai đội cùng địa hình) theo vị trí bục / cầu / đảo / khe của bản đồ tham khảo (chỉ layout, không dùng ảnh của họ). `go run ./cmd/mapgen` ghi `migrations/036_*`, `038_*`, `configs/maps.yaml`, `configs/bricks.yaml` (`-preview DIR`: PNG mask cứng / mềm + spawn; `-check`: báo file lỗi thời; test `TestGeneratedFilesUpToDate` cũng kiểm tra). `037_battle_maps` (INSERT 16 map ở 100 × 56, `ON CONFLICT DO NOTHING`) được đóng băng đúng như đã chạy, generator không ghi nó nữa; `038_wide_maps` UPDATE từng map sang layout hiện tại (width / height / grid / tiles / spawn / description, `updated_at` mới nên `GET /maps` trả ETag mới) chỉ `WHERE map_id = … AND grid_width = 100 AND theme = <theme của generator>`: chạy lại không ghi đè, map admin đã sửa (đổi kích thước / theme) được giữ. Down của 038 không khôi phục gì (layout 100 × 56 chỉ còn trong 037). Sửa layout lần sau → sửa `mapgen`, đóng băng 038 tương tự và cho generator ghi migration mới (chỉ cập nhật row còn đúng bản trước).
 
-**Kích thước**: mọi map mới 100 × 56 ô × 16 px = 1600 × 896 (màn trận của client không có camera pan/zoom: viewport cố định 1600 × 900, map rộng hơn sẽ bị cắt). Map tham khảo ~2,1:1 được ép về 1,78:1.
+**Kích thước**: 16 map mới 150 × 70 ô × 16 px = 2400 × 1120 (~2,14:1, gần map tham khảo ~2,1:1); `grassland_valley` / `frozen_peak` giữ 1600 × 900. Map rộng hơn màn hình: client có camera pan theo đường đạn / người chơi, đọc kích thước từ `terrain.width` / `terrain.height` của `MatchStarted` / `MatchStateSync` (hoặc `width` / `height` của `GET /maps`), không giả định 1600 × 900. Vật lý không đổi (speed power × 9,6, gravity 445, bay tối đa 4,5 s): phát 45° full lực bay ~2070 px trên mặt phẳng, nên 2400 là gần mức rộng nhất hai bên còn bắn tới nhau. Spawn hai đội cách nhau ~1300–1900 px; spawn thấp hơn đồng đội đứng gần giữa hơn để bục phía trên không che đường bắn; mọi spawn đứng trên ≥ 12 ô (192 px) mặt đi được (thực tế 14–35 ô), bục / đảo chính rộng hơn bản 1600. Bot (`bestMove`) không tìm được chỗ nào trong tầm đi có phát gây damage thì đi về phía địch gần nhất (trên map 2400 px địch có thể ngoài tầm bắn). Độ dày đất tính theo hố lớn nhất (Tanko cannon_ball với bonus ở cap +50 %: r 27 px, mỗi phát sâu ~22 px; lớn hơn mọi hố skill): đứng ở spawn phải chịu ≥ 3 phát cùng chỗ mới rơi khỏi map (thực tế 4–10 phát trên đất mềm; spawn trên đất cứng / lớp mềm trên đá thì không bao giờ rơi, chỉ bị đào hố và vẫn ăn sát thương nổ), và 1 phát ở bất kỳ đâu trên sàn spawn không khoét thủng sàn (`TestGeneratedMapsGroundHoldsTankoCraters`). Đạn nổ trên đất cứng không khoét gì nhưng sát thương nổ vẫn đủ (`TestExplosionOnHardGroundStillSplashes`). Skill bom liên hoàn (2 + rank quả cùng đường bay, mỗi quả một hố như đạn thường) vẫn đào giếng xuyên đất mềm được, theo thiết kế.
 
 **Theme** (`config_maps.theme`, `gamedata.MapThemes`, mặc định `grassland`): `grassland`, `ice`, `beach`, `graveyard`, `desert`, `sky`, `temple`, `steel`, `city_night`, `stone`, `cave`. Mỗi theme = nền trời, vật liệu mềm, vật liệu cứng, đáy nước (`beach`, `ice`, `sky`, `temple`, `city_night`, `steel`) hoặc vực (còn lại). Theme lạ coi là `grassland` (`ThemeOrDefault`).
 
@@ -820,24 +824,24 @@ Methods: `IsSolid(x,y)`, `IsDestructible(x,y)`, `CarveBowl(cx,cy,radius)` (mọi
 |---|---|---|---|---|---|
 | `grassland_valley` | Thung lũng cỏ | grassland | bronze | 0–4 | legacy (đồi sine) |
 | `frozen_peak` | Đỉnh băng | grassland | silver | 1–4 | legacy (đỉnh nhọn) |
-| `ice_bridge` | Cầu băng | ice | bronze | 1,5–4 | 4 nhịp cầu băng mềm, nối bằng 3 vòm băng cứng |
-| `coconut_isles` | Đảo dừa | beach | bronze | 0,5–3,5 | 7 đảo cát mềm, khe 2 ô giữa các đảo |
-| `graveyard` | Nghĩa trang | graveyard | bronze | 0–3 | nền đất trên vực, gò, lòng trũng giữa có huyệt mở, bia cứng, bí ngô, khối treo |
-| `pyramid` | Kim tự tháp | desert | bronze | 0–3 | kim tự tháp rỗng bằng đá cứng, cửa ở chân, đụn cát bên trong, nền cát trên đá |
-| `floating_isle` | Đảo nổi | sky | bronze | 2–4 | đảo cỏ (mềm) trên lõi đá cứng |
-| `frozen_land` | Băng giá | ice | bronze | 1,5–4 | thềm băng, nhũ băng treo (4 cái giữa cứng) |
-| `sky_temple` | Đền tế | temple | silver | 0,5–3 | mái ván dài, cột cứng, hai sàn, ván thấp giữa, thuyền trên dung nham |
-| `escape` | Trốn thoát | city_night | gold | 0–3 | thùng thép cứng xếp vòng cung (không gì phá được) |
-| `iron_bars` | Song sắt | steel | bronze | 0–3 | thanh thép + thùng cứng nhiều tầng trên sàn mềm |
-| `barricade` | Rào cản | steel | bronze | 0–3 | lưới chốt thép cứng trên sàn mềm |
-| `iron_city` | Thành phố sắt | city_night | gold | 0–2,5 | dầm thép cứng: dốc từ góc xuống, zigzag giữa, bục có lớp mạ mềm |
-| `stone_forest` | Rừng đá | stone | bronze | 0–3 | khối đá cứng lơ lửng, nền cỏ trên đá, 2 hố, gai đá |
-| `stone_cave` | Hang đá | cave | silver | 0–2 | bát đá cứng (đá vụn mềm trên mặt), que gỗ |
-| `sky_islands` | Đảo bay | sky | silver | 2–4 | nhiều đảo nhỏ, dải đảo dài sát nước |
-| `iron_bridge` | Cầu sắt | steel | bronze | 0,5–3,5 | 3 nhịp cầu (tấm mềm trên dầm cứng), giàn cứng ở đầu nhịp, thùng cứng |
-| `steel_base` | Căn cứ thép | steel | gold | 0–2,5 | dầm, khối thép cứng, bục có lớp mạ mềm (thay map legacy cùng id khi row còn chưa có tile) |
+| `ice_bridge` | Cầu băng | ice | bronze | 1,5–4 | 4 nhịp cầu băng mềm 22 ô, nối bằng 3 vòm băng cứng cao 6 ô, tảng băng thấp dưới vòm |
+| `coconut_isles` | Đảo dừa | beach | bronze | 0,5–3,5 | 7 đảo cát mềm ~19 ô, khe 3 ô, cây dừa ở đảo ngoài cùng, đá cứng thấp dưới khe |
+| `graveyard` | Nghĩa trang | graveyard | bronze | 0–3 | nền đất rộng trên vực, gò, lòng trũng giữa có huyệt mở, bia cứng, bí ngô, khối treo |
+| `pyramid` | Kim tự tháp | desert | bronze | 0–3 | kim tự tháp rỗng lớn bằng đá cứng ở giữa (bắn vòng qua đỉnh), cửa ở chân, đụn cát + gờ bên trong, nền cát trên đá |
+| `floating_isle` | Đảo nổi | sky | bronze | 2–4 | đảo cỏ rộng (mềm) trên lõi đá cứng, đảo lớn 42 ô ở giữa |
+| `frozen_land` | Băng giá | ice | bronze | 1,5–4 | thềm băng rộng, nhũ băng treo (6 cái giữa cứng) |
+| `sky_temple` | Đền tế | temple | silver | 0,5–3 | mái ván dài, cột cứng, hai sàn 25 ô (sống cứng), thuyền giữa, hai thuyền thấp hai bên |
+| `escape` | Trốn thoát | city_night | gold | 0–3 | hàng thùng thép cứng (4 thùng = 16 ô) lơ lửng (không gì phá được) |
+| `iron_bars` | Song sắt | steel | bronze | 0–3 | thanh thép dài + thùng cứng nhiều tầng trên sàn mềm có đáy cứng |
+| `barricade` | Rào cản | steel | bronze | 0–3 | lưới chốt thép cứng trên sàn mềm có đáy cứng |
+| `iron_city` | Thành phố sắt | city_night | gold | 0–2,5 | dầm thép cứng: dốc từ góc xuống bục 15–17 ô có lớp mạ mềm, zigzag giữa |
+| `stone_forest` | Rừng đá | stone | bronze | 0–3 | khối đá cứng lơ lửng, nền cỏ rộng trên đá, 2 hố, gai đá |
+| `stone_cave` | Hang đá | cave | silver | 0–2 | bát đá cứng rộng (đá vụn mềm trên mặt), que gỗ |
+| `sky_islands` | Đảo bay | sky | silver | 2–4 | nhiều đảo 12–18 ô, dải đảo dài sát nước |
+| `iron_bridge` | Cầu sắt | steel | bronze | 0,5–3,5 | 3 nhịp cầu dài 34 ô (tấm mềm trên dầm cứng), giàn cứng ở đầu nhịp, thùng cứng |
+| `steel_base` | Căn cứ thép | steel | gold | 0–2,5 | dầm, khối thép cứng, bục 15–16 ô có lớp mạ mềm (thay map legacy cùng id khi row còn chưa có tile) |
 
-Spawn: 4 điểm `[đội 1 a, đội 1 b, đội 2 a, đội 2 b]` (`TeamSpawns`: nửa đầu cho đội 1 bên trái), đội 2 là ảnh gương của đội 1; 1v1 dùng điểm đầu của mỗi đội. Test (`internal/game/match/maps_test.go`): mỗi map hợp lệ với brick types (như admin editor kiểm khi lưu), 4 spawn đúng nửa, đứng được (`CanStandAt`) trên đúng bục, dưới chân ≥ 60 px đất hoặc gặp đất cứng, không có ô lẻ trôi nổi; mỗi spawn bắn trúng được ít nhất một spawn địch và bị bắn trúng từ một spawn địch, hai spawn 1v1 bắn được nhau (không gió); bot vs bot 2v2 chơi hết trận trên mọi map.
+Spawn: 4 điểm `[đội 1 a, đội 1 b, đội 2 a, đội 2 b]` (`TeamSpawns`: nửa đầu cho đội 1 bên trái), đội 2 là ảnh gương của đội 1; 1v1 dùng điểm đầu của mỗi đội. Test (`internal/game/match/maps_test.go`): mỗi map hợp lệ với brick types (như admin editor kiểm khi lưu), 4 spawn đúng nửa, đứng được (`CanStandAt`) trên đúng bục, dưới chân ≥ 60 px đất hoặc gặp đất cứng, không có ô lẻ trôi nổi; mỗi spawn bắn trúng được ít nhất một spawn địch và bị bắn trúng từ một spawn địch, hai spawn 1v1 bắn được nhau (bot `bestShot`, không gió); mọi spawn bắn trúng được **mọi** spawn địch (`TestGeneratedMapsEveryEnemyReachable`: `SimulateProjectile` trên terrain thật, góc 5–175°, lực 10–100, không gió, trúng thân trong `PlayerHitRadius`); quanh mỗi spawn ≥ 192 px mặt đi liền (`TestGeneratedMapsSpawnsHaveWideFloor`: `WalkTo` từng px, dừng ở tường hoặc mép rơi); bot vs bot 2v2 chơi hết trận trên mọi map.
 
 **Xoay map**: ranked chọn ngẫu nhiên trong các map có `minRankTier` ≤ hạng của người cao nhất (`randomMapForRating`): bronze có 11 map (grassland_valley + 10 map mới), silver thêm frozen_peak, sky_temple, stone_cave, sky_islands, gold thêm escape, iron_city, steel_base. QuickPlay "Đấu với máy" (`bot: "ai"`) chọn ngẫu nhiên trong mọi map đã load (`quickPlayMapID`); Luyện tập (bot idle) luôn `grassland_valley`. Game server đọc map lúc khởi động: thêm / sửa map cần restart `cmd/game`.
 
@@ -886,7 +890,7 @@ Skill theo **nhân vật** (`config_characters.skill_id`), dùng bằng `Shoot {
 |---|---|---|---|---|
 | Bắn | Pháo hiệu như phát thường (gió, trọng lực); đáp: khói đỏ, không damage / hố; bay khỏi map → mất skill | 2 + cấp bom lớn (playtest 6: bớt 1 quả, mỗi quả giữ sát thương cũ: (1,8 + 0,15 × cấp) / (3 + cấp) × base) cùng đường bay đạn thường (cùng gốc, góc, lực, gió; không lái), cách ≥ 0,1 s; bom sau bay qua hố của bom trước và nổ ở chỗ đường bay đó chạm địa hình / người chơi: mỗi quả khoét lòng chảo của vũ khí; không mục tiêu thì đào một giếng (~40 px mỗi quả với `cannon_ball`); trúng thân thì nổ ở tâm thân, hố không chạm đất dưới chân: cầu vồng (dốc) và bắn thẳng ở 600 px đều trúng mục tiêu tới trần (bắn thẳng: quả đầu nổ cạnh chân, mục tiêu rơi vào hố, quả sau trúng thân) | Nạp 0,3 s rồi tia thẳng từ tâm thân theo góc ngắm tới mép map, xuyên địa hình (không giảm damage); bỏ qua lực | Không ngắm; các hạt cùng bay thẳng lên trên Flora ra khỏi đỉnh map (y −140, 0,55 s), sang trên đầu đồng đội ngoài màn hình (0,2 s) rồi rơi thẳng xuống thân (0,65 s): đáp và hồi lúc 1,4 s, mọi đồng đội còn sống (cả Flora); replay kéo thêm 0,9 s cho hiệu ứng nở hoa |
 | Số lượng | 0,5 s sau khi đáp: 12 + 4×cấp tên lửa rơi thẳng (không gió, bắn xuống 1500 px/s `rainDropSpeed`, ~0,37 s tới đất) từ đỉnh map, cách 0,05 s (cấp 4: 28 quả trong ~1,8 s, cả skill ~3,0 s; trước 032 ~3,9 s), rải ± (90 + 15×cấp) px quanh điểm đáp, dày ở giữa (độ lệch = khoảng × \|v\|², nửa số quả trong ± 1/4 khoảng; seed theo trận + lượt); giải theo thứ tự chạm đất. Pháo hiệu trúng mục tiêu: ~1,4 × base (cấp 0) tới mức trần (cấp 4, ~1,8 × base sau defense của Tanko), địch cách 100 px dính ~0,55 × base ở cấp 4 | 3 / 4 / 5 / 6 / 7 | 1 tia | 1 hạt / đồng đội |
-| Damage | Mỗi quả 0,25 × base (nổ 0,7 × bán kính vũ khí, hố 0,6 × hố vũ khí = 12 px); tổng mỗi mục tiêu ≤ 2 × base (trước defense) | Tổng (1,8 + 0,15×cấp) × base chia đều; tổng mỗi mục tiêu ≤ (1,2 + 0,15×cấp) × base (trước defense; cấp 4: phát cầu vồng trúng 6 / 7 quả là chạm trần); nổ 1,3 ×, hố mọi quả = hố vũ khí (lòng chảo 52 px, như phát thường; trước playtest 5: tròn 1,4 × = 73 px); đào bao sâu cũng được (trước: không khoét 48 px đáy map) | Địch gần nhất (1,5 + 0,1×cấp) × base, mỗi địch sau ×0,8; không hố, không văng, không rơi; không trúng đồng đội | Hồi theo máu tối đa: Flora (40 + 5×cấp)%, đồng đội (30 + 5×cấp)%; không nhân skill power; dư thành khiên (≤ 50% máu tối đa) |
+| Damage | Mỗi quả 0,25 × base (nổ 0,7 × bán kính vũ khí, hố 1,0 × hố vũ khí = 12 px; 039: hố vũ khí 20 → 12 px nên `rainCrater` 0,6 → 1,0); tổng mỗi mục tiêu ≤ 2 × base (trước defense) | Tổng (1,8 + 0,15×cấp) × base chia đều; tổng mỗi mục tiêu ≤ (1,2 + 0,15×cấp) × base (trước defense; cấp 4: phát cầu vồng trúng 6 / 7 quả là chạm trần); nổ 1,3 ×, hố mọi quả = hố vũ khí (lòng chảo 52 px, như phát thường; trước playtest 5: tròn 1,4 × = 73 px); đào bao sâu cũng được (trước: không khoét 48 px đáy map) | Địch gần nhất (1,5 + 0,1×cấp) × base, mỗi địch sau ×0,8; không hố, không văng, không rơi; không trúng đồng đội | Hồi theo máu tối đa: Flora (40 + 5×cấp)%, đồng đội (30 + 5×cấp)%; không nhân skill power; dư thành khiên (≤ 50% máu tối đa) |
 | Hiệu ứng | `burn` 1 lượt lên mọi địch trúng | `root` 1 lượt | `stun` 1 lượt | Gỡ hiệu ứng xấu mọi đồng đội |
 | Bot | Ngắm như phát thường tốt nhất (trượt theo hit chance) | Phát dốc nhất (lệch ≤ 30° so với thẳng đứng, bay ≤ `MaxFlightSeconds` − 1 s = 3,5 s) gây ≥ 80% damage của phát tốt nhất, không có thì phát tốt nhất; trong các lực tốt như nhau ở một góc, lực mà đường bay (bỏ qua người chơi) chạm đất gần chân địch nhất (`shaftMiss`: giếng đào ngay dưới mục tiêu); trượt theo hit chance | Góc trúng nhiều địch nhất (ưu tiên 2) | Khi máu mình < 60%, đồng đội < 50% hoặc đồng đội dính hiệu ứng xấu |
 

@@ -2,7 +2,7 @@
   name: Basic Rocket
   damage: 480
   explosionRadius: 40
-  terrainDamage: 25
+  terrainDamage: 20
   projectileWeight: 1.0
   windInfluence: 1.0
   multiHit: 1
@@ -11,7 +11,7 @@
   name: Cannon Ball
   damage: 420
   explosionRadius: 60
-  terrainDamage: 65
+  terrainDamage: 30
   projectileWeight: 1.5
   windInfluence: 0.5
   multiHit: 1
@@ -20,7 +20,7 @@
   name: Electric Orb
   damage: 620
   explosionRadius: 30
-  terrainDamage: 25
+  terrainDamage: 20
   projectileWeight: 0.8
   windInfluence: 1.3
   multiHit: 1
@@ -29,7 +29,7 @@
   name: Seed Bomb
   damage: 380
   explosionRadius: 40
-  terrainDamage: 30
+  terrainDamage: 24
   projectileWeight: 0.9
   windInfluence: 1.0
   multiHit: 1

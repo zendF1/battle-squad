@@ -7,6 +7,18 @@ import (
 	"battle-squad/internal/game/gamedata"
 )
 
+// The terrain damage bonus grows craters by at most MaxTerrainDamageBonus percent.
+func TestTerrainDamageBonusIsCapped(t *testing.T) {
+	for _, c := range []struct {
+		bonus int
+		want  float64
+	}{{0, 52}, {30, 67.6}, {50, 78}, {120, 78}, {790, 78}, {-20, 52}} {
+		if got := craterRadius(&BattlePlayerState{TerrainDamageBonus: c.bonus}, 52); math.Abs(got-c.want) > 1e-9 {
+			t.Errorf("bonus %d: crater %v, want %v", c.bonus, got, c.want)
+		}
+	}
+}
+
 func TestTerrainDamageBonusGrowsCraterOnly(t *testing.T) {
 	m, clients := newFlowMatch(t)
 	cur := m.State.CurrentPlayerID

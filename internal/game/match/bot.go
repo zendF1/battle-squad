@@ -393,7 +393,8 @@ func (b *BotBrain) evalShot(m *Match, bot *BattlePlayerState, feet Vector2, angl
 }
 
 // bestMove tries walking to a few spots in range and returns the walk target
-// whose best shot beats current, if any. Walks that drop off the map are skipped.
+// whose best shot beats current, if any; when no spot has a damaging shot it walks toward
+// the nearest enemy instead. Walks that drop off the map are skipped.
 func (b *BotBrain) bestMove(m *Match, bot *BattlePlayerState, weapon gamedata.WeaponConfig, current shotPlan) (float64, bool) {
 	reach := float64(bot.MoveEnergy * 2) // processMove: 1 energy per 2px
 	bestX, best, moved := 0.0, current, false
@@ -405,6 +406,20 @@ func (b *BotBrain) bestMove(m *Match, bot *BattlePlayerState, weapon gamedata.We
 		}
 		if s := b.bestShot(m, bot, pos, weapon); s.betterThan(best) {
 			bestX, best, moved = targetX, s, true
+		}
+	}
+	if !moved && best.quality() <= 0 {
+		// No spot in reach has a damaging shot: on a 2400 px map the enemy may simply be out
+		// of range (a full-power shot carries ~2070 px), so close in on the nearest one.
+		dir := 1.0
+		if b.nearestEnemyX(m, bot) < bot.Position.X {
+			dir = -1.0
+		}
+		for _, frac := range []float64{1, 0.5} {
+			targetX := bot.Position.X + dir*frac*reach
+			if pos, ok := predictMove(m.Terrain, bot.Position, targetX); ok && math.Abs(pos.X-bot.Position.X) >= 10 {
+				return targetX, true
+			}
 		}
 	}
 	return bestX, moved

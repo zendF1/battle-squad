@@ -10,9 +10,10 @@ import (
 	"battle-squad/internal/shared/database/dbtest"
 )
 
-// Migration 029 halves Rookie's and Tanko's terrain damage (weapons and the characters' display
-// copy) to configs/*.yaml's values, leaves Spark and Flora, keeps admin edits on reruns, and a
-// later rerun of 023 does not undo it; the down migration restores the old values.
+// Migrations 029 (halves Rookie's and Tanko's terrain damage) and 039 (craters scaled to the
+// characters: 20 / 30 / 20 / 24) bring the weapons and the characters' display
+// copy to configs/*.yaml's values, keep admin edits on reruns, and a
+// later rerun of 023 does not undo them; the down migrations restore the old values.
 func TestWeaponCraterMigrationMatchesSeed(t *testing.T) {
 	ctx := context.Background()
 	db := dbtest.NewSchema(t, 0, "001_init_schema.up.sql", "004_admin_config_tables.up.sql")
@@ -40,6 +41,18 @@ func TestWeaponCraterMigrationMatchesSeed(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, readMigration(t, "023_character_identities.up.sql")); err != nil {
 		t.Fatal(err)
 	}
+	if terrain := func(id string) (v int) {
+		db.Pool.QueryRow(ctx, `SELECT terrain_damage FROM config_weapons WHERE weapon_id = $1`, id).Scan(&v)
+		return v
+	}; terrain("basic_rocket") != 25 || terrain("cannon_ball") != 65 {
+		t.Fatal("029 did not halve the craters")
+	}
+	small := readMigration(t, "039_small_craters.up.sql")
+	for i := 0; i < 2; i++ {
+		if _, err := db.Pool.Exec(ctx, small); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	_, self, _, _ := runtime.Caller(0)
 	prev := gamedata.Data
@@ -64,22 +77,33 @@ func TestWeaponCraterMigrationMatchesSeed(t *testing.T) {
 			t.Errorf("character %s: migrated terrain damage %d, yaml %d", id, got, c.TerrainDamage)
 		}
 	}
-	if terrain("config_weapons", "weapon_id", "basic_rocket") != 25 || terrain("config_weapons", "weapon_id", "cannon_ball") != 65 {
-		t.Fatal("not halved")
+	if terrain("config_weapons", "weapon_id", "basic_rocket") != 20 || terrain("config_weapons", "weapon_id", "cannon_ball") != 30 ||
+		terrain("config_weapons", "weapon_id", "electric_orb") != 20 || terrain("config_weapons", "weapon_id", "seed_bomb") != 24 {
+		t.Fatal("039 did not shrink the craters")
 	}
 
 	// An admin edit after the migration survives a rerun
 	if _, err := db.Pool.Exec(ctx, `UPDATE config_weapons SET terrain_damage = 90 WHERE weapon_id = 'cannon_ball'`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Pool.Exec(ctx, up); err != nil {
-		t.Fatal(err)
+	for _, f := range []string{up, small} {
+		if _, err := db.Pool.Exec(ctx, f); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if got := terrain("config_weapons", "weapon_id", "cannon_ball"); got != 90 {
 		t.Fatalf("admin edit lost: %d", got)
 	}
 
-	// The down migration restores the full craters of the rows still at 029's values
+	// 039's down brings the rows still at its values back to 029's, then 029's down restores
+	// the full craters of the rows still at 029's values
+	if _, err := db.Pool.Exec(ctx, readMigration(t, "039_small_craters.down.sql")); err != nil {
+		t.Fatal(err)
+	}
+	if terrain("config_weapons", "weapon_id", "basic_rocket") != 25 || terrain("config_weapons", "weapon_id", "seed_bomb") != 30 ||
+		terrain("config_characters", "character_id", "tanko") != 65 || terrain("config_weapons", "weapon_id", "cannon_ball") != 90 {
+		t.Fatal("039 down: not restored")
+	}
 	if _, err := db.Pool.Exec(ctx, readMigration(t, "029_weapon_craters_halved.down.sql")); err != nil {
 		t.Fatal(err)
 	}

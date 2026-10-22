@@ -77,8 +77,8 @@
         this.ctx = this.canvas.getContext('2d');
         this.wrap = document.getElementById(wrapId);
 
-        this.gridWidth = 100;
-        this.gridHeight = 56;
+        this.gridWidth = 150;
+        this.gridHeight = 70;
         this.cellSize = 16;
         this.tiles = [];
         this.spawnPoints = [];
@@ -139,8 +139,8 @@
     };
 
     MapEditor.prototype.initNewMap = function() {
-        this.gridWidth = 100;
-        this.gridHeight = 56;
+        this.gridWidth = 150;
+        this.gridHeight = 70;
         this.cellSize = 16;
         this.tiles = [];
         for (var row = 0; row < this.gridHeight; row++) {
@@ -269,8 +269,8 @@
             return;
         }
 
-        var gridWidth = parseInt(document.getElementById('propGridWidth').value) || 100;
-        var gridHeight = parseInt(document.getElementById('propGridHeight').value) || 56;
+        var gridWidth = parseInt(document.getElementById('propGridWidth').value) || 150;
+        var gridHeight = parseInt(document.getElementById('propGridHeight').value) || 70;
         var cellSize = parseInt(document.getElementById('propCellSize').value) || 16;
 
         if (gridWidth !== this.gridWidth || gridHeight !== this.gridHeight) {
