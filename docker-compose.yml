@@ -1,5 +1,15 @@
 version: '3.8'
 
+# Order: postgres + redis -> migrate (runs once, exits 0) -> api, game, admin, worker.
+# Production values (APP_ENV, JWT_SECRET, ADMIN_BOOTSTRAP_*) come from the shell or a .env
+# next to this file; see docs/deploy.md.
+
+x-app-env: &app-env
+  APP_ENV: ${APP_ENV:-development}
+  POSTGRES_DSN: postgres://postgres:postgres@postgres:5432/battlesquad?sslmode=disable
+  REDIS_ADDR: redis:6379
+  JWT_SECRET: ${JWT_SECRET:-super-secret-battle-squad-key-2026} # the dev default; production refuses it
+
 services:
   postgres:
     image: postgres:15-alpine
@@ -12,6 +22,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d battlesquad"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
     networks:
       - battlesquad_network
 
@@ -25,6 +40,21 @@ services:
     networks:
       - battlesquad_network
 
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrate
+    environment:
+      <<: *app-env
+      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - battlesquad_network
+
   api:
     build:
       context: .
@@ -32,11 +62,12 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - POSTGRES_DSN=postgres://postgres:postgres@postgres:5432/battlesquad?sslmode=disable
-      - REDIS_ADDR=redis:6379
+      <<: *app-env
     depends_on:
-      - postgres
-      - redis
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
     networks:
       - battlesquad_network
 
@@ -45,12 +76,13 @@ services:
       context: .
       dockerfile: Dockerfile.game
     environment:
-      - POSTGRES_DSN=postgres://postgres:postgres@postgres:5432/battlesquad?sslmode=disable
-      - REDIS_ADDR=redis:6379
-      - NODE_ID=game-1
+      <<: *app-env
+      NODE_ID: game-1
     depends_on:
-      - postgres
-      - redis
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
     networks:
       - battlesquad_network
 
@@ -59,12 +91,13 @@ services:
       context: .
       dockerfile: Dockerfile.game
     environment:
-      - POSTGRES_DSN=postgres://postgres:postgres@postgres:5432/battlesquad?sslmode=disable
-      - REDIS_ADDR=redis:6379
-      - NODE_ID=game-2
+      <<: *app-env
+      NODE_ID: game-2
     depends_on:
-      - postgres
-      - redis
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
     networks:
       - battlesquad_network
 
@@ -80,16 +113,34 @@ services:
     networks:
       - battlesquad_network
 
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.admin
+    ports:
+      - "9000:9000"
+    environment:
+      <<: *app-env
+      NODE_ID: node-admin-1
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+    networks:
+      - battlesquad_network
+
   worker:
     build:
       context: .
       dockerfile: Dockerfile.worker
     environment:
-      - POSTGRES_DSN=postgres://postgres:postgres@postgres:5432/battlesquad?sslmode=disable
-      - REDIS_ADDR=redis:6379
+      <<: *app-env
     depends_on:
-      - postgres
-      - redis
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
     networks:
       - battlesquad_network
 

@@ -11,8 +11,9 @@ Go turn-based artillery game server: `cmd/api` (REST), `cmd/game` (WebSocket), `
 
 ## Migrations
 
-- `cmd/migrate/main.go` reruns ALL files from a hardcoded list — register new files there
-- Must be idempotent (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`); never `DROP TABLE` in up migrations
+- `cmd/migrate` embeds `migrations/*.up.sql` (filename order, each once via `schema_migrations`), then seeds missing rows from `configs/*.yaml` + Go defaults (`internal/shared/migrate`); never edit an applied file, add a new one
+- Must be idempotent (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`; an untracked DB reruns all once); never `DROP TABLE` in up migrations
+- Reference rows a migration adds or changes: keep `configs/*.yaml` / seed defaults at the current values too
 
 ## Git
 

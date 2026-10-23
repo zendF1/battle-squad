@@ -587,7 +587,7 @@ carry `element`.
   `config_tips (tip_id, text, sort_order)`.
 - The texts come from the Godot client at 935c5af. The migration fills a column only while it is
   empty and inserts rows with `ON CONFLICT DO NOTHING`, so reruns keep admin edits.
-  `configs/*.yaml` carries the same texts for the admin seed of a fresh DB.
+  `configs/*.yaml` carries the same texts for the cmd/migrate seed of a fresh DB.
 
 ## 6a. Mode select (migration 044_mode_select)
 
@@ -657,7 +657,7 @@ carry `element`.
   (boulders / earth, the same numbers and placeholders), Tanko's playstyle and `tip_02` mention it;
   each only while still the old text.
 - 055: Tide's guns `tide_weapon_lv10` .. `lv40` (Iron .. Dragon Water Gun, the generic tiers'
-  stats and prices, as the other characters'; the admin seed has them too).
+  stats and prices, as the other characters'; the cmd/migrate seed has them too).
 - The down files undo each, keeping a Tide (and her guns, offers) a player owns or bought.
 
 ## 6b. DB behind it since S2 (migration 041_gamedata_rules)

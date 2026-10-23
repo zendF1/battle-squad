@@ -49,9 +49,17 @@ docker-compose up -d postgres redis
 make migrate
 # hoặc
 go run ./cmd/migrate
+go run ./cmd/migrate -status    # file nào đã chạy / còn chờ
+go run ./cmd/migrate -dry-run   # xem trước, không đổi gì
 ```
 
-### 3. Chạy 3 servers (mỗi cái 1 terminal)
+`cmd/migrate` làm hết: schema (mỗi file `migrations/*.up.sql` chạy một lần, ghi vào
+`schema_migrations`), dữ liệu game tham chiếu (seed từ `configs/*.yaml` + default trong Go, chỉ
+thêm dòng còn thiếu nên không ghi đè chỉnh sửa của admin) và tài khoản admin đầu tiên
+(`ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD`). Chạy lại là no-op. Chi tiết và deploy
+production: [docs/deploy.md](docs/deploy.md).
+
+### 3. Chạy servers (mỗi cái 1 terminal)
 
 ```bash
 # Terminal 1 — API Server
@@ -60,7 +68,10 @@ make run-api
 # Terminal 2 — Game Server
 make run-game
 
-# Terminal 3 — Worker
+# Terminal 3 — Admin Dashboard (http://localhost:9000)
+make run-admin
+
+# Terminal 4 — Worker
 make run-worker
 ```
 
@@ -81,6 +92,35 @@ curl -X POST http://localhost:8080/auth/guest-login \
 curl http://localhost:8080/metrics
 ```
 
+### Chạy local từ DB mới
+
+Một Postgres mới tinh trong docker (container `battlesquad_fresh_pg`, port 5440, không đụng DB
+dev), migrate một lần là có đủ dữ liệu game, rồi chạy các server trỏ vào nó:
+
+```bash
+# 1. DB mới + migrate (schema, dữ liệu game, admin đầu tiên)
+ADMIN_BOOTSTRAP_EMAIL=admin@local.test ADMIN_BOOTSTRAP_PASSWORD='doi-mat-khau-nay' make db-fresh
+
+# 2. Các server dùng DB đó (mỗi lệnh 1 terminal; Redis localhost:6379, DB 7 để tách khỏi dev)
+export POSTGRES_DSN='postgres://postgres:postgres@localhost:5440/battlesquad?sslmode=disable' REDIS_DB=7
+go run ./cmd/migrate -status   # 0 pending
+go run ./cmd/api               # http://localhost:8080
+go run ./cmd/game              # ws://localhost:8081/ws
+go run ./cmd/admin             # http://localhost:9000, đăng nhập bằng admin ở bước 1
+go run ./cmd/worker
+
+# 3. Kiểm tra
+curl -s localhost:8080/gamedata | jq '.data.characters | length'   # 5
+curl -s -X POST localhost:8080/auth/guest-login -H 'Content-Type: application/json' -d '{"deviceInstallId": "fresh-1"}'
+
+# Xoá DB này khi xong
+make db-fresh-down
+```
+
+Đổi port: `make db-fresh FRESH_PG_PORT=5441`. Khi chưa có admin nào và `APP_ENV` không phải
+production, dashboard mở không cần đăng nhập (như trước); có admin rồi (hoặc production) thì
+mọi trang cần đăng nhập.
+
 ---
 
 ## Chạy Production (Docker Compose)
@@ -91,7 +131,7 @@ curl http://localhost:8080/metrics
 docker-compose up -d --build
 ```
 
-Lệnh này build và chạy tất cả 5 services: postgres, redis, api, game, worker.
+Lệnh này build và chạy postgres, redis, `migrate` (chạy một lần sau khi Postgres sẵn sàng), rồi api, game (2 node + nginx), admin, worker khi migrate xong. Deploy production từ DB trống: [docs/deploy.md](docs/deploy.md).
 
 ### Build riêng từng image
 
@@ -99,6 +139,8 @@ Lệnh này build và chạy tất cả 5 services: postgres, redis, api, game, 
 docker build -f Dockerfile.api -t battlesquad-api .
 docker build -f Dockerfile.game -t battlesquad-game .
 docker build -f Dockerfile.worker -t battlesquad-worker .
+docker build -f Dockerfile.admin -t battlesquad-admin .
+docker build -f Dockerfile.migrate -t battlesquad-migrate .   # migrations + configs nhúng trong binary
 ```
 
 ### Biến môi trường (Production)
@@ -112,7 +154,9 @@ docker build -f Dockerfile.worker -t battlesquad-worker .
 | `REDIS_ADDR` | Redis address | `localhost:6379` |
 | `REDIS_PASSWORD` | Redis password | _(empty)_ |
 | `REDIS_DB` | Redis database number | `0` |
-| `JWT_SECRET` | Secret key cho JWT token | _(phải thay đổi cho production)_ |
+| `JWT_SECRET` | Secret key cho JWT token (api + game cùng giá trị) | _(dev default; production bắt buộc giá trị riêng ≥ 32 ký tự, api / game từ chối chạy nếu không)_ |
+| `ADMIN_PORT` | Port Admin Dashboard | `9000` |
+| `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | `cmd/migrate` tạo admin dashboard đầu tiên khi chưa có admin nào (mật khẩu ≥ 12 ký tự, không bao giờ đổi admin đã có) | _(empty)_ |
 | `APP_VERSION` | Phiên bản ứng dụng | `1.0.0` |
 | `PROTOCOL_VERSION` | Phiên bản protocol tối thiểu | `1` |
 | `NODE_ID` | ID node cho Game Server (multi-node) | `node-game-1` |
@@ -131,7 +175,8 @@ battle-squad/
 │   ├── api/main.go          # API Server entry point
 │   ├── game/main.go         # Game Server entry point
 │   ├── worker/main.go       # Worker entry point
-│   └── migrate/main.go      # Database migration tool
+│   ├── admin/main.go        # Admin Dashboard
+│   └── migrate/main.go      # Migration + seed + admin bootstrap (internal/shared/migrate)
 ├── internal/
 │   ├── shared/              # Code dùng chung
 │   │   ├── auth/            # JWT sign/verify
@@ -280,7 +325,11 @@ make build-all      # Build tất cả binaries vào bin/
 make test           # Chạy toàn bộ tests
 make test-cover     # Chạy tests với coverage report
 make lint           # Go vet
-make migrate        # Chạy database migration
+make migrate        # Chạy database migration (+ seed dữ liệu game + admin đầu tiên)
+make migrate-status # Trạng thái từng file migration
+make db-fresh       # Postgres mới trong docker (port 5440) + migrate
+make db-fresh-down  # Xoá container đó
+make run-admin      # Admin Dashboard
 make docker-up      # Docker compose up
 make docker-down    # Docker compose down
 make clean          # Xóa bin/ và coverage files

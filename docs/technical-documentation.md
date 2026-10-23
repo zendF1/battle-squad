@@ -28,7 +28,7 @@ Battle Squad là game bắn súng theo lượt (turn-based artillery). Server g�
 | Game Server | 8081 | WebSocket: lobby, matchmaking, rooms, matches (real-time) |
 | Worker | — | Background jobs: ban expiry (5m), daily reset (1h), account deletion (1h) |
 | Admin Dashboard | 9000 | Web UI + API: game config CRUD, player management, matchmaking tuning |
-| Migrate | — | Chạy 1 lần: apply SQL migrations từ `migrations/` |
+| Migrate | — | Chạy trước mỗi deploy: migrations chưa chạy (`schema_migrations`), seed dữ liệu game tham chiếu, admin đầu tiên (xem [Migrations và DB mới](#migrations-va-db-moi)) |
 
 **Tại sao tách process:** API crash không ảnh hưởng trận đấu đang chơi. Mỗi process scale độc lập.
 
@@ -68,7 +68,8 @@ Tất cả config qua environment variables, có default cho local dev.
 | `DEV_UNLOCK_ALL` | `false` | Game server: QuickPlay may use every character and item without owning them, and items are not reserved or consumed (testing only; ignored when `APP_ENV=production`) |
 | `REDIS_PASSWORD` | _(empty)_ | Redis password |
 | `REDIS_DB` | `0` | Redis database index |
-| `JWT_SECRET` | `super-secret-battle-squad-key-2026` | JWT signing secret |
+| `JWT_SECRET` | `super-secret-battle-squad-key-2026` | JWT signing secret (api + game). `APP_ENV=production` bắt buộc giá trị riêng ≥ 32 ký tự (`Config.CheckProduction`, api / game dừng nếu sai) |
+| `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | _(empty)_ | `cmd/migrate`: tạo admin dashboard đầu tiên khi `admin_users` trống |
 | `APP_VERSION` | `1.0.0` | App version |
 | `PROTOCOL_VERSION` | `1` | Protocol version (force update nếu client < server) |
 | `NODE_ID` | `node-game-1` | Game server node ID (multi-node) |
@@ -121,10 +122,11 @@ internal/
 │   ├── server.go         Routes + template rendering
 │   ├── repository.go     DB queries
 │   ├── handlers_*.go     Handlers (dashboard, config, players, devtools, matchmaking)
-│   ├── seed.go           Idempotent config seeding
+│   ├── auth.go           Đăng nhập dashboard (admin_users, session Redis)
 │   └── templates/        Embedded HTML templates
 │
 ├── shared/               Code shared giữa tất cả servers
+│   ├── migrate/          cmd/migrate: runner (schema_migrations), seed dữ liệu tham chiếu, admin bootstrap
 │   ├── config/           Environment-based config loading
 │   ├── database/         PostgreSQL pool + Redis client wrappers
 │   ├── auth/             JWT manager (sign/verify)
@@ -139,9 +141,38 @@ internal/
     ├── scheduler.go      Job scheduler with panic recovery
     └── jobs/             ban_expire, daily_reset, account_deletion
 
-configs/                  YAML game data (characters, weapons, skills, items, maps, bricks); mirror của DB cho test / fallback
-migrations/               SQL migration files (001-039)
+configs/                  YAML game data (characters, weapons, skills, items, maps, bricks) với giá trị HIỆN TẠI: nguồn seed của cmd/migrate (configs.FS nhúng vào binary), fallback khi không đọc được DB
+migrations/               SQL migration files (001-056), nhúng vào cmd/migrate (migrations.FS)
 ```
+
+### Migrations và DB mới
+
+Một đường migrate cho mọi môi trường (dev, CI, production). `go run ./cmd/migrate` trên Postgres trống
+cho ra đủ dữ liệu game hiện tại; trên DB đã có thì chỉ chạy phần còn thiếu. Các bước (một connection
+giữ `pg_advisory_lock`, `internal/shared/migrate`):
+
+1. **Schema**: mỗi `migrations/*.up.sql` chưa có trong `schema_migrations (filename, checksum, applied_at)`,
+   theo thứ tự tên file, mỗi file một transaction cùng dòng tracking. DB cũ chưa có bảng tracking (chạy
+   theo kiểu cũ: rerun mọi file mỗi deploy) → chạy lại mọi file một lần (idempotent) rồi ghi lại hết.
+   File đã chạy mà nội dung đổi (checksum khác) → lỗi, trừ khi `-allow-changed` (ghi checksum mới, không
+   chạy lại).
+2. **Seed dữ liệu tham chiếu** (`seed.go`, trước đây là admin seed ở `internal/admin`): `configs/*.yaml` +
+   default Go (game_settings + rules, equipment, titles, milestones), `ON CONFLICT DO NOTHING` nên không ghi
+   đè chỉnh sửa của admin. Một transaction; không thiếu dòng nào thì rollback để trigger statement-level
+   không tăng `gamedata_revision` (chạy lại là no-op). Nút "Seed config" ở Dev Tools của admin gọi cùng code.
+   Lưu ý: dòng admin đã xoá mà còn trong YAML sẽ được thêm lại (như admin seed lúc khởi động trước đây).
+3. **Không có fixture dev**: migrations và seed chỉ chứa dữ liệu tham chiếu, giống nhau mọi môi trường.
+4. **Admin bootstrap**: `admin_users` trống và có cả `ADMIN_BOOTSTRAP_EMAIL` + `ADMIN_BOOTSTRAP_PASSWORD` →
+   tạo một admin (bcrypt, mật khẩu ≥ 12 ký tự). Không bao giờ đổi admin đã có, không có mật khẩu mặc định.
+   Production mà không có admin và không đặt biến → cảnh báo.
+
+`-status` liệt kê từng file, `-dry-run` cho biết sẽ làm gì mà không đổi gì. Dashboard (`cmd/admin`):
+production luôn cần đăng nhập; môi trường khác cần khi đã có ít nhất một admin (chưa có thì mở như trước).
+Session: cookie HttpOnly `bs_admin_session` (SameSite Lax, Secure qua HTTPS), key Redis `admin:session:*`
+12 giờ; sai mật khẩu 10 lần / 15 phút cho một email thì tạm khoá. `cmd/admin` không seed lúc khởi động nữa.
+
+Deploy production từ DB trống, biến môi trường từng cmd, thứ tự migrate → api → game → admin → worker:
+[docs/deploy.md](deploy.md).
 
 ---
 
@@ -312,7 +343,7 @@ Slot: `weapon`, `armor`, `helmet`, `pants`, `boots`, `gloves`. Mỗi món sở h
 
 Điều kiện mặc: sở hữu nhân vật (`CHARACTER_NOT_FOUND`), `characterId` của item null hoặc trùng (`EQUIP_WRONG_CHARACTER`), level nhân vật ≥ `requiredLevel` (`EQUIP_LEVEL_REQUIRED`). Mặc/tháo, cường hoá, khảm ngọc, tách và chỉ số vào trận không xét `isActive`: item đã tắt chỉ không bán nữa, món đã có vẫn dùng bình thường. Level nhân vật tối đa = level cuối của bảng `character_levels` (mặc định 80, xem [Reward System](#reward-system)).
 
-**Default equipment catalog** (`migrations/016_default_equipment_catalog.up.sql`, cùng dữ liệu với `cmd/admin` `SeedEquipmentConfig`; `ON CONFLICT DO NOTHING` nên chạy lại không ghi đè chỉnh sửa từ admin):
+**Default equipment catalog** (`migrations/016_default_equipment_catalog.up.sql`, cùng dữ liệu với `SeedEquipmentConfig` của cmd/migrate; `ON CONFLICT DO NOTHING` nên chạy lại không ghi đè chỉnh sửa từ admin):
 
 Level yêu cầu theo `docs/equipment-system-design.md` (là **level nhân vật**); hậu tố `lvN` của item normal chính là level yêu cầu:
 
