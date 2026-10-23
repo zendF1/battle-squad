@@ -17,23 +17,27 @@ type BossRow struct {
 	Config                                          gamedata.BossConfig
 	SkillsJSON, MinionsJSON, WavesJSON, RewardsJSON string
 	HoverJSON                                       string // "" = no hover band
+	SummonJSON                                      string // "" = no summon config (boss v3)
 }
 
 const bossColumns = `boss_id, name, description, recommended_level, enabled, sort_order, map_id, hp, defense, damage,
-	body_size, turn_limit, shielded_damage_factor, out_of_map, skills, minions, waves, rewards, daily_bonus_runs, flying, hover`
+	body_size, turn_limit, shielded_damage_factor, out_of_map, skills, minions, waves, rewards, daily_bonus_runs, flying, hover, summon`
 
 func scanBoss(row pgx.Row) (BossRow, error) {
 	var b BossRow
 	c := &b.Config
-	var skills, minions, waves, rewards, hover []byte
+	var skills, minions, waves, rewards, hover, summon []byte
 	if err := row.Scan(&c.BossID, &c.Name, &c.Description, &c.RecommendedLevel, &c.Enabled, &c.SortOrder, &c.MapID, &c.HP,
 		&c.Defense, &c.Damage, &c.BodySize, &c.TurnLimit, &c.ShieldedDamageFactor, &c.OutOfMap, &skills, &minions, &waves, &rewards,
-		&c.DailyBonusRuns, &c.Flying, &hover); err != nil {
+		&c.DailyBonusRuns, &c.Flying, &hover, &summon); err != nil {
 		return b, err
 	}
 	b.SkillsJSON, b.MinionsJSON, b.WavesJSON, b.RewardsJSON = indentJSON(skills), indentJSON(minions), indentJSON(waves), indentJSON(rewards)
 	if len(hover) > 0 {
 		b.HoverJSON = indentJSON(hover)
+	}
+	if len(summon) > 0 {
+		b.SummonJSON = indentJSON(summon)
 	}
 	return b, nil
 }
@@ -102,17 +106,17 @@ func (r *Repository) SaveBoss(ctx context.Context, b gamedata.BossConfig) error 
 	rewards, _ := json.Marshal(b.Rewards)
 	tag, err := tx.Exec(ctx, `
 		INSERT INTO config_bosses (`+bossColumns+`)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
 		ON CONFLICT (boss_id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description,
 			recommended_level = EXCLUDED.recommended_level, enabled = EXCLUDED.enabled, sort_order = EXCLUDED.sort_order,
 			map_id = EXCLUDED.map_id, hp = EXCLUDED.hp, defense = EXCLUDED.defense, damage = EXCLUDED.damage,
 			body_size = EXCLUDED.body_size, turn_limit = EXCLUDED.turn_limit, shielded_damage_factor = EXCLUDED.shielded_damage_factor,
 			out_of_map = EXCLUDED.out_of_map, skills = EXCLUDED.skills, minions = EXCLUDED.minions, waves = EXCLUDED.waves,
 			rewards = EXCLUDED.rewards, daily_bonus_runs = EXCLUDED.daily_bonus_runs, flying = EXCLUDED.flying,
-			hover = EXCLUDED.hover, updated_at = CURRENT_TIMESTAMP`,
+			hover = EXCLUDED.hover, summon = EXCLUDED.summon, updated_at = CURRENT_TIMESTAMP`,
 		b.BossID, b.Name, b.Description, b.RecommendedLevel, b.Enabled, b.SortOrder, b.MapID, b.HP, b.Defense, b.Damage,
 		b.BodySize, b.TurnLimit, b.ShieldedDamageFactor, b.OutOfMap, skills, minions, waves, rewards, b.DailyBonusRuns,
-		b.Flying, b.HoverJSON())
+		b.Flying, b.HoverJSON(), b.SummonJSON())
 	if err != nil {
 		return err
 	}

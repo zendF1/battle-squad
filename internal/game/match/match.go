@@ -553,14 +553,21 @@ func (m *Match) startTurn(ctx context.Context) {
 		Data:  payload,
 	})
 
-	// Stunned or frozen: the whole turn is lost; the server ends it after a short pause
+	// Stunned or frozen: the whole turn is lost; the server ends it after a short pause (a boss
+	// still summons a due wave first)
 	if skip != "" {
+		if _, due := m.summonDue(); due && player.Role == RoleBoss {
+			m.runOnTurnAfter(ctx, secs(moverMoveDelaySec), m.bossSkippedSummon)
+			return
+		}
 		m.resolveTurnAfter(ctx, m.gd.Rules.Timings.SkipTurnDelaySec, m.endTurn)
 		return
 	}
 
 	if player.Role == RoleBoss {
-		if m.bossHovers(player) {
+		if _, due := m.summonDue(); due {
+			m.runOnTurnAfter(ctx, secs(moverMoveDelaySec), m.bossSummonThenAttack) // the free summon, then the attack
+		} else if m.bossHovers(player) {
 			m.runOnTurnAfter(ctx, secs(moverMoveDelaySec), m.bossHoverTurn) // the flight, then the skill
 		} else {
 			m.runOnTurnAfter(ctx, secs(bossTurnDelaySec), m.bossAct)
@@ -586,6 +593,7 @@ func (m *Match) endTurn(ctx context.Context) {
 	// Effects count down at the end of their target's turn; global ones every turn
 	if currentPlayer != nil {
 		TickPlayerStatusEffects(currentPlayer)
+		m.leaperTurnEnded(currentPlayer) // leapt lasts until the end of the leaper's next turn
 	}
 	m.State.ActiveEffects = tickEffects(m.State.ActiveEffects)
 

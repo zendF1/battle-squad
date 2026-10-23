@@ -303,6 +303,7 @@ func (m *Match) broadcastShot(shot *ShotResolved, tl *shotTimeline) {
 		shot.Projectiles = []*ProjectileResult{}
 	}
 	shooter := m.State.Players[shot.ShooterID]
+	m.minionShotKinds(shot)
 	blasts := m.deathBlasts(shooter, tl)
 	m.bossAfterShot(tl)
 	for _, r := range shot.Projectiles {

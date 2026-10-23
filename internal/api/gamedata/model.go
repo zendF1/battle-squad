@@ -43,7 +43,8 @@ type GameData struct {
 // boss turns before it escapes; ShieldedDamageFactor the damage it takes while a minion lives;
 // DailyBonusRuns the runs a day with the bonus reward table. Flying: the boss floats (never
 // falls); Hover the band it flies to a new point of at the start of each of its turns (null:
-// none).
+// none). Summon (boss v3): its free summon at the start of its turns (null: none); Skills are
+// its attacks only (summoning is not a skill).
 type Boss struct {
 	BossID               string       `json:"bossId"`
 	Name                 string       `json:"name"`
@@ -61,6 +62,17 @@ type Boss struct {
 	DailyBonusRuns       int          `json:"dailyBonusRuns"`
 	Flying               bool         `json:"flying"`
 	Hover                *BossHover   `json:"hover"`
+	Summon               *BossSummon  `json:"summon"`
+}
+
+// BossSummon is a boss's free summon: Count minions of MinionID at the start of its turn from
+// round FirstRound on, when the previous wave is dead and more than CooldownRounds rounds after
+// its last summon (a ShotResolved actionMode summon before its attack).
+type BossSummon struct {
+	MinionID       string `json:"minionId"`
+	Count          int    `json:"count"`
+	CooldownRounds int    `json:"cooldownRounds"`
+	FirstRound     int    `json:"firstRound"`
 }
 
 // BossHover is the band a flying boss hovers in (px, its feet): at least MinMove px from where it
@@ -99,15 +111,27 @@ type BossMinion struct {
 	WalkRange        float64 `json:"walkRange"`
 	HoverHeight      float64 `json:"hoverHeight"`
 	FlySpeed         float64 `json:"flySpeed"`
+	// leaper (boss v3): LeapRange px per leap (0: the whole map), LeapDetonateNextTurn, ShootAfterLeap
+	LeapRange            float64 `json:"leapRange"`
+	LeapDetonateNextTurn bool    `json:"leapDetonateNextTurn"`
+	ShootAfterLeap       bool    `json:"shootAfterLeap"`
+	// ProjectileKind is ShotResolved projectiles[].kind of its shots ("": a normal shot's)
+	ProjectileKind string `json:"projectileKind"`
 }
 
-// BossSkill is a boss skill as the client names it (ShotResolved.skillId of the boss's turn);
-// Kind is rain, beam or summon.
+// BossSkill is a boss attack as the client names it (ShotResolved.skillId of the boss's turn);
+// Kind is rain, beam or shockwave; Pattern of a beam "" (aimed), radial or sweep; a rain's
+// ProjectileKind is its shells' projectiles[].kind (steel_shell, magma_bomb, ice_spike,
+// ice_shard; missile by default) and LaunchFrom "" (they fall from the top of the map) or boss
+// (they leave a ring around the boss's body, then fall).
 type BossSkill struct {
-	SkillID     string `json:"skillId"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Kind        string `json:"kind"`
+	SkillID        string `json:"skillId"`
+	Name           string `json:"name"`
+	Description    string `json:"description"`
+	Kind           string `json:"kind"`
+	Pattern        string `json:"pattern,omitempty"`
+	ProjectileKind string `json:"projectileKind,omitempty"`
+	LaunchFrom     string `json:"launchFrom,omitempty"`
 }
 
 // GunKind is a config_gun_kinds row: a gun art kind and its Vietnamese name ("Đại pháo").

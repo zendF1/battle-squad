@@ -25,9 +25,25 @@ func TestValidateBoss(t *testing.T) {
 		"body size":       func(b *BossConfig) { b.BodySize = 10 },
 		"out of map":      func(b *BossConfig) { b.OutOfMap = "fly" },
 		"kind":            func(b *BossConfig) { b.Skills[0].Kind = "meteor" },
-		"rain count":      func(b *BossConfig) { b.Skills[0].Count = 0 },
+		"no rain shells":  func(b *BossConfig) { b.Skills[0].Count = 0 },
 		"status turns":    func(b *BossConfig) { b.Skills[0].Status, b.Skills[0].StatusTurns = "burn", 0 },
-		"summon minion":   func(b *BossConfig) { b.Skills[2].MinionID = "ghost" },
+		"summon minion":   func(b *BossConfig) { b.Summon.MinionID = "ghost" },
+		"summon count":    func(b *BossConfig) { b.Summon.Count = 0 },
+		"summon cooldown": func(b *BossConfig) { b.Summon.CooldownRounds = -1 },
+		"only a summon": func(b *BossConfig) {
+			b.Skills = []BossSkill{{SkillID: "s", Name: "S", Kind: BossSkillSummon, Weight: 1, MinionID: "drone", Count: 1}}
+		},
+		"beam pattern":   func(b *BossConfig) { b.Skills[1].Pattern = "spiral" },
+		"beam count":     func(b *BossConfig) { b.Skills[1].Count = 0 },
+		"target of beam": func(b *BossConfig) { b.Skills[1].Target = BossTargetMap },
+		"rain count":     func(b *BossConfig) { b.Skills[0].Count = 61 },
+		"shockwave step": func(b *BossConfig) {
+			b.Skills[0] = BossSkill{SkillID: "w", Name: "W", Kind: BossSkillShockwave, Weight: 1, Step: 5}
+		},
+		"leap range":      func(b *BossConfig) { b.Minions[0].LeapRange = -5 },
+		"projectile kind": func(b *BossConfig) { b.Skills[0].ProjectileKind = "Steel Shell!" },
+		"minion kind":     func(b *BossConfig) { b.Minions[0].ProjectileKind = "drone-bolt" },
+		"launch from":     func(b *BossConfig) { b.Skills[0].LaunchFrom = "sky" },
 		"minion char":     func(b *BossConfig) { b.Minions[0].CharacterID = "nobody" },
 		"initial > max":   func(b *BossConfig) { b.Waves.MaxAlive = 1 },
 		"drop item":       func(b *BossConfig) { b.Rewards.Bonus.Drops[0].ItemID = "golden_ticket" },
@@ -108,5 +124,36 @@ func TestBossLookups(t *testing.T) {
 	party, boss, minions := BossSpawns(m)
 	if len(party) != 4 || party[3].X != 4 || boss.X != 5 || len(minions) != 2 || minions[1].X != 7 {
 		t.Fatalf("spawns %v %v %v", party, boss, minions)
+	}
+}
+
+// Boss v3: the summon JSON round-trips (null: none) and a boss v2 row summons with its summon
+// skill, which is never an attack; the leaper detonates after a leap unless told not to.
+func TestBossSummonConfig(t *testing.T) {
+	var b BossConfig
+	if err := ParseBossSummon(&b, []byte(`{"minionId":"drone","count":3,"cooldownRounds":3,"firstRound":2}`)); err != nil ||
+		b.Summon == nil || *b.Summon != (BossSummon{MinionID: "drone", Count: 3, CooldownRounds: 3, FirstRound: 2}) ||
+		string(b.SummonJSON()) != `{"minionId":"drone","count":3,"cooldownRounds":3,"firstRound":2}` {
+		t.Fatalf("summon %+v %v", b.Summon, err)
+	}
+	if ParseBossSummon(&b, []byte(`{"minionId":"drone","every":2}`)) == nil {
+		t.Fatal("unknown summon field accepted")
+	}
+	if err := ParseBossSummon(&b, []byte("null")); err != nil || b.Summon != nil || b.SummonJSON() != nil || b.SummonConfig() != nil {
+		t.Fatal("no summon")
+	}
+	legacy := BossConfig{Skills: []BossSkill{{SkillID: "a", Kind: BossSkillRain}, {SkillID: "w", Kind: BossSkillSummon, MinionID: "crab", Count: 2, Cooldown: 3}}}
+	if s := legacy.SummonConfig(); s == nil || *s != (BossSummon{MinionID: "crab", Count: 2, CooldownRounds: 3, FirstRound: 1}) ||
+		len(legacy.AttackSkills()) != 1 || legacy.AttackSkills()[0].SkillID != "a" {
+		t.Fatalf("legacy %+v %+v", s, legacy.AttackSkills())
+	}
+	for _, d := range DefaultBosses() {
+		if len(d.AttackSkills()) != len(d.Skills) || d.Summon == nil || d.Summon.Count != d.Waves.MaxAlive {
+			t.Fatalf("%s: summon %+v maxAlive %d", d.BossID, d.Summon, d.Waves.MaxAlive)
+		}
+	}
+	off := false
+	if !(MinionConfig{}).LeapDetonates() || (MinionConfig{LeapDetonateNextTurn: &off}).LeapDetonates() {
+		t.Fatal("leapDetonateNextTurn")
 	}
 }

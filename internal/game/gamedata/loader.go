@@ -569,18 +569,21 @@ func LoadFromDB(ctx context.Context, db *database.PostgresDB) (*Snapshot, error)
 
 	if err := each("config_bosses", `SELECT boss_id, name, description, recommended_level, enabled, sort_order, map_id,
 		hp, defense, damage, body_size, turn_limit, shielded_damage_factor, out_of_map, skills, minions, waves, rewards,
-		daily_bonus_runs, flying, hover FROM config_bosses ORDER BY sort_order, boss_id`, func(rows pgx.Rows) error {
+		daily_bonus_runs, flying, hover, summon FROM config_bosses ORDER BY sort_order, boss_id`, func(rows pgx.Rows) error {
 		var b BossConfig
-		var skills, minions, waves, rewards, hover []byte
+		var skills, minions, waves, rewards, hover, summon []byte
 		if err := rows.Scan(&b.BossID, &b.Name, &b.Description, &b.RecommendedLevel, &b.Enabled, &b.SortOrder, &b.MapID,
 			&b.HP, &b.Defense, &b.Damage, &b.BodySize, &b.TurnLimit, &b.ShieldedDamageFactor, &b.OutOfMap,
-			&skills, &minions, &waves, &rewards, &b.DailyBonusRuns, &b.Flying, &hover); err != nil {
+			&skills, &minions, &waves, &rewards, &b.DailyBonusRuns, &b.Flying, &hover, &summon); err != nil {
 			return err
 		}
 		// A boss the match cannot run is dropped (and logged), like an invalid map
 		err := ParseBossJSON(&b, skills, minions, waves, rewards)
 		if err == nil {
 			err = ParseBossHover(&b, hover)
+		}
+		if err == nil {
+			err = ParseBossSummon(&b, summon)
 		}
 		if err != nil {
 			observability.Log.Error().Err(err).Str("bossId", b.BossID).Msg("skipping boss with invalid JSON")

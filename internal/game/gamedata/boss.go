@@ -36,27 +36,46 @@ const (
 	// px crater, at most Cap × the boss damage per target (0: no cap); Status (Turns) on every
 	// enemy damaged; with LavaTurns > 0 each impact leaves a lava pool (LavaRadius px, LavaDamage
 	// HP at the start of the turn of a player standing in it) for LavaTurns rounds. Count 1,
-	// Spread 0 is a single slam on the target.
+	// Spread 0 is a single slam on the target. Target map (boss v3) rains over the whole map
+	// (Spread 0: half the map width), target party around the party's mean x.
 	BossSkillRain = "rain"
-	// BossSkillBeam: a straight beam from the boss's body centre through the target's body to
-	// the map edge, through terrain; every enemy within HalfWidth px of it takes Damage × the
-	// boss damage (Decay × the previous one for each next enemy; 0 = 1) and Status (Turns).
+	// BossSkillBeam: straight beams through terrain; every enemy within HalfWidth px of one takes
+	// Damage × the boss damage and Status (Turns), once per cast. Pattern "" (aimed): one beam
+	// from the boss's body centre through the target's body to the map edge (Decay × the
+	// previous damage for each next enemy; 0 = 1). Pattern radial (boss v3): Count beams evenly
+	// spaced around the boss's body centre (360° / Count apart, the whole fan turned by a random
+	// angle) out to the map edges. Pattern sweep (boss v3): Count horizontal beams across the
+	// whole map width at the party members' heights (the rest evenly spaced over their y range).
 	BossSkillBeam = "beam"
-	// BossSkillSummon: Count minions of MinionID appear on the minion spawn points (the free one
-	// nearest the boss first; free pillar tops on a pillar arena), at most waves.maxAlive living
-	// minions; it is not cast while a minion of the previous wave (the initial minions are the
-	// first) still lives.
+	// BossSkillShockwave (boss v3): a slam at the boss's feet, then a wave along the ground both
+	// ways to the map edges (an explode every Step px, Interval s apart); every grounded enemy
+	// takes Damage × the boss damage × (1 − its distance / the farther edge's), at least
+	// MinFactor × it, when the wave reaches it. Blast is the slam's blast radius (the clients'
+	// effect), Crater the bowl each explode carves.
+	BossSkillShockwave = "shockwave"
+	// BossSkillSummon (legacy, boss v2): summoning is the boss-level BossSummon now; a summon
+	// skill is never cast as an attack (a boss without a summon config summons with its first
+	// summon skill's minion, count and cooldown: BossConfig.SummonConfig).
 	BossSkillSummon = "summon"
 )
 
 // BossSkillKinds are the skill kinds a boss may use.
-var BossSkillKinds = []string{BossSkillRain, BossSkillBeam, BossSkillSummon}
+var BossSkillKinds = []string{BossSkillRain, BossSkillBeam, BossSkillShockwave, BossSkillSummon}
+
+// Beam patterns (BossSkill.Pattern).
+const (
+	BeamAimed  = ""
+	BeamRadial = "radial"
+	BeamSweep  = "sweep"
+)
 
 // Boss skill targets (BossSkill.Target).
 const (
 	BossTargetRandom   = "random"    // a random living enemy
 	BossTargetNearest  = "nearest"   // the living enemy nearest the boss
 	BossTargetLowestHP = "lowest_hp" // the living enemy with the least HP
+	BossTargetParty    = "party"     // rain: the mean x of the living enemies
+	BossTargetMap      = "map"       // rain: the centre of the map (Spread 0: half the map width)
 )
 
 // BossSkill is one skill of a boss (config_bosses.skills, a JSON array).
@@ -64,12 +83,12 @@ type BossSkill struct {
 	SkillID     string  `json:"skillId"`
 	Name        string  `json:"name"`
 	Description string  `json:"description"`
-	Kind        string  `json:"kind"`     // rain, beam, summon
+	Kind        string  `json:"kind"`     // rain, beam, shockwave (summon: legacy, never cast)
 	Weight      float64 `json:"weight"`   // relative pick chance among the skills off cooldown
 	Cooldown    int     `json:"cooldown"` // boss turns before it may be used again (0: next turn)
 	Target      string  `json:"target,omitempty"`
 
-	Count       int     `json:"count,omitempty"`
+	Count       int     `json:"count,omitempty"` // rain: shells; beam radial / sweep: beams
 	Spread      float64 `json:"spread,omitempty"`
 	Damage      float64 `json:"damage,omitempty"` // × the boss damage
 	Blast       float64 `json:"blast,omitempty"`
@@ -77,12 +96,116 @@ type BossSkill struct {
 	Cap         float64 `json:"cap,omitempty"`
 	Decay       float64 `json:"decay,omitempty"`
 	HalfWidth   float64 `json:"halfWidth,omitempty"`
+	Pattern     string  `json:"pattern,omitempty"` // beam: "" aimed, radial, sweep
 	Status      string  `json:"status,omitempty"`
 	StatusTurns int     `json:"statusTurns,omitempty"`
 	LavaRadius  float64 `json:"lavaRadius,omitempty"`
 	LavaTurns   int     `json:"lavaTurns,omitempty"`
 	LavaDamage  int     `json:"lavaDamage,omitempty"`
+	Step        float64 `json:"step,omitempty"`      // shockwave: px between two explodes (0: 150)
+	Interval    float64 `json:"interval,omitempty"`  // shockwave: s between two explodes (0: 0.08)
+	MinFactor   float64 `json:"minFactor,omitempty"` // shockwave: the least share of the damage far away (0: 0.4)
 	MinionID    string  `json:"minionId,omitempty"`
+	// ProjectileKind (rain) is ShotResolved projectiles[].kind of its shells, the art the
+	// clients draw ("": missile); LaunchFrom (rain) "" drops them from the top of the map, boss
+	// launches each from a ring around the boss's body (radius bodySize × RainRingPerBodySize px)
+	// on an arc up to its column, from where it falls.
+	ProjectileKind string `json:"projectileKind,omitempty"`
+	LaunchFrom     string `json:"launchFrom,omitempty"`
+}
+
+// Rain launch points (BossSkill.LaunchFrom).
+const (
+	RainFromTop  = ""
+	RainFromBoss = "boss"
+	// RainRingPerBodySize × the boss's bodySize is the radius of the ring a boss-launched rain
+	// leaves from, around its body centre.
+	RainRingPerBodySize = 30.0
+	// DefaultRainProjectileKind is a boss rain shell's kind without a projectileKind.
+	DefaultRainProjectileKind = "missile"
+)
+
+// validKind reports whether k is a projectile kind ("" or up to 32 of a-z, 0-9, _).
+func validKind(k string) bool {
+	if len(k) > 32 {
+		return false
+	}
+	for _, r := range k {
+		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+// Shockwave defaults (zero fields of a shockwave skill).
+const (
+	DefaultShockwaveStep      = 150.0
+	DefaultShockwaveInterval  = 0.08
+	DefaultShockwaveMinFactor = 0.4
+)
+
+// BossSummon is how a boss summons (config_bosses.summon, boss v3): at the start of each of its
+// turns from round FirstRound on, when the previous wave (the initial minions first) is dead and
+// more than CooldownRounds boss turns have passed since its last summon, Count minions of
+// MinionID appear (at most waves.maxAlive alive) in a ShotResolved of its own (actionMode
+// summon) before its attack; a stunned or frozen boss still summons.
+type BossSummon struct {
+	MinionID       string `json:"minionId"`
+	Count          int    `json:"count"`
+	CooldownRounds int    `json:"cooldownRounds"`
+	FirstRound     int    `json:"firstRound"`
+}
+
+// SummonConfig is how b summons: its summon config, else (a boss v2 row) its first summon
+// skill's minion, count and cooldown from round 1; nil when it never summons.
+func (b BossConfig) SummonConfig() *BossSummon {
+	if b.Summon != nil {
+		s := *b.Summon
+		return &s
+	}
+	for _, s := range b.Skills {
+		if s.Kind == BossSkillSummon {
+			return &BossSummon{MinionID: s.MinionID, Count: s.Count, CooldownRounds: s.Cooldown, FirstRound: 1}
+		}
+	}
+	return nil
+}
+
+// AttackSkills are the skills b may cast as its turn's attack (every kind but summon).
+func (b BossConfig) AttackSkills() []BossSkill {
+	var out []BossSkill
+	for _, s := range b.Skills {
+		if s.Kind != BossSkillSummon {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// ParseBossSummon reads config_bosses.summon into b.Summon (NULL / empty / null: none).
+func ParseBossSummon(b *BossConfig, raw []byte) error {
+	b.Summon = nil
+	if s := strings.TrimSpace(string(raw)); s == "" || s == "null" {
+		return nil
+	}
+	var v BossSummon
+	dec := json.NewDecoder(strings.NewReader(string(raw)))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&v); err != nil {
+		return fmt.Errorf("summon: %w", err)
+	}
+	b.Summon = &v
+	return nil
+}
+
+// SummonJSON is config_bosses.summon of b (nil: SQL NULL).
+func (b BossConfig) SummonJSON() []byte {
+	if b.Summon == nil {
+		return nil
+	}
+	out, _ := json.Marshal(b.Summon)
+	return out
 }
 
 // MinionConfig is a minion type of a boss (config_bosses.minions, a JSON array): its stats, the
@@ -112,9 +235,9 @@ type MinionConfig struct {
 	BodySize    float64 `json:"bodySize"`
 	HitChance   float64 `json:"hitChance,omitempty"`
 
-	Behavior         string  `json:"behavior,omitempty"`         // shooter (""), bomber
+	Behavior         string  `json:"behavior,omitempty"`         // shooter (""), bomber, leaper
 	Movement         string  `json:"movement,omitempty"`         // walk (""), none, fly
-	ShotDamageFactor float64 `json:"shotDamageFactor,omitempty"` // × Damage for its shots (0: bomber 0.35, shooter 1)
+	ShotDamageFactor float64 `json:"shotDamageFactor,omitempty"` // × Damage for its shots (0: bomber 0.8, shooter / leaper 1)
 	DetonateRange    float64 `json:"detonateRange,omitempty"`    // bomber: px from a party player's feet (0: 70)
 	FlyRange         float64 `json:"flyRange,omitempty"`         // fly: px per turn (0: 90)
 	WalkRange        float64 `json:"walkRange,omitempty"`        // walk: px per turn at most, whatever its move energy (0: 80)
@@ -125,6 +248,19 @@ type MinionConfig struct {
 	ExplodeDamagePct float64 `json:"explodeDamagePct,omitempty"` // % of the max HP (0: 50)
 	ExplodeRadius    float64 `json:"explodeRadius,omitempty"`    // px (0: 80)
 	ExplodeCrater    float64 `json:"explodeCrater,omitempty"`    // px (0: 20)
+	// Leaper (boss v3): LeapRange px at most per leap (0: the whole map); LeapDetonateNextTurn
+	// (nil: true) detonates on the turn after a leap when still within detonateRange;
+	// ShootAfterLeap also shoots on the turn it leaps.
+	LeapRange            float64 `json:"leapRange,omitempty"`
+	LeapDetonateNextTurn *bool   `json:"leapDetonateNextTurn,omitempty"`
+	ShootAfterLeap       bool    `json:"shootAfterLeap,omitempty"`
+	// ProjectileKind is ShotResolved projectiles[].kind of its shots ("": a normal shot's).
+	ProjectileKind string `json:"projectileKind,omitempty"`
+}
+
+// LeapDetonates reports whether a leaper detonates on the turn after a leap (default true).
+func (m MinionConfig) LeapDetonates() bool {
+	return m.LeapDetonateNextTurn == nil || *m.LeapDetonateNextTurn
 }
 
 // Minion behaviors (MinionConfig.Behavior), movements (Movement) and blast bases
@@ -132,6 +268,9 @@ type MinionConfig struct {
 const (
 	MinionShooter = "shooter"
 	MinionBomber  = "bomber"
+	// MinionLeaper (boss v3): leaps (UnitJumped) next to the nearest party member when none is
+	// within detonateRange, detonates on its next turn when one still is, else shoots.
+	MinionLeaper = "leaper"
 
 	MinionMoveNone = "none"
 	MinionMoveWalk = "walk"
@@ -148,8 +287,9 @@ var MinionDefaults = MinionConfig{
 	ExplodeDamageOf: ExplodeOfTarget, ExplodeDamagePct: 50, ExplodeRadius: 80, ExplodeCrater: 20,
 }
 
-// BomberShotDamageFactor is a bomber's shot damage factor unless ShotDamageFactor is set.
-const BomberShotDamageFactor = 0.35
+// BomberShotDamageFactor is a bomber's shot damage factor unless ShotDamageFactor is set (boss
+// v3: 0.35 → 0.8).
+const BomberShotDamageFactor = 0.8
 
 // Normalized is m with its zero fields set to their defaults.
 func (m MinionConfig) Normalized() MinionConfig {
@@ -324,6 +464,9 @@ type BossConfig struct {
 	// new point of it at the start of each of its turns (UnitFlew), then casts.
 	Flying bool
 	Hover  *BossHover
+	// Summon (boss v3, config_bosses.summon): the free summon at the start of the boss's turns
+	// (nil: SummonConfig falls back to a legacy summon skill).
+	Summon *BossSummon
 }
 
 // Minion is the boss's minion type id.
@@ -404,8 +547,8 @@ func ValidateBoss(b BossConfig, characters map[string]CharacterConfig, items map
 		return bad("dailyBonusRuns %d outside 0..100", b.DailyBonusRuns)
 	case b.RecommendedLevel < 1:
 		return bad("recommendedLevel %d < 1", b.RecommendedLevel)
-	case len(b.Skills) == 0:
-		return bad("skills: at least one")
+	case len(b.AttackSkills()) == 0:
+		return bad("skills: at least one attack (not a summon)")
 	}
 	if h := b.Hover; h != nil {
 		switch {
@@ -432,8 +575,12 @@ func ValidateBoss(b BossConfig, characters map[string]CharacterConfig, items map
 			return bad("minion %s: bodySize %v outside 0.3..3", m.MinionID, m.BodySize)
 		case !finite(m.HitChance) || m.HitChance < 0 || m.HitChance > 100:
 			return bad("minion %s: hitChance %v outside 0..100", m.MinionID, m.HitChance)
-		case m.Behavior != "" && m.Behavior != MinionShooter && m.Behavior != MinionBomber:
-			return bad("minion %s: behavior %q: shooter or bomber", m.MinionID, m.Behavior)
+		case m.Behavior != "" && m.Behavior != MinionShooter && m.Behavior != MinionBomber && m.Behavior != MinionLeaper:
+			return bad("minion %s: behavior %q: shooter, bomber or leaper", m.MinionID, m.Behavior)
+		case !inRange(m.LeapRange, 0, 5000):
+			return bad("minion %s: leapRange 0..5000", m.MinionID)
+		case !validKind(m.ProjectileKind):
+			return bad("minion %s: projectileKind %q: up to 32 of a-z, 0-9, _", m.MinionID, m.ProjectileKind)
 		case m.Movement != "" && m.Movement != MinionMoveNone && m.Movement != MinionMoveWalk && m.Movement != MinionMoveFly:
 			return bad("minion %s: movement %q: none, walk or fly", m.MinionID, m.Movement)
 		case m.ExplodeDamageOf != "" && m.ExplodeDamageOf != ExplodeOfTarget && m.ExplodeDamageOf != ExplodeOfSelf:
@@ -464,6 +611,14 @@ func ValidateBoss(b BossConfig, characters map[string]CharacterConfig, items map
 	if initial > b.Waves.MaxAlive {
 		return bad("waves.initial: %d minions > maxAlive %d", initial, b.Waves.MaxAlive)
 	}
+	if s := b.Summon; s != nil {
+		switch {
+		case !minions[s.MinionID] || s.Count < 1 || s.Count > 12:
+			return bad("summon: minion %q unknown or count outside 1..12", s.MinionID)
+		case s.CooldownRounds < 0 || s.CooldownRounds > 50 || s.FirstRound < 0 || s.FirstRound > 200:
+			return bad("summon: cooldownRounds 0..50, firstRound 0..200")
+		}
+	}
 
 	skillIDs := map[string]bool{}
 	for i, s := range b.Skills {
@@ -479,24 +634,39 @@ func ValidateBoss(b BossConfig, characters map[string]CharacterConfig, items map
 			return bad("skill %s: weight %v outside (0, 1000]", s.SkillID, s.Weight)
 		case s.Cooldown < 0 || s.Cooldown > 50:
 			return bad("skill %s: cooldown %d outside 0..50", s.SkillID, s.Cooldown)
-		case s.Target != "" && s.Target != BossTargetRandom && s.Target != BossTargetNearest && s.Target != BossTargetLowestHP:
-			return bad("skill %s: target %q: random, nearest or lowest_hp", s.SkillID, s.Target)
+		case s.Target != "" && s.Target != BossTargetRandom && s.Target != BossTargetNearest && s.Target != BossTargetLowestHP &&
+			!(s.Kind == BossSkillRain && (s.Target == BossTargetParty || s.Target == BossTargetMap)):
+			return bad("skill %s: target %q: random, nearest or lowest_hp (rain also party, map)", s.SkillID, s.Target)
 		case s.StatusTurns < 0 || s.StatusTurns > 5 || (s.Status != "" && s.StatusTurns < 1):
 			return bad("skill %s: statusTurns %d (1..5 with a status)", s.SkillID, s.StatusTurns)
 		}
 		switch s.Kind {
 		case BossSkillRain:
 			switch {
-			case s.Count < 1 || s.Count > 40:
-				return bad("skill %s: count %d outside 1..40", s.SkillID, s.Count)
-			case !in(s.Spread, 0, 1200), !in(s.Damage, 0, 20), !in(s.Blast, 1, 400), !in(s.Crater, 0, 200), !in(s.Cap, 0, 50):
-				return bad("skill %s: spread 0..1200, damage 0..20, blast 1..400, crater 0..200, cap 0..50", s.SkillID)
+			case s.Count < 1 || s.Count > 60:
+				return bad("skill %s: count %d outside 1..60", s.SkillID, s.Count)
+			case !in(s.Spread, 0, 3000), !in(s.Damage, 0, 20), !in(s.Blast, 1, 400), !in(s.Crater, 0, 200), !in(s.Cap, 0, 50):
+				return bad("skill %s: spread 0..3000, damage 0..20, blast 1..400, crater 0..200, cap 0..50", s.SkillID)
 			case s.LavaTurns < 0 || s.LavaTurns > 10 || s.LavaDamage < 0 || !in(s.LavaRadius, 0, 400) || (s.LavaTurns > 0 && s.LavaRadius <= 0):
 				return bad("skill %s: lavaTurns 0..10, lavaDamage >= 0, lavaRadius 0..400 (> 0 with lava)", s.SkillID)
+			case !validKind(s.ProjectileKind):
+				return bad("skill %s: projectileKind %q: up to 32 of a-z, 0-9, _", s.SkillID, s.ProjectileKind)
+			case s.LaunchFrom != RainFromTop && s.LaunchFrom != RainFromBoss:
+				return bad("skill %s: launchFrom %q: \"\" (the top of the map) or boss", s.SkillID, s.LaunchFrom)
 			}
 		case BossSkillBeam:
-			if !in(s.Damage, 0, 20) || !in(s.HalfWidth, 1, 200) || !in(s.Decay, 0, 1) {
+			switch {
+			case !in(s.Damage, 0, 20) || !in(s.HalfWidth, 1, 200) || !in(s.Decay, 0, 1):
 				return bad("skill %s: damage 0..20, halfWidth 1..200, decay 0..1", s.SkillID)
+			case s.Pattern != BeamAimed && s.Pattern != BeamRadial && s.Pattern != BeamSweep:
+				return bad("skill %s: pattern %q: \"\", radial or sweep", s.SkillID, s.Pattern)
+			case s.Pattern != BeamAimed && (s.Count < 1 || s.Count > 60):
+				return bad("skill %s: count %d outside 1..60 (beams of a %s)", s.SkillID, s.Count, s.Pattern)
+			}
+		case BossSkillShockwave:
+			if !in(s.Damage, 0, 20) || !in(s.Blast, 0, 400) || !in(s.Crater, 0, 200) || !in(s.Step, 0, 1200) || (s.Step > 0 && s.Step < 20) ||
+				!in(s.Interval, 0, 2) || !in(s.MinFactor, 0, 1) {
+				return bad("skill %s: damage 0..20, blast 0..400, crater 0..200, step 0 or 20..1200, interval 0..2, minFactor 0..1", s.SkillID)
 			}
 		case BossSkillSummon:
 			if !minions[s.MinionID] || s.Count < 1 || s.Count > 12 {
@@ -537,8 +707,9 @@ func inRange(f, lo, hi float64) bool {
 	return !math.IsNaN(f) && !math.IsInf(f, 0) && f >= lo && f <= hi
 }
 
-// SpawnSetPillar marks the spawn points of an arena's pillars (SpawnPoint.Set): the party spawns
-// on random distinct ones and the minions appear on free ones (ArenaPillars).
+// SpawnSetPillar marks the spawn points of an arena's pillars or islets (SpawnPoint.Set; boss v3:
+// the sky islets of arena_ice_witch_islands carry the same tag): the party spawns on random
+// distinct ones and the minions appear on free ones (ArenaPillars).
 const SpawnSetPillar = "pillar"
 
 // ArenaPillars are the arena's pillar spawn points (Set pillar), nil for an arena without.

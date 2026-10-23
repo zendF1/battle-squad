@@ -25,6 +25,7 @@ func mustJSON(t *testing.T, v any) []byte {
 func asTurnOf(m *Match, p *BattlePlayerState) {
 	m.State.CurrentPlayerID = p.PlayerID
 	m.resolving = false
+	m.turnSeq++ // a new turn (a leaper's leapt dates from its own turn)
 	p.MoveEnergy = m.turnMoveEnergy(p)
 	if p.Role == RoleMinion {
 		p.MoveEnergy = m.minionMoveEnergy(p)
@@ -61,7 +62,7 @@ func TestBomberFliesAndDetonates(t *testing.T) {
 			t.Fatal(err)
 		}
 		moved := math.Hypot(drone.Position.X-from.X, drone.Position.Y-from.Y)
-		if fl.PlayerID != drone.PlayerID || fl.From != from || fl.To != drone.Position || moved > 90+61 || // ≤ flyRange (+ the hover lift)
+		if fl.PlayerID != drone.PlayerID || fl.From != from || fl.To != drone.Position || moved > 270+61 || moved < 200 || // ≤ flyRange 270 (+ the hover lift), 3 × v2's
 			math.Abs(fl.Duration-moved/220) > 0.01 || drone.Position.X >= from.X || !drone.IsAlive {
 			t.Fatalf("flight %+v moved %.0f to %v (p0 at %v)", fl, moved, drone.Position, p0.Position)
 		}
@@ -144,7 +145,7 @@ func TestCrabWalksToPlayer(t *testing.T) {
 		asTurnOf(m, crab)
 		before := crab.Position
 		m.minionMove(ctx, crab)
-		if crab.Position.Y >= float64(m.Terrain.Height) || math.Abs(crab.Position.X-before.X) > 81 {
+		if crab.Position.Y >= float64(m.Terrain.Height) || math.Abs(crab.Position.X-before.X) > 241 {
 			t.Fatalf("turn %d: %v → %v", turns, before, crab.Position)
 		}
 		if crab.Position == before {
@@ -152,7 +153,7 @@ func TestCrabWalksToPlayer(t *testing.T) {
 		}
 		m.Terrain.CarveBowl(crab.Position.X+40, crab.Position.Y, 30) // the party shelling the ground in front of it
 	}
-	if m.detonateTarget(crab) != p0 || turns < 3 {
+	if m.detonateTarget(crab) != p0 || turns < 2 {
 		t.Fatalf("after %d turns crab at %v, p0 at %v", turns, crab.Position, p0.Position)
 	}
 	drainMsgs(watch)
@@ -300,7 +301,7 @@ func TestSnowmanDeathBlastChains(t *testing.T) {
 			t.Fatalf("terrain versions out of order %v", versions)
 		}
 	}
-	first := blastDamage(m, p0, p0.MaxHP, s1.Position, 30, 140)
+	first := blastDamage(m, p0, p0.MaxHP, s1.Position, 15, 140)
 	if blastOn["p0"] < first || blastOn[s2.PlayerID] <= 0 || s2.IsAlive || m.State.Players["boss_ice_witch"].HP != bossHP ||
 		p0.MinionDamage < 10 || blastOn["boss_ice_witch"] != 0 {
 		t.Fatalf("blast damage %v (p0 first %d), p0 minion damage %d", blastOn, first, p0.MinionDamage)
@@ -367,9 +368,9 @@ func TestWitchTurnLimit30(t *testing.T) {
 	}
 }
 
-// A fresh bomber needs at least 3 of its own turns (at its default range) to come within
+// A fresh bomber needs at least 2 of its own turns (at its boss v3 range, 3 × v2's) to come within
 // detonateRange of the nearest party spawn from any point it appears at.
-func TestBomberApproachTakesThreeTurns(t *testing.T) {
+func TestBomberApproachTakesTwoTurns(t *testing.T) {
 	loadConfigs(t)
 	gd := gamedata.Current()
 	for _, b := range gamedata.DefaultBosses() {
@@ -396,7 +397,7 @@ func TestBomberApproachTakesThreeTurns(t *testing.T) {
 				if mc.Movement == gamedata.MinionMoveFly {
 					step = mc.FlyRange
 				}
-				if turns := math.Ceil((best - mc.DetonateRange) / step); turns < 3 {
+				if turns := math.Ceil((best - mc.DetonateRange) / step); turns < 2 {
 					t.Fatalf("%s %s at %v: %.0f px from the party, %v turns", b.BossID, mc.MinionID, sp, best, turns)
 				}
 			}
@@ -404,33 +405,31 @@ func TestBomberApproachTakesThreeTurns(t *testing.T) {
 	}
 }
 
-// A summon waits until the previous wave (the initial minions first) is dead, and never goes
-// past maxAlive (3).
+// A summon is due only from summon.firstRound on, when the previous wave (the initial minions
+// first) is dead and more than cooldownRounds rounds after the last summon; it never goes past
+// maxAlive (3 for the robot).
 func TestBossSummonWaits(t *testing.T) {
 	loadConfigs(t)
 	m, _ := bossMatch(t, "steel_robot", 4)
+	due := func() bool { _, ok := m.summonDue(); return ok }
 	m.boss.round = 10
-	picks := func() map[string]bool {
-		seen := map[string]bool{}
-		for i := 0; i < 100; i++ {
-			sk, _ := m.pickBossSkill(rand.New(rand.NewSource(int64(i))))
-			seen[sk.SkillID] = true
-		}
-		return seen
-	}
-	if picks()["drone_wave"] {
-		t.Fatal("summoned while the initial drones live")
+	if due() {
+		t.Fatal("due while the initial drones live")
 	}
 	killPlayer(m.State.Players["minion_drone_1"])
-	if picks()["drone_wave"] {
-		t.Fatal("summoned while a drone of the wave lives")
+	if due() {
+		t.Fatal("due while a drone of the wave lives")
 	}
 	killPlayer(m.State.Players["minion_drone_2"])
-	if !picks()["drone_wave"] {
+	m.boss.round = 1 // before firstRound 2
+	if due() {
+		t.Fatal("due before firstRound")
+	}
+	m.boss.round = 2
+	if !due() {
 		t.Fatal("no summon once the wave is dead")
 	}
-	bossCast(t, m, "drone_wave")
-	if m.aliveMinions() != 2 || len(m.boss.wave) != 2 || picks()["drone_wave"] {
+	if _, ok := m.bossFreeSummon(m.bossPlayer()); !ok || m.aliveMinions() != 3 || len(m.boss.wave) != 3 || due() || m.boss.lastSummon != 2 {
 		t.Fatalf("after a summon: %d alive, wave %v", m.aliveMinions(), m.boss.wave)
 	}
 	// summoned by the boss: the free spawn nearest it first
@@ -439,6 +438,16 @@ func TestBossSummonWaits(t *testing.T) {
 	for _, sp := range m.boss.spawns[1:] {
 		if math.Abs(sp.X-boss.Position.X) < math.Abs(first.Position.X-boss.Position.X)-1 {
 			t.Fatalf("summoned at %v, %v is nearer the boss", first.Position, sp)
+		}
+	}
+	// the wave dies at once: the cooldown (3 rounds) still holds
+	for _, id := range m.boss.wave {
+		killPlayer(m.State.Players[id])
+	}
+	for r, want := range map[int]bool{3: false, 5: false, 6: true} {
+		m.boss.round = r
+		if due() != want {
+			t.Fatalf("round %d: due %v", r, !want)
 		}
 	}
 }

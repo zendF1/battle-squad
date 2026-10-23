@@ -81,9 +81,10 @@ func (m *Match) minionCfg(p *BattlePlayerState) (gamedata.MinionConfig, bool) {
 	return mc.Normalized(), ok
 }
 
-// isMover reports whether p plays the mover turn: a bomber or a flying minion.
+// isMover reports whether p plays the mover turn: a bomber, a leaper or a flying minion.
 func (m *Match) isMover(p *BattlePlayerState) bool {
-	return m.boss != nil && p.Role == RoleMinion && (p.Behavior == gamedata.MinionBomber || p.Movement == gamedata.MinionMoveFly)
+	return m.boss != nil && p.Role == RoleMinion &&
+		(p.Behavior == gamedata.MinionBomber || p.Behavior == gamedata.MinionLeaper || p.Movement == gamedata.MinionMoveFly)
 }
 
 // bossHovers reports whether p is a flying boss with a hover band.
@@ -146,7 +147,7 @@ func (m *Match) freePillar(rng *rand.Rand) (Vector2, bool) {
 	for _, sp := range m.boss.pillars {
 		taken := false
 		for _, p := range m.State.Players {
-			if p.IsAlive && !p.Flying && math.Abs(p.Position.X-sp.X) < pillarFreeRadius {
+			if p.IsAlive && !p.Flying && math.Hypot(p.Position.X-sp.X, p.Position.Y-sp.Y) < pillarFreeRadius {
 				taken = true
 				break
 			}
@@ -201,10 +202,18 @@ func (m *Match) nearestParty(p *BattlePlayerState) *BattlePlayerState {
 }
 
 // detonateTarget is the party member a bomber p is within detonateRange of (the nearest), nil
-// when it is not a bomber or nobody is that close.
+// when it is not a bomber or nobody is that close. A leaper detonates only on the turn after its
+// leap (leapDetonateNextTurn).
 func (m *Match) detonateTarget(p *BattlePlayerState) *BattlePlayerState {
 	mc, ok := m.minionCfg(p)
-	if !ok || mc.Behavior != gamedata.MinionBomber {
+	switch {
+	case !ok:
+		return nil
+	case mc.Behavior == gamedata.MinionLeaper:
+		if !mc.LeapDetonates() || !m.leaptLastTurn(p) {
+			return nil
+		}
+	case mc.Behavior != gamedata.MinionBomber:
 		return nil
 	}
 	t := m.nearestParty(p)
@@ -254,6 +263,9 @@ func (m *Match) minionMove(ctx context.Context, p *BattlePlayerState) float64 {
 	target := m.nearestParty(p)
 	if !ok || target == nil || !canMove(m.gd, p) {
 		return 0
+	}
+	if mc.Behavior == gamedata.MinionLeaper {
+		return m.leaperMove(p, mc)
 	}
 	switch p.Movement {
 	case gamedata.MinionMoveFly:
@@ -316,6 +328,10 @@ func (m *Match) moverStrike(ctx context.Context) {
 		m.runOnTurnAfter(ctx, secs(moverActDelaySec), func(ctx context.Context) { m.selfDestruct(ctx, p) })
 		return
 	}
+	if m.leaperRests(p) {
+		m.resolveTurnAfter(ctx, moverActDelaySec, m.endTurn)
+		return
+	}
 	act, ok := m.minionShot(p)
 	if !ok {
 		m.endTurn(ctx)
@@ -335,6 +351,9 @@ func (m *Match) playMoverTurn(ctx context.Context, p *BattlePlayerState) {
 	}
 	if m.detonateTarget(p) != nil {
 		m.selfDestruct(ctx, p)
+		return
+	}
+	if m.leaperRests(p) {
 		return
 	}
 	if act, ok := m.minionShot(p); ok {

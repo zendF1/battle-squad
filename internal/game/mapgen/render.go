@@ -32,8 +32,11 @@ func Files() map[string]string {
 		WideDownFile:   WideDownSQL(),
 		ArenasUpFile:   ArenasUpSQL(),
 		ArenasDownFile: ArenasDownSQL(),
-		MapsYAMLFile:   MapsYAML(),
-		BricksYAMLFile: BricksYAML(),
+		// 051: the boss v3 arena
+		ArenasV3UpFile:   ArenasV3UpSQL(),
+		ArenasV3DownFile: ArenasV3DownSQL(),
+		MapsYAMLFile:     MapsYAML(),
+		BricksYAMLFile:   BricksYAML(),
 	}
 }
 

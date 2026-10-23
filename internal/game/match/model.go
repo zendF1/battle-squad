@@ -85,6 +85,11 @@ type BattlePlayerState struct {
 	Flying   bool   `json:"flying,omitempty"`
 	Behavior string `json:"behavior,omitempty"`
 	Movement string `json:"movement,omitempty"`
+	// Boss v3: Leapt is true on a leaper from its leap (UnitJumped) until the end of its next
+	// turn, when it detonates if a party member is still within detonateRange; LeapSeq is the
+	// turn it leapt on.
+	Leapt   bool `json:"leapt,omitempty"`
+	LeapSeq int  `json:"-"`
 }
 
 // The roles of the boss's side (BattlePlayerState.Role).
@@ -183,7 +188,9 @@ type ProjectileResult struct {
 	CraterRadius float64 `json:"craterRadius"`
 	// Kind is what a skill projectile is: flare (missile rain signal, lands without exploding),
 	// missile (falls from the top of the map), bomb (bomb chain), seed (bloom, lands on an ally
-	// without exploding); "" for a normal shot.
+	// without exploding); "" for a normal shot. Boss mode: a boss rain's projectileKind
+	// (steel_shell, magma_bomb, ice_spike, ice_shard; missile by default) and a minion's shots'
+	// (drone_bolt, crab_spit, snowball).
 	Kind string `json:"kind,omitempty"`
 	// LaunchDelay is when the projectile leaves (s since the shot), the time of its first path
 	// sample: path times are always seconds since the shot was fired.
@@ -232,7 +239,7 @@ type ShotEvent struct {
 // the time-ordered effects. The server state already reflects the outcome; clients replay it.
 type ShotResolved struct {
 	ShooterID   string `json:"shooterId"`
-	ActionMode  string `json:"actionMode"` // weapon, skill, item
+	ActionMode  string `json:"actionMode"` // weapon, skill, item; boss mode: self_destruct, death_blast, summon
 	SkillID     string `json:"skillId,omitempty"`
 	ItemID      string `json:"itemId,omitempty"`
 	SkillEnergy int    `json:"skillEnergy"` // shooter's skill energy after the shot

@@ -90,7 +90,7 @@ func TestNewBossSide(t *testing.T) {
 	loadConfigs(t)
 	m, _ := bossMatch(t, "steel_robot", 4)
 	boss := m.State.Players["boss_steel_robot"]
-	if boss == nil || boss.Role != RoleBoss || boss.BossID != "steel_robot" || boss.HP != 12000 || boss.MaxHP != 12000 ||
+	if boss == nil || boss.Role != RoleBoss || boss.BossID != "steel_robot" || boss.HP != 10000 || boss.MaxHP != 10000 ||
 		boss.Defense != 60 || boss.BodySize != 3 || boss.TeamID != 2 || !boss.IsBot || boss.DisplayName != "Rô-bốt Thép" {
 		t.Fatalf("boss %+v", boss)
 	}
@@ -100,7 +100,7 @@ func TestNewBossSide(t *testing.T) {
 	drone := m.State.Players["minion_drone_1"]
 	spark := gamedata.Current().Data.Weapons[gamedata.Current().Data.Characters["spark"].WeaponID]
 	if drone == nil || drone.Role != RoleMinion || drone.MinionID != "drone" || drone.HP != 650 || drone.CharacterID != "spark" ||
-		drone.Damage() != 56 || drone.BodySize != 0.7 || drone.TeamID != 2 || drone.DamageBonus != 56-spark.Damage || // 160 × 0.35
+		drone.Damage() != 128 || drone.BodySize != 0.7 || drone.TeamID != 2 || drone.DamageBonus != 128-spark.Damage || // 160 × 0.8
 		!drone.Flying || drone.Behavior != "bomber" || drone.Movement != "fly" {
 		t.Fatalf("drone %+v", drone)
 	}
@@ -161,8 +161,7 @@ func TestBossTurnOrder(t *testing.T) {
 	}
 	// a minion dies: it is left out once the order is laid out again (a summon)
 	killPlayer(m.State.Players["minion_drone_1"])
-	summon, _ := m.boss.cfg.Skill("drone_wave")
-	m.castBossSkill(ctx, summon)
+	m.bossSummon("drone", 3, m.newTimeline()) // 1 alive of maxAlive 3: two more
 	order = m.State.TurnOrder
 	if len(order) != 8 || order[7] != "boss_steel_robot" || order[1] != "minion_drone_2" || order[3] != "minion_drone_3" || order[5] != "minion_drone_4" {
 		t.Fatalf("order after summon %v", order)
@@ -215,8 +214,10 @@ func TestBossShield(t *testing.T) {
 
 	m.startTurn(context.Background())
 	m.State.CurrentPlayerID = boss.PlayerID
-	summon, _ := m.boss.cfg.Skill("drone_wave")
-	m.castBossSkill(context.Background(), summon)
+	m.boss.round = 2
+	if _, ok := m.bossFreeSummon(boss); !ok {
+		t.Fatal("no free summon")
+	}
 	if err := json.Unmarshal(lastEvent(t, drainMsgs(watch), "BossShieldChanged"), &ev); err != nil || !ev.Shielded || !*m.State.BossShielded {
 		t.Fatalf("shield up %+v %v", ev, err)
 	}
@@ -266,25 +267,27 @@ func TestBossSkillEvents(t *testing.T) {
 		bossCast(t, m, "shell_barrage")
 		s := shotOf(t, watch)
 		ev := eventTypes(s)
-		if s.ShooterID != "boss_steel_robot" || s.ActionMode != "skill" || s.SkillID != "shell_barrage" || len(s.Projectiles) != 10 ||
-			ev["rain"] != 1 || ev["explode"] < 5 || ev["damage"] < 1 || p.HP >= p.MaxHP {
+		if s.ShooterID != "boss_steel_robot" || s.ActionMode != "skill" || s.SkillID != "shell_barrage" || len(s.Projectiles) != 24 ||
+			ev["rain"] != 1 || ev["explode"] < 12 || ev["damage"] < 1 || p.HP >= p.MaxHP {
 			t.Fatalf("rain shot %+v events %v hp %d", s.SkillID, ev, p.HP)
 		}
 		for _, pr := range s.Projectiles {
-			if pr.Kind != "missile" || pr.SkillID != "shell_barrage" || pr.ExplosionRadius != 55 {
+			if pr.Kind != "steel_shell" || pr.SkillID != "shell_barrage" || pr.ExplosionRadius != 75 || pr.CraterRadius != 21 {
 				t.Fatalf("projectile %+v", pr)
 			}
 		}
-		cap := int(math.Round(reduceByDefense(1.2*420, p.Defense, gamedata.DefenseK())))
+		cap := int(math.Round(reduceByDefense(1.0*630, p.Defense, gamedata.DefenseK())))
 		if lost := p.MaxHP - p.HP; lost > cap {
 			t.Fatalf("lost %d > cap %d", lost, cap)
 		}
 	})
 
-	t.Run("beam", func(t *testing.T) {
+	t.Run("beam", func(t *testing.T) { // an aimed beam (pattern "", boss v2) still works
 		m, watch := bossMatch(t, "steel_robot", 4)
+		m.boss.cfg.Skills = append(m.boss.cfg.Skills, gamedata.BossSkill{SkillID: "aimed", Name: "Aimed", Kind: gamedata.BossSkillBeam, Weight: 1,
+			Target: gamedata.BossTargetLowestHP, Damage: 1.3, HalfWidth: 16, Decay: 0.85})
 		m.State.Players["p2"].HP = 100 // lowest HP: the target
-		bossCast(t, m, "laser_beam")
+		bossCast(t, m, "aimed")
 		s := shotOf(t, watch)
 		ev := eventTypes(s)
 		if ev["beam"] != 1 || ev["damage"] < 1 || m.State.Players["p2"].IsAlive {
@@ -303,8 +306,13 @@ func TestBossSkillEvents(t *testing.T) {
 
 	t.Run("summon", func(t *testing.T) {
 		m, watch := bossMatch(t, "ice_witch", 4)
-		killPlayer(m.State.Players["minion_snowman_1"])
-		bossCast(t, m, "snowman_wave")
+		for i := 1; i <= 3; i++ {
+			killPlayer(m.State.Players[fmt.Sprintf("minion_snowman_%d", i)])
+		}
+		m.boss.round = 2
+		if _, ok := m.bossFreeSummon(m.bossPlayer()); !ok {
+			t.Fatal("no summon")
+		}
 		s := shotOf(t, watch)
 		var summons []ShotEvent
 		for _, e := range s.Events {
@@ -312,12 +320,13 @@ func TestBossSkillEvents(t *testing.T) {
 				summons = append(summons, e)
 			}
 		}
-		// 2 alive of maxAlive 3: one more, with the whole unit in the event
+		// the wave is dead: five more (maxAlive 5), the whole unit in each event
 		e := summons
-		if len(e) != 1 || e[0].MinionID != "snowman" || e[0].PlayerID != "minion_snowman_4" || e[0].HP == nil || *e[0].HP != 900 ||
+		if s.ActionMode != ActionSummon || s.SkillID != "" || s.ShooterID != "boss_ice_witch" || len(s.Events) != 5 ||
+			len(e) != 5 || e[0].MinionID != "snowman" || e[0].PlayerID != "minion_snowman_4" || e[0].HP == nil || *e[0].HP != 900 ||
 			e[0].Position == nil || e[0].MaxHP == nil || *e[0].MaxHP != 900 || e[0].DisplayName != "Người tuyết" || e[0].TeamID != 2 ||
-			e[0].BodySize != 0.85 || e[0].Flying == nil || *e[0].Flying || e[0].Behavior != "shooter" || e[0].Movement != "none" {
-			t.Fatalf("summons %+v", summons)
+			e[0].BodySize != 0.85 || e[0].Flying == nil || *e[0].Flying || e[0].Behavior != "leaper" || e[0].Movement != "none" {
+			t.Fatalf("summon shot %+v", s)
 		}
 		var raw struct {
 			Events []map[string]any `json:"events"`
@@ -333,14 +342,13 @@ func TestBossSkillEvents(t *testing.T) {
 			}
 		}
 		p := m.State.Players["minion_snowman_4"]
-		if p == nil || !p.IsAlive || p.Position != *e[0].Position || m.aliveMinions() != 3 {
+		if p == nil || !p.IsAlive || p.Position != *e[0].Position || m.aliveMinions() != 5 {
 			t.Fatalf("summoned %+v alive %d", p, m.aliveMinions())
 		}
-		// full: the summon is not picked
-		for i := 0; i < 20; i++ {
-			if sk, _ := m.pickBossSkill(rand.New(rand.NewSource(int64(i)))); sk.Kind == gamedata.BossSkillSummon {
-				t.Fatal("picked a summon with maxAlive minions")
-			}
+		// full, and the wave lives: no summon due
+		m.boss.round = 10
+		if _, due := m.summonDue(); due {
+			t.Fatal("a summon is due with maxAlive minions")
 		}
 	})
 
@@ -355,17 +363,17 @@ func TestBossSkillEvents(t *testing.T) {
 		}
 		// a party member standing in a pool burns at the start of its turn; the pool dries up
 		z := m.State.LavaZones[0]
-		if z.Damage != 150 || z.Radius != 50 || z.ExpiresRound != m.boss.round+2 {
+		if z.Damage != 120 || z.Radius != 40 || z.ExpiresRound != m.boss.round+1 {
 			t.Fatalf("zone %+v", z)
 		}
 		p.Position = z.Position
 		p.Shield, p.HP, p.StatusEffects = 0, p.MaxHP, []StatusEffect{}
 		m.State.CurrentPlayerID = "p0"
 		m.startTurn(context.Background())
-		if p.HP != p.MaxHP-150 {
+		if p.HP != p.MaxHP-120 {
 			t.Fatalf("lava: hp %d of %d", p.HP, p.MaxHP)
 		}
-		m.boss.round += 2
+		m.boss.round++
 		m.bossTurnEnded(context.Background())
 		if len(m.State.LavaZones) != 0 {
 			t.Fatalf("zones left %v", m.State.LavaZones)
@@ -373,15 +381,15 @@ func TestBossSkillEvents(t *testing.T) {
 	})
 }
 
-// The skill pick: by weight among the skills off cooldown; a skill cast this round waits its
-// cooldown in boss turns.
+// The skill pick: by weight among the attack skills off cooldown (never a summon skill); a skill
+// cast this round waits its cooldown in boss turns.
 func TestBossSkillCooldown(t *testing.T) {
 	loadConfigs(t)
 	m, _ := bossMatch(t, "steel_robot", 4)
+	m.boss.cfg.Skills = append(m.boss.cfg.Skills, gamedata.BossSkill{SkillID: "drone_wave", Name: "W", Kind: gamedata.BossSkillSummon,
+		Weight: 100, MinionID: "drone", Count: 2}) // a legacy summon skill: never an attack
 	m.boss.round = 1
-	m.boss.wave = nil                 // the initial drones are not the last wave (see TestBossSummonWaits)
 	m.boss.lastUsed["laser_beam"] = 1 // cooldown 2: free again at round 4
-	m.boss.lastUsed["drone_wave"] = 1 // cooldown 3
 	for r := 2; r <= 3; r++ {
 		m.boss.round = r
 		for i := 0; i < 30; i++ {
@@ -396,7 +404,7 @@ func TestBossSkillCooldown(t *testing.T) {
 		sk, _ := m.pickBossSkill(rand.New(rand.NewSource(int64(i))))
 		seen[sk.SkillID] = true
 	}
-	if !seen["laser_beam"] || !seen["drone_wave"] || !seen["shell_barrage"] {
+	if !seen["laser_beam"] || seen["drone_wave"] || !seen["shell_barrage"] {
 		t.Fatalf("picked %v", seen)
 	}
 }
@@ -565,6 +573,7 @@ func playBossMatch(t *testing.T, m *Match, maxTurns int) int {
 		seq := m.turnSeq
 		cur := m.State.Players[m.State.CurrentPlayerID]
 		if cur.Role == RoleBoss {
+			m.bossFreeSummon(cur) // the free summon first, even when it lost its attack
 			if skipsTurn(m.gd, cur) == "" {
 				m.bossHover(cur)
 				if sk, ok := m.pickBossSkill(m.skillRNG()); ok {

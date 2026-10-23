@@ -62,6 +62,8 @@ type bossRuntime struct {
 	seq      int            // minions created
 	shielded bool
 	lavaSeq  int
+	// lastSummon is the round of the boss's last free summon (0: none yet).
+	lastSummon int
 }
 
 // BossPlayerID is the player id of boss bossID in its match.
@@ -331,29 +333,24 @@ func (m *Match) bossAct(ctx context.Context) {
 	})
 }
 
-// pickBossSkill picks the boss's skill this turn: by weight among the skills off cooldown (cast
-// more than cooldown boss turns ago) that can act (a summon needs room under waves.maxAlive);
-// when none is, the first skill that is not a summon.
+// pickBossSkill picks the boss's attack this turn: by weight among its attack skills
+// (AttackSkills: summoning is free, never an attack) off cooldown (cast more than cooldown boss
+// turns ago); when none is, the first attack skill.
 func (m *Match) pickBossSkill(rng *rand.Rand) (gamedata.BossSkill, bool) {
 	b := m.boss
-	alive := m.aliveMinions()
+	attacks := b.cfg.AttackSkills()
 	var cands []gamedata.BossSkill
 	total := 0.0
-	for _, s := range b.cfg.Skills {
+	for _, s := range attacks {
 		if last, used := b.lastUsed[s.SkillID]; used && b.round-last <= s.Cooldown {
 			continue
-		}
-		if s.Kind == gamedata.BossSkillSummon && (alive >= b.cfg.Waves.MaxAlive || len(b.spawns) == 0 || m.waveAlive()) {
-			continue // full, nowhere to stand, or the previous wave still fights
 		}
 		cands = append(cands, s)
 		total += s.Weight
 	}
 	if len(cands) == 0 {
-		for _, s := range b.cfg.Skills {
-			if s.Kind != gamedata.BossSkillSummon {
-				return s, true
-			}
+		if len(attacks) > 0 {
+			return attacks[0], true
 		}
 		return gamedata.BossSkill{}, false
 	}
@@ -381,9 +378,16 @@ func (m *Match) castBossSkill(ctx context.Context, skill gamedata.BossSkill) {
 	case gamedata.BossSkillRain:
 		m.bossRain(boss, skill, shot, tl, rng)
 	case gamedata.BossSkillBeam:
-		m.bossBeam(boss, skill, tl, rng)
-	case gamedata.BossSkillSummon:
-		m.bossSummon(skill, tl)
+		switch skill.Pattern {
+		case gamedata.BeamRadial:
+			m.bossRadialBeams(boss, skill, tl, rng)
+		case gamedata.BeamSweep:
+			m.bossSweepBeams(boss, skill, tl)
+		default:
+			m.bossBeam(boss, skill, tl, rng)
+		}
+	case gamedata.BossSkillShockwave:
+		m.bossShockwave(boss, skill, tl)
 	}
 	tl.reach(bossChargeTime)
 	m.el.Log("BossSkill", boss.PlayerID, skill.SkillID)
@@ -420,14 +424,14 @@ func (m *Match) bossTarget(boss *BattlePlayerState, target string, rng *rand.Ran
 // crater px crater, at most cap × the boss damage per target; status on every enemy damaged;
 // with lava each impact leaves a lava pool (a lava event).
 func (m *Match) bossRain(boss *BattlePlayerState, s gamedata.BossSkill, shot *ShotResolved, tl *shotTimeline, rng *rand.Rand) {
-	target := m.bossTarget(boss, s.Target, rng)
-	if target == nil {
+	centre, spread, ok := m.rainCentre(boss, s, rng)
+	if !ok {
 		return
 	}
 	base := float64(m.boss.cfg.Damage)
 	tu := gamedata.DefaultRainTuning()
-	xs := rainColumns(rng, s.Count, target.Position.X, s.Spread, m.Terrain.Width, 1)
-	tl.add(ShotEvent{T: bossChargeTime, Type: "rain", Position: vecPtr(target.Position), Radius: s.Spread, Count: s.Count})
+	xs := rainColumns(rng, s.Count, centre.X, spread, m.Terrain.Width, 1)
+	tl.add(ShotEvent{T: bossChargeTime, Type: "rain", Position: vecPtr(centre), Radius: spread, Count: s.Count})
 
 	weapon := gamedata.WeaponConfig{WeaponID: s.SkillID, Damage: m.boss.cfg.Damage, ExplosionRadius: int(math.Round(s.Blast)), ProjectileWeight: 1}
 	var limit *skillCap
@@ -435,6 +439,20 @@ func (m *Match) bossRain(boss *BattlePlayerState, s gamedata.BossSkill, shot *Sh
 		limit = newSkillCap(m.capOfBase(s.Cap * base))
 	}
 	launch := func(k int) float64 { return bossChargeTime + bossRainInterval*float64(k) }
+	// from the boss (launchFrom boss): each shell first arcs from its ring around the boss's body
+	// up to its column (arcs[k], arcTime[k] s), then falls from startY
+	startY := tu.StartY
+	var arcs [][]ProjectileStep
+	arcTime := make([]float64, s.Count)
+	if s.LaunchFrom == gamedata.RainFromBoss {
+		startY = rainArcTopY
+		arcs, arcTime = m.rainArcs(boss, xs, startY, rng)
+	}
+	drop := func(k int) float64 { return launch(k) + arcTime[k] }
+	kind := s.ProjectileKind
+	if kind == "" {
+		kind = gamedata.DefaultRainProjectileKind
+	}
 	dropPower := rainDropPower(tu, m.gd.Physics)
 	statused := map[string]bool{}
 	left := make([]int, s.Count)
@@ -445,9 +463,9 @@ func (m *Match) bossRain(boss *BattlePlayerState, s gamedata.BossSkill, shot *Sh
 		pick, bestEnd := -1, math.MaxFloat64
 		var best *ProjectileResult
 		for i, k := range left {
-			r := SimulateProjectile(boss.PlayerID, boss.TeamID, Vector2{X: xs[k], Y: tu.StartY}, 270, dropPower,
+			r := SimulateProjectile(boss.PlayerID, boss.TeamID, Vector2{X: xs[k], Y: startY}, 270, dropPower,
 				weapon, WindState{}, m.Terrain, m.State.Players, 0)
-			if end := launch(k) + flightEnd(r); end < bestEnd {
+			if end := drop(k) + flightEnd(r); end < bestEnd {
 				pick, best, bestEnd = i, r, end
 			}
 		}
@@ -455,8 +473,17 @@ func (m *Match) bossRain(boss *BattlePlayerState, s gamedata.BossSkill, shot *Sh
 		left = append(left[:pick], left[pick+1:]...)
 
 		boss.ShotsFired++
-		delayPath(best, launch(k))
-		best.SkillID, best.Kind = s.SkillID, "missile"
+		delayPath(best, drop(k))
+		if arcs != nil {
+			arc := make([]ProjectileStep, len(arcs[k]))
+			for i, st := range arcs[k] {
+				st.Time += launch(k)
+				arc[i] = st
+			}
+			best.Path = append(arc, best.Path...)
+			best.LaunchDelay = launch(k)
+		}
+		best.SkillID, best.Kind = s.SkillID, kind
 		best.ExplosionRadius, best.CraterRadius = s.Blast, s.Crater
 		shot.Projectiles = append(shot.Projectiles, best)
 		if best.ExplosionPoint == nil {
@@ -547,16 +574,16 @@ func (m *Match) bossBeam(boss *BattlePlayerState, s gamedata.BossSkill, tl *shot
 	}
 }
 
-// bossSummon: count minions of the skill's type appear (summon events bossSummonGap apart from
+// bossSummon: count minions of type minionID appear (summon events bossSummonGap apart from
 // bossChargeTime) at the minion spawn points, at most waves.maxAlive alive; they take their
-// turns from the next round.
-func (m *Match) bossSummon(s gamedata.BossSkill, tl *shotTimeline) {
+// turns from the next round. It reports how many appeared.
+func (m *Match) bossSummon(minionID string, count int, tl *shotTimeline) int {
 	b := m.boss
-	mc, ok := b.cfg.Minion(s.MinionID)
+	mc, ok := b.cfg.Minion(minionID)
 	if !ok || len(b.spawns) == 0 {
-		return
+		return 0
 	}
-	n := min(s.Count, b.cfg.Waves.MaxAlive-m.aliveMinions())
+	n := min(count, b.cfg.Waves.MaxAlive-m.aliveMinions())
 	rng := m.turnRNG("summon")
 	if n > 0 {
 		b.wave = nil
@@ -575,6 +602,7 @@ func (m *Match) bossSummon(s gamedata.BossSkill, tl *shotTimeline) {
 	if n > 0 {
 		m.rebuildBossTurnOrder()
 	}
+	return max(n, 0)
 }
 
 // waveAlive reports whether a minion of the last wave still lives.

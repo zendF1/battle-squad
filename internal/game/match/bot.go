@@ -227,6 +227,13 @@ func (b *BotBrain) DecideAction(m *Match, bot *BattlePlayerState, turn botTurnSt
 		return nil
 	}
 
+	// Boss v3: walk out of the reach of a leaper that is about to blow up next to it
+	if !turn.moved {
+		if act, ok := b.dodgeLeapers(m, bot, now); ok {
+			return act
+		}
+	}
+
 	if bot.SkillEnergy >= m.gd.Rules.SkillEnergy.Max {
 		if act, ok := b.skillAction(m, bot, weapon, now); ok {
 			return act

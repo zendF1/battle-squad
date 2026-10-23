@@ -15,6 +15,9 @@ const (
 	ArenasDownFile     = "migrations/045_boss_arenas.down.sql"
 	ArenasV2UpFile     = "migrations/047_boss_arenas_v2.up.sql"
 	ArenaSpawnsFixFile = "migrations/049_boss_placement.up.sql"
+	// 051: the boss v3 arena (ArenasV3), generated like 045.
+	ArenasV3UpFile   = "migrations/051_boss_arena_islands.up.sql"
+	ArenasV3DownFile = "migrations/051_boss_arena_islands.down.sql"
 )
 
 // ArenaDef is a boss arena (not mirrored unless Build mirrors it). Spawn cells (column, row of
@@ -157,8 +160,51 @@ var ArenasV2 = []ArenaDef{
 	},
 }
 
-// AllArenas are every generated arena: Arenas, then ArenasV2.
-func AllArenas() []ArenaDef { return append(append([]ArenaDef{}, Arenas...), ArenasV2...) }
+// WitchIslets are the sky ice islets of arena_ice_witch_islands (boss v3, migration 051): the
+// columns c0..c1 and the top row of each, left to right, staggered in height with gaps between
+// them and nothing under them (a fall is out of the map). Each is IsletThick rows of hard ice
+// under a soft snow cap of IsletSnow rows; the 14-cell ones are the large islets. The tops stay
+// at or below row 33 (y 528), clear under the witch's hover band (feet y 320..430).
+var WitchIslets = [12][3]int{
+	{3, 12, 40}, {17, 26, 50}, {22, 33, 33}, {38, 51, 44}, {55, 64, 56}, {60, 69, 34},
+	{72, 85, 47}, {88, 97, 36}, {104, 117, 45}, {120, 129, 52}, {125, 134, 33}, {138, 147, 42},
+}
+
+const (
+	IsletThick = 5 // rows of an islet, its bottom chamfered over 3 rows
+	IsletSnow  = 2 // soft snow rows on its top
+)
+
+// witchIslet is the spawn cell on top of islet i (its middle column).
+func witchIslet(i int) [2]int {
+	is := WitchIslets[i]
+	return [2]int{(is[0] + is[1]) / 2, is[2]}
+}
+
+// ArenasV3 are the boss v3 arenas (migration 051): Phù Thuỷ Băng's sky ice islands, which
+// replace arena_ice_witch_pillars (kept in config_maps, used by no boss, out of the PvP rotation).
+var ArenasV3 = []ArenaDef{
+	{
+		ID: "arena_ice_witch_islands", Name: "Đảo băng", Theme: "ice", Wind: [2]float64{1, 3.5},
+		Description: "Boss arena of Phù Thuỷ Băng v3: twelve floating ice islets (hard ice under snow caps) at staggered heights over the open abyss, nothing below them; the party on random islets, snowmen on the free ones, the witch hovering above.",
+		Build: func(g *Grid) {
+			for _, is := range WitchIslets {
+				g.Island(is[0], is[1], is[2], IsletThick, 3, IsletSnow)
+			}
+		},
+		// the outer and large islets first (the party's fallback), the boss over the middle one,
+		// every other islet a minion spawn
+		Party:   [4][2]int{witchIslet(0), witchIslet(11), witchIslet(3), witchIslet(8)},
+		Boss:    witchIslet(6),
+		Minions: [][2]int{witchIslet(1), witchIslet(2), witchIslet(4), witchIslet(5), witchIslet(6), witchIslet(7), witchIslet(9), witchIslet(10)},
+		Pillars: true,
+	},
+}
+
+// AllArenas are every generated arena: Arenas, ArenasV2, then ArenasV3.
+func AllArenas() []ArenaDef {
+	return append(append(append([]ArenaDef{}, Arenas...), ArenasV2...), ArenasV3...)
+}
 
 // Grid draws the arena's grid (not mirrored).
 func (a ArenaDef) Grid() *Grid {
@@ -233,6 +279,15 @@ func arenasUpSQL(file string, defs []ArenaDef, title string) string {
 	}
 	return b.String()
 }
+
+// ArenasV3UpSQL is migration 051: the boss v3 arena (the witch's sky ice islands), inserted the
+// same way (a row that exists is kept).
+func ArenasV3UpSQL() string {
+	return arenasUpSQL(ArenasV3UpFile, ArenasV3, "-- The boss v3 arena (Phù Thuỷ Băng's sky ice islands; 050_boss_mode_v3 points the witch at it)")
+}
+
+// ArenasV3DownSQL removes the arena 051 inserted.
+func ArenasV3DownSQL() string { return arenasDownSQL(ArenasV3DownFile, ArenasV3) }
 
 // ArenasDownSQL removes the arenas 045 inserted.
 func ArenasDownSQL() string { return arenasDownSQL(ArenasDownFile, Arenas) }

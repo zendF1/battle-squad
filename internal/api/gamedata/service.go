@@ -225,10 +225,21 @@ func bosses(snap *gd.Snapshot) []Boss {
 				Behavior: m.Behavior, Movement: m.Movement, ExplodeOnDeath: m.ExplodeOnDeath, ExplodeRadius: m.ExplodeRadius,
 				ExplodeDamagePct: m.ExplodeDamagePct, ExplodeDamageOf: m.ExplodeDamageOf, ExplodeCrater: m.ExplodeCrater,
 				DetonateRange: m.DetonateRange, ShotDamageFactor: m.ShotDamageFactor, FlyRange: m.FlyRange, WalkRange: m.WalkRange,
-				HoverHeight: m.HoverHeight, FlySpeed: m.FlySpeed})
+				HoverHeight: m.HoverHeight, FlySpeed: m.FlySpeed, LeapRange: m.LeapRange, LeapDetonateNextTurn: m.LeapDetonates(),
+				ShootAfterLeap: m.ShootAfterLeap, ProjectileKind: m.ProjectileKind})
 		}
-		for _, s := range b.Skills {
-			e.Skills = append(e.Skills, BossSkill{SkillID: s.SkillID, Name: s.Name, Description: s.Description, Kind: s.Kind})
+		for _, s := range b.AttackSkills() {
+			sk := BossSkill{SkillID: s.SkillID, Name: s.Name, Description: s.Description, Kind: s.Kind, Pattern: s.Pattern}
+			if s.Kind == gd.BossSkillRain {
+				sk.ProjectileKind, sk.LaunchFrom = s.ProjectileKind, s.LaunchFrom
+				if sk.ProjectileKind == "" {
+					sk.ProjectileKind = gd.DefaultRainProjectileKind
+				}
+			}
+			e.Skills = append(e.Skills, sk)
+		}
+		if s := b.SummonConfig(); s != nil {
+			e.Summon = &BossSummon{MinionID: s.MinionID, Count: s.Count, CooldownRounds: s.CooldownRounds, FirstRound: s.FirstRound}
 		}
 		out = append(out, e)
 	}

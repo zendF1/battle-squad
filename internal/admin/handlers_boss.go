@@ -89,7 +89,8 @@ func (s *Server) handleBossDelete(w http.ResponseWriter, r *http.Request) {
 // parseBossForm reads the edit form; the row keeps the submitted texts for a re-render.
 func parseBossForm(r *http.Request) (BossRow, error) {
 	row := BossRow{SkillsJSON: r.FormValue("skills"), MinionsJSON: r.FormValue("minions"), WavesJSON: r.FormValue("waves"),
-		RewardsJSON: r.FormValue("rewards"), HoverJSON: strings.TrimSpace(r.FormValue("hover"))}
+		RewardsJSON: r.FormValue("rewards"), HoverJSON: strings.TrimSpace(r.FormValue("hover")),
+		SummonJSON: strings.TrimSpace(r.FormValue("summon"))}
 	c := &row.Config
 	c.BossID = strings.TrimSpace(r.FormValue("boss_id"))
 	c.Name = strings.TrimSpace(r.FormValue("name"))
@@ -123,6 +124,9 @@ func parseBossForm(r *http.Request) (BossRow, error) {
 		return row, fmt.Errorf("JSON: %w", err)
 	}
 	if err := gamedata.ParseBossHover(c, []byte(row.HoverJSON)); err != nil {
+		return row, fmt.Errorf("JSON: %w", err)
+	}
+	if err := gamedata.ParseBossSummon(c, []byte(row.SummonJSON)); err != nil {
 		return row, fmt.Errorf("JSON: %w", err)
 	}
 	return row, nil

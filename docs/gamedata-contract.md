@@ -400,7 +400,7 @@ catalog endpoints.
   (`bazooka` "Bazooka", `cannon` "Đại pháo", `shock_rifle` "Súng điện", `seed_launcher` "Súng hạt",
   `blaster` "Súng"). Source `config_gun_kinds`.
 
-### 4.18 `bosses[]` (config_bosses, enabled only, in display order; boss mode, migrations 046 / 048)
+### 4.18 `bosses[]` (config_bosses, enabled only, in display order; boss mode, migrations 046 / 048 / 050)
 
 Everything the Boss tab and the arena need to draw and describe a boss:
 
@@ -417,47 +417,106 @@ Everything the Boss tab and the arena need to draw and describe a boss:
 | `turnLimit` | int | boss turns before it escapes (the party loses) |
 | `shieldedDamageFactor` | number 0..1 | while a minion lives the boss takes this × the damage (show the shield; `MatchState.bossShielded`) |
 | `minions[]` | object | its minion types (a minion's match player id is `minion_<minionId>_<n>`), defaults filled in; see below |
-| `skills[]` | `{skillId, name, description, kind}` | its skills (`ShotResolved.skillId` of the boss's turn); `kind` `rain`, `beam` or `summon` |
+| `skills[]` | `{skillId, name, description, kind, pattern?, projectileKind?, launchFrom?}` | its attacks (`ShotResolved.skillId` of the boss's attack); `kind` `rain`, `beam` or `shockwave` (050; summoning is no skill any more, see `summon`); a beam's `pattern` `radial` (a fan of beams around the boss) or `sweep` (horizontal beams across the map), omitted for an aimed beam; a rain's `projectileKind` (the `kind` of its `ShotResolved` projectiles: `steel_shell`, `magma_bomb`, `ice_spike`, `ice_shard`; `missile` by default) and `launchFrom` (`boss`: the shells leave a ring around the boss, omitted: they fall from the top of the map) |
 | `dailyBonusRuns` | int | runs a day with the big reward table (`GET /boss/runs` has what is left) |
 | `flying` | bool | (048) the boss floats: draw it in the air, no fall; it moves with `UnitFlew` |
 | `hover` | `{minX, maxX, minY, maxY, minMove, flySpeed}` or `null` | (048) the band (px, the boss's feet point) a flying boss flies to a new random point of at the start of each of its turns, at least `minMove` px away, at `flySpeed` px/s |
+| `summon` | `{minionId, count, cooldownRounds, firstRound}` or `null` | (050) its free summon: at the start of its turn from round `firstRound` on, when the previous wave is dead and more than `cooldownRounds` rounds after its last summon, `count` minions appear in a `ShotResolved` `actionMode` `summon` before its attack (also when it is stunned / frozen) |
 
 `minions[]` fields (048):
 
 | Field | Type | Meaning |
 |---|---|---|
 | `minionId`, `name`, `hp`, `bodySize` | | as before |
-| `behavior` | `shooter` / `bomber` | a shooter stays put (or walks with the bot AI) and shoots; a bomber closes in on the nearest party member and detonates |
+| `behavior` | `shooter` / `bomber` / `leaper` | a shooter stays put (or walks with the bot AI) and shoots; a bomber closes in on the nearest party member and detonates; a leaper (050) jumps next to the nearest party member (`UnitJumped`, `leapt` on its state) and detonates on its next turn if one is still within `detonateRange` |
 | `movement` | `none` / `walk` / `fly` | how it moves: never, along the ground (`PlayerMoved`), through the air (`UnitFlew`; `flying` on its state) |
 | `detonateRange` | px | a bomber detonates when it ENDS a move this close (feet to feet) to a party member (warning: fuse) |
 | `walkRange`, `flyRange` | px | the most it walks / flies in one turn |
 | `hoverHeight` | px | a flier hovers this far over the ground under it |
 | `flySpeed` | px/s | `UnitFlew.duration` = distance / this |
-| `shotDamageFactor` | number | its shots deal its damage × this (bombers 0.35: weak shots) |
+| `shotDamageFactor` | number | its shots deal its damage × this (bombers 0.8, v2 0.35) |
+| `leapRange`, `leapDetonateNextTurn`, `shootAfterLeap` | px, bool, bool | (050) leaper: the longest leap (0: the whole map), whether it detonates on the turn after a leap, whether it also shoots on the turn it leaps |
+| `projectileKind` | string | (050) the `kind` of its shots' `ShotResolved` projectiles (`drone_bolt`, `crab_spit`, `snowball`; `""`: a normal shot) |
 | `explodeOnDeath` | bool | it blasts when it dies (`damage` cause `death_blast`) |
 | `explodeDamageOf` | `target` / `self` | its blast deals `explodeDamagePct` % of the max HP of each one hit (`target`) or of the minion (`self`) |
 | `explodeDamagePct`, `explodeRadius`, `explodeCrater` | %, px, px | the blast: full at the body edge, half at `explodeRadius`, no defense, shield first; the crater it carves |
 
 ```json
-{"bossId": "steel_robot", "name": "Rô-bốt Thép",
- "description": "Người khổng lồ cơ khí canh giữ xưởng sắt bỏ hoang. Nã pháo dồn dập, bắn tia laze xuyên đất và gọi drone che chắn.",
- "recommendedLevel": 10, "modeId": "boss_steel_robot", "queue": "boss:steel_robot", "mapId": "arena_steel_robot",
- "hp": 12000, "bodySize": 3, "turnLimit": 15, "shieldedDamageFactor": 0.1,
- "minions": [{"minionId": "drone", "name": "Drone", "hp": 650, "bodySize": 0.7, "behavior": "bomber", "movement": "fly",
-   "explodeOnDeath": false, "explodeRadius": 80, "explodeDamagePct": 50, "explodeDamageOf": "target", "explodeCrater": 20,
-   "detonateRange": 70, "shotDamageFactor": 0.35, "flyRange": 90, "walkRange": 80, "hoverHeight": 60, "flySpeed": 220}],
+{
+ "bossId": "steel_robot",
+ "name": "Rô-bốt Thép",
+ "description": "Người khổng lồ cơ khí canh giữ xưởng sắt bỏ hoang. Nã pháo phủ kín chiến trường, quét năm tia laze ngang map và thả drone che chắn.",
+ "recommendedLevel": 10,
+ "modeId": "boss_steel_robot",
+ "queue": "boss:steel_robot",
+ "mapId": "arena_steel_robot",
+ "hp": 10000,
+ "bodySize": 3,
+ "turnLimit": 15,
+ "shieldedDamageFactor": 0.1,
+ "minions": [
+  {
+   "minionId": "drone",
+   "name": "Drone",
+   "hp": 650,
+   "bodySize": 0.7,
+   "behavior": "bomber",
+   "movement": "fly",
+   "explodeOnDeath": false,
+   "explodeRadius": 80,
+   "explodeDamagePct": 50,
+   "explodeDamageOf": "target",
+   "explodeCrater": 20,
+   "detonateRange": 70,
+   "shotDamageFactor": 0.8,
+   "flyRange": 270,
+   "walkRange": 80,
+   "hoverHeight": 60,
+   "flySpeed": 220,
+   "leapRange": 0,
+   "leapDetonateNextTurn": true,
+   "shootAfterLeap": false,
+   "projectileKind": "drone_bolt"
+  }
+ ],
  "skills": [
-   {"skillId": "shell_barrage", "name": "Mưa đạn pháo", "description": "Mười quả đạn pháo dội xuống quanh một người chơi.", "kind": "rain"},
-   {"skillId": "laser_beam", "name": "Tia laze nghiền", "description": "Tia laze xuyên địa hình bắn thẳng vào người yếu nhất, trúng mọi người trên đường.", "kind": "beam"},
-   {"skillId": "drone_wave", "name": "Gọi drone", "description": "Thả hai drone. Còn drone thì Rô-bốt Thép được che chắn.", "kind": "summon"}],
- "dailyBonusRuns": 3, "flying": false, "hover": null}
+  {
+   "skillId": "shell_barrage",
+   "name": "Mưa đạn pháo",
+   "description": "Hai mươi bốn quả đạn pháo dội xuống bảy phần mười chiến trường quanh cả đội.",
+   "kind": "rain",
+   "projectileKind": "steel_shell"
+  },
+  {
+   "skillId": "laser_beam",
+   "name": "Tia laze nghiền",
+   "description": "Năm tia laze xuyên địa hình quét ngang toàn map ở độ cao của từng người chơi.",
+   "kind": "beam",
+   "pattern": "sweep"
+  }
+ ],
+ "dailyBonusRuns": 3,
+ "flying": false,
+ "hover": null,
+ "summon": {
+  "minionId": "drone",
+  "count": 3,
+  "cooldownRounds": 3,
+  "firstRound": 2
+ }
+}
 ```
 
-`ice_witch` (048, band top 049): `"mapId": "arena_ice_witch_pillars", "hp": 30000, "turnLimit": 30, "flying": true,
+`lava_crab` (050): `"hp": 15000`, minion `crab` `bomber` / `walk`, `walkRange` 240, `shotDamageFactor`
+0.8, `explodeDamagePct` 35, `projectileKind` `crab_spit`; skills `fire_bombs` (`rain`, `projectileKind`
+`magma_bomb`), `claw_slam` (`shockwave`); `summon` `{crab, 4, 3, 2}`. `ice_witch` (050 / 051):
+`"mapId": "arena_ice_witch_islands", "hp": 13000, "turnLimit": 30, "flying": true,
 "hover": {"minX": 400, "maxX": 2000, "minY": 320, "maxY": 430, "minMove": 200, "flySpeed": 220}`, minion
-`snowman` `behavior` `shooter`, `movement` `none`, `explodeOnDeath` true, `explodeDamagePct` 30,
-`explodeRadius` 140, `explodeCrater` 24. `lava_crab`: `"mapId": "arena_lava_crab_mound"`, minion `crab`
-`bomber` / `walk`, `walkRange` 80.
+`snowman` `behavior` `leaper`, `movement` `none`, `shotDamageFactor` 1.3, `detonateRange` 70,
+`explodeOnDeath` true, `explodeDamagePct` 15, `explodeRadius` 140, `explodeCrater` 24, `leapRange` 0,
+`leapDetonateNextTurn` true, `shootAfterLeap` false, `projectileKind` `snowball`; skills `ice_spikes`
+(`rain`, `ice_spike`), `frost_beam` (`beam`, `pattern` `radial`), `blizzard` (`rain`, `ice_shard`,
+`launchFrom` `boss`); `summon` `{snowman, 5, 3, 2}`.
 
 The skill numbers, minion stats beyond HP / body, reward tables and waves stay on the server
 (admin Bosses page). Source: `config_bosses` (and `config_game_modes` for `modeId`).
@@ -516,6 +575,16 @@ The skill numbers, minion stats beyond HP / body, reward tables and waves stay o
   witch's `hover.minY` 200 → 320 (her body stays below the client's boss HP bar). Each only while
   still the 047 / 048 value, so reruns keep admin edits. 047 is frozen as applied (no longer
   generated by `cmd/mapgen`).
+- 050_boss_mode_v3: `config_bosses` + `summon` (JSONB, NULL = none), added and seeded once (3
+  drones, 4 crabs, 5 snowmen; cooldown 3 rounds, from round 2); the summon skills leave `skills`;
+  the v3 skills, minions (`leaper` snowmen, ×3 ranges, stronger shots, projectile kinds), waves
+  (`maxAlive` 3 / 4 / 5), damage (×1.5), HP (10000 / 15000 / 13000), descriptions and the witch's
+  arena `arena_ice_witch_islands`; each only while it is still the v2 value, so reruns keep
+  admin edits. The down file puts the v2 values back and drops `summon`.
+- 051_boss_arena_islands (generated by `go run ./cmd/mapgen`): `arena_ice_witch_islands`, the
+  witch's 12 sky ice islets, every spawn but the boss's `"set": "pillar"` (`ON CONFLICT DO
+  NOTHING`). `arena_ice_witch_pillars` stays in `config_maps`, used by no boss (out of the PvP
+  rotation like every `arena_` map).
 
 ## 6b. DB behind it since S2 (migration 041_gamedata_rules)
 
