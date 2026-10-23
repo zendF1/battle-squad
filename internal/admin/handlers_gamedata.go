@@ -475,12 +475,14 @@ var textTables = []*textTable{
 		Order: "sort_order, mode_id", CanAdd: true, CanDelete: true, Check: checkGameModes,
 		Desc: "Chế độ: lobby = một lựa chọn ở màn Chọn chế độ, trong mục Category (Mode Categories), theo Thứ tự (queue: hàng chờ ghép trận, " +
 			strings.Join(matchmaker.Queues, " / ") + " hoặc boss:<boss id> của một boss đang bật (trang Bosses); bot: QuickPlay với bot; cả hai trống = luyện tập; Icon: mã icon của client, trống = icon chung; " +
-			"Số người: tối đa trong đội (2v2: 1..2, boss: 1..4), 1 khi không có queue; Xếp hạng: bật đúng khi queue là " + matchmaker.RankedQueue + "; tắt Bật = ẩn khỏi GET /gamedata). " +
+			"Số người: tối đa trong đội (2v2: 1..2, boss: 1..4), 1 khi không có queue; Xếp hạng: bật đúng khi queue là " + matchmaker.RankedQueue + "; tắt Bật = ẩn khỏi GET /gamedata; " +
+			"Số vật phẩm: số vật phẩm mỗi người mang vào trận của chế độ (0..20), trống = luật chung Rules › maxLoadout; boss: 6). " +
 			"match = chế độ của trận (lịch sử, kết quả; mode id = queue của trận ghép, vd boss:steel_robot).",
 		Cols: []textCol{{Name: "kind", Label: "Loại", Kind: "select", Options: []string{"lobby", "match"}}, {Name: "name", Label: "Tên", Kind: "text", Required: true},
 			{Name: "description", Label: "Mô tả", Kind: "text"}, {Name: "category", Label: "Category", Kind: "text"}, {Name: "icon", Label: "Icon", Kind: "text"},
 			{Name: "queue", Label: "Queue", Kind: "text"}, {Name: "bot", Label: "Bot", Kind: "text"},
 			{Name: "party_size", Label: "Số người", Kind: "int", Min: 1, Max: gamedata.BossPartySize}, {Name: "ranked", Label: "Xếp hạng", Kind: "bool"},
+			{Name: "max_items", Label: "Số vật phẩm", Kind: "optint", Min: 0, Max: 20},
 			{Name: "enabled", Label: "Bật", Kind: "bool"}, {Name: "sort_order", Label: "Thứ tự", Kind: "int", Min: 0, Max: 10000}}},
 	{Path: "mode-categories", Title: "Mode Categories", Table: "config_mode_categories", Key: "category_id", KeyLabel: "Category ID",
 		Order: "sort_order, category_id", CanAdd: true, CanDelete: true, Check: checkGameModes,
@@ -689,6 +691,20 @@ func parseTextRow(t *textTable, r *http.Request) (map[string]any, error) {
 			}
 			if n < c.Min || n > c.Max {
 				return nil, fmt.Errorf("%s: %d ngoài khoảng %d..%d", c.Label, n, c.Min, c.Max)
+			}
+			out[c.Name] = n
+		case "optint": // empty: NULL
+			v := strings.TrimSpace(raw)
+			if v == "" {
+				out[c.Name] = nil
+				continue
+			}
+			n, err := strconv.Atoi(v)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %q không phải số nguyên", c.Label, raw)
+			}
+			if n < c.Min || n > c.Max {
+				return nil, fmt.Errorf("%s: %d ngoài khoảng %d..%d (trống = mặc định)", c.Label, n, c.Min, c.Max)
 			}
 			out[c.Name] = n
 		case "select":

@@ -288,7 +288,7 @@ item id the match does not handle shows as `instant: true, aimKind: "none"`; the
 reject it.
 
 `itemRules`: `maxLoadout` (int; a player brings at most this many items, `rules.items`
-`maxLoadout` 3) and `airStrike {angle, power}` (numbers; the strike falls from (targetX, 0) at
+`maxLoadout` 3, unless the mode says otherwise: `modes.lobby[].maxItems`, 6 in the boss modes) and `airStrike {angle, power}` (numbers; the strike falls from (targetX, 0) at
 this angle and power whatever the Shoot carries, `rules.items` `airStrikeAngle` /
 `airStrikePower` 270 / 80).
 
@@ -370,7 +370,7 @@ catalog endpoints.
 - `modes.categories[]` `{categoryId, name}`: the sections (tabs) of the mode select screen, in
   order (`pvp` "PvP", `boss` "Boss"). A category with no `modes.lobby` entry shows the "Sắp ra
   mắt" placeholder. Source `config_mode_categories` (admin: Texts → Mode Categories).
-- `modes.lobby[]` `{modeId, name, description, queue, bot, category, icon, partySize, ranked}`:
+- `modes.lobby[]` `{modeId, name, description, queue, bot, category, icon, partySize, ranked, maxItems}`:
   the enabled mode choices of the mode select screen, in order (group them by `category`).
   A non-empty `queue` joins that matchmaking queue (`CreateLobby {queue}` / `SetLobbyQueue
   {queue}`, then `StartQueue`); the server runs `ranked_2v2`, `casual_2v2` and `boss:<bossId>`
@@ -385,9 +385,19 @@ catalog endpoints.
     (`LOBBY_FULL`; switching a bigger lobby to a smaller mode is `PARTY_TOO_LARGE`).
   - `ranked` (bool): its matches change rating / rank points (only the `ranked_2v2` queue): show
     the rank line and the result's rating row only then.
+  - `maxItems` (int, 0..20; 052): the most battle items a player brings into this mode's matches:
+    the loadout screen of the mode offers this many item slots. It is the mode's
+    `config_game_modes.max_items`, or `itemRules.maxLoadout` (3) when that is NULL; the boss modes
+    take 6. The server enforces it for the lobby's queue: `UpdateLoadout` with more items is an
+    `Error {code: "LOADOUT_INVALID", message: "You can bring at most <maxItems> items"}`; a lobby
+    switched to a mode with fewer slots (`SetLobbyQueue`, `StartQueue`) keeps the first
+    `maxItems` of each member's items (the saved loadout is unchanged); the matchmade room and
+    the item reservation apply the same limit. Bots keep their own item rule
+    (`itemRules.maxLoadout`).
   - Source `config_game_modes` (kind `lobby`, `enabled` true; admin: Texts → Game Modes, which
     rejects a queue the server does not run, a `ranked` flag that does not match the queue, a
-    party bigger than the queue allows (2 for 2v2, 4 for a boss), or an unknown category).
+    party bigger than the queue allows (2 for 2v2, 4 for a boss), or an unknown category; its
+    "Số vật phẩm" column edits `max_items`, empty = NULL).
 - `modes.match[]` `{modeId, name}`: a match's mode (MatchStarted `mode`, match history) and its
   Vietnamese name. A matchmade match's mode is its queue: `ranked_2v2` "Đấu hạng 2vs2",
   `casual_2v2` "Đấu thường 2vs2", `boss:<bossId>` the boss's name (`boss:steel_robot` "Rô-bốt
@@ -510,7 +520,7 @@ Everything the Boss tab and the arena need to draw and describe a boss:
 `lava_crab` (050): `"hp": 15000`, minion `crab` `bomber` / `walk`, `walkRange` 240, `shotDamageFactor`
 0.8, `explodeDamagePct` 35, `projectileKind` `crab_spit`; skills `fire_bombs` (`rain`, `projectileKind`
 `magma_bomb`), `claw_slam` (`shockwave`); `summon` `{crab, 4, 3, 2}`. `ice_witch` (050 / 051):
-`"mapId": "arena_ice_witch_islands", "hp": 13000, "turnLimit": 30, "flying": true,
+`"mapId": "arena_ice_witch_islands", "hp": 14000, "turnLimit": 30, "flying": true,
 "hover": {"minX": 400, "maxX": 2000, "minY": 320, "maxY": 430, "minMove": 200, "flySpeed": 220}`, minion
 `snowman` `behavior` `leaper`, `movement` `none`, `shotDamageFactor` 1.3, `detonateRange` 70,
 `explodeOnDeath` true, `explodeDamagePct` 15, `explodeRadius` 140, `explodeCrater` 24, `leapRange` 0,
@@ -585,6 +595,12 @@ The skill numbers, minion stats beyond HP / body, reward tables and waves stay o
   witch's 12 sky ice islets, every spawn but the boss's `"set": "pillar"` (`ON CONFLICT DO
   NOTHING`). `arena_ice_witch_pillars` stays in `config_maps`, used by no boss (out of the PvP
   rotation like every `arena_` map).
+- 052_boss_status_items: `config_game_modes` + `max_items` (INT 0..20, NULL = `rules.items`
+  `maxLoadout`; `modes.lobby[].maxItems`), added and seeded once (6 for the `boss:` lobby
+  modes); the status skills (`fire_bombs`, `ice_spikes`, `frost_beam`, `blizzard`) gain
+  `statusChance` 0.5 and 1.3 x their damage and caps (descriptions say "có 50 %"); the witch's
+  HP 13000 -> 14000. Each only while still the 050 value, so reruns keep admin edits. The down
+  file puts the 050 values back and drops `max_items`.
 
 ## 6b. DB behind it since S2 (migration 041_gamedata_rules)
 
@@ -1359,7 +1375,8 @@ The full response (`200`, `ETag: "4eedfeb2e6a5a751"`):
           "category": "pvp",
           "icon": "swords",
           "partySize": 2,
-          "ranked": false
+          "ranked": false,
+          "maxItems": 3
         },
         {
           "modeId": "ranked",
@@ -1370,7 +1387,8 @@ The full response (`200`, `ETag: "4eedfeb2e6a5a751"`):
           "category": "pvp",
           "icon": "trophy",
           "partySize": 2,
-          "ranked": true
+          "ranked": true,
+          "maxItems": 3
         },
         {
           "modeId": "bot",
@@ -1381,7 +1399,8 @@ The full response (`200`, `ETag: "4eedfeb2e6a5a751"`):
           "category": "pvp",
           "icon": "robot",
           "partySize": 1,
-          "ranked": false
+          "ranked": false,
+          "maxItems": 3
         },
         {
           "modeId": "practice",
@@ -1392,7 +1411,8 @@ The full response (`200`, `ETag: "4eedfeb2e6a5a751"`):
           "category": "pvp",
           "icon": "target",
           "partySize": 1,
-          "ranked": false
+          "ranked": false,
+          "maxItems": 3
         }
       ],
       "match": [

@@ -8,9 +8,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// MaxLoadoutItems is how many items a player may bring into a match (rules.items maxLoadout of
-// the current game data).
-func MaxLoadoutItems() int { return gamedata.Current().Rules.Items.MaxLoadout }
+// MaxLoadoutItems is how many items a player may bring into a match of mode (a queue, a room
+// mode; "" quick play): the mode's config_game_modes max_items, else rules.items maxLoadout of
+// the current game data (gamedata.Snapshot.ModeMaxItems; 6 for the boss queues since 052).
+func MaxLoadoutItems(mode string) int { return gamedata.Current().ModeMaxItems(mode) }
+
+// TrimLoadout is items cut to the first MaxLoadoutItems(mode) (a loadout saved for a mode that
+// allows more).
+func TrimLoadout(items []string, mode string) []string {
+	if limit := MaxLoadoutItems(mode); len(items) > limit {
+		return append([]string(nil), items[:max(limit, 0)]...)
+	}
+	return items
+}
 
 // DefaultCharacterID is the character every player owns and plays when none is picked
 // (rules.player defaultCharacterId of the current game data).
@@ -80,9 +90,10 @@ func checkCharacterOwned(ctx context.Context, own loadoutOwnership, playerID, ch
 	return nil
 }
 
-// checkItemSelection enforces the item count and per-match use limits.
-func checkItemSelection(items []string) error {
-	if limit := MaxLoadoutItems(); len(items) > limit {
+// checkItemSelection enforces the item count of mode (MaxLoadoutItems) and the per-match use
+// limits.
+func checkItemSelection(items []string, mode string) error {
+	if limit := MaxLoadoutItems(mode); len(items) > limit {
 		return &LoadoutError{Reason: fmt.Sprintf("You can bring at most %d items", limit)}
 	}
 	if _, err := itemCounts(items); err != nil {
@@ -122,27 +133,34 @@ func checkItemsOwned(ctx context.Context, own loadoutOwnership, playerID string,
 // validateQuickPlayLoadout applies the room SelectCharacter / SelectItems
 // rules to a QuickPlay loadout. devUnlock skips only the ownership checks.
 func validateQuickPlayLoadout(ctx context.Context, own loadoutOwnership, playerID string, p QuickPlayPayload, devUnlock bool) error {
-	if !validCharacterID(p.CharacterID) {
-		return &LoadoutError{Reason: fmt.Sprintf("Unknown character: %s", p.CharacterID)}
+	return validateLoadout(ctx, own, playerID, p.CharacterID, p.Items, "", devUnlock)
+}
+
+// validateLoadout checks a loadout for a match of mode: a playable character the player owns,
+// at most MaxLoadoutItems(mode) known items within their per-match limits, all held.
+func validateLoadout(ctx context.Context, own loadoutOwnership, playerID, characterID string, items []string, mode string, devUnlock bool) error {
+	if !validCharacterID(characterID) {
+		return &LoadoutError{Reason: fmt.Sprintf("Unknown character: %s", characterID)}
 	}
-	if err := checkItemsKnown(p.Items); err != nil {
+	if err := checkItemsKnown(items); err != nil {
 		return err
 	}
-	if err := checkItemSelection(p.Items); err != nil {
+	if err := checkItemSelection(items, mode); err != nil {
 		return err
 	}
 	if devUnlock {
 		return nil
 	}
-	if err := checkCharacterOwned(ctx, own, playerID, p.CharacterID); err != nil {
+	if err := checkCharacterOwned(ctx, own, playerID, characterID); err != nil {
 		return err
 	}
-	return checkItemsOwned(ctx, own, playerID, p.Items)
+	return checkItemsOwned(ctx, own, playerID, items)
 }
 
-// ValidateLoadout applies the QuickPlay loadout rules (a playable character the
-// player owns, at most 3 known items within their per-match limits, all held)
-// to a ranked lobby loadout. A rule broken is a *LoadoutError.
-func ValidateLoadout(ctx context.Context, pool *pgxpool.Pool, playerID, characterID string, items []string) error {
-	return validateQuickPlayLoadout(ctx, poolOwnership{pool: pool}, playerID, QuickPlayPayload{CharacterID: characterID, Items: items}, false)
+// ValidateLoadout applies the QuickPlay loadout rules (a playable character the player owns,
+// known items within their per-match limits, all held) to a lobby loadout for queue: at most
+// MaxLoadoutItems(queue) items (rules.items maxLoadout, 6 for a boss queue). A rule broken is a
+// *LoadoutError.
+func ValidateLoadout(ctx context.Context, pool *pgxpool.Pool, playerID, characterID, queue string, items []string) error {
+	return validateLoadout(ctx, poolOwnership{pool: pool}, playerID, characterID, items, queue, false)
 }

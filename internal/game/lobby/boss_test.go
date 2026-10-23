@@ -65,3 +65,40 @@ func TestBossLobbyPartySize(t *testing.T) {
 		t.Fatalf("third in ranked: %s", code)
 	}
 }
+
+// A member's items follow the lobby queue's item count (052): a saved loadout of 6 stays whole
+// in a boss queue (config_game_modes max_items 6) and is cut to the first 3 (rules.items
+// maxLoadout) when the host switches to a 2v2 queue; StartQueue enqueues the cut loadout.
+func TestLobbyItemsFollowQueue(t *testing.T) {
+	six := 6
+	rules := gamedata.DefaultRules()
+	rules.Items.MaxLoadout = 3
+	gamedata.UseForTest(t, gamedata.Current().WithBosses(gamedata.DefaultBosses()).WithRules(rules).WithModes([]gamedata.GameModeConfig{
+		{ModeID: "boss_steel_robot", Kind: "lobby", Queue: "boss:steel_robot", PartySize: 4, Enabled: true, MaxItems: &six},
+		{ModeID: "ranked", Kind: "lobby", Queue: matchmaker.RankedQueue, PartySize: 2, Enabled: true},
+	}))
+	saved := []string{"medkit", "teleport", "power_shot", "air_strike", "drill_bomb", "freeze_bomb"}
+	p := newParty(t, time.Minute)
+	p.hub.store = stubStore{ratings: map[string]int{}, items: saved}
+	q := &fakeQueuer{}
+	p.hub.matchmaker = q
+	host := p.online("ph")
+	p.send(host, "CreateLobby", CreateLobbyPayload{Queue: "boss:steel_robot"})
+	var st LobbyState
+	p.expect(host, "LobbyUpdated", &st)
+	if len(st.Members[0].Items) != 6 {
+		t.Fatalf("boss lobby items %v", st.Members[0].Items)
+	}
+	p.send(host, "SetLobbyQueue", SetLobbyQueuePayload{Queue: matchmaker.RankedQueue})
+	p.expect(host, "LobbyUpdated", &st)
+	if got := st.Members[0].Items; len(got) != 3 || got[0] != "medkit" || got[2] != "power_shot" {
+		t.Fatalf("2v2 lobby items %v", got)
+	}
+	p.send(host, "StartQueue", struct{}{})
+	p.expect(host, "QueueStarted", nil)
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if len(q.items) != 1 || len(q.items[0]["ph"]) != 3 {
+		t.Fatalf("enqueued items %v", q.items)
+	}
+}

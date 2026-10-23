@@ -150,11 +150,11 @@ func (r *Repository) TextRows(ctx context.Context, spec *textTable) ([]map[strin
 	return out, rows.Err()
 }
 
-// castText selects every column as text.
+// castText selects every column as text (NULL as "").
 func castText(cols []string) string {
 	out := make([]string, len(cols))
 	for i, c := range cols {
-		out[i] = c + "::text"
+		out[i] = "COALESCE(" + c + "::text, '')"
 	}
 	return strings.Join(out, ", ")
 }

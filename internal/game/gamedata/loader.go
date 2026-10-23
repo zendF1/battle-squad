@@ -543,10 +543,10 @@ func LoadFromDB(ctx context.Context, db *database.PostgresDB) (*Snapshot, error)
 	}
 
 	if err := each("config_game_modes", `SELECT mode_id, kind, name, description, queue, bot, category, icon, party_size,
-		ranked, enabled, sort_order FROM config_game_modes ORDER BY sort_order, mode_id`, func(rows pgx.Rows) error {
+		ranked, enabled, sort_order, max_items FROM config_game_modes ORDER BY sort_order, mode_id`, func(rows pgx.Rows) error {
 		var m GameModeConfig
 		if err := rows.Scan(&m.ModeID, &m.Kind, &m.Name, &m.Description, &m.Queue, &m.Bot, &m.Category, &m.Icon, &m.PartySize,
-			&m.Ranked, &m.Enabled, &m.SortOrder); err != nil {
+			&m.Ranked, &m.Enabled, &m.SortOrder, &m.MaxItems); err != nil {
 			return err
 		}
 		s.Modes = append(s.Modes, m)

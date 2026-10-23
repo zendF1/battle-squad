@@ -123,7 +123,7 @@ func buildRankedRoster(result matchmaker.MatchResult, profiles map[string]ranked
 				if charID == "" {
 					charID = "rookie"
 				}
-				items := entry.PlayerItems[pid]
+				items := TrimLoadout(entry.PlayerItems[pid], result.Mode()) // at most the mode's item count
 				if items == nil {
 					items = []string{}
 				}

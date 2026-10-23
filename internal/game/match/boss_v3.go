@@ -254,7 +254,7 @@ func (m *Match) beamHitsOnce(boss *BattlePlayerState, s gamedata.BossSkill, beam
 			tl.add(ShotEvent{T: h.t, Type: "die", PlayerID: p.PlayerID, Cause: "laser"})
 			continue
 		}
-		if s.Status != "" {
+		if s.Status != "" && m.bossStatusLands(s) {
 			m.applyShotStatus(tl, h.t, boss, p, s.Status, s.StatusTurns)
 		}
 	}
@@ -359,23 +359,28 @@ func (m *Match) bossShockwave(boss *BattlePlayerState, s gamedata.BossSkill, tl 
 	tl.add(ShotEvent{T: bossChargeTime, Type: "explode", Position: vecPtr(boss.Position), Radius: s.Crater, Crater: CraterBowl,
 		TerrainVersion: m.Terrain.Version, BlastRadius: s.Blast})
 	last := bossChargeTime
-	for _, dir := range []float64{-1, 1} {
-		for k := 1; ; k++ {
-			x, edge := x0+dir*step*float64(k), false
-			if x <= 2 {
-				x, edge = 2, true
-			} else if x >= w-2 {
-				x, edge = w-2, true
+	// The steps are carved in the order they play (k = 1 left, k = 1 right, k = 2 left, …): the
+	// clients count their carves in play order and take a terrainVersion they did not reach for
+	// a drifted terrain (a Reconnect whose MatchStateSync drops the rest of the replay, its damage
+	// events included), so the versions must rise with t.
+	done := map[float64]bool{}
+	for k := 1; !done[-1] || !done[1]; k++ {
+		t := bossChargeTime + interval*float64(k)
+		for _, dir := range []float64{-1, 1} {
+			if done[dir] {
+				continue
 			}
-			t := bossChargeTime + interval*float64(k)
+			x := x0 + dir*step*float64(k)
+			if x <= 2 {
+				x, done[dir] = 2, true
+			} else if x >= w-2 {
+				x, done[dir] = w-2, true
+			}
 			if y := m.Terrain.GetLandingY(x, 0); y < h {
 				m.Terrain.CarveBowl(x, y, s.Crater)
 				tl.add(ShotEvent{T: t, Type: "explode", Position: vecPtr(Vector2{X: x, Y: y}), Radius: s.Crater, Crater: CraterBowl,
 					TerrainVersion: m.Terrain.Version})
 				last = math.Max(last, t)
-			}
-			if edge {
-				break
 			}
 		}
 	}

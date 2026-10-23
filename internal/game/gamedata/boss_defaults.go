@@ -1,7 +1,7 @@
 package gamedata
 
-// DefaultBosses are the bosses migrations 046_boss_mode, 048_boss_mode_v2, 049_boss_placement and
-// 050_boss_mode_v3 seed (the YAML fallback plays with them too); TestBossMigration keeps the two
+// DefaultBosses are the bosses migrations 046_boss_mode, 048_boss_mode_v2, 049_boss_placement,
+// 050_boss_mode_v3 and 052_boss_status_items seed (the YAML fallback plays with them too); TestBossMigration keeps the two
 // equal. Boss v2: the drones are flying bombers, the crabs walking bombers (on the mound arena)
 // and the witch hovers (y 320..430, below the client's boss HP bar), 30 turns. Boss v3: minions
 // move 3 × as far (drones fly 270 px, crabs walk 240 px) and hit harder (bombers' shots 0.8 ×,
@@ -10,9 +10,11 @@ package gamedata
 // wide skills (×1.5 damage and craters): the robot's party-wide shell rain and 5-beam sweep, the
 // crab's map-wide fire bombs and ground shockwave, the witch's wide ice spikes, 20-beam radial
 // burst (stun) and map-wide blizzard (freeze; its ice shards leave a ring around the witch); each
-// rain and minion shot has its own projectile kind. HP, the skills' caps and the minion blasts are
-// retuned with the bot balance runs (TestBossBalanceSim: 4 bots at the recommended level win about
-// half of their fights): robot 10000 HP, crab 15000, witch 13000. Original designs: a steel mech
+// rain and minion shot has its own projectile kind. 052: a status lands on a hit party member half
+// of the time (statusChance 0.5, rolled once per member and cast), and the status skills hit 1.3 x
+// as hard (damage and caps). HP, the skills' caps and the minion blasts are retuned with the bot
+// balance runs (TestBossBalanceSim: 4 bots at the recommended level win about half of their
+// fights): robot 10000 HP, crab 15000, witch 14000 (050: 13000). Original designs: a steel mech
 // titan with drones, a lava crab with crabs and lava, an ice witch with snowmen and frost.
 func DefaultBosses() []BossConfig {
 	// t is {goldPer1000Damage, maxGold, winGold, expPer1000Damage, maxExp, winExp}
@@ -73,9 +75,9 @@ func DefaultBosses() []BossConfig {
 			RecommendedLevel: 25, Enabled: true, SortOrder: 2, MapID: "arena_lava_crab_mound",
 			HP: 15000, Defense: 90, Damage: 720, BodySize: 3.2, TurnLimit: 15, ShieldedDamageFactor: 0.1, OutOfMap: BossOutOfMapClamp,
 			Skills: []BossSkill{
-				{SkillID: "fire_bombs", Name: "Bom dung nham", Description: "Mười quả bom lửa rơi khắp chiến trường, gây bỏng và để lại vũng dung nham một lượt.",
-					Kind: BossSkillRain, Weight: 3, Cooldown: 1, Target: BossTargetMap, Count: 10, Damage: 0.35, Blast: 80, Crater: 27, Cap: 0.7,
-					Status: "burn", StatusTurns: 1, LavaRadius: 40, LavaTurns: 1, LavaDamage: 120, ProjectileKind: "magma_bomb"},
+				{SkillID: "fire_bombs", Name: "Bom dung nham", Description: "Mười quả bom lửa rơi khắp chiến trường; ai trúng có 50 % bị bỏng, mỗi chỗ nổ để lại vũng dung nham một lượt.",
+					Kind: BossSkillRain, Weight: 3, Cooldown: 1, Target: BossTargetMap, Count: 10, Damage: 0.455, Blast: 80, Crater: 27, Cap: 0.91,
+					Status: "burn", StatusTurns: 1, StatusChance: 0.5, LavaRadius: 40, LavaTurns: 1, LavaDamage: 120, ProjectileKind: "magma_bomb"},
 				{SkillID: "claw_slam", Name: "Cú kẹp đập", Description: "Càng đập xuống đất, sóng chấn động chạy ra hai mép map, trúng mọi người đứng trên mặt đất.",
 					Kind: BossSkillShockwave, Weight: 2, Cooldown: 1, Damage: 0.6, Blast: 120, Crater: 14, Step: 150, Interval: 0.08, MinFactor: 0.4},
 			},
@@ -92,17 +94,17 @@ func DefaultBosses() []BossConfig {
 			BossID: "ice_witch", Name: "Phù Thuỷ Băng",
 			Description:      "Phù thuỷ của đỉnh tuyết vĩnh cửu, bay giữa các đảo băng. Hai mươi tia băng toả tròn làm choáng, bão tuyết phủ cả map đóng băng người trúng, người tuyết nhảy tới nổ tung.",
 			RecommendedLevel: 40, Enabled: true, SortOrder: 3, MapID: "arena_ice_witch_islands",
-			HP: 13000, Defense: 80, Damage: 780, BodySize: 2.8, TurnLimit: 30, ShieldedDamageFactor: 0.1, OutOfMap: BossOutOfMapClamp,
+			HP: 14000, Defense: 80, Damage: 780, BodySize: 2.8, TurnLimit: 30, ShieldedDamageFactor: 0.1, OutOfMap: BossOutOfMapClamp,
 			Flying: true, Hover: &BossHover{MinX: 400, MaxX: 2000, MinY: 320, MaxY: 430, MinMove: 200, FlySpeed: 220},
 			Skills: []BossSkill{
-				{SkillID: "ice_spikes", Name: "Gai băng", Description: "Mười bốn gai băng rơi rộng quanh một người chơi; ai trúng bị đóng băng một lượt.",
-					Kind: BossSkillRain, Weight: 3, Cooldown: 2, Target: BossTargetRandom, Count: 14, Spread: 360, Damage: 0.25, Blast: 65, Crater: 15, Cap: 0.7,
-					Status: "freeze", StatusTurns: 1, ProjectileKind: "ice_spike"},
-				{SkillID: "frost_beam", Name: "Tia băng", Description: "Hai mươi tia băng toả tròn đều từ phù thuỷ ra tới mép map, xuyên địa hình; ai trúng bị choáng một lượt.",
-					Kind: BossSkillBeam, Weight: 2, Cooldown: 3, Pattern: BeamRadial, Count: 20, Damage: 0.8, HalfWidth: 14, Status: "stun", StatusTurns: 1},
-				{SkillID: "blizzard", Name: "Bão tuyết", Description: "Bốn mươi mảnh băng từ quanh phù thuỷ bay ra trút xuống khắp chiến trường; ai trúng bị đóng băng một lượt.",
-					Kind: BossSkillRain, Weight: 2, Cooldown: 3, Target: BossTargetMap, Count: 40, Damage: 0.15, Blast: 50, Crater: 12, Cap: 0.6,
-					Status: "freeze", StatusTurns: 1, ProjectileKind: "ice_shard", LaunchFrom: RainFromBoss},
+				{SkillID: "ice_spikes", Name: "Gai băng", Description: "Mười bốn gai băng rơi rộng quanh một người chơi; ai trúng có 50 % bị đóng băng một lượt.",
+					Kind: BossSkillRain, Weight: 3, Cooldown: 2, Target: BossTargetRandom, Count: 14, Spread: 360, Damage: 0.325, Blast: 65, Crater: 15, Cap: 0.91,
+					Status: "freeze", StatusTurns: 1, StatusChance: 0.5, ProjectileKind: "ice_spike"},
+				{SkillID: "frost_beam", Name: "Tia băng", Description: "Hai mươi tia băng toả tròn đều từ phù thuỷ ra tới mép map, xuyên địa hình; ai trúng có 50 % bị choáng một lượt.",
+					Kind: BossSkillBeam, Weight: 2, Cooldown: 3, Pattern: BeamRadial, Count: 20, Damage: 1.04, HalfWidth: 14, Status: "stun", StatusTurns: 1, StatusChance: 0.5},
+				{SkillID: "blizzard", Name: "Bão tuyết", Description: "Bốn mươi mảnh băng từ quanh phù thuỷ bay ra trút xuống khắp chiến trường; ai trúng có 50 % bị đóng băng một lượt.",
+					Kind: BossSkillRain, Weight: 2, Cooldown: 3, Target: BossTargetMap, Count: 40, Damage: 0.195, Blast: 50, Crater: 12, Cap: 0.78,
+					Status: "freeze", StatusTurns: 1, StatusChance: 0.5, ProjectileKind: "ice_shard", LaunchFrom: RainFromBoss},
 			},
 			Minions: []MinionConfig{
 				{MinionID: "snowman", Name: "Người tuyết", CharacterID: "flora", HP: 900, Defense: 30, Damage: 170, MoveEnergy: 40, BodySize: 0.85, HitChance: 50,

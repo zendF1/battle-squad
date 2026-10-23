@@ -18,6 +18,7 @@
         <td>
             {{if eq .Kind "bool"}}<input form="f{{$i}}" type="checkbox" name="c_{{.Name}}" {{if eq $v "true"}}checked{{end}}>
             {{else if eq .Kind "int"}}<input form="f{{$i}}" type="number" name="c_{{.Name}}" value="{{$v}}" step="1" min="{{.Min}}" max="{{.Max}}" required style="width:90px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;">
+            {{else if eq .Kind "optint"}}<input form="f{{$i}}" type="number" name="c_{{.Name}}" value="{{$v}}" step="1" min="{{.Min}}" max="{{.Max}}" placeholder="mặc định" style="width:90px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;">
             {{else if eq .Kind "select"}}<select form="f{{$i}}" name="c_{{.Name}}">{{range .Options}}<option value="{{.}}" {{if eq . $v}}selected{{end}}>{{.}}</option>{{end}}</select>
             {{else if eq .Kind "textarea"}}<textarea form="f{{$i}}" name="c_{{.Name}}" rows="2" style="width:100%;min-width:320px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-family:inherit;" {{if .Required}}required{{end}}>{{$v}}</textarea>
             {{else}}<input form="f{{$i}}" type="text" name="c_{{.Name}}" value="{{$v}}" {{if .Required}}required{{end}} style="width:100%;min-width:120px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;">
@@ -38,6 +39,7 @@
         <td>
             {{if eq .Kind "bool"}}<input form="fnew" type="checkbox" name="c_{{.Name}}">
             {{else if eq .Kind "int"}}<input form="fnew" type="number" name="c_{{.Name}}" value="{{.Min}}" step="1" min="{{.Min}}" max="{{.Max}}" required style="width:90px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;">
+            {{else if eq .Kind "optint"}}<input form="fnew" type="number" name="c_{{.Name}}" value="" step="1" min="{{.Min}}" max="{{.Max}}" placeholder="mặc định" style="width:90px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;">
             {{else if eq .Kind "select"}}<select form="fnew" name="c_{{.Name}}">{{range .Options}}<option value="{{.}}">{{.}}</option>{{end}}</select>
             {{else if eq .Kind "textarea"}}<textarea form="fnew" name="c_{{.Name}}" rows="2" style="width:100%;min-width:320px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-family:inherit;" {{if .Required}}required{{end}}></textarea>
             {{else}}<input form="fnew" type="text" name="c_{{.Name}}" {{if .Required}}required{{end}} style="width:100%;min-width:120px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;">

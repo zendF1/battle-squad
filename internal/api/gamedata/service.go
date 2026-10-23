@@ -178,7 +178,7 @@ func Build(snap *gd.Snapshot) *GameData {
 				continue // disabled, or the queue of a boss that is not enabled
 			}
 			out.Modes.Lobby = append(out.Modes.Lobby, LobbyMode{ModeID: m.ModeID, Name: m.Name, Description: m.Description, Queue: m.Queue,
-				Bot: m.Bot, Category: m.Category, Icon: m.Icon, PartySize: max(m.PartySize, 1), Ranked: m.Ranked})
+				Bot: m.Bot, Category: m.Category, Icon: m.Icon, PartySize: max(m.PartySize, 1), Ranked: m.Ranked, MaxItems: modeMaxItems(m, r)})
 		} else {
 			out.Modes.Match = append(out.Modes.Match, MatchMode{ModeID: m.ModeID, Name: m.Name})
 		}
@@ -190,6 +190,15 @@ func Build(snap *gd.Snapshot) *GameData {
 	}
 	out.Bosses = bosses(snap)
 	return out
+}
+
+// modeMaxItems is the items a player brings into a match of lobby mode m: its max_items, else
+// rules.items maxLoadout.
+func modeMaxItems(m gd.GameModeConfig, r *gd.Rules) int {
+	if m.MaxItems != nil {
+		return *m.MaxItems
+	}
+	return r.Items.MaxLoadout
 }
 
 func hasBoss(snap *gd.Snapshot, queue string) bool {

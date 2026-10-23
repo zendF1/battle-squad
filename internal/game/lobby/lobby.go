@@ -342,7 +342,7 @@ func (l *LobbyRoom) processUpdateLoadout(ctx context.Context, client *ws.Client,
 	if payload.Items != nil {
 		member.Items = payload.Items
 	}
-	if err := room.ValidateLoadout(ctx, l.hub.db.Pool, client.PlayerID, member.CharacterID, member.Items); err != nil {
+	if err := room.ValidateLoadout(ctx, l.hub.db.Pool, client.PlayerID, member.CharacterID, l.State.Queue, member.Items); err != nil {
 		var loadoutErr *room.LoadoutError
 		if errors.As(err, &loadoutErr) {
 			l.sendError(client, model.ErrLoadoutInvalid.Code, loadoutErr.Reason)
@@ -413,7 +413,7 @@ func (l *LobbyRoom) processStartQueue(ctx context.Context, client *ws.Client) {
 		playerIDs = append(playerIDs, m.PlayerID)
 		playerRatings[m.PlayerID] = m.Rating
 		playerChars[m.PlayerID] = m.CharacterID
-		playerItems[m.PlayerID] = m.Items
+		playerItems[m.PlayerID] = room.TrimLoadout(m.Items, l.State.Queue)
 		playerNames[m.PlayerID] = m.DisplayName
 	}
 
@@ -567,7 +567,17 @@ func (l *LobbyRoom) processSetLobbyQueue(ctx context.Context, client *ws.Client,
 		return
 	}
 	l.State.Queue = payload.Queue
+	l.trimLoadoutsLocked()
 	l.broadcastLobbyUpdatedLocked()
+}
+
+// trimLoadoutsLocked cuts every member's items to the lobby queue's item count
+// (room.MaxLoadoutItems: a loadout of a boss queue's 6 items keeps the first 3 in a 2v2
+// queue). The saved loadout is not changed. Caller holds l.mu.
+func (l *LobbyRoom) trimLoadoutsLocked() {
+	for i := range l.State.Members {
+		l.State.Members[i].Items = room.TrimLoadout(l.State.Members[i].Items, l.State.Queue)
+	}
 }
 
 // statusAndSize is the lobby's status, member count and most members.

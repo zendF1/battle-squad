@@ -16,6 +16,7 @@ import (
 // rating ratings[id] (1000 by default), playing rookie.
 type stubStore struct {
 	ratings map[string]int
+	items   []string // every member's saved items (nil: none)
 }
 
 func (s stubStore) rating(id string) int {
@@ -27,7 +28,8 @@ func (s stubStore) rating(id string) int {
 
 func (s stubStore) Member(_ context.Context, id string) LobbyMember {
 	r, tier, div := s.Rating(context.Background(), id)
-	return LobbyMember{PlayerID: id, DisplayName: s.DisplayName(context.Background(), id), CharacterID: "rookie", Items: []string{},
+	items := append([]string{}, s.items...)
+	return LobbyMember{PlayerID: id, DisplayName: s.DisplayName(context.Background(), id), CharacterID: "rookie", Items: items,
 		Rating: r, Tier: tier, Division: div, Level: 7, Gun: MemberGun{Kind: "bazooka", Tier: gunTierBasic}}
 }
 

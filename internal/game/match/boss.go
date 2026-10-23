@@ -64,6 +64,27 @@ type bossRuntime struct {
 	lavaSeq  int
 	// lastSummon is the round of the boss's last free summon (0: none yet).
 	lastSummon int
+	// statusRoll draws the status chance rolls of the cast resolving (0..1; castBossSkill seeds
+	// it from the match and turn, so a replay rolls the same); tests may fix it (statusRollFix).
+	statusRoll    func() float64
+	statusRollFix func() float64
+}
+
+// bossStatusLands reports whether skill s's status lands on a party member its cast hit: a roll
+// under its statusChance (default 0.5).
+func (m *Match) bossStatusLands(s gamedata.BossSkill) bool {
+	c := s.StatusChanceOrDefault()
+	if c >= 1 {
+		return true
+	}
+	roll := m.boss.statusRoll
+	if m.boss.statusRollFix != nil {
+		roll = m.boss.statusRollFix
+	}
+	if roll == nil {
+		roll = m.turnRNG("status").Float64
+	}
+	return roll() < c
 }
 
 // BossPlayerID is the player id of boss bossID in its match.
@@ -374,6 +395,7 @@ func (m *Match) castBossSkill(ctx context.Context, skill gamedata.BossSkill) {
 	shot := &ShotResolved{ShooterID: boss.PlayerID, ActionMode: "skill", SkillID: skill.SkillID}
 	tl := m.newTimeline()
 	rng := m.skillRNG()
+	m.boss.statusRoll = m.turnRNG("status").Float64
 	switch skill.Kind {
 	case gamedata.BossSkillRain:
 		m.bossRain(boss, skill, shot, tl, rng)
@@ -492,7 +514,7 @@ func (m *Match) bossRain(boss *BattlePlayerState, s gamedata.BossSkill, shot *Sh
 		t := flightEnd(best)
 		hit := m.explodeCapped(boss, best, base*s.Damage, tl, limit)
 		if s.Status != "" {
-			m.applyOnce(tl, t, boss, hit, statused, s.Status, s.StatusTurns)
+			m.bossStatusOnce(tl, t, boss, hit, statused, s)
 		}
 		if s.LavaTurns > 0 && best.ExplosionPoint.Y < float64(m.Terrain.Height) {
 			m.addLava(tl, t, *best.ExplosionPoint, s)
@@ -568,7 +590,7 @@ func (m *Match) bossBeam(boss *BattlePlayerState, s gamedata.BossSkill, tl *shot
 			tl.add(ShotEvent{T: t, Type: "die", PlayerID: p.PlayerID, Cause: "laser"})
 			continue
 		}
-		if s.Status != "" {
+		if s.Status != "" && m.bossStatusLands(s) {
 			m.applyShotStatus(tl, t, boss, p, s.Status, s.StatusTurns)
 		}
 	}

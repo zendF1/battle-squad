@@ -16,12 +16,13 @@ import (
 )
 
 // 045 / 046 seed the arenas, the three bosses (equal to gamedata.DefaultBosses), their lobby
-// and match modes and player_boss_runs (047 / 048 / 049: boss v2, 050 / 051: boss v3); a rerun keeps admin edits;
+// and match modes and player_boss_runs (047 / 048 / 049: boss v2, 050 / 051: boss v3, 052: status chance and the
+// boss modes' 6 items); a rerun keeps admin edits;
 // down / up gives the defaults back.
 func TestBossMigration(t *testing.T) {
 	names := registered(t)
 	for _, f := range []string{"045_boss_arenas.up.sql", "046_boss_mode.up.sql", "047_boss_arenas_v2.up.sql", "048_boss_mode_v2.up.sql",
-		"049_boss_placement.up.sql", "050_boss_mode_v3.up.sql", "051_boss_arena_islands.up.sql"} {
+		"049_boss_placement.up.sql", "050_boss_mode_v3.up.sql", "051_boss_arena_islands.up.sql", "052_boss_status_items.up.sql"} {
 		if !slices.Contains(names, f) {
 			t.Fatalf("cmd/migrate does not run %s: %v", f, names)
 		}
@@ -59,6 +60,19 @@ func TestBossMigration(t *testing.T) {
 		}
 	}
 
+	// 052: the boss lobby modes take 6 items, the other modes the global rule; the status skills roll
+	for _, b := range snap.Bosses {
+		if n := snap.ModeMaxItems(b.Queue()); n != 6 {
+			t.Fatalf("%s: %d items", b.BossID, n)
+		}
+	}
+	if n := snap.ModeMaxItems("ranked_2v2"); n != snap.Rules.Items.MaxLoadout {
+		t.Fatalf("ranked: %d items", n)
+	}
+	if crab, _ := snap.Boss("lava_crab"); crab.Skills[0].StatusChance != 0.5 || crab.Skills[0].Damage != 0.455 {
+		t.Fatalf("crab 052 %+v", crab.Skills[0])
+	}
+
 	// 050 / 051: the free summons, the witch on the islands with her v3 numbers
 	if witch, _ := snap.Boss("ice_witch"); witch.MapID != "arena_ice_witch_islands" || witch.Summon == nil || witch.Summon.Count != 5 ||
 		witch.Minions[0].Behavior != gamedata.MinionLeaper || len(witch.AttackSkills()) != len(witch.Skills) {
@@ -81,8 +95,11 @@ func TestBossMigration(t *testing.T) {
 		skills = jsonb_set(skills, '{1,minFactor}', '0.5') WHERE boss_id = 'lava_crab'`)
 	execSQL(t, db, `UPDATE config_bosses SET minions = jsonb_set(minions, '{0,explodeDamagePct}', '25') WHERE boss_id = 'ice_witch'`)
 	execSQL(t, db, `UPDATE config_maps SET name = 'Đảo' WHERE map_id = 'arena_ice_witch_islands'`)
+	// 052 edits: a boss mode's items, the witch's frost beam chance
+	execSQL(t, db, `UPDATE config_game_modes SET max_items = 4 WHERE mode_id = 'boss_ice_witch'`)
+	execSQL(t, db, `UPDATE config_bosses SET skills = jsonb_set(skills, '{1,statusChance}', '0.8') WHERE boss_id = 'ice_witch'`)
 	for _, f := range []string{"045_boss_arenas", "046_boss_mode", "047_boss_arenas_v2", "048_boss_mode_v2", "049_boss_placement",
-		"050_boss_mode_v3", "051_boss_arena_islands"} {
+		"050_boss_mode_v3", "051_boss_arena_islands", "052_boss_status_items"} {
 		runSQL(t, db, f+".up.sql")
 	}
 	if sp := crabSpawns(); sp[5].X != 900 || sp[6].X != 1464 {
@@ -104,6 +121,9 @@ func TestBossMigration(t *testing.T) {
 			t.Fatalf("a rerun lost a v2 edit: robot %+v witch %d %d %v %v %s crab %+v arena %q", robot.Minions[0], witch.TurnLimit, witch.HP,
 				witch.Flying, witch.Hover, witch.MapID, crab.Waves, arena)
 		}
+		if n := snap.ModeMaxItems("boss:ice_witch"); n != 4 || witch.Skills[1].StatusChance != 0.8 || witch.HP != 27000 {
+			t.Fatalf("a rerun lost a 052 edit: %d items, frost beam %+v", n, witch.Skills[1])
+		}
 		if crab.Summon == nil || crab.Summon.Count != 2 || crab.Damage != 700 || crab.Skills[1].MinFactor != 0.5 ||
 			witch.Minions[0].ExplodeDamagePct != 25 || islands != "Đảo" {
 			t.Fatalf("a rerun lost a v3 edit: crab %+v %d %+v witch %+v islands %q", crab.Summon, crab.Damage, crab.Skills[1], witch.Minions[0], islands)
@@ -121,6 +141,7 @@ func TestBossMigration(t *testing.T) {
 		t.Fatalf("a rerun lost a mode / arena edit: %d %q", party, mapName)
 	}
 
+	runSQL(t, db, "052_boss_status_items.down.sql")
 	runSQL(t, db, "051_boss_arena_islands.down.sql")
 	runSQL(t, db, "050_boss_mode_v3.down.sql")
 	runSQL(t, db, "049_boss_placement.down.sql")
@@ -151,8 +172,26 @@ func TestBossMigration(t *testing.T) {
 	runSQL(t, db, "050_boss_mode_v3.up.sql")
 	runSQL(t, db, "051_boss_arena_islands.up.sql")
 	runSQL(t, db, "051_boss_arena_islands.up.sql")
-	if snap, err := gamedata.LoadFromDB(ctx, db); err != nil || !reflect.DeepEqual(snap.Bosses, gamedata.DefaultBosses()) {
+	runSQL(t, db, "052_boss_status_items.up.sql")
+	runSQL(t, db, "052_boss_status_items.up.sql")
+	if snap, err := gamedata.LoadFromDB(ctx, db); err != nil || !reflect.DeepEqual(snap.Bosses, gamedata.DefaultBosses()) ||
+		snap.ModeMaxItems("boss:lava_crab") != 6 {
 		t.Fatalf("down / up: %v", err)
+	}
+	// 052's down gives the v3 skills, HP and the global item rule back
+	runSQL(t, db, "052_boss_status_items.down.sql")
+	{
+		var cols, witchHP int
+		var beamDamage float64
+		var beamChance, crabDamage string
+		_ = db.Pool.QueryRow(ctx, `SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema()
+			AND table_name = 'config_game_modes' AND column_name = 'max_items'`).Scan(&cols)
+		_ = db.Pool.QueryRow(ctx, `SELECT hp, (skills->1->>'damage')::float8, COALESCE(skills->1->>'statusChance', '') FROM config_bosses
+			WHERE boss_id = 'ice_witch'`).Scan(&witchHP, &beamDamage, &beamChance)
+		_ = db.Pool.QueryRow(ctx, `SELECT skills->0->>'damage' FROM config_bosses WHERE boss_id = 'lava_crab'`).Scan(&crabDamage)
+		if cols != 0 || witchHP != 13000 || beamDamage != 0.8 || beamChance != "" || crabDamage != "0.35" {
+			t.Fatalf("052 down: %d max_items columns, witch %d %v %q, crab %s", cols, witchHP, beamDamage, beamChance, crabDamage)
+		}
 	}
 	runSQL(t, db, "050_boss_mode_v3.down.sql")
 	{
@@ -169,9 +208,11 @@ func TestBossMigration(t *testing.T) {
 	}
 	runSQL(t, db, "050_boss_mode_v3.up.sql")
 	runSQL(t, db, "050_boss_mode_v3.up.sql")
+	runSQL(t, db, "052_boss_status_items.up.sql")
 	if snap, err := gamedata.LoadFromDB(ctx, db); err != nil || !reflect.DeepEqual(snap.Bosses, gamedata.DefaultBosses()) {
 		t.Fatalf("050 down / up: %v", err)
 	}
+	runSQL(t, db, "052_boss_status_items.down.sql")
 	// 048's down gives the phase 1 rows back (still loadable)
 	runSQL(t, db, "050_boss_mode_v3.down.sql")
 	runSQL(t, db, "049_boss_placement.down.sql")
@@ -187,6 +228,7 @@ func TestBossMigration(t *testing.T) {
 	runSQL(t, db, "048_boss_mode_v2.up.sql")
 	runSQL(t, db, "049_boss_placement.up.sql")
 	runSQL(t, db, "050_boss_mode_v3.up.sql")
+	runSQL(t, db, "052_boss_status_items.up.sql")
 }
 
 // The Boss page edits every field: a valid save is stored and bumps the game data revision;
@@ -351,6 +393,32 @@ func TestBossAdminPage(t *testing.T) {
 	}
 	if rec := post(h, "/texts/game-modes/save", mode("boss_x", "boss:ice_witch", "4")); !saved1(rec) {
 		t.Fatalf("boss mode of 4: %s", rec.Header().Get("Location"))
+	}
+	// max_items (052): a number 0..20, empty = NULL (the global rule); the page shows it
+	maxItems := func(key string) string {
+		var v string
+		_ = db.Pool.QueryRow(ctx, `SELECT COALESCE(max_items::text, 'NULL') FROM config_game_modes WHERE mode_id = $1`, key).Scan(&v)
+		return v
+	}
+	if maxItems("boss_x") != "NULL" || maxItems("boss_lava_crab") != "6" {
+		t.Fatalf("max_items boss_x %s, boss_lava_crab %s", maxItems("boss_x"), maxItems("boss_lava_crab"))
+	}
+	withItems := mode("boss_x", "boss:ice_witch", "4")
+	withItems.Del("new")
+	withItems.Set("c_max_items", "5")
+	if rec := post(h, "/texts/game-modes/save", withItems); !saved1(rec) || maxItems("boss_x") != "5" {
+		t.Fatalf("max_items 5: %s, %s", rec.Header().Get("Location"), maxItems("boss_x"))
+	}
+	if body := get(h, "/texts/game-modes").Body.String(); !strings.Contains(body, `name="c_max_items"`) {
+		t.Fatal("the Game Modes page has no max_items")
+	}
+	withItems.Set("c_max_items", "21")
+	if rec := post(h, "/texts/game-modes/save", withItems); saved1(rec) || maxItems("boss_x") != "5" {
+		t.Fatal("max_items 21 accepted")
+	}
+	withItems.Set("c_max_items", "")
+	if rec := post(h, "/texts/game-modes/save", withItems); !saved1(rec) || maxItems("boss_x") != "NULL" {
+		t.Fatalf("empty max_items: %s", maxItems("boss_x"))
 	}
 	for name, v := range map[string]url.Values{
 		"unknown boss": mode("boss_y", "boss:dragon", "4"),

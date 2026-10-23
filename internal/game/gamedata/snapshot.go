@@ -119,13 +119,35 @@ type TypeWordConfig struct {
 
 // GameModeConfig is a config_game_modes row (kind lobby or match). A lobby mode sits in
 // Category (a ModeCategoryConfig), shows Icon (a client icon key), takes up to PartySize
-// lobby members and changes rating when Ranked; a disabled one is not offered.
+// lobby members and changes rating when Ranked; a disabled one is not offered. MaxItems (052,
+// config_game_modes.max_items) is how many items a player brings into its matches, nil for
+// rules.items maxLoadout (ModeMaxItems).
 type GameModeConfig struct {
 	ModeID, Kind, Name, Description, Queue, Bot string
 	Category, Icon                              string
 	PartySize                                   int
 	Ranked, Enabled                             bool
 	SortOrder                                   int
+	MaxItems                                    *int
+}
+
+// ModeMaxItems is how many items a player may bring into a match of queue (or match mode) q:
+// the max_items of the lobby mode with that queue, else of the mode row q itself, when set;
+// rules.items maxLoadout otherwise (and for "", custom rooms and quick play).
+func (s *Snapshot) ModeMaxItems(q string) int {
+	if q != "" {
+		for _, m := range s.Modes {
+			if m.Kind == "lobby" && m.Queue == q && m.MaxItems != nil {
+				return *m.MaxItems
+			}
+		}
+		for _, m := range s.Modes {
+			if m.ModeID == q && m.MaxItems != nil {
+				return *m.MaxItems
+			}
+		}
+	}
+	return s.Rules.Items.MaxLoadout
 }
 
 // ModeCategoryConfig is a config_mode_categories row: a section of the mode select screen.

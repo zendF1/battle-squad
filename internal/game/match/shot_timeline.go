@@ -304,16 +304,17 @@ func (m *Match) broadcastShot(shot *ShotResolved, tl *shotTimeline) {
 	}
 	shooter := m.State.Players[shot.ShooterID]
 	m.minionShotKinds(shot)
-	blasts := m.deathBlasts(shooter, tl)
+	m.deathBlasts(shooter, tl)
 	m.bossAfterShot(tl)
 	for _, r := range shot.Projectiles {
 		tl.reach(flightEnd(r))
 	}
 	m.grantHitEnergy(shooter, tl)
 	shot.Events = tl.sorted()
-	if blasts {
-		renumberTerrainVersions(shot.Events)
-	}
+	// the clients count their carves in play order: whatever order the shot carved in (death
+	// blasts after the rest, a skill's parts resolved one after the other), the explodes carry
+	// the versions in time order
+	renumberTerrainVersions(shot.Events)
 	if shot.Events == nil {
 		shot.Events = []ShotEvent{}
 	}

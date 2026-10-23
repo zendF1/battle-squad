@@ -136,6 +136,7 @@ func TestWitchRadialBeams(t *testing.T) {
 	p0, p1 := m.State.Players["p0"], m.State.Players["p1"]
 	p0.Position = Vector2{X: origin.X, Y: origin.Y + lift} // its body centre on hers
 	p0.Shield, p0.HP = 0, p0.MaxHP
+	m.boss.statusRollFix = func() float64 { return 0 } // every status roll lands
 	bossCast(t, m, "frost_beam")
 	s := shotOf(t, watch)
 	beams := shotEventsOf(s, "beam")
@@ -192,6 +193,7 @@ func TestWitchRadialBeams(t *testing.T) {
 func TestBlizzardCoversTheMap(t *testing.T) {
 	loadConfigs(t)
 	m, watch := bossMatch(t, "ice_witch", 4)
+	m.boss.statusRollFix = func() float64 { return 0 } // every status roll lands
 	bossCast(t, m, "blizzard")
 	s := shotOf(t, watch)
 	if len(s.Projectiles) != 40 {
@@ -231,6 +233,90 @@ func TestBlizzardCoversTheMap(t *testing.T) {
 		if p := m.State.Players[id]; p.IsAlive && !HasEffect(p, "freeze") {
 			t.Fatalf("%s hit but not frozen", id)
 		}
+	}
+}
+
+// Boss statuses land by chance (052, statusChance 0.5): the status skills carry 0.5 and 1.3 × their
+// v3 damage; each party member a cast hits rolls once (a rain's many shells too); a roll under
+// the chance lands the status, one at or over it does not (the damage stays); unfixed, the rolls
+// are seeded by the match and turn (the same turn rolls the same) and land about half the time.
+func TestBossStatusChance(t *testing.T) {
+	loadConfigs(t)
+	v3 := map[string]float64{"fire_bombs": 0.35, "ice_spikes": 0.25, "frost_beam": 0.8, "blizzard": 0.15}
+	for _, b := range gamedata.DefaultBosses() {
+		for _, s := range b.Skills {
+			if s.Status == "" {
+				continue
+			}
+			if s.StatusChance != 0.5 || math.Abs(s.Damage-1.3*v3[s.SkillID]) > 1e-9 {
+				t.Fatalf("%s: chance %v damage %v", s.SkillID, s.StatusChance, s.Damage)
+			}
+		}
+	}
+	if (gamedata.BossSkill{}).StatusChanceOrDefault() != 0.5 {
+		t.Fatal("default chance")
+	}
+
+	// the frost beam on p0 at the witch's body: a roll of 0.49 stuns, 0.5 does not
+	beamOnP0 := func(roll func() float64, turn int) (*Match, ShotResolved) {
+		m, watch := bossMatch(t, "ice_witch", 2)
+		lift := shotOriginLift(m.Terrain)
+		origin := bodyCentre(m.bossPlayer(), lift)
+		p0 := m.State.Players["p0"]
+		p0.Position = Vector2{X: origin.X, Y: origin.Y + lift}
+		p0.Shield, p0.HP = 0, p0.MaxHP
+		m.State.TurnIndex = turn
+		m.boss.statusRollFix = roll
+		bossCast(t, m, "frost_beam")
+		return m, shotOf(t, watch)
+	}
+	k := gamedata.DefenseK()
+	for roll, stunned := range map[float64]bool{0.49: true, 0.5: false} {
+		m, s := beamOnP0(func() float64 { return roll }, 1)
+		p0 := m.State.Players["p0"]
+		want := int(math.Round(reduceByDefense(1.04*780, p0.Defense, k)))
+		if HasEffect(p0, "stun") != stunned || (len(shotEventsOf(s, "status")) > 0) != stunned || p0.MaxHP-p0.HP != want {
+			t.Fatalf("roll %v: stunned %v, status events %d, lost %d want %d", roll, HasEffect(p0, "stun"),
+				len(shotEventsOf(s, "status")), p0.MaxHP-p0.HP, want)
+		}
+	}
+
+	// a blizzard over the party: one roll per member hit, however many shards hit it
+	m, watch := bossMatch(t, "ice_witch", 4)
+	for _, p := range m.State.Players {
+		if p.Role == "" {
+			p.Shield, p.HP = 0, p.MaxHP
+		}
+	}
+	rolls := 0
+	m.boss.statusRollFix = func() float64 { rolls++; return 0.9 }
+	bossCast(t, m, "blizzard")
+	s := shotOf(t, watch)
+	hit := map[string]bool{}
+	for _, e := range shotEventsOf(s, "damage") {
+		if m.State.Players[e.PlayerID].Role == "" {
+			hit[e.PlayerID] = true
+		}
+	}
+	if len(hit) == 0 || rolls != len(hit) || len(shotEventsOf(s, "status")) != 0 {
+		t.Fatalf("%d members hit, %d rolls, %d status events", len(hit), rolls, len(shotEventsOf(s, "status")))
+	}
+
+	// seeded: the same match and turn roll the same; over many turns about half land
+	landed := 0
+	for turn := 0; turn < 60; turn++ {
+		a, _ := beamOnP0(nil, turn)
+		b, _ := beamOnP0(nil, turn)
+		sa, sb := HasEffect(a.State.Players["p0"], "stun"), HasEffect(b.State.Players["p0"], "stun")
+		if sa != sb {
+			t.Fatalf("turn %d rolled differently", turn)
+		}
+		if sa {
+			landed++
+		}
+	}
+	if landed < 18 || landed > 42 {
+		t.Fatalf("%d / 60 stuns landed", landed)
 	}
 }
 
@@ -313,6 +399,84 @@ func TestCrabShockwave(t *testing.T) {
 	}
 	if len(shotEventsOf(s, "damage")) < 4 {
 		t.Fatalf("damage %v", shotEventsOf(s, "damage"))
+	}
+}
+
+// replayShot plays shot s the way the clients do: the events in order, each explode's carve
+// counted (the terrain version + 1), and at the first explode whose terrainVersion is not the
+// count the client takes its terrain for drifted, asks for a MatchStateSync and drops the rest
+// of the replay. It returns the HP each player was shown (from the damage events played, the
+// start HP otherwise) and whether the whole shot played.
+func replayShot(s ShotResolved, version uint64, hp map[string]int) (map[string]int, bool) {
+	shown := map[string]int{}
+	for id, v := range hp {
+		shown[id] = v
+	}
+	for _, e := range s.Events {
+		switch {
+		case e.Type == "explode" && e.TerrainVersion > 0:
+			version++
+			if e.TerrainVersion != version {
+				return shown, false
+			}
+		case e.Type == "damage" && e.HP != nil:
+			shown[e.PlayerID] = *e.HP
+		}
+	}
+	return shown, true
+}
+
+// The crab's claw slam hurts the whole party on the mound: every grounded member loses
+// damage × the boss damage × max(minFactor, 1 − distance / the farther edge's) through its
+// defense (a damage event each, cause explosion), and the clients play all of it: the steps'
+// terrain versions rise in play order (both sides interleaved), so no client drops the replay
+// (and its damage) for a drifted terrain.
+func TestCrabShockwaveDamagesParty(t *testing.T) {
+	loadConfigs(t)
+	m, watch := bossMatch(t, "lava_crab", 4)
+	crab := m.bossPlayer()
+	start := map[string]int{}
+	for _, p := range m.State.Players {
+		if p.Role == "" {
+			p.Shield, p.HP = 0, p.MaxHP
+			if !m.Terrain.CanStandAt(p.Position.X, p.Position.Y) {
+				t.Fatalf("%s is not grounded at %v", p.PlayerID, p.Position)
+			}
+		}
+		start[p.PlayerID] = p.HP
+	}
+	skill, _ := m.boss.cfg.Skill("claw_slam")
+	version := m.Terrain.Version
+	x0, w := crab.Position.X, float64(m.Terrain.Width)
+	bossCast(t, m, "claw_slam")
+	s := shotOf(t, watch)
+	k := m.gd.Physics.DefenseKOrDefault()
+	hits := map[string]int{}
+	for _, e := range shotEventsOf(s, "damage") {
+		if e.Cause == "explosion" {
+			hits[e.PlayerID] += e.Amount
+		}
+	}
+	fell := map[string]int{}
+	for _, e := range shotEventsOf(s, "damage") {
+		if e.Cause == "fall" {
+			fell[e.PlayerID] += e.Amount
+		}
+	}
+	shown, whole := replayShot(s, version, start)
+	if !whole {
+		t.Errorf("the clients drop the replay at a terrain version out of play order")
+	}
+	for i := 0; i < 4; i++ {
+		p := m.State.Players[fmt.Sprintf("p%d", i)]
+		f := math.Max(skill.MinFactor, 1-math.Abs(p.Position.X-x0)/math.Max(x0, w-x0))
+		want := int(math.Round(reduceByDefense(skill.Damage*float64(m.boss.cfg.Damage)*f, p.Defense, k)))
+		if want <= 0 || hits[p.PlayerID] != want || p.MaxHP-p.HP != want+fell[p.PlayerID] {
+			t.Errorf("%s at %v: hit %d, lost %d, want %d (+ fall %d)", p.PlayerID, p.Position, hits[p.PlayerID], p.MaxHP-p.HP, want, fell[p.PlayerID])
+		}
+		if shown[p.PlayerID] != p.HP {
+			t.Errorf("%s: the clients show %d HP, the server has %d", p.PlayerID, shown[p.PlayerID], p.HP)
+		}
 	}
 }
 

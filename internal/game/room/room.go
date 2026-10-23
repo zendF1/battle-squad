@@ -413,10 +413,10 @@ func (r *Room) processSelectCharacter(client *ws.Client, characterID string) {
 }
 
 func (r *Room) processSelectItems(client *ws.Client, items []string) {
-	if len(items) > MaxLoadoutItems() {
+	if len(items) > MaxLoadoutItems(r.State.Mode) {
 		return
 	}
-	if err := checkItemSelection(items); err != nil {
+	if err := checkItemSelection(items, r.State.Mode); err != nil {
 		r.sendError(client, err.Error())
 		return
 	}
@@ -663,8 +663,9 @@ func (r *Room) sendError(client *ws.Client, message string) {
 	}
 }
 
-// reservePlayerItems verifies all players own their selected items and creates reservations
-// atomically. If any item is not owned or reservation fails, the transaction is rolled back.
+// reservePlayerItems verifies all players own their selected items (at most
+// MaxLoadoutItems(the room's mode) each) and creates reservations atomically. If any item is
+// not owned or reservation fails, the transaction is rolled back.
 func (r *Room) reservePlayerItems(matchID string) error {
 	ctx := context.Background()
 	tx, err := r.db.Pool.Begin(ctx)
@@ -678,6 +679,9 @@ func (r *Room) reservePlayerItems(matchID string) error {
 			continue // a bot's items are in no inventory
 		}
 
+		if limit := MaxLoadoutItems(r.State.Mode); len(p.Items) > limit {
+			return &LoadoutError{PlayerID: p.PlayerID, Reason: fmt.Sprintf("You can bring at most %d items", limit)}
+		}
 		counts, err := itemCounts(p.Items)
 		if err != nil {
 			return &LoadoutError{PlayerID: p.PlayerID, Reason: err.Error()}

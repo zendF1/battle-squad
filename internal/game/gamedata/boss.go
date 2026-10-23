@@ -99,13 +99,16 @@ type BossSkill struct {
 	Pattern     string  `json:"pattern,omitempty"` // beam: "" aimed, radial, sweep
 	Status      string  `json:"status,omitempty"`
 	StatusTurns int     `json:"statusTurns,omitempty"`
-	LavaRadius  float64 `json:"lavaRadius,omitempty"`
-	LavaTurns   int     `json:"lavaTurns,omitempty"`
-	LavaDamage  int     `json:"lavaDamage,omitempty"`
-	Step        float64 `json:"step,omitempty"`      // shockwave: px between two explodes (0: 150)
-	Interval    float64 `json:"interval,omitempty"`  // shockwave: s between two explodes (0: 0.08)
-	MinFactor   float64 `json:"minFactor,omitempty"` // shockwave: the least share of the damage far away (0: 0.4)
-	MinionID    string  `json:"minionId,omitempty"`
+	// StatusChance (052) is the chance (0..1) that the status lands on a party member the cast
+	// hits (rolled once per member and cast); 0 is DefaultBossStatusChance.
+	StatusChance float64 `json:"statusChance,omitempty"`
+	LavaRadius   float64 `json:"lavaRadius,omitempty"`
+	LavaTurns    int     `json:"lavaTurns,omitempty"`
+	LavaDamage   int     `json:"lavaDamage,omitempty"`
+	Step         float64 `json:"step,omitempty"`      // shockwave: px between two explodes (0: 150)
+	Interval     float64 `json:"interval,omitempty"`  // shockwave: s between two explodes (0: 0.08)
+	MinFactor    float64 `json:"minFactor,omitempty"` // shockwave: the least share of the damage far away (0: 0.4)
+	MinionID     string  `json:"minionId,omitempty"`
 	// ProjectileKind (rain) is ShotResolved projectiles[].kind of its shells, the art the
 	// clients draw ("": missile); LaunchFrom (rain) "" drops them from the top of the map, boss
 	// launches each from a ring around the boss's body (radius bodySize × RainRingPerBodySize px)
@@ -136,6 +139,18 @@ func validKind(k string) bool {
 		}
 	}
 	return true
+}
+
+// DefaultBossStatusChance is a boss skill's status chance without a statusChance (052: a hit
+// party member gets the status half of the time).
+const DefaultBossStatusChance = 0.5
+
+// StatusChanceOrDefault is the chance the skill's status lands on a member it hits.
+func (s BossSkill) StatusChanceOrDefault() float64 {
+	if s.StatusChance > 0 {
+		return s.StatusChance
+	}
+	return DefaultBossStatusChance
 }
 
 // Shockwave defaults (zero fields of a shockwave skill).
@@ -639,6 +654,8 @@ func ValidateBoss(b BossConfig, characters map[string]CharacterConfig, items map
 			return bad("skill %s: target %q: random, nearest or lowest_hp (rain also party, map)", s.SkillID, s.Target)
 		case s.StatusTurns < 0 || s.StatusTurns > 5 || (s.Status != "" && s.StatusTurns < 1):
 			return bad("skill %s: statusTurns %d (1..5 with a status)", s.SkillID, s.StatusTurns)
+		case !in(s.StatusChance, 0, 1):
+			return bad("skill %s: statusChance %v outside 0..1 (0: %v)", s.SkillID, s.StatusChance, DefaultBossStatusChance)
 		}
 		switch s.Kind {
 		case BossSkillRain:

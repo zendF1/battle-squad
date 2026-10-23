@@ -13,15 +13,17 @@ import (
 type fakeQueuer struct {
 	mu     sync.Mutex
 	queues []string
+	items  []map[string][]string // each enqueued lobby's playerItems
 }
 
 func (f *fakeQueuer) EnqueueLobby(_ context.Context, queue, lobbyID string, playerIDs []string, _ map[string]int,
-	_ map[string]string, _ map[string][]string, _ map[string]string) (*matchmaker.QueueEntry, error) {
+	_ map[string]string, items map[string][]string, _ map[string]string) (*matchmaker.QueueEntry, error) {
 	if !matchmaker.KnownQueue(queue) {
 		return nil, matchmaker.ErrUnknownQueue
 	}
 	f.mu.Lock()
 	f.queues = append(f.queues, queue)
+	f.items = append(f.items, items)
 	f.mu.Unlock()
 	return &matchmaker.QueueEntry{EntryID: "e_" + lobbyID, Queue: queue, LobbyID: lobbyID, PlayerIDs: playerIDs}, nil
 }

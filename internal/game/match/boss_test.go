@@ -297,6 +297,7 @@ func TestBossSkillEvents(t *testing.T) {
 
 	t.Run("status", func(t *testing.T) {
 		m, watch := bossMatch(t, "ice_witch", 1)
+		m.boss.statusRollFix = func() float64 { return 0 } // every status roll lands
 		bossCast(t, m, "ice_spikes")
 		s := shotOf(t, watch)
 		if eventTypes(s)["status"] != 1 || !HasEffect(m.State.Players["p0"], "freeze") {

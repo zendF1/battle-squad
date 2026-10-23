@@ -284,13 +284,13 @@ func TestGameDataFromDB(t *testing.T) {
 		t.Fatalf("matchmaking %+v", mm)
 	}
 	if !reflect.DeepEqual(g.Modes.Lobby, []LobbyMode{
-		{ModeID: "casual", Name: "Đấu thường 2vs2", Description: "Ghép 2v2, không tính điểm hạng", Queue: "casual_2v2", Category: "pvp", Icon: "swords", PartySize: 2},
-		{ModeID: "ranked", Name: "Đấu hạng 2vs2", Description: "Ghép 2v2, tính điểm hạng", Queue: "ranked_2v2", Category: "pvp", Icon: "trophy", PartySize: 2, Ranked: true},
-		{ModeID: "bot", Name: "Đấu máy", Description: "Đấu 1v1 với máy biết bắn", Bot: "ai", Category: "pvp", Icon: "robot", PartySize: 1},
-		{ModeID: "practice", Name: "Luyện tập", Description: "Tập bắn với bia đứng yên", Category: "pvp", Icon: "target", PartySize: 1},
-		{ModeID: "boss_steel_robot", Name: "Rô-bốt Thép", Description: "Đánh boss, tối đa 4 người", Queue: "boss:steel_robot", Category: "boss", Icon: "boss", PartySize: 4},
-		{ModeID: "boss_lava_crab", Name: "Cua Dung Nham", Description: "Đánh boss, tối đa 4 người", Queue: "boss:lava_crab", Category: "boss", Icon: "boss", PartySize: 4},
-		{ModeID: "boss_ice_witch", Name: "Phù Thuỷ Băng", Description: "Đánh boss, tối đa 4 người", Queue: "boss:ice_witch", Category: "boss", Icon: "boss", PartySize: 4},
+		{ModeID: "casual", Name: "Đấu thường 2vs2", Description: "Ghép 2v2, không tính điểm hạng", Queue: "casual_2v2", Category: "pvp", Icon: "swords", PartySize: 2, MaxItems: 3},
+		{ModeID: "ranked", Name: "Đấu hạng 2vs2", Description: "Ghép 2v2, tính điểm hạng", Queue: "ranked_2v2", Category: "pvp", Icon: "trophy", PartySize: 2, Ranked: true, MaxItems: 3},
+		{ModeID: "bot", Name: "Đấu máy", Description: "Đấu 1v1 với máy biết bắn", Bot: "ai", Category: "pvp", Icon: "robot", PartySize: 1, MaxItems: 3},
+		{ModeID: "practice", Name: "Luyện tập", Description: "Tập bắn với bia đứng yên", Category: "pvp", Icon: "target", PartySize: 1, MaxItems: 3},
+		{ModeID: "boss_steel_robot", Name: "Rô-bốt Thép", Description: "Đánh boss, tối đa 4 người", Queue: "boss:steel_robot", Category: "boss", Icon: "boss", PartySize: 4, MaxItems: 6},
+		{ModeID: "boss_lava_crab", Name: "Cua Dung Nham", Description: "Đánh boss, tối đa 4 người", Queue: "boss:lava_crab", Category: "boss", Icon: "boss", PartySize: 4, MaxItems: 6},
+		{ModeID: "boss_ice_witch", Name: "Phù Thuỷ Băng", Description: "Đánh boss, tối đa 4 người", Queue: "boss:ice_witch", Category: "boss", Icon: "boss", PartySize: 4, MaxItems: 6},
 	}) || !reflect.DeepEqual(g.Modes.Categories, []ModeCategory{{"pvp", "PvP"}, {"boss", "Boss"}}) ||
 		!reflect.DeepEqual(g.Modes.Match, []MatchMode{{"pvp_1v1", "Đấu 1v1"}, {"pvp_2v2", "Đấu 2v2"}, {"ranked_2v2", "Đấu hạng 2vs2"}, {"casual_2v2", "Đấu thường 2vs2"},
 			{"boss:steel_robot", "Rô-bốt Thép"}, {"boss:lava_crab", "Cua Dung Nham"}, {"boss:ice_witch", "Phù Thuỷ Băng"}}) {
@@ -323,13 +323,13 @@ func TestGameDataFromDB(t *testing.T) {
 		crab.Summon == nil || crab.Summon.Count != 4 {
 		t.Fatalf("lava_crab %+v", crab)
 	}
-	if witch.MapID != "arena_ice_witch_islands" || witch.TurnLimit != 30 || witch.HP != 13000 || !witch.Flying ||
+	if witch.MapID != "arena_ice_witch_islands" || witch.TurnLimit != 30 || witch.HP != 14000 || !witch.Flying ||
 		witch.Hover == nil || *witch.Hover != (BossHover{MinX: 400, MaxX: 2000, MinY: 320, MaxY: 430, MinMove: 200, FlySpeed: 220}) ||
 		witch.Minions[0].Behavior != "leaper" || witch.Minions[0].Movement != "none" || !witch.Minions[0].ExplodeOnDeath ||
 		witch.Minions[0].ExplodeRadius != 140 || witch.Minions[0].ExplodeDamagePct != 15 || !witch.Minions[0].LeapDetonateNextTurn ||
 		witch.Minions[0].ShootAfterLeap || witch.Minions[0].ProjectileKind != "snowball" || witch.Summon == nil || witch.Summon.Count != 5 ||
 		witch.Skills[1].Pattern != "radial" || witch.Skills[2] != (BossSkill{SkillID: "blizzard", Name: "Bão tuyết",
-		Description: "Bốn mươi mảnh băng từ quanh phù thuỷ bay ra trút xuống khắp chiến trường; ai trúng bị đóng băng một lượt.", Kind: "rain",
+		Description: "Bốn mươi mảnh băng từ quanh phù thuỷ bay ra trút xuống khắp chiến trường; ai trúng có 50 % bị đóng băng một lượt.", Kind: "rain",
 		ProjectileKind: "ice_shard", LaunchFrom: "boss"}) {
 		t.Fatalf("ice_witch %+v", witch)
 	}
@@ -413,6 +413,7 @@ func TestGameDataMigrationDownUpAndSeed(t *testing.T) {
 	runMigration(t, db, "041_gamedata_rules.up.sql") // cmd/migrate reruns every file
 	runMigration(t, db, "044_mode_select.up.sql")
 	runMigration(t, db, "046_boss_mode.up.sql")
+	runMigration(t, db, "052_boss_status_items.up.sql")
 	if after, _ := fetch(t, h); !reflect.DeepEqual(after, before) {
 		t.Fatal("down / up changed the payload")
 	}

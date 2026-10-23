@@ -113,6 +113,20 @@ func (m *Match) applyOnce(tl *shotTimeline, t float64, source *BattlePlayerState
 	}
 }
 
+// bossStatusOnce is applyOnce for boss skill s: each living target not yet rolled this cast
+// rolls once (bossStatusLands) whether s's status lands on it.
+func (m *Match) bossStatusOnce(tl *shotTimeline, t float64, source *BattlePlayerState, targets []*BattlePlayerState, seen map[string]bool, s gamedata.BossSkill) {
+	for _, p := range targets {
+		if !p.IsAlive || seen[p.PlayerID] {
+			continue
+		}
+		seen[p.PlayerID] = true
+		if m.bossStatusLands(s) {
+			m.applyShotStatus(tl, t, source, p, s.Status, s.StatusTurns)
+		}
+	}
+}
+
 // skillRNG is the seeded random source of this turn's skill: the same match and turn give the
 // same numbers (the missile rain columns), so a replay of the event log is deterministic.
 func (m *Match) skillRNG() *rand.Rand {

@@ -473,6 +473,9 @@ type LobbyMode struct {
 	Icon        string `json:"icon"`
 	PartySize   int    `json:"partySize"`
 	Ranked      bool   `json:"ranked"`
+	// MaxItems (052) is how many battle items a player brings into its matches: the mode's
+	// config_game_modes max_items, itemRules.maxLoadout when NULL (6 for the boss modes).
+	MaxItems int `json:"maxItems"`
 }
 
 // MatchMode is a match's mode (MatchStarted.mode, match history).
