@@ -73,7 +73,7 @@ func DefaultBosses() []BossConfig {
 			RecommendedLevel: 25, Enabled: true, SortOrder: 2, MapID: "arena_lava_crab_mound",
 			HP: 15000, Defense: 90, Damage: 720, BodySize: 3.2, TurnLimit: 15, ShieldedDamageFactor: 0.1, OutOfMap: BossOutOfMapClamp,
 			Skills: []BossSkill{
-				{SkillID: "fire_bombs", Name: "Bom dung nham", Description: "Mười sáu quả bom lửa rơi khắp chiến trường, gây bỏng và để lại vũng dung nham hai lượt.",
+				{SkillID: "fire_bombs", Name: "Bom dung nham", Description: "Mười quả bom lửa rơi khắp chiến trường, gây bỏng và để lại vũng dung nham một lượt.",
 					Kind: BossSkillRain, Weight: 3, Cooldown: 1, Target: BossTargetMap, Count: 10, Damage: 0.35, Blast: 80, Crater: 27, Cap: 0.7,
 					Status: "burn", StatusTurns: 1, LavaRadius: 40, LavaTurns: 1, LavaDamage: 120, ProjectileKind: "magma_bomb"},
 				{SkillID: "claw_slam", Name: "Cú kẹp đập", Description: "Càng đập xuống đất, sóng chấn động chạy ra hai mép map, trúng mọi người đứng trên mặt đất.",
