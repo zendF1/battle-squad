@@ -7,13 +7,14 @@ import (
 	"battle-squad/internal/game/gamedata"
 )
 
-// Files cmd/mapgen writes for the boss arenas: 045 the phase 1 arenas (Arenas), 047 the boss v2
-// arenas (ArenasV2).
+// Files cmd/mapgen writes for the boss arenas: 045 the phase 1 arenas (Arenas). 047 (the boss v2
+// arenas, ArenasV2) was generated the same way and is now frozen as applied: 049 moves the
+// mound's minion spawns off the crab's body (TestArenasV2Migrations: 047 + 049 = ArenasV2).
 const (
-	ArenasUpFile     = "migrations/045_boss_arenas.up.sql"
-	ArenasDownFile   = "migrations/045_boss_arenas.down.sql"
-	ArenasV2UpFile   = "migrations/047_boss_arenas_v2.up.sql"
-	ArenasV2DownFile = "migrations/047_boss_arenas_v2.down.sql"
+	ArenasUpFile       = "migrations/045_boss_arenas.up.sql"
+	ArenasDownFile     = "migrations/045_boss_arenas.down.sql"
+	ArenasV2UpFile     = "migrations/047_boss_arenas_v2.up.sql"
+	ArenaSpawnsFixFile = "migrations/049_boss_placement.up.sql"
 )
 
 // ArenaDef is a boss arena (not mirrored unless Build mirrors it). Spawn cells (column, row of
@@ -102,6 +103,11 @@ const (
 	witchPillarW   = 9  // cells
 	witchPillarGap = 16 // cells from a pillar's left column to the next one's
 	witchFirstCol  = 7
+	// The mound's slope minion spawns: the slope brick crabSlopeDrop rows under the top in
+	// column crabSlopeCol and its mirror (x 936 / 1464, ~250 px from the boss at x 1192: a
+	// crab's ~37 px body stands > 40 px clear of the crab boss's ~158 px one).
+	crabSlopeCol  = 58
+	crabSlopeDrop = 8
 )
 
 // WitchPillarTops are the top rows of the ice pillars, left to right.
@@ -126,9 +132,12 @@ var ArenasV2 = []ArenaDef{
 			g.Hill(67, 82, CrabMoundTop, crabGround-1, Hard)
 			g.Mirror()
 		},
-		Party:   [4][2]int{{12, crabGround}, {137, crabGround}, {28, crabGround}, {121, crabGround}},
-		Boss:    [2]int{74, CrabMoundTop},
-		Minions: [][2]int{{67, CrabMoundTop}, {82, CrabMoundTop}, {54, crabGround}, {95, crabGround}},
+		Party: [4][2]int{{12, crabGround}, {137, crabGround}, {28, crabGround}, {121, crabGround}},
+		Boss:  [2]int{74, CrabMoundTop},
+		// the mound's slopes, then its feet (049; 047 had the first two on the top, x 1080 / 1320,
+		// inside the crab's drawn body)
+		Minions: [][2]int{{crabSlopeCol, CrabMoundTop + crabSlopeDrop}, {GridW - 1 - crabSlopeCol, CrabMoundTop + crabSlopeDrop},
+			{54, crabGround}, {95, crabGround}},
 	},
 	{
 		ID: "arena_ice_witch_pillars", Name: "Cột băng", Theme: "ice", Wind: [2]float64{1, 3.5},
@@ -202,9 +211,10 @@ func ArenasUpSQL() string {
 	return arenasUpSQL(ArenasUpFile, Arenas, "-- The boss arenas (config_bosses.map_id)")
 }
 
-// ArenasV2UpSQL is migration 047: the boss v2 arenas (048_boss_mode_v2 points the crab and the
-// witch at them), inserted the same way.
-func ArenasV2UpSQL() string {
+// arenasV2UpSQL is migration 047 as ArenasV2 would render it now: the boss v2 arenas
+// (048_boss_mode_v2 points the crab and the witch at them), inserted the same way. 047 itself
+// is frozen; 049 updates its spawns.
+func arenasV2UpSQL() string {
 	return arenasUpSQL(ArenasV2UpFile, ArenasV2, "-- The boss v2 arenas (Cua Dung Nham's mound, Phù Thuỷ Băng's pillars)")
 }
 
@@ -226,9 +236,6 @@ func arenasUpSQL(file string, defs []ArenaDef, title string) string {
 
 // ArenasDownSQL removes the arenas 045 inserted.
 func ArenasDownSQL() string { return arenasDownSQL(ArenasDownFile, Arenas) }
-
-// ArenasV2DownSQL removes the arenas 047 inserted.
-func ArenasV2DownSQL() string { return arenasDownSQL(ArenasV2DownFile, ArenasV2) }
 
 func arenasDownSQL(file string, defs []ArenaDef) string {
 	ids := make([]string, len(defs))

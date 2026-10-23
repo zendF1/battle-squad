@@ -319,7 +319,7 @@ func TestGameDataFromDB(t *testing.T) {
 		t.Fatalf("lava_crab %+v", crab)
 	}
 	if witch.MapID != "arena_ice_witch_pillars" || witch.TurnLimit != 30 || witch.HP != 30000 || !witch.Flying ||
-		witch.Hover == nil || *witch.Hover != (BossHover{MinX: 400, MaxX: 2000, MinY: 200, MaxY: 430, MinMove: 200, FlySpeed: 220}) ||
+		witch.Hover == nil || *witch.Hover != (BossHover{MinX: 400, MaxX: 2000, MinY: 320, MaxY: 430, MinMove: 200, FlySpeed: 220}) ||
 		witch.Minions[0].Behavior != "shooter" || witch.Minions[0].Movement != "none" || !witch.Minions[0].ExplodeOnDeath ||
 		witch.Minions[0].ExplodeRadius != 140 || witch.Minions[0].ExplodeDamagePct != 30 {
 		t.Fatalf("ice_witch %+v", witch)

@@ -16,11 +16,12 @@ import (
 )
 
 // 045 / 046 seed the arenas, the three bosses (equal to gamedata.DefaultBosses), their lobby
-// and match modes and player_boss_runs; a rerun keeps admin edits; down / up gives the
-// defaults back.
+// and match modes and player_boss_runs (047 / 048 / 049: boss v2); a rerun keeps admin edits;
+// down / up gives the defaults back.
 func TestBossMigration(t *testing.T) {
 	names := registered(t)
-	for _, f := range []string{"045_boss_arenas.up.sql", "046_boss_mode.up.sql", "047_boss_arenas_v2.up.sql", "048_boss_mode_v2.up.sql"} {
+	for _, f := range []string{"045_boss_arenas.up.sql", "046_boss_mode.up.sql", "047_boss_arenas_v2.up.sql", "048_boss_mode_v2.up.sql",
+		"049_boss_placement.up.sql"} {
 		if !slices.Contains(names, f) {
 			t.Fatalf("cmd/migrate does not run %s: %v", f, names)
 		}
@@ -34,6 +35,20 @@ func TestBossMigration(t *testing.T) {
 	if !reflect.DeepEqual(snap.Bosses, gamedata.DefaultBosses()) {
 		got, _ := json.Marshal(snap.Bosses)
 		t.Fatalf("seeded bosses differ from DefaultBosses: %s", got)
+	}
+	crabSpawns := func() []gamedata.SpawnPoint {
+		var raw []byte
+		if err := db.Pool.QueryRow(ctx, `SELECT spawn_points FROM config_maps WHERE map_id = 'arena_lava_crab_mound'`).Scan(&raw); err != nil {
+			t.Fatal(err)
+		}
+		var out []gamedata.SpawnPoint
+		_ = json.Unmarshal(raw, &out)
+		return out
+	}
+	// 049: the mound's minion spawns off the crab's body (configs/maps.yaml has them too)
+	if sp := crabSpawns(); len(sp) != 9 || sp[5].X != 936 || sp[6].X != 1464 || sp[5].Y != 764 ||
+		!reflect.DeepEqual(sp, snap.Data.Maps["arena_lava_crab_mound"].SpawnPoints) {
+		t.Fatalf("crab arena spawns %+v", sp)
 	}
 	for _, b := range snap.Bosses {
 		if _, ok := snap.Data.Maps[b.MapID]; !ok {
@@ -54,11 +69,15 @@ func TestBossMigration(t *testing.T) {
 	execSQL(t, db, `UPDATE config_bosses SET turn_limit = 25, hp = 27000, flying = false, hover = NULL, map_id = 'arena_steel_robot'
 		WHERE boss_id = 'ice_witch'`)
 	execSQL(t, db, `UPDATE config_bosses SET waves = '{"initial":[{"minionId":"crab","count":1}],"maxAlive":2}' WHERE boss_id = 'lava_crab'`)
-	execSQL(t, db, `UPDATE config_maps SET name = 'Gò' WHERE map_id = 'arena_lava_crab_mound'`)
+	execSQL(t, db, `UPDATE config_maps SET name = 'Gò', spawn_points = jsonb_set(spawn_points, '{5,x}', '900') WHERE map_id = 'arena_lava_crab_mound'`)
 	runSQL(t, db, "045_boss_arenas.up.sql")
 	runSQL(t, db, "046_boss_mode.up.sql")
 	runSQL(t, db, "047_boss_arenas_v2.up.sql")
 	runSQL(t, db, "048_boss_mode_v2.up.sql")
+	runSQL(t, db, "049_boss_placement.up.sql")
+	if sp := crabSpawns(); sp[5].X != 900 || sp[6].X != 1464 {
+		t.Fatalf("a rerun lost a crab arena spawn edit: %+v", sp)
+	}
 	{
 		snap, err := gamedata.LoadFromDB(ctx, db)
 		if err != nil {
@@ -87,16 +106,34 @@ func TestBossMigration(t *testing.T) {
 		t.Fatalf("a rerun lost a mode / arena edit: %d %q", party, mapName)
 	}
 
+	runSQL(t, db, "049_boss_placement.down.sql")
 	runSQL(t, db, "048_boss_mode_v2.down.sql")
 	runSQL(t, db, "046_boss_mode.down.sql")
 	runSQL(t, db, "047_boss_arenas_v2.down.sql")
 	runSQL(t, db, "047_boss_arenas_v2.up.sql")
 	runSQL(t, db, "046_boss_mode.up.sql")
 	runSQL(t, db, "048_boss_mode_v2.up.sql")
+	// 047 / 048 alone: the f1e239f spawns and band; 049 moves them, its down moves them back
+	if sp := crabSpawns(); sp[5].X != 1080 || sp[6].X != 1320 {
+		t.Fatalf("047 crab spawns %+v", sp)
+	}
+	runSQL(t, db, "049_boss_placement.up.sql")
+	runSQL(t, db, "049_boss_placement.up.sql")
+	if sp := crabSpawns(); sp[5].X != 936 || sp[6].X != 1464 {
+		t.Fatalf("049 crab spawns %+v", sp)
+	}
+	runSQL(t, db, "049_boss_placement.down.sql")
+	var minY float64
+	_ = db.Pool.QueryRow(ctx, `SELECT (hover->>'minY')::float8 FROM config_bosses WHERE boss_id = 'ice_witch'`).Scan(&minY)
+	if sp := crabSpawns(); sp[5].X != 1080 || minY != 200 {
+		t.Fatalf("049 down: crab spawns %+v, witch minY %v", sp, minY)
+	}
+	runSQL(t, db, "049_boss_placement.up.sql")
 	if snap, err := gamedata.LoadFromDB(ctx, db); err != nil || !reflect.DeepEqual(snap.Bosses, gamedata.DefaultBosses()) {
 		t.Fatalf("down / up: %v", err)
 	}
 	// 048's down gives the phase 1 rows back (still loadable)
+	runSQL(t, db, "049_boss_placement.down.sql")
 	runSQL(t, db, "048_boss_mode_v2.down.sql")
 	var cols int
 	_ = db.Pool.QueryRow(ctx, `SELECT count(*) FROM information_schema.columns WHERE table_name = 'config_bosses' AND column_name IN ('flying', 'hover')`).Scan(&cols)
@@ -107,6 +144,7 @@ func TestBossMigration(t *testing.T) {
 		t.Fatalf("048 down: %d columns, witch %s %d", cols, witchMap, witchTurns)
 	}
 	runSQL(t, db, "048_boss_mode_v2.up.sql")
+	runSQL(t, db, "049_boss_placement.up.sql")
 }
 
 // The Boss page edits every field: a valid save is stored and bumps the game data revision;

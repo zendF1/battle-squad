@@ -1,9 +1,10 @@
 package gamedata
 
-// DefaultBosses are the bosses migrations 046_boss_mode and 048_boss_mode_v2 seed (the YAML
-// fallback plays with them too); TestBossMigration keeps the two equal. Boss v2: the drones are
-// flying bombers, the crabs walking bombers (on the mound arena), the snowmen shooters that
-// blast when they die (on the pillar arena) and the witch hovers, 30 turns. Original designs: a steel
+// DefaultBosses are the bosses migrations 046_boss_mode, 048_boss_mode_v2 and 049_boss_placement
+// seed (the YAML fallback plays with them too); TestBossMigration keeps the two equal. Boss v2: the
+// drones are flying bombers, the crabs walking bombers (on the mound arena), the snowmen shooters
+// that blast when they die (on the pillar arena) and the witch hovers (y 320..430, below the
+// client's boss HP bar), 30 turns. Original designs: a steel
 // mech titan with drones, a lava crab with crabs and lava, an ice witch with snowmen and frost.
 func DefaultBosses() []BossConfig {
 	// t is {goldPer1000Damage, maxGold, winGold, expPer1000Damage, maxExp, winExp}
@@ -85,7 +86,7 @@ func DefaultBosses() []BossConfig {
 			Description:      "Phù thuỷ của đỉnh tuyết vĩnh cửu. Gai băng đóng băng người trúng, tia băng giá giữ chân, bão tuyết phủ cả chiến trường.",
 			RecommendedLevel: 40, Enabled: true, SortOrder: 3, MapID: "arena_ice_witch_pillars",
 			HP: 30000, Defense: 80, Damage: 520, BodySize: 2.8, TurnLimit: 30, ShieldedDamageFactor: 0.1, OutOfMap: BossOutOfMapClamp,
-			Flying: true, Hover: &BossHover{MinX: 400, MaxX: 2000, MinY: 200, MaxY: 430, MinMove: 200, FlySpeed: 220},
+			Flying: true, Hover: &BossHover{MinX: 400, MaxX: 2000, MinY: 320, MaxY: 430, MinMove: 200, FlySpeed: 220},
 			Skills: []BossSkill{
 				{SkillID: "ice_spikes", Name: "Gai băng", Description: "Tám gai băng rơi quanh một người chơi; ai trúng bị đóng băng một lượt.",
 					Kind: BossSkillRain, Weight: 3, Cooldown: 2, Target: BossTargetRandom, Count: 8, Spread: 220, Damage: 0.3, Blast: 45, Crater: 10, Cap: 0.9,

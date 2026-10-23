@@ -188,6 +188,34 @@ func TestCrabArenaHasNoHoles(t *testing.T) {
 	}
 }
 
+// Every crab spawn on the mound arena (initial and summoned) stands on the ground with its body
+// at least 40 px clear of the crab boss's as the client draws them (~50 px half-width per
+// bodySize: the boss's 3.2 → ~158 px); the initial crabs land there.
+func TestCrabSpawnsClearOfBoss(t *testing.T) {
+	loadConfigs(t)
+	const drawnHalfWidth = 158.0 / 3.2
+	m, _ := bossMatch(t, "lava_crab", 1)
+	boss := m.State.Players[BossPlayerID("lava_crab")]
+	mc, _ := m.boss.cfg.Minion("crab")
+	clear := func(x float64) float64 {
+		return math.Abs(x-boss.Position.X) - drawnHalfWidth*(boss.BodySize+mc.BodySize)
+	}
+	if len(m.boss.spawns) != 4 {
+		t.Fatalf("spawns %v", m.boss.spawns)
+	}
+	for _, sp := range m.boss.spawns {
+		if gap := clear(sp.X); gap < 40 || !m.Terrain.CanStandAt(sp.X, sp.Y) {
+			t.Fatalf("spawn %v: %.0f px from the boss's body (boss at %v), stands %v", sp, gap, boss.Position, m.Terrain.CanStandAt(sp.X, sp.Y))
+		}
+	}
+	for _, id := range m.boss.minions {
+		p := m.State.Players[id]
+		if gap := clear(p.Position.X); gap < 40 || p.Position.Y != m.Terrain.SpawnY(p.Position.X, p.Position.Y) {
+			t.Fatalf("%s at %v: %.0f px from the boss's body", id, p.Position, gap)
+		}
+	}
+}
+
 // The witch hovers: each turn she flies (UnitFlew) to a point of her band at least minMove px
 // away, at flySpeed; a crater under her does not move her.
 func TestWitchHovers(t *testing.T) {

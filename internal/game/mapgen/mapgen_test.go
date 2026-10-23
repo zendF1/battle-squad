@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -23,6 +24,33 @@ func TestGeneratedFilesUpToDate(t *testing.T) {
 		if string(got) != want {
 			t.Errorf("%s is out of date: run go run ./cmd/mapgen", path)
 		}
+	}
+}
+
+// 047 (the boss v2 arenas) is frozen as applied: 047 + 049 is what ArenasV2 renders now, 049
+// moving the mound's minion spawns from 047's (only while the row still has them).
+func TestArenasV2Migrations(t *testing.T) {
+	read := func(path string) string {
+		b, err := os.ReadFile(filepath.Join(repoRoot(), path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	mound := ArenasV2[0]
+	if mound.ID != "arena_lava_crab_mound" {
+		t.Fatalf("ArenasV2[0] is %s", mound.ID)
+	}
+	old := mound
+	old.Minions = [][2]int{{67, CrabMoundTop}, {82, CrabMoundTop}, {54, crabGround}, {95, crabGround}} // 047 (f1e239f)
+	oldJSON, newJSON := sqlString(SpawnJSON(old.Map().SpawnPoints)), sqlString(SpawnJSON(mound.Map().SpawnPoints))
+	frozen := read(ArenasV2UpFile)
+	if !strings.Contains(frozen, oldJSON) || strings.Replace(frozen, oldJSON, newJSON, 1) != arenasV2UpSQL() {
+		t.Fatalf("%s + 049 differ from ArenasV2", ArenasV2UpFile)
+	}
+	fix := read(ArenaSpawnsFixFile)
+	if !strings.Contains(fix, "SET spawn_points = "+newJSON+"\n") || !strings.Contains(fix, "AND spawn_points = "+oldJSON+"::jsonb;") {
+		t.Fatalf("%s does not move %s to %s", ArenaSpawnsFixFile, oldJSON, newJSON)
 	}
 }
 
