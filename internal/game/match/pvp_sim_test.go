@@ -19,7 +19,8 @@ import (
 )
 
 // The PvP character balance runs (PVP_SIM=<matches per pairing>; PVP_SIM_CHAR=<id> the character
-// played against every other, tide by default; PVP_SIM_ALL=1 every pairing; PVP_SIM_LEVEL the
+// played against every other, tide by default; PVP_SIM_ALL=1 every pairing; PVP_SIM_NO_ELEMENTS=1
+// without the element multipliers; PVP_SIM_LEVEL the
 // level, 30 by default; with TEST_POSTGRES_DSN the bots carry the migrated guns): 1v1 matches of
 // two bots (gold tier aim) at the same level with the stat points spread evenly, the best gun of
 // that level and medkit + teleport, on the PvP maps in turn, elements included. It logs each
@@ -30,6 +31,11 @@ func TestPvPCharacterSim(t *testing.T) {
 		t.Skip("set PVP_SIM=<matches per pairing> to run the PvP character balance runs")
 	}
 	loadConfigs(t)
+	if os.Getenv("PVP_SIM_NO_ELEMENTS") != "" { // the same runs without the element multipliers
+		r := gamedata.Current().Rules.Clone()
+		r.Elements = gamedata.ElementRules{}
+		gamedata.UseForTest(t, gamedata.Current().WithRules(r))
+	}
 	weapons := simWeapons(t)
 	gd := gamedata.Current()
 	level := 30
