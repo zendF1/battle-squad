@@ -41,7 +41,9 @@ type GameData struct {
 // BodySize (× a player's body: hit radius physics.playerHitRadius × it around
 // physics.shotOriginLift × it above the feet) of the boss and of each minion type; TurnLimit
 // boss turns before it escapes; ShieldedDamageFactor the damage it takes while a minion lives;
-// DailyBonusRuns the runs a day with the bonus reward table.
+// DailyBonusRuns the runs a day with the bonus reward table. Flying: the boss floats (never
+// falls); Hover the band it flies to a new point of at the start of each of its turns (null:
+// none).
 type Boss struct {
 	BossID               string       `json:"bossId"`
 	Name                 string       `json:"name"`
@@ -57,14 +59,46 @@ type Boss struct {
 	Minions              []BossMinion `json:"minions"`
 	Skills               []BossSkill  `json:"skills"`
 	DailyBonusRuns       int          `json:"dailyBonusRuns"`
+	Flying               bool         `json:"flying"`
+	Hover                *BossHover   `json:"hover"`
 }
 
-// BossMinion is a minion type of a boss.
+// BossHover is the band a flying boss hovers in (px, its feet): at least MinMove px from where it
+// was, at FlySpeed px/s (UnitFlew).
+type BossHover struct {
+	MinX     float64 `json:"minX"`
+	MaxX     float64 `json:"maxX"`
+	MinY     float64 `json:"minY"`
+	MaxY     float64 `json:"maxY"`
+	MinMove  float64 `json:"minMove"`
+	FlySpeed float64 `json:"flySpeed"`
+}
+
+// BossMinion is a minion type of a boss, its defaults filled in: Behavior shooter / bomber,
+// Movement none / walk / fly, a bomber detonates when it ends a move within DetonateRange px of
+// a party member; it walks at most WalkRange px and flies at most FlyRange px a turn (HoverHeight
+// px over the ground, FlySpeed px/s); its blast (a detonation, or its death with ExplodeOnDeath)
+// deals ExplodeDamagePct % of the max HP of each one hit (ExplodeDamageOf target) or of the minion
+// (self) within ExplodeRadius px, half at the edge, and carves ExplodeCrater px; its shots deal
+// its damage × ShotDamageFactor.
 type BossMinion struct {
-	MinionID string  `json:"minionId"`
-	Name     string  `json:"name"`
-	HP       int     `json:"hp"`
-	BodySize float64 `json:"bodySize"`
+	MinionID         string  `json:"minionId"`
+	Name             string  `json:"name"`
+	HP               int     `json:"hp"`
+	BodySize         float64 `json:"bodySize"`
+	Behavior         string  `json:"behavior"`
+	Movement         string  `json:"movement"`
+	ExplodeOnDeath   bool    `json:"explodeOnDeath"`
+	ExplodeRadius    float64 `json:"explodeRadius"`
+	ExplodeDamagePct float64 `json:"explodeDamagePct"`
+	ExplodeDamageOf  string  `json:"explodeDamageOf"`
+	ExplodeCrater    float64 `json:"explodeCrater"`
+	DetonateRange    float64 `json:"detonateRange"`
+	ShotDamageFactor float64 `json:"shotDamageFactor"`
+	FlyRange         float64 `json:"flyRange"`
+	WalkRange        float64 `json:"walkRange"`
+	HoverHeight      float64 `json:"hoverHeight"`
+	FlySpeed         float64 `json:"flySpeed"`
 }
 
 // BossSkill is a boss skill as the client names it (ShotResolved.skillId of the boss's turn);

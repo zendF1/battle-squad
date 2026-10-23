@@ -84,6 +84,8 @@ type ItemConfig struct {
 type SpawnPoint struct {
 	X float64 `yaml:"x"`
 	Y float64 `yaml:"y"`
+	// Set groups an arena's spawn points (SpawnSetPillar: a pillar top); "" for the rest.
+	Set string `json:"set,omitempty" yaml:"set,omitempty"`
 }
 
 type TerrainLayer struct {
@@ -567,16 +569,20 @@ func LoadFromDB(ctx context.Context, db *database.PostgresDB) (*Snapshot, error)
 
 	if err := each("config_bosses", `SELECT boss_id, name, description, recommended_level, enabled, sort_order, map_id,
 		hp, defense, damage, body_size, turn_limit, shielded_damage_factor, out_of_map, skills, minions, waves, rewards,
-		daily_bonus_runs FROM config_bosses ORDER BY sort_order, boss_id`, func(rows pgx.Rows) error {
+		daily_bonus_runs, flying, hover FROM config_bosses ORDER BY sort_order, boss_id`, func(rows pgx.Rows) error {
 		var b BossConfig
-		var skills, minions, waves, rewards []byte
+		var skills, minions, waves, rewards, hover []byte
 		if err := rows.Scan(&b.BossID, &b.Name, &b.Description, &b.RecommendedLevel, &b.Enabled, &b.SortOrder, &b.MapID,
 			&b.HP, &b.Defense, &b.Damage, &b.BodySize, &b.TurnLimit, &b.ShieldedDamageFactor, &b.OutOfMap,
-			&skills, &minions, &waves, &rewards, &b.DailyBonusRuns); err != nil {
+			&skills, &minions, &waves, &rewards, &b.DailyBonusRuns, &b.Flying, &hover); err != nil {
 			return err
 		}
 		// A boss the match cannot run is dropped (and logged), like an invalid map
-		if err := ParseBossJSON(&b, skills, minions, waves, rewards); err != nil {
+		err := ParseBossJSON(&b, skills, minions, waves, rewards)
+		if err == nil {
+			err = ParseBossHover(&b, hover)
+		}
+		if err != nil {
 			observability.Log.Error().Err(err).Str("bossId", b.BossID).Msg("skipping boss with invalid JSON")
 			return nil
 		}

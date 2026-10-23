@@ -1,7 +1,9 @@
 package gamedata
 
-// DefaultBosses are the bosses migration 046_boss_mode seeds (the YAML fallback plays with
-// them too); TestBossMigrationSeedsDefaults keeps the two equal. Original designs: a steel
+// DefaultBosses are the bosses migrations 046_boss_mode and 048_boss_mode_v2 seed (the YAML
+// fallback plays with them too); TestBossMigration keeps the two equal. Boss v2: the drones are
+// flying bombers, the crabs walking bombers (on the mound arena), the snowmen shooters that
+// blast when they die (on the pillar arena) and the witch hovers, 30 turns. Original designs: a steel
 // mech titan with drones, a lava crab with crabs and lava, an ice witch with snowmen and frost.
 func DefaultBosses() []BossConfig {
 	// t is {goldPer1000Damage, maxGold, winGold, expPer1000Damage, maxExp, winExp}
@@ -49,15 +51,17 @@ func DefaultBosses() []BossConfig {
 					Kind: BossSkillSummon, Weight: 2, Cooldown: 3, MinionID: "drone", Count: 2},
 			},
 			Minions: []MinionConfig{
-				{MinionID: "drone", Name: "Drone", CharacterID: "spark", HP: 650, Defense: 20, Damage: 160, MoveEnergy: 80, BodySize: 0.7, HitChance: 45},
+				{MinionID: "drone", Name: "Drone", CharacterID: "spark", HP: 650, Defense: 20, Damage: 160, MoveEnergy: 80, BodySize: 0.7, HitChance: 45,
+					Behavior: MinionBomber, Movement: MinionMoveFly, ShotDamageFactor: 0.35, DetonateRange: 70, FlyRange: 90, HoverHeight: 60,
+					FlySpeed: 220, ExplodeDamageOf: ExplodeOfTarget, ExplodeDamagePct: 50, ExplodeRadius: 80, ExplodeCrater: 20},
 			},
-			Waves:   BossWaves{Initial: []BossWaveEntry{{MinionID: "drone", Count: 2}}, MaxAlive: 4},
+			Waves:   BossWaves{Initial: []BossWaveEntry{{MinionID: "drone", Count: 2}}, MaxAlive: 3},
 			Rewards: rewards([6]int{60, 1500, 400, 25, 600, 120}, [6]int{15, 400, 100, 8, 200, 40}), DailyBonusRuns: 3,
 		},
 		{
 			BossID: "lava_crab", Name: "Cua Dung Nham",
 			Description:      "Con cua khổng lồ sống trong miệng núi lửa. Ném bom dung nham để lại vũng lửa, kẹp càng nghiền nát người đến gần.",
-			RecommendedLevel: 25, Enabled: true, SortOrder: 2, MapID: "arena_lava_crab",
+			RecommendedLevel: 25, Enabled: true, SortOrder: 2, MapID: "arena_lava_crab_mound",
 			HP: 18000, Defense: 90, Damage: 480, BodySize: 3.2, TurnLimit: 15, ShieldedDamageFactor: 0.1, OutOfMap: BossOutOfMapClamp,
 			Skills: []BossSkill{
 				{SkillID: "fire_bombs", Name: "Bom dung nham", Description: "Bốn quả bom lửa rơi xuống, gây bỏng và để lại vũng dung nham hai lượt.",
@@ -69,16 +73,19 @@ func DefaultBosses() []BossConfig {
 					Kind: BossSkillSummon, Weight: 2, Cooldown: 3, MinionID: "crab", Count: 2},
 			},
 			Minions: []MinionConfig{
-				{MinionID: "crab", Name: "Cua con", CharacterID: "tanko", HP: 800, Defense: 40, Damage: 180, MoveEnergy: 50, BodySize: 0.75, HitChance: 45},
+				{MinionID: "crab", Name: "Cua con", CharacterID: "tanko", HP: 800, Defense: 40, Damage: 180, MoveEnergy: 50, BodySize: 0.75, HitChance: 45,
+					Behavior: MinionBomber, Movement: MinionMoveWalk, ShotDamageFactor: 0.35, DetonateRange: 70, WalkRange: 80,
+					ExplodeDamageOf: ExplodeOfTarget, ExplodeDamagePct: 50, ExplodeRadius: 80, ExplodeCrater: 20},
 			},
-			Waves:   BossWaves{Initial: []BossWaveEntry{{MinionID: "crab", Count: 2}}, MaxAlive: 4},
+			Waves:   BossWaves{Initial: []BossWaveEntry{{MinionID: "crab", Count: 2}}, MaxAlive: 3},
 			Rewards: rewards([6]int{80, 2000, 520, 32, 800, 160}, [6]int{20, 520, 130, 10, 260, 52}), DailyBonusRuns: 3,
 		},
 		{
 			BossID: "ice_witch", Name: "Phù Thuỷ Băng",
 			Description:      "Phù thuỷ của đỉnh tuyết vĩnh cửu. Gai băng đóng băng người trúng, tia băng giá giữ chân, bão tuyết phủ cả chiến trường.",
-			RecommendedLevel: 40, Enabled: true, SortOrder: 3, MapID: "arena_ice_witch",
-			HP: 24000, Defense: 80, Damage: 520, BodySize: 2.8, TurnLimit: 15, ShieldedDamageFactor: 0.1, OutOfMap: BossOutOfMapClamp,
+			RecommendedLevel: 40, Enabled: true, SortOrder: 3, MapID: "arena_ice_witch_pillars",
+			HP: 30000, Defense: 80, Damage: 520, BodySize: 2.8, TurnLimit: 30, ShieldedDamageFactor: 0.1, OutOfMap: BossOutOfMapClamp,
+			Flying: true, Hover: &BossHover{MinX: 400, MaxX: 2000, MinY: 200, MaxY: 430, MinMove: 200, FlySpeed: 220},
 			Skills: []BossSkill{
 				{SkillID: "ice_spikes", Name: "Gai băng", Description: "Tám gai băng rơi quanh một người chơi; ai trúng bị đóng băng một lượt.",
 					Kind: BossSkillRain, Weight: 3, Cooldown: 2, Target: BossTargetRandom, Count: 8, Spread: 220, Damage: 0.3, Blast: 45, Crater: 10, Cap: 0.9,
@@ -92,9 +99,11 @@ func DefaultBosses() []BossConfig {
 					Kind: BossSkillSummon, Weight: 2, Cooldown: 3, MinionID: "snowman", Count: 2},
 			},
 			Minions: []MinionConfig{
-				{MinionID: "snowman", Name: "Người tuyết", CharacterID: "flora", HP: 900, Defense: 30, Damage: 170, MoveEnergy: 40, BodySize: 0.85, HitChance: 50},
+				{MinionID: "snowman", Name: "Người tuyết", CharacterID: "flora", HP: 900, Defense: 30, Damage: 170, MoveEnergy: 40, BodySize: 0.85, HitChance: 50,
+					Behavior: MinionShooter, Movement: MinionMoveNone, ShotDamageFactor: 1, ExplodeOnDeath: true,
+					ExplodeDamageOf: ExplodeOfTarget, ExplodeDamagePct: 30, ExplodeRadius: 140, ExplodeCrater: 24},
 			},
-			Waves:   BossWaves{Initial: []BossWaveEntry{{MinionID: "snowman", Count: 3}}, MaxAlive: 4},
+			Waves:   BossWaves{Initial: []BossWaveEntry{{MinionID: "snowman", Count: 3}}, MaxAlive: 3},
 			Rewards: rewards([6]int{96, 2400, 640, 40, 960, 192}, [6]int{24, 640, 160, 13, 320, 64}), DailyBonusRuns: 3,
 		},
 	}

@@ -157,8 +157,8 @@ func TestLoadGameDataReadsBricksAndThemes(t *testing.T) {
 	if m := Data.Maps["grassland_valley"]; m.ThemeOrDefault() != "grassland" || m.HasTiles() {
 		t.Fatal("grassland_valley")
 	}
-	if len(Data.Maps) != 21 { // 2 legacy, 16 battle maps, 3 boss arenas
-		t.Fatalf("%d maps, want 21", len(Data.Maps))
+	if len(Data.Maps) != 23 { // 2 legacy, 16 battle maps, 3 phase 1 + 2 v2 boss arenas
+		t.Fatalf("%d maps, want 23", len(Data.Maps))
 	}
 	for _, b := range snap.Bosses {
 		if !snap.IsBossArena(b.MapID) || Data.Maps[b.MapID].MapID != b.MapID {

@@ -2,6 +2,7 @@ package room
 
 import (
 	"context"
+	"math/rand"
 	"time"
 
 	"battle-squad/internal/api/economy"
@@ -31,10 +32,11 @@ func bossCards(cfg gamedata.BossConfig, side []*match.BattlePlayerState) []Match
 // runs it after startDelay (the MatchFound reveal); it counts for milestones and daily missions.
 func (r *Room) startBossMatch(matchID string, gd *gamedata.Snapshot, cfg gamedata.BossConfig, side []*match.BattlePlayerState,
 	botTierConfig matchmaker.BotTierConfig, startDelay time.Duration) {
-	party, _, _ := gamedata.BossSpawns(gd.Data.Maps[cfg.MapID])
+	// the party's spawns: in order, or random distinct pillar tops on a pillar arena
+	party := gamedata.BossPartySpawns(gd.Data.Maps[cfg.MapID], len(r.State.Players), rand.Intn)
 	players := make([]*match.BattlePlayerState, 0, len(r.State.Players)+len(side))
 	for i, p := range r.State.Players {
-		sp := party[i%len(party)]
+		sp := party[i]
 		isBot := isBotID(p.PlayerID)
 		stats, look := r.playerStats(p, isBot)
 		players = append(players, newBattlePlayer(p, match.Vector2{X: sp.X, Y: sp.Y}, stats, look, isBot))

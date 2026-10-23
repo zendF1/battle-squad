@@ -173,9 +173,11 @@ func NewMatchWithData(
 	}
 	terrain := NewTerrainFor(gd, mapCfgForTerrain)
 
-	// Land players on the surface nearest their configured spawn height
+	// Land players on the surface nearest their configured spawn height (fliers: SetupBoss)
 	for _, p := range mPlayers {
-		p.Position.Y = terrain.SpawnY(p.Position.X, p.Position.Y)
+		if !p.Flying {
+			p.Position.Y = terrain.SpawnY(p.Position.X, p.Position.Y)
+		}
 	}
 
 	mapName, mapTheme := gd.MapDisplay(mapID)
@@ -483,7 +485,10 @@ func (m *Match) startTurn(ctx context.Context) {
 
 	player := m.State.Players[m.State.CurrentPlayerID]
 	player.MoveEnergy = m.turnMoveEnergy(player) // Reset move energy to full
-	ApplyTurnStartEffects(m.gd, player)          // net / root / stun / freeze limit this turn's movement
+	if player.Role == RoleMinion {
+		player.MoveEnergy = m.minionMoveEnergy(player) // none / fly: 0; walk: at most walkRange px
+	}
+	ApplyTurnStartEffects(m.gd, player) // net / root / stun / freeze limit this turn's movement
 	if m.boss != nil && player.Role == RoleBoss {
 		m.bossTurnStarted(player) // a new round
 	}
@@ -506,6 +511,9 @@ func (m *Match) startTurn(ctx context.Context) {
 		m.turnStartDamage(player, int(math.Round(float64(player.MaxHP)*float64(combat.BurnMaxHPPercent)/100)), "burn")
 	}
 	if !player.IsAlive {
+		if m.turnStartDeathBlast(ctx, player) { // a minion that blasts when it dies
+			return
+		}
 		m.syncBossShield() // a minion burnt to death
 		m.checkWinCondition(ctx)
 		if m.State.Status == "in_progress" {
@@ -552,7 +560,13 @@ func (m *Match) startTurn(ctx context.Context) {
 	}
 
 	if player.Role == RoleBoss {
-		m.runOnTurnAfter(ctx, secs(bossTurnDelaySec), m.bossAct)
+		if m.bossHovers(player) {
+			m.runOnTurnAfter(ctx, secs(moverMoveDelaySec), m.bossHoverTurn) // the flight, then the skill
+		} else {
+			m.runOnTurnAfter(ctx, secs(bossTurnDelaySec), m.bossAct)
+		}
+	} else if m.isMover(player) {
+		m.runOnTurnAfter(ctx, secs(moverMoveDelaySec), m.moverTurn) // the move, then the strike
 	} else if player.IsBot {
 		// Short idle before acting; the bot then spends its "thinking" time visibly aiming
 		botDelay := randomDelay(botTurnStartMinDelay, botTurnStartMaxDelay)

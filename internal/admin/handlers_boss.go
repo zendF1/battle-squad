@@ -89,7 +89,7 @@ func (s *Server) handleBossDelete(w http.ResponseWriter, r *http.Request) {
 // parseBossForm reads the edit form; the row keeps the submitted texts for a re-render.
 func parseBossForm(r *http.Request) (BossRow, error) {
 	row := BossRow{SkillsJSON: r.FormValue("skills"), MinionsJSON: r.FormValue("minions"), WavesJSON: r.FormValue("waves"),
-		RewardsJSON: r.FormValue("rewards")}
+		RewardsJSON: r.FormValue("rewards"), HoverJSON: strings.TrimSpace(r.FormValue("hover"))}
 	c := &row.Config
 	c.BossID = strings.TrimSpace(r.FormValue("boss_id"))
 	c.Name = strings.TrimSpace(r.FormValue("name"))
@@ -97,6 +97,7 @@ func parseBossForm(r *http.Request) (BossRow, error) {
 	c.MapID = strings.TrimSpace(r.FormValue("map_id"))
 	c.OutOfMap = r.FormValue("out_of_map")
 	c.Enabled = r.FormValue("enabled") == "on" || r.FormValue("enabled") == "true"
+	c.Flying = r.FormValue("flying") == "on" || r.FormValue("flying") == "true"
 	var errs []string
 	ints := map[string]*int{"recommended_level": &c.RecommendedLevel, "sort_order": &c.SortOrder, "hp": &c.HP, "defense": &c.Defense,
 		"damage": &c.Damage, "turn_limit": &c.TurnLimit, "daily_bonus_runs": &c.DailyBonusRuns}
@@ -119,6 +120,9 @@ func parseBossForm(r *http.Request) (BossRow, error) {
 		return row, fmt.Errorf("%s", strings.Join(errs, "; "))
 	}
 	if err := gamedata.ParseBossJSON(c, []byte(row.SkillsJSON), []byte(row.MinionsJSON), []byte(row.WavesJSON), []byte(row.RewardsJSON)); err != nil {
+		return row, fmt.Errorf("JSON: %w", err)
+	}
+	if err := gamedata.ParseBossHover(c, []byte(row.HoverJSON)); err != nil {
 		return row, fmt.Errorf("JSON: %w", err)
 	}
 	return row, nil

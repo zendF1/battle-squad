@@ -218,7 +218,7 @@ func (m *Match) explodeCapped(shooter *BattlePlayerState, r *ProjectileResult, b
 // from an earlier explosion of the shot falls again once it has landed.
 func (m *Match) settleFalls(shooter *BattlePlayerState, t float64, tl *shotTimeline) {
 	for _, p := range m.playersByID() {
-		if !p.IsAlive {
+		if !p.IsAlive || p.Flying { // fliers never fall
 			continue
 		}
 		landY := m.Terrain.GetLandingY(p.Position.X, p.Position.Y)
@@ -302,13 +302,17 @@ func (m *Match) broadcastShot(shot *ShotResolved, tl *shotTimeline) {
 	if shot.Projectiles == nil {
 		shot.Projectiles = []*ProjectileResult{}
 	}
+	shooter := m.State.Players[shot.ShooterID]
+	blasts := m.deathBlasts(shooter, tl)
 	m.bossAfterShot(tl)
 	for _, r := range shot.Projectiles {
 		tl.reach(flightEnd(r))
 	}
-	shooter := m.State.Players[shot.ShooterID]
 	m.grantHitEnergy(shooter, tl)
 	shot.Events = tl.sorted()
+	if blasts {
+		renumberTerrainVersions(shot.Events)
+	}
 	if shot.Events == nil {
 		shot.Events = []ShotEvent{}
 	}

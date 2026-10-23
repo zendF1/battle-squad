@@ -208,10 +208,12 @@
                 var rawSpawns = data.spawnPoints || [];
                 for (var i = 0; i < rawSpawns.length; i++) {
                     var sp = rawSpawns[i];
-                    self.spawnPoints.push({
+                    var point = {
                         x: sp.x !== undefined ? sp.x : sp.X,
                         y: sp.y !== undefined ? sp.y : sp.Y
-                    });
+                    };
+                    if (sp.set) point.set = sp.set; // a boss arena's spawn set (pillar)
+                    self.spawnPoints.push(point);
                 }
 
                 // Populate form fields

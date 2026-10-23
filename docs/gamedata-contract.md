@@ -400,7 +400,7 @@ catalog endpoints.
   (`bazooka` "Bazooka", `cannon` "Đại pháo", `shock_rifle` "Súng điện", `seed_launcher` "Súng hạt",
   `blaster` "Súng"). Source `config_gun_kinds`.
 
-### 4.18 `bosses[]` (config_bosses, enabled only, in display order; boss mode, migration 046)
+### 4.18 `bosses[]` (config_bosses, enabled only, in display order; boss mode, migrations 046 / 048)
 
 Everything the Boss tab and the arena need to draw and describe a boss:
 
@@ -416,22 +416,48 @@ Everything the Boss tab and the arena need to draw and describe a boss:
 | `bodySize` | number | × a player's body: the boss is drawn `bodySize` × a player's 40 px height; it is hit within `physics.playerHitRadius × bodySize` of a centre `physics.shotOriginLift × bodySize` above its feet |
 | `turnLimit` | int | boss turns before it escapes (the party loses) |
 | `shieldedDamageFactor` | number 0..1 | while a minion lives the boss takes this × the damage (show the shield; `MatchState.bossShielded`) |
-| `minions[]` | `{minionId, name, hp, bodySize}` | its minion types (a minion's match player id is `minion_<minionId>_<n>`) |
+| `minions[]` | object | its minion types (a minion's match player id is `minion_<minionId>_<n>`), defaults filled in; see below |
 | `skills[]` | `{skillId, name, description, kind}` | its skills (`ShotResolved.skillId` of the boss's turn); `kind` `rain`, `beam` or `summon` |
 | `dailyBonusRuns` | int | runs a day with the big reward table (`GET /boss/runs` has what is left) |
+| `flying` | bool | (048) the boss floats: draw it in the air, no fall; it moves with `UnitFlew` |
+| `hover` | `{minX, maxX, minY, maxY, minMove, flySpeed}` or `null` | (048) the band (px, the boss's feet point) a flying boss flies to a new random point of at the start of each of its turns, at least `minMove` px away, at `flySpeed` px/s |
+
+`minions[]` fields (048):
+
+| Field | Type | Meaning |
+|---|---|---|
+| `minionId`, `name`, `hp`, `bodySize` | | as before |
+| `behavior` | `shooter` / `bomber` | a shooter stays put (or walks with the bot AI) and shoots; a bomber closes in on the nearest party member and detonates |
+| `movement` | `none` / `walk` / `fly` | how it moves: never, along the ground (`PlayerMoved`), through the air (`UnitFlew`; `flying` on its state) |
+| `detonateRange` | px | a bomber detonates when it ENDS a move this close (feet to feet) to a party member (warning: fuse) |
+| `walkRange`, `flyRange` | px | the most it walks / flies in one turn |
+| `hoverHeight` | px | a flier hovers this far over the ground under it |
+| `flySpeed` | px/s | `UnitFlew.duration` = distance / this |
+| `shotDamageFactor` | number | its shots deal its damage × this (bombers 0.35: weak shots) |
+| `explodeOnDeath` | bool | it blasts when it dies (`damage` cause `death_blast`) |
+| `explodeDamageOf` | `target` / `self` | its blast deals `explodeDamagePct` % of the max HP of each one hit (`target`) or of the minion (`self`) |
+| `explodeDamagePct`, `explodeRadius`, `explodeCrater` | %, px, px | the blast: full at the body edge, half at `explodeRadius`, no defense, shield first; the crater it carves |
 
 ```json
 {"bossId": "steel_robot", "name": "Rô-bốt Thép",
  "description": "Người khổng lồ cơ khí canh giữ xưởng sắt bỏ hoang. Nã pháo dồn dập, bắn tia laze xuyên đất và gọi drone che chắn.",
  "recommendedLevel": 10, "modeId": "boss_steel_robot", "queue": "boss:steel_robot", "mapId": "arena_steel_robot",
  "hp": 12000, "bodySize": 3, "turnLimit": 15, "shieldedDamageFactor": 0.1,
- "minions": [{"minionId": "drone", "name": "Drone", "hp": 650, "bodySize": 0.7}],
+ "minions": [{"minionId": "drone", "name": "Drone", "hp": 650, "bodySize": 0.7, "behavior": "bomber", "movement": "fly",
+   "explodeOnDeath": false, "explodeRadius": 80, "explodeDamagePct": 50, "explodeDamageOf": "target", "explodeCrater": 20,
+   "detonateRange": 70, "shotDamageFactor": 0.35, "flyRange": 90, "walkRange": 80, "hoverHeight": 60, "flySpeed": 220}],
  "skills": [
    {"skillId": "shell_barrage", "name": "Mưa đạn pháo", "description": "Mười quả đạn pháo dội xuống quanh một người chơi.", "kind": "rain"},
    {"skillId": "laser_beam", "name": "Tia laze nghiền", "description": "Tia laze xuyên địa hình bắn thẳng vào người yếu nhất, trúng mọi người trên đường.", "kind": "beam"},
    {"skillId": "drone_wave", "name": "Gọi drone", "description": "Thả hai drone. Còn drone thì Rô-bốt Thép được che chắn.", "kind": "summon"}],
- "dailyBonusRuns": 3}
+ "dailyBonusRuns": 3, "flying": false, "hover": null}
 ```
+
+`ice_witch` (048): `"mapId": "arena_ice_witch_pillars", "hp": 30000, "turnLimit": 30, "flying": true,
+"hover": {"minX": 400, "maxX": 2000, "minY": 200, "maxY": 430, "minMove": 200, "flySpeed": 220}`, minion
+`snowman` `behavior` `shooter`, `movement` `none`, `explodeOnDeath` true, `explodeDamagePct` 30,
+`explodeRadius` 140, `explodeCrater` 24. `lava_crab`: `"mapId": "arena_lava_crab_mound"`, minion `crab`
+`bomber` / `walk`, `walkRange` 80.
 
 The skill numbers, minion stats beyond HP / body, reward tables and waves stay on the server
 (admin Bosses page). Source: `config_bosses` (and `config_game_modes` for `modeId`).
@@ -478,6 +504,13 @@ The skill numbers, minion stats beyond HP / body, reward tables and waves stay o
   waves, rewards, daily_bonus_runs)` seeded with the three bosses; lobby modes `boss_<bossId>`
   (queue `boss:<bossId>`, category `boss`, icon `boss`, party 4) and match modes `boss:<bossId>`;
   `player_boss_runs`. Seed rows `ON CONFLICT DO NOTHING`, so reruns keep admin edits.
+- 047 (generated by `go run ./cmd/mapgen`): the v2 arenas `arena_lava_crab_mound`,
+  `arena_ice_witch_pillars` (`ON CONFLICT DO NOTHING`). Spawn points may carry `"set": "pillar"`
+  (also in `GET /maps/{id}` `spawnPoints`).
+- 048: `config_bosses` + `flying` (bool), `hover` (JSONB, NULL = none), added and seeded (the witch)
+  once; the minion JSON gains the v2 fields; `maxAlive` 3; the crab and the witch move to the 047
+  arenas; the witch 30 turns, 30000 HP. Each value changes only while it is still the 046 default,
+  so reruns keep admin edits.
 
 ## 6b. DB behind it since S2 (migration 041_gamedata_rules)
 

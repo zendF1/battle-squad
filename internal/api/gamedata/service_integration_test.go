@@ -302,13 +302,27 @@ func TestGameDataFromDB(t *testing.T) {
 	if b := g.Bosses[0]; b.BossID != "steel_robot" || b.Name != "Rô-bốt Thép" || b.RecommendedLevel != 10 || b.ModeID != "boss_steel_robot" ||
 		b.Queue != "boss:steel_robot" || b.MapID != "arena_steel_robot" || b.HP != 12000 || b.BodySize != 3 || b.TurnLimit != 15 ||
 		b.ShieldedDamageFactor != 0.1 || b.DailyBonusRuns != 3 || b.Description == "" ||
-		!reflect.DeepEqual(b.Minions, []BossMinion{{MinionID: "drone", Name: "Drone", HP: 650, BodySize: 0.7}}) || len(b.Skills) != 3 ||
+		b.Flying || b.Hover != nil ||
+		!reflect.DeepEqual(b.Minions, []BossMinion{{MinionID: "drone", Name: "Drone", HP: 650, BodySize: 0.7, Behavior: "bomber", Movement: "fly",
+			ExplodeRadius: 80, ExplodeDamagePct: 50, ExplodeDamageOf: "target", ExplodeCrater: 20, DetonateRange: 70, ShotDamageFactor: 0.35,
+			FlyRange: 90, WalkRange: 80, HoverHeight: 60, FlySpeed: 220}}) || len(b.Skills) != 3 ||
 		b.Skills[0] != (BossSkill{SkillID: "shell_barrage", Name: "Mưa đạn pháo", Description: "Mười quả đạn pháo dội xuống quanh một người chơi.", Kind: "rain"}) {
 		t.Fatalf("steel_robot %+v", b)
 	}
 	if g.Bosses[1].BossID != "lava_crab" || g.Bosses[1].Minions[0].MinionID != "crab" || g.Bosses[2].BossID != "ice_witch" ||
 		g.Bosses[2].Minions[0].MinionID != "snowman" || len(g.Bosses[2].Skills) != 4 {
 		t.Fatalf("bosses %+v", g.Bosses)
+	}
+	crab, witch := g.Bosses[1], g.Bosses[2]
+	if crab.MapID != "arena_lava_crab_mound" || crab.Minions[0].Behavior != "bomber" || crab.Minions[0].Movement != "walk" ||
+		crab.Minions[0].WalkRange != 80 || crab.Flying {
+		t.Fatalf("lava_crab %+v", crab)
+	}
+	if witch.MapID != "arena_ice_witch_pillars" || witch.TurnLimit != 30 || witch.HP != 30000 || !witch.Flying ||
+		witch.Hover == nil || *witch.Hover != (BossHover{MinX: 400, MaxX: 2000, MinY: 200, MaxY: 430, MinMove: 200, FlySpeed: 220}) ||
+		witch.Minions[0].Behavior != "shooter" || witch.Minions[0].Movement != "none" || !witch.Minions[0].ExplodeOnDeath ||
+		witch.Minions[0].ExplodeRadius != 140 || witch.Minions[0].ExplodeDamagePct != 30 {
+		t.Fatalf("ice_witch %+v", witch)
 	}
 	if g.MapThemes.Default != "grassland" || len(g.MapThemes.Themes) != 11 {
 		t.Fatalf("map themes %+v", g.MapThemes)

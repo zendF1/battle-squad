@@ -213,9 +213,19 @@ func bosses(snap *gd.Snapshot) []Boss {
 		}
 		e := Boss{BossID: b.BossID, Name: b.Name, Description: b.Description, RecommendedLevel: b.RecommendedLevel, ModeID: modeID,
 			Queue: b.Queue(), MapID: b.MapID, HP: b.HP, BodySize: b.BodySize, TurnLimit: b.TurnLimit,
-			ShieldedDamageFactor: b.ShieldedDamageFactor, Minions: []BossMinion{}, Skills: []BossSkill{}, DailyBonusRuns: b.DailyBonusRuns}
+			ShieldedDamageFactor: b.ShieldedDamageFactor, Minions: []BossMinion{}, Skills: []BossSkill{}, DailyBonusRuns: b.DailyBonusRuns,
+			Flying: b.Flying}
+		if b.Hover != nil {
+			h := b.Hover.Normalized()
+			e.Hover = &BossHover{MinX: h.MinX, MaxX: h.MaxX, MinY: h.MinY, MaxY: h.MaxY, MinMove: h.MinMove, FlySpeed: h.FlySpeed}
+		}
 		for _, m := range b.Minions {
-			e.Minions = append(e.Minions, BossMinion{MinionID: m.MinionID, Name: m.Name, HP: m.HP, BodySize: m.BodySize})
+			m = m.Normalized()
+			e.Minions = append(e.Minions, BossMinion{MinionID: m.MinionID, Name: m.Name, HP: m.HP, BodySize: m.BodySize,
+				Behavior: m.Behavior, Movement: m.Movement, ExplodeOnDeath: m.ExplodeOnDeath, ExplodeRadius: m.ExplodeRadius,
+				ExplodeDamagePct: m.ExplodeDamagePct, ExplodeDamageOf: m.ExplodeDamageOf, ExplodeCrater: m.ExplodeCrater,
+				DetonateRange: m.DetonateRange, ShotDamageFactor: m.ShotDamageFactor, FlyRange: m.FlyRange, WalkRange: m.WalkRange,
+				HoverHeight: m.HoverHeight, FlySpeed: m.FlySpeed})
 		}
 		for _, s := range b.Skills {
 			e.Skills = append(e.Skills, BossSkill{SkillID: s.SkillID, Name: s.Name, Description: s.Description, Kind: s.Kind})

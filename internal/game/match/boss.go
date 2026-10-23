@@ -56,7 +56,9 @@ type bossRuntime struct {
 	lastUsed map[string]int // skill id → the round it was cast
 	party    []string       // team 1 in turn order
 	minions  []string       // minion player ids in the order they appeared
+	wave     []string       // the last wave (the initial minions, then each summon): no summon while one lives
 	spawns   []Vector2      // the arena's minion spawn points
+	pillars  []Vector2      // the arena's pillar tops (gamedata.ArenaPillars), nil for most arenas
 	seq      int            // minions created
 	shielded bool
 	lavaSeq  int
@@ -70,11 +72,12 @@ func BossPlayerID(bossID string) string { return "boss_" + bossID }
 // them on the ground (Terrain.SpawnY).
 func NewBossSide(gd *gamedata.Snapshot, cfg gamedata.BossConfig) []*BattlePlayerState {
 	_, bossSpawn, minionSpawns := gamedata.BossSpawns(gd.Data.Maps[cfg.MapID])
+	minionSpawns = nearestFirst(minionSpawns, bossSpawn)
 	out := []*BattlePlayerState{{
 		PlayerID: BossPlayerID(cfg.BossID), DisplayName: cfg.Name, TeamID: 2,
 		HP: cfg.HP, MaxHP: cfg.HP, Defense: cfg.Defense, Position: Vector2{X: bossSpawn.X, Y: bossSpawn.Y},
 		Items: []string{}, StatusEffects: []StatusEffect{}, IsAlive: true, IsBot: true,
-		Role: RoleBoss, BossID: cfg.BossID, BodySize: cfg.BodySize,
+		Role: RoleBoss, BossID: cfg.BossID, BodySize: cfg.BodySize, Flying: cfg.Flying,
 	}}
 	seq := 0
 	for _, w := range cfg.Waves.Initial {
@@ -91,18 +94,22 @@ func NewBossSide(gd *gamedata.Snapshot, cfg gamedata.BossConfig) []*BattlePlayer
 	return out
 }
 
-// newMinion is the seq-th minion of the match, of type mc, at pos.
+// newMinion is the seq-th minion of the match, of type mc, at pos. Its shots deal its damage ×
+// shotDamageFactor (the weapon's damage + damageBonus).
 func newMinion(gd *gamedata.Snapshot, cfg gamedata.BossConfig, mc gamedata.MinionConfig, seq int, pos Vector2) *BattlePlayerState {
+	mc = mc.Normalized()
 	weaponDamage := 0
 	if c, ok := gd.Data.Characters[mc.CharacterID]; ok {
 		weaponDamage = gd.Data.Weapons[c.WeaponID].Damage
 	}
 	energy := max(mc.MoveEnergy, 1)
+	shotDamage := int(math.Round(float64(mc.Damage) * mc.ShotDamageFactor))
 	return &BattlePlayerState{
 		PlayerID: fmt.Sprintf("minion_%s_%d", mc.MinionID, seq), DisplayName: mc.Name, TeamID: 2, CharacterID: mc.CharacterID,
-		HP: mc.HP, MaxHP: mc.HP, Defense: mc.Defense, DamageBonus: mc.Damage - weaponDamage, Position: pos,
+		HP: mc.HP, MaxHP: mc.HP, Defense: mc.Defense, DamageBonus: shotDamage - weaponDamage, Position: pos,
 		MoveEnergy: energy, MaxMoveEnergy: energy, Items: []string{}, StatusEffects: []StatusEffect{},
 		IsAlive: true, IsBot: true, Role: RoleMinion, BossID: cfg.BossID, MinionID: mc.MinionID, BodySize: mc.BodySize,
+		Flying: mc.Movement == gamedata.MinionMoveFly, Behavior: mc.Behavior, Movement: mc.Movement,
 	}
 }
 
@@ -128,11 +135,17 @@ func (m *Match) SetupBoss(cfg gamedata.BossConfig) {
 		b.minions = append(b.minions, p.PlayerID)
 	}
 	b.seq = len(minions)
-	_, _, spawns := gamedata.BossSpawns(m.gd.Data.Maps[cfg.MapID])
-	for _, sp := range spawns {
+	b.wave = append([]string(nil), b.minions...)
+	arena := m.gd.Data.Maps[cfg.MapID]
+	_, bossSpawn, spawns := gamedata.BossSpawns(arena)
+	for _, sp := range nearestFirst(spawns, bossSpawn) {
 		b.spawns = append(b.spawns, Vector2{X: sp.X, Y: sp.Y})
 	}
+	for _, sp := range gamedata.ArenaPillars(arena) {
+		b.pillars = append(b.pillars, Vector2{X: sp.X, Y: sp.Y})
+	}
 	m.boss = b
+	m.placeBossSide()
 	m.State.Boss = &BossState{BossID: cfg.BossID, PlayerID: b.playerID, TurnLimit: cfg.TurnLimit}
 	m.rebuildBossTurnOrder()
 	m.State.CurrentPlayerID = m.State.TurnOrder[0]
@@ -330,8 +343,8 @@ func (m *Match) pickBossSkill(rng *rand.Rand) (gamedata.BossSkill, bool) {
 		if last, used := b.lastUsed[s.SkillID]; used && b.round-last <= s.Cooldown {
 			continue
 		}
-		if s.Kind == gamedata.BossSkillSummon && (alive >= b.cfg.Waves.MaxAlive || len(b.spawns) == 0) {
-			continue
+		if s.Kind == gamedata.BossSkillSummon && (alive >= b.cfg.Waves.MaxAlive || len(b.spawns) == 0 || m.waveAlive()) {
+			continue // full, nowhere to stand, or the previous wave still fights
 		}
 		cands = append(cands, s)
 		total += s.Weight
@@ -544,25 +557,62 @@ func (m *Match) bossSummon(s gamedata.BossSkill, tl *shotTimeline) {
 		return
 	}
 	n := min(s.Count, b.cfg.Waves.MaxAlive-m.aliveMinions())
+	rng := m.turnRNG("summon")
+	if n > 0 {
+		b.wave = nil
+	}
 	for i := 0; i < n; i++ {
 		b.seq++
-		pos := m.freeMinionSpawn()
+		pos := m.freeMinionSpawn(rng)
 		pos.Y = m.Terrain.SpawnY(pos.X, pos.Y)
 		p := newMinion(m.gd, b.cfg, mc, b.seq, pos)
+		m.liftFlier(p)
 		m.State.Players[p.PlayerID] = p
 		b.minions = append(b.minions, p.PlayerID)
-		tl.add(ShotEvent{T: bossChargeTime + bossSummonGap*float64(i), Type: "summon", PlayerID: p.PlayerID, MinionID: mc.MinionID,
-			Position: vecPtr(p.Position), HP: intPtr(p.HP)})
+		b.wave = append(b.wave, p.PlayerID)
+		tl.add(summonEvent(bossChargeTime+bossSummonGap*float64(i), p))
 	}
 	if n > 0 {
 		m.rebuildBossTurnOrder()
 	}
 }
 
-// freeMinionSpawn is the first minion spawn point no living minion stands near (40 px), else
-// the next one in turn.
-func (m *Match) freeMinionSpawn() Vector2 {
+// waveAlive reports whether a minion of the last wave still lives.
+func (m *Match) waveAlive() bool {
+	for _, id := range m.boss.wave {
+		if p := m.State.Players[id]; p != nil && p.IsAlive {
+			return true
+		}
+	}
+	return false
+}
+
+// nearestFirst is spawns ordered by their distance to the boss's spawn (nearest first, ties in
+// order): minions appear by the boss, not by the party.
+func nearestFirst(spawns []gamedata.SpawnPoint, boss gamedata.SpawnPoint) []gamedata.SpawnPoint {
+	out := append([]gamedata.SpawnPoint(nil), spawns...)
+	sort.SliceStable(out, func(i, j int) bool {
+		return math.Hypot(out[i].X-boss.X, out[i].Y-boss.Y) < math.Hypot(out[j].X-boss.X, out[j].Y-boss.Y)
+	})
+	return out
+}
+
+// summonEvent is the summon event of minion p at t: the new unit in full.
+func summonEvent(t float64, p *BattlePlayerState) ShotEvent {
+	flying := p.Flying
+	return ShotEvent{T: t, Type: "summon", PlayerID: p.PlayerID, MinionID: p.MinionID, Position: vecPtr(p.Position),
+		HP: intPtr(p.HP), MaxHP: intPtr(p.MaxHP), DisplayName: p.DisplayName, TeamID: p.TeamID, BodySize: p.BodySize,
+		Flying: &flying, Behavior: p.Behavior, Movement: p.Movement}
+}
+
+// freeMinionSpawn is where the next minion appears: on a pillar arena a random free pillar top
+// (freePillar), else the first minion spawn point no living minion stands near (40 px), else the
+// next one in turn.
+func (m *Match) freeMinionSpawn(rng *rand.Rand) Vector2 {
 	b := m.boss
+	if sp, ok := m.freePillar(rng); ok {
+		return sp
+	}
 	for _, sp := range b.spawns {
 		free := true
 		for _, p := range m.State.Players {

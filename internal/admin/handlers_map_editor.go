@@ -372,14 +372,14 @@ func allAir(tiles [][]int) bool {
 
 // MapExportYAML is the YAML output structure for a single map.
 type MapExportYAML struct {
-	MapID                 string               `yaml:"mapId"`
-	Name                  string               `yaml:"name"`
-	GridWidth             int                  `yaml:"gridWidth"`
-	GridHeight            int                  `yaml:"gridHeight"`
-	CellSize              int                  `yaml:"cellSize"`
-	DefaultWindPowerRange []float64            `yaml:"defaultWindPowerRange"`
-	Tiles                 [][]interface{}      `yaml:"tiles"`
-	SpawnPoints           []map[string]float64 `yaml:"spawnPoints"`
+	MapID                 string           `yaml:"mapId"`
+	Name                  string           `yaml:"name"`
+	GridWidth             int              `yaml:"gridWidth"`
+	GridHeight            int              `yaml:"gridHeight"`
+	CellSize              int              `yaml:"cellSize"`
+	DefaultWindPowerRange []float64        `yaml:"defaultWindPowerRange"`
+	Tiles                 [][]interface{}  `yaml:"tiles"`
+	SpawnPoints           []map[string]any `yaml:"spawnPoints"`
 }
 
 func (s *Server) handleMapExport(w http.ResponseWriter, r *http.Request) {
@@ -411,7 +411,7 @@ func (s *Server) handleMapExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.Unmarshal(data.SpawnPoints, &export.SpawnPoints); err != nil {
-		export.SpawnPoints = []map[string]float64{}
+		export.SpawnPoints = []map[string]any{}
 	}
 
 	w.Header().Set("Content-Type", "application/x-yaml")

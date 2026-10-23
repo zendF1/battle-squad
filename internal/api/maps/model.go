@@ -35,6 +35,9 @@ type MapDetail struct {
 type SpawnPoint struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
+	// Set groups a boss arena's spawn points ("pillar": a pillar top of arena_ice_witch_pillars);
+	// omitted for the rest.
+	Set string `json:"set,omitempty"`
 }
 
 // BrickType is a config_brick_types row: destructible = soft terrain, else hard.

@@ -79,6 +79,12 @@ type BattlePlayerState struct {
 	BodySize     float64 `json:"bodySize,omitempty"`
 	BossDamage   int     `json:"bossDamage,omitempty"`
 	MinionDamage int     `json:"minionDamage,omitempty"`
+	// Boss v2 (boss and minions only): Flying units never fall (craters and falls skip them;
+	// they move with UnitFlew); Behavior (shooter / bomber) and Movement (none / walk / fly) of
+	// a minion (its config, defaults filled in).
+	Flying   bool   `json:"flying,omitempty"`
+	Behavior string `json:"behavior,omitempty"`
+	Movement string `json:"movement,omitempty"`
 }
 
 // The roles of the boss's side (BattlePlayerState.Role).
@@ -209,6 +215,17 @@ type ShotEvent struct {
 	Duration       float64  `json:"duration,omitempty"`       // fall: seconds until landing; beam: seconds the beam shows
 	MinionID       string   `json:"minionId,omitempty"`       // summon: the minion type
 	ZoneID         string   `json:"zoneId,omitempty"`         // lava: the pool (MatchState.lavaZones)
+	// explode of a minion's detonation / death blast: the blast's damage radius (radius stays
+	// the crater, as in every explode; playerId is the minion that blew up)
+	BlastRadius float64 `json:"blastRadius,omitempty"`
+	// summon: the new unit as MatchStateSync shows it
+	MaxHP       *int    `json:"maxHp,omitempty"`
+	DisplayName string  `json:"displayName,omitempty"`
+	TeamID      int     `json:"teamId,omitempty"`
+	BodySize    float64 `json:"bodySize,omitempty"`
+	Flying      *bool   `json:"flying,omitempty"`
+	Behavior    string  `json:"behavior,omitempty"`
+	Movement    string  `json:"movement,omitempty"`
 }
 
 // ShotResolved is the single message describing a whole shot: every projectile's flight plus

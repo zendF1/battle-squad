@@ -42,8 +42,10 @@ const (
 	// the map edge, through terrain; every enemy within HalfWidth px of it takes Damage × the
 	// boss damage (Decay × the previous one for each next enemy; 0 = 1) and Status (Turns).
 	BossSkillBeam = "beam"
-	// BossSkillSummon: Count minions of MinionID appear on the minion spawn points, at most
-	// waves.maxAlive living minions.
+	// BossSkillSummon: Count minions of MinionID appear on the minion spawn points (the free one
+	// nearest the boss first; free pillar tops on a pillar arena), at most waves.maxAlive living
+	// minions; it is not cast while a minion of the previous wave (the initial minions are the
+	// first) still lives.
 	BossSkillSummon = "summon"
 )
 
@@ -85,7 +87,20 @@ type BossSkill struct {
 
 // MinionConfig is a minion type of a boss (config_bosses.minions, a JSON array): its stats, the
 // character whose weapon and walking it plays with (the bot AI aims it like that character's
-// gun, Damage replacing the gun's damage) and the bot hit chance (0: the match's bot tier).
+// gun, Damage × ShotDamageFactor replacing the gun's damage) and the bot hit chance (0: the
+// match's bot tier).
+//
+// Behavior and movement (boss v2): a shooter stays put (movement none) or walks with the bot AI
+// (walk) and shoots; a bomber moves toward the nearest party player each turn (walk: WalkTo with
+// its move energy, at most WalkRange px, never into a hole to the bottom; fly: a straight flight
+// of up to FlyRange px, HoverHeight px over the ground under it) and detonates when it ends its
+// move within
+// DetonateRange px of one, else shoots. A detonation, and the blast of a minion with
+// ExplodeOnDeath when it dies, hits everyone of the other side within ExplodeRadius px (a death
+// blast also the other minions, never the boss) for ExplodeDamagePct % of the max HP of the one
+// hit (ExplodeDamageOf target) or of the minion (self), full at the centre down to half at the
+// edge, no defense, shield first, and carves an ExplodeCrater px crater. Zero values are the
+// defaults (MinionDefaults); Normalized fills them in.
 type MinionConfig struct {
 	MinionID    string  `json:"minionId"`
 	Name        string  `json:"name"`
@@ -96,6 +111,131 @@ type MinionConfig struct {
 	MoveEnergy  int     `json:"moveEnergy"`
 	BodySize    float64 `json:"bodySize"`
 	HitChance   float64 `json:"hitChance,omitempty"`
+
+	Behavior         string  `json:"behavior,omitempty"`         // shooter (""), bomber
+	Movement         string  `json:"movement,omitempty"`         // walk (""), none, fly
+	ShotDamageFactor float64 `json:"shotDamageFactor,omitempty"` // × Damage for its shots (0: bomber 0.35, shooter 1)
+	DetonateRange    float64 `json:"detonateRange,omitempty"`    // bomber: px from a party player's feet (0: 70)
+	FlyRange         float64 `json:"flyRange,omitempty"`         // fly: px per turn (0: 90)
+	WalkRange        float64 `json:"walkRange,omitempty"`        // walk: px per turn at most, whatever its move energy (0: 80)
+	HoverHeight      float64 `json:"hoverHeight,omitempty"`      // fly: px over the ground under it (0: 60)
+	FlySpeed         float64 `json:"flySpeed,omitempty"`         // fly: px/s of UnitFlew (0: 220)
+	ExplodeOnDeath   bool    `json:"explodeOnDeath,omitempty"`
+	ExplodeDamageOf  string  `json:"explodeDamageOf,omitempty"`  // target (""), self
+	ExplodeDamagePct float64 `json:"explodeDamagePct,omitempty"` // % of the max HP (0: 50)
+	ExplodeRadius    float64 `json:"explodeRadius,omitempty"`    // px (0: 80)
+	ExplodeCrater    float64 `json:"explodeCrater,omitempty"`    // px (0: 20)
+}
+
+// Minion behaviors (MinionConfig.Behavior), movements (Movement) and blast bases
+// (ExplodeDamageOf).
+const (
+	MinionShooter = "shooter"
+	MinionBomber  = "bomber"
+
+	MinionMoveNone = "none"
+	MinionMoveWalk = "walk"
+	MinionMoveFly  = "fly"
+
+	ExplodeOfTarget = "target"
+	ExplodeOfSelf   = "self"
+)
+
+// MinionDefaults are the values a zero MinionConfig field stands for (the shot damage factor
+// depends on the behavior: BomberShotDamageFactor or 1).
+var MinionDefaults = MinionConfig{
+	Behavior: MinionShooter, Movement: MinionMoveWalk, DetonateRange: 70, FlyRange: 90, WalkRange: 80, HoverHeight: 60, FlySpeed: 220,
+	ExplodeDamageOf: ExplodeOfTarget, ExplodeDamagePct: 50, ExplodeRadius: 80, ExplodeCrater: 20,
+}
+
+// BomberShotDamageFactor is a bomber's shot damage factor unless ShotDamageFactor is set.
+const BomberShotDamageFactor = 0.35
+
+// Normalized is m with its zero fields set to their defaults.
+func (m MinionConfig) Normalized() MinionConfig {
+	d := MinionDefaults
+	str := func(v *string, def string) {
+		if *v == "" {
+			*v = def
+		}
+	}
+	num := func(v *float64, def float64) {
+		if *v == 0 {
+			*v = def
+		}
+	}
+	str(&m.Behavior, d.Behavior)
+	str(&m.Movement, d.Movement)
+	str(&m.ExplodeDamageOf, d.ExplodeDamageOf)
+	if m.ShotDamageFactor == 0 {
+		m.ShotDamageFactor = 1
+		if m.Behavior == MinionBomber {
+			m.ShotDamageFactor = BomberShotDamageFactor
+		}
+	}
+	num(&m.DetonateRange, d.DetonateRange)
+	num(&m.FlyRange, d.FlyRange)
+	num(&m.WalkRange, d.WalkRange)
+	num(&m.HoverHeight, d.HoverHeight)
+	num(&m.FlySpeed, d.FlySpeed)
+	num(&m.ExplodeDamagePct, d.ExplodeDamagePct)
+	num(&m.ExplodeRadius, d.ExplodeRadius)
+	num(&m.ExplodeCrater, d.ExplodeCrater)
+	return m
+}
+
+// BossHover is the band a flying boss hovers in (config_bosses.hover): at the start of each of
+// its turns it flies to a random point (its feet) of MinX..MaxX × MinY..MaxY px, at least
+// MinMove px (0: 200) from where it was, at FlySpeed px/s (0: 220), then casts.
+type BossHover struct {
+	MinX     float64 `json:"minX"`
+	MaxX     float64 `json:"maxX"`
+	MinY     float64 `json:"minY"`
+	MaxY     float64 `json:"maxY"`
+	MinMove  float64 `json:"minMove,omitempty"`
+	FlySpeed float64 `json:"flySpeed,omitempty"`
+}
+
+// Hover defaults (BossHover zero fields).
+const (
+	DefaultHoverMinMove = 200.0
+	DefaultFlySpeed     = 220.0
+)
+
+// Normalized is h with its zero MinMove / FlySpeed set to the defaults.
+func (h BossHover) Normalized() BossHover {
+	if h.MinMove == 0 {
+		h.MinMove = DefaultHoverMinMove
+	}
+	if h.FlySpeed == 0 {
+		h.FlySpeed = DefaultFlySpeed
+	}
+	return h
+}
+
+// ParseBossHover reads config_bosses.hover into b.Hover (NULL / empty / null: no band).
+func ParseBossHover(b *BossConfig, raw []byte) error {
+	b.Hover = nil
+	if s := strings.TrimSpace(string(raw)); s == "" || s == "null" {
+		return nil
+	}
+	var h BossHover
+	dec := json.NewDecoder(strings.NewReader(string(raw)))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&h); err != nil {
+		return fmt.Errorf("hover: %w", err)
+	}
+	b.Hover = &h
+	return nil
+}
+
+// HoverJSON is config_bosses.hover of b (nil: SQL NULL).
+func (b BossConfig) HoverJSON() []byte {
+	if b.Hover == nil {
+		return nil
+	}
+	out, _ := json.Marshal(b.Hover)
+	return out
 }
 
 // BossWaveEntry is Count minions of MinionID.
@@ -180,6 +320,10 @@ type BossConfig struct {
 	Waves                BossWaves
 	Rewards              BossRewards
 	DailyBonusRuns       int
+	// Flying: the boss never falls and craters do not move it; with a Hover band it flies to a
+	// new point of it at the start of each of its turns (UnitFlew), then casts.
+	Flying bool
+	Hover  *BossHover
 }
 
 // Minion is the boss's minion type id.
@@ -263,6 +407,17 @@ func ValidateBoss(b BossConfig, characters map[string]CharacterConfig, items map
 	case len(b.Skills) == 0:
 		return bad("skills: at least one")
 	}
+	if h := b.Hover; h != nil {
+		switch {
+		case !b.Flying:
+			return bad("hover: only for a flying boss")
+		case !inRange(h.MinX, 0, 20000), !inRange(h.MaxX, 0, 20000), !inRange(h.MinY, 0, 20000), !inRange(h.MaxY, 0, 20000),
+			h.MinX > h.MaxX, h.MinY > h.MaxY:
+			return bad("hover: 0 <= minX <= maxX, 0 <= minY <= maxY")
+		case !inRange(h.MinMove, 0, 5000), !inRange(h.FlySpeed, 0, 3000), h.FlySpeed > 0 && h.FlySpeed < 20:
+			return bad("hover: minMove 0..5000, flySpeed 0 or 20..3000")
+		}
+	}
 
 	minions := map[string]bool{}
 	for i, m := range b.Minions {
@@ -277,6 +432,17 @@ func ValidateBoss(b BossConfig, characters map[string]CharacterConfig, items map
 			return bad("minion %s: bodySize %v outside 0.3..3", m.MinionID, m.BodySize)
 		case !finite(m.HitChance) || m.HitChance < 0 || m.HitChance > 100:
 			return bad("minion %s: hitChance %v outside 0..100", m.MinionID, m.HitChance)
+		case m.Behavior != "" && m.Behavior != MinionShooter && m.Behavior != MinionBomber:
+			return bad("minion %s: behavior %q: shooter or bomber", m.MinionID, m.Behavior)
+		case m.Movement != "" && m.Movement != MinionMoveNone && m.Movement != MinionMoveWalk && m.Movement != MinionMoveFly:
+			return bad("minion %s: movement %q: none, walk or fly", m.MinionID, m.Movement)
+		case m.ExplodeDamageOf != "" && m.ExplodeDamageOf != ExplodeOfTarget && m.ExplodeDamageOf != ExplodeOfSelf:
+			return bad("minion %s: explodeDamageOf %q: target or self", m.MinionID, m.ExplodeDamageOf)
+		case !inRange(m.ShotDamageFactor, 0, 5), !inRange(m.DetonateRange, 0, 500), !inRange(m.FlyRange, 0, 2400), !inRange(m.WalkRange, 0, 2400),
+			!inRange(m.HoverHeight, 0, 400), !inRange(m.FlySpeed, 0, 3000), m.FlySpeed > 0 && m.FlySpeed < 20:
+			return bad("minion %s: shotDamageFactor 0..5, detonateRange 0..500, flyRange / walkRange 0..2400, hoverHeight 0..400, flySpeed 0 or 20..3000", m.MinionID)
+		case !inRange(m.ExplodeDamagePct, 0, 100), !inRange(m.ExplodeRadius, 0, 400), !inRange(m.ExplodeCrater, 0, 200):
+			return bad("minion %s: explodeDamagePct 0..100, explodeRadius 0..400, explodeCrater 0..200", m.MinionID)
 		}
 		if characters != nil {
 			if _, ok := characters[m.CharacterID]; !ok {
@@ -366,6 +532,49 @@ func ValidateBoss(b BossConfig, characters map[string]CharacterConfig, items map
 	return nil
 }
 
+// inRange reports whether f is a finite number within lo..hi.
+func inRange(f, lo, hi float64) bool {
+	return !math.IsNaN(f) && !math.IsInf(f, 0) && f >= lo && f <= hi
+}
+
+// SpawnSetPillar marks the spawn points of an arena's pillars (SpawnPoint.Set): the party spawns
+// on random distinct ones and the minions appear on free ones (ArenaPillars).
+const SpawnSetPillar = "pillar"
+
+// ArenaPillars are the arena's pillar spawn points (Set pillar), nil for an arena without.
+func ArenaPillars(m MapConfig) []SpawnPoint {
+	var out []SpawnPoint
+	for _, sp := range m.SpawnPoints {
+		if sp.Set == SpawnSetPillar {
+			out = append(out, sp)
+		}
+	}
+	return out
+}
+
+// BossPartySpawns are the spawn points of the n party members of a match on arena m: n random
+// distinct pillars on a pillar arena (intn(k) draws in [0, k); with fewer pillars than members
+// they repeat), the party spawn points (BossSpawns) in order otherwise.
+func BossPartySpawns(m MapConfig, n int, intn func(int) int) []SpawnPoint {
+	out := make([]SpawnPoint, 0, n)
+	if pillars := ArenaPillars(m); len(pillars) > 0 {
+		pool := append([]SpawnPoint(nil), pillars...)
+		for i := len(pool) - 1; i > 0; i-- {
+			j := intn(i + 1)
+			pool[i], pool[j] = pool[j], pool[i]
+		}
+		for i := 0; i < n; i++ {
+			out = append(out, pool[i%len(pool)])
+		}
+		return out
+	}
+	party, _, _ := BossSpawns(m)
+	for i := 0; i < n; i++ {
+		out = append(out, party[i%len(party)])
+	}
+	return out
+}
+
 // BossSpawns splits an arena's spawn points: the party's (0..3), the boss's (4) and the
 // minions' (5..). Missing points fall back to points spread over the map's width.
 func BossSpawns(m MapConfig) (party []SpawnPoint, boss SpawnPoint, minions []SpawnPoint) {
@@ -428,8 +637,15 @@ func (s *Snapshot) BossQueues() []string {
 	return out
 }
 
-// IsBossArena reports whether mapID is the arena of a boss (kept out of the PvP map rotation).
+// BossArenaPrefix starts the id of every boss arena (mapgen arenas), used by a boss or not.
+const BossArenaPrefix = "arena_"
+
+// IsBossArena reports whether mapID is a boss arena (kept out of the PvP map rotation): the arena
+// of a boss, or any map whose id starts with BossArenaPrefix (an arena no boss uses any more).
 func (s *Snapshot) IsBossArena(mapID string) bool {
+	if strings.HasPrefix(mapID, BossArenaPrefix) {
+		return true
+	}
 	for _, b := range s.Bosses {
 		if b.MapID == mapID {
 			return true
