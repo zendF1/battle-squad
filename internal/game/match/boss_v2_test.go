@@ -34,7 +34,7 @@ func asTurnOf(m *Match, p *BattlePlayerState) {
 
 // blastDamage is what a minion blast of pct % with radius deals p (target mode) from point.
 func blastDamage(m *Match, p *BattlePlayerState, base int, point Vector2, pct, radius float64) int {
-	d := blastEdgeDistance(p, point, m.gd.Physics.PlayerHitRadius, shotOriginLift(m.Terrain))
+	d := blastDistance(p, point, m.gd.Physics.PlayerHitRadius, shotOriginLift(m.Terrain))
 	if d > radius {
 		return 0
 	}
@@ -301,7 +301,7 @@ func TestSnowmanDeathBlastChains(t *testing.T) {
 			t.Fatalf("terrain versions out of order %v", versions)
 		}
 	}
-	first := blastDamage(m, p0, p0.MaxHP, s1.Position, 15, 140)
+	first := blastDamage(m, p0, p0.MaxHP, s1.Position, 15*0.5, 140) // the death blast: 0.5 × the detonation's 15 %
 	if blastOn["p0"] < first || blastOn[s2.PlayerID] <= 0 || s2.IsAlive || m.State.Players["boss_ice_witch"].HP != bossHP ||
 		p0.MinionDamage < 10 || blastOn["boss_ice_witch"] != 0 {
 		t.Fatalf("blast damage %v (p0 first %d), p0 minion damage %d", blastOn, first, p0.MinionDamage)

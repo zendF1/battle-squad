@@ -734,7 +734,13 @@ shot origin = position − (0, 20)        // ShotOriginLift = PlayerHeight / 2 =
 
 ```
 Explosion damage:
-  distance = dist(explosionCenter, playerPosition)
+  distance = max(0, dist(explosionCenter, bodyCentre) − hitRadius × bodySize)   // tới MÉP THÂN (blastDistance)
+    // bodyCentre = position − (0, shotOriginLift × bodySize), hitRadius = physics.player_hit_radius (24);
+    // đúng vòng tròn đạn va chạm (checkSegmentCollisions); bodySize 1 cho người chơi, boss / lính theo config.
+    // Mọi đơn vị (người chơi, lính, boss) và mọi vụ nổ (đạn, skill, mưa của boss, lính tự nổ / nổ khi chết)
+    // đo cùng cách: hai thân sát nhau cùng ăn nổ, cùng khoảng cách thì cùng damage. Người bị trúng trực tiếp
+    // (hitPlayerId) distance = 0. Trước bản sửa này đạn đo tới chân: đạn nổ trên đầu một người tuyết cách chân
+    // người tuyết sát bên ~55 px > bán kính 40, nên chỉ con bị trúng mất máu.
   if distance >= explosionRadius → 0 damage
   multiplier = 1.0 - (distance / explosionRadius)  // linear falloff
   rawDamage = (weaponDamage + shooter.damageBonus) * itemFactor * multiplier
@@ -1210,7 +1216,7 @@ Không có item khiên (bloom là skill), nên luật "khiên khi máu thấp v�
 
 ---
 
-## 8a. Chế độ Boss (migration 045 / 046, v2: 047 / 048 / 049, v3: 050 / 051)
+## 8a. Chế độ Boss (migration 045 / 046, v2: 047 / 048 / 049, v3: 050 / 051, sau v3: 052 / 053)
 
 Đội tối đa 4 người (người thật + bot đồng đội, team 1) đánh một boss và lính của nó (team 2). Mỗi boss là một dòng `config_bosses` (admin trang **Bosses**), có chế độ lobby riêng trong mục Boss của màn Chọn chế độ (`config_game_modes` kind `lobby`, category `boss`, icon `boss`, `party_size` 4, queue `boss:<bossId>`) và dòng match cùng id với queue (`boss:steel_robot` "Rô-bốt Thép": lịch sử / kết quả hiện tên boss). Code: `internal/game/gamedata/boss.go` (config, kiểm tra), `match/boss.go` (trận), `match/reward_boss.go` (thưởng), `matchmaker/plan_boss.go` (ghép), `room/boss.go` (tạo trận), `internal/api/boss` (`GET /boss/runs`), `mapgen/arenas.go` (arena).
 
@@ -1231,7 +1237,7 @@ Rô-bốt Thép, Cua: 15 lượt boss tối đa; Phù thuỷ: 30 lượt, bay l�
 | `boss_id`, `name`, `description`, `recommended_level`, `enabled`, `sort_order` | Thẻ ở tab Boss; tắt → boss, chế độ của nó không có trong `GET /gamedata`, queue không chạy (`INVALID_QUEUE`) |
 | `map_id` | Arena (`config_maps`): spawn 0..3 đội, 4 boss, 5.. lính (`gamedata.BossSpawns`) |
 | `hp`, `defense`, `damage` | Chỉ số boss; kỹ năng gây `damage × skill.damage` (rồi qua defense người trúng) |
-| `body_size` | × thân người chơi: va chạm trong `physics.player_hit_radius × size` quanh tâm `shotOriginLift × size` trên chân; vụ nổ đo tới mép thân (khoảng cách tới tâm − (size − 1) × hitRadius, hoặc tới chân nếu gần hơn); tia laze / beam trúng trong `halfWidth + hitRadius × size`. Người chơi (size 1) không đổi gì |
+| `body_size` | × thân người chơi: va chạm trong `physics.player_hit_radius × size` quanh tâm `shotOriginLift × size` trên chân; vụ nổ đo tới mép thân (khoảng cách tới tâm − size × hitRadius, như mọi đơn vị); tia laze / beam trúng trong `halfWidth + hitRadius × size`. Người chơi (size 1) không đổi gì |
 | `turn_limit` | Số lượt boss; hết lượt thứ này mà boss còn sống → đội thua `boss_escaped` |
 | `shielded_damage_factor` | Còn lính sống: boss nhận damage × hệ số (0..1) |
 | `out_of_map` | `clamp` (mặc định): vụ nổ làm boss rơi khỏi đáy map thì boss đứng yên tại chỗ (không có event `fall`); `kill`: boss rơi chết như người chơi (đội thắng). Arena đặt boss trên nền cứng không phá được nên thực tế không xảy ra. Lính rơi khỏi map thì chết như người chơi (không ảnh hưởng trận) |
@@ -1342,6 +1348,11 @@ Rô-bốt Thép, bảng bonus: 100 + 60 / 1000 damage (tối đa 1.500) + 400 th
   - **Cân bằng 052** (30 trận mỗi boss, bot gold có súng DB): trước (v3, hiệu ứng luôn dính) Rô-bốt Thép 17 / 30 (57 %), Cua 11 / 30 (37 %), Phù thuỷ 15 / 30 (50 %); sau (50 %, × 1,3, phù thuỷ 14.000 HP) Rô-bốt Thép 13 / 30 (43 %, không đổi cấu hình: dao động mẫu 43–57 %), Cua 14 / 30 (47 %), Phù thuỷ 15 / 30 (50 %); với 13.000 HP phù thuỷ thắng 18 / 30 (60 %).
   - **6 vật phẩm trong trận boss**: `config_game_modes.max_items` (INT 0..20, NULL = `rules.items maxLoadout` 3; seed 6 cho các dòng lobby `boss:`; admin Texts → Game Modes cột "Số vật phẩm", trống = NULL). `gamedata.Snapshot.ModeMaxItems(queue)` (dòng lobby có queue đó, rồi dòng mode id đó) = `room.MaxLoadoutItems(mode)`, áp dụng ở: lobby `UpdateLoadout` theo queue của lobby (`room.ValidateLoadout(…, queue, items)`, quá thì `Error LOADOUT_INVALID "You can bring at most N items"`), `SetLobbyQueue` / `StartQueue` (cắt còn N món đầu, không đổi loadout đã lưu), phòng ghép trận (`buildRankedRoster` cắt theo mode), `SelectItems` của phòng tự tạo (theo `RoomState.mode`) và giữ chỗ vật phẩm (`reservePlayerItems`: quá thì `LoadoutError`, trận ghép cho người đó vào không vật phẩm; khoá dòng `FOR UPDATE` như cũ). Bot vẫn theo `maxLoadout`. `GET /gamedata` `modes.lobby[].maxItems`.
 - **Migration 050** `050_boss_mode_v3`: thêm cột `summon` (một lần, kèm giá trị cho 3 boss), cập nhật skills / minions / waves / description / damage / hp và arena phù thuỷ, mỗi giá trị chỉ khi còn là giá trị v2 (chạy lại giữ chỉnh sửa admin); down trả về v2 và bỏ cột. Admin **Bosses** thêm ô JSON "Triệu hồi" (`summon`, kiểm tra `ValidateBoss`: lính có thật, count 1..12, cooldownRounds 0..50, firstRound 0..200) và các trường mới trong JSON kỹ năng / lính (`pattern`, `count`, `step`, `interval`, `minFactor`, `projectileKind`, `launchFrom`, `leapRange`, `leapDetonateNextTurn`, `shootAfterLeap`; `projectileKind` chỉ gồm a-z, 0-9, _).
+
+- **Sau 052 (migration 053 `053_snowman_death_blast`)**:
+  - **Vụ nổ đo tới mép thân, mọi đơn vị** (`blastDistance`, `match/body.go`): khoảng cách = max(0, |điểm nổ − tâm thân| − `player_hit_radius × bodySize`), đúng vòng tròn đạn va chạm, cho người chơi, lính và boss, cho mọi vụ nổ (đạn, skill, mưa của boss, lính tự nổ / nổ khi chết; bot AI ước lượng cùng cách). Lỗi cũ: đạn đo tới CHÂN (thân ≤ 1) hoặc tới "mép thân trừ một thân người thường" (boss), trong khi đạn nổ trên mặt thân: đạn rơi trúng đầu một người tuyết (bodySize 0,85: bán kính 20,4 px, tâm 17 px trên chân) cách chân người tuyết đứng sát bên ~55 px > bán kính 40 của Basic Rocket, nên chỉ con bị trúng mất máu (hai người chơi đứng sát nhau cũng vậy). Nay hai thân sát nhau cùng ăn nổ, cùng khoảng cách thì cùng damage; người bị trúng trực tiếp vẫn khoảng cách 0 (đủ damage). Hệ quả cân bằng PvP: tầm nổ hiệu dụng xa hơn ~24 px (bán kính thân), nổ trên đất cạnh chân mạnh hơn (đất cách chân 20 px, bán kính 40: 50 % → ~89 %).
+  - **Người tuyết nổ khi chết yếu hơn tự nổ**: `minions[].deathBlastDamageFactor` (× `explodeDamagePct` chỉ cho vụ nổ khi chết `death_blast`, không áp dụng cho tự nổ `self_destruct`; 0 / thiếu = 1, `ValidateBoss` 0..2; luôn được lưu, kể cả 0, khi admin lưu). Người tuyết 0,5: tự nổ vẫn 15 % máu tối đa của người trúng, nổ khi chết 7,5 %. `GET /gamedata` `bosses[].minions[].deathBlastDamageFactor` (đã điền mặc định). Migration 053 chỉ đặt 0,5 cho người tuyết của Phù Thuỷ Băng khi trường còn thiếu (chạy lại giữ chỉnh sửa admin); down bỏ trường khi còn là 0,5.
+  - **Cân bằng 053** (`TestBossBalanceSim`, 60 trận mỗi boss, bot gold có súng DB, trước → sau): Phù thuỷ 29 / 60 (48 %) → 33 / 60 (55 %, vòng ~17; người đội chết vì nổ khi chết của người tuyết 18 → 8, vì tự nổ 38 → 20), Rô-bốt Thép 35 / 60 (58 %) → 24 / 60 (40 %; mưa đạn pháo của boss cũng đo tới mép thân nên trúng đội nhiều hơn), Cua 33 / 60 (55 %) → 36 / 60 (60 %). Cả ba trong 40–60 %, không chỉnh thêm số.
 
 ### Migration 046
 

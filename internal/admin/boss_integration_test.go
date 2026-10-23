@@ -17,12 +17,13 @@ import (
 
 // 045 / 046 seed the arenas, the three bosses (equal to gamedata.DefaultBosses), their lobby
 // and match modes and player_boss_runs (047 / 048 / 049: boss v2, 050 / 051: boss v3, 052: status chance and the
-// boss modes' 6 items); a rerun keeps admin edits;
+// boss modes' 6 items, 053: the snowman's death blast factor 0.5); a rerun keeps admin edits;
 // down / up gives the defaults back.
 func TestBossMigration(t *testing.T) {
 	names := registered(t)
 	for _, f := range []string{"045_boss_arenas.up.sql", "046_boss_mode.up.sql", "047_boss_arenas_v2.up.sql", "048_boss_mode_v2.up.sql",
-		"049_boss_placement.up.sql", "050_boss_mode_v3.up.sql", "051_boss_arena_islands.up.sql", "052_boss_status_items.up.sql"} {
+		"049_boss_placement.up.sql", "050_boss_mode_v3.up.sql", "051_boss_arena_islands.up.sql", "052_boss_status_items.up.sql",
+		"053_snowman_death_blast.up.sql"} {
 		if !slices.Contains(names, f) {
 			t.Fatalf("cmd/migrate does not run %s: %v", f, names)
 		}
@@ -73,6 +74,13 @@ func TestBossMigration(t *testing.T) {
 		t.Fatalf("crab 052 %+v", crab.Skills[0])
 	}
 
+	// 053: the snowman's death blast is half its detonation, the other minions' unchanged
+	if witch, _ := snap.Boss("ice_witch"); witch.Minions[0].DeathBlastDamageFactor != 0.5 {
+		t.Fatalf("witch 053 %+v", witch.Minions[0])
+	}
+	if robot, _ := snap.Boss("steel_robot"); robot.Minions[0].DeathBlastDamageFactor != 0 || robot.Minions[0].Normalized().DeathBlastDamageFactor != 1 {
+		t.Fatalf("drone 053 %+v", robot.Minions[0])
+	}
 	// 050 / 051: the free summons, the witch on the islands with her v3 numbers
 	if witch, _ := snap.Boss("ice_witch"); witch.MapID != "arena_ice_witch_islands" || witch.Summon == nil || witch.Summon.Count != 5 ||
 		witch.Minions[0].Behavior != gamedata.MinionLeaper || len(witch.AttackSkills()) != len(witch.Skills) {
@@ -98,8 +106,10 @@ func TestBossMigration(t *testing.T) {
 	// 052 edits: a boss mode's items, the witch's frost beam chance
 	execSQL(t, db, `UPDATE config_game_modes SET max_items = 4 WHERE mode_id = 'boss_ice_witch'`)
 	execSQL(t, db, `UPDATE config_bosses SET skills = jsonb_set(skills, '{1,statusChance}', '0.8') WHERE boss_id = 'ice_witch'`)
+	// 053 edit: the snowman's death blast factor
+	execSQL(t, db, `UPDATE config_bosses SET minions = jsonb_set(minions, '{0,deathBlastDamageFactor}', '0.8') WHERE boss_id = 'ice_witch'`)
 	for _, f := range []string{"045_boss_arenas", "046_boss_mode", "047_boss_arenas_v2", "048_boss_mode_v2", "049_boss_placement",
-		"050_boss_mode_v3", "051_boss_arena_islands", "052_boss_status_items"} {
+		"050_boss_mode_v3", "051_boss_arena_islands", "052_boss_status_items", "053_snowman_death_blast"} {
 		runSQL(t, db, f+".up.sql")
 	}
 	if sp := crabSpawns(); sp[5].X != 900 || sp[6].X != 1464 {
@@ -124,6 +134,9 @@ func TestBossMigration(t *testing.T) {
 		if n := snap.ModeMaxItems("boss:ice_witch"); n != 4 || witch.Skills[1].StatusChance != 0.8 || witch.HP != 27000 {
 			t.Fatalf("a rerun lost a 052 edit: %d items, frost beam %+v", n, witch.Skills[1])
 		}
+		if witch.Minions[0].DeathBlastDamageFactor != 0.8 {
+			t.Fatalf("a rerun lost a 053 edit: %+v", witch.Minions[0])
+		}
 		if crab.Summon == nil || crab.Summon.Count != 2 || crab.Damage != 700 || crab.Skills[1].MinFactor != 0.5 ||
 			witch.Minions[0].ExplodeDamagePct != 25 || islands != "Đảo" {
 			t.Fatalf("a rerun lost a v3 edit: crab %+v %d %+v witch %+v islands %q", crab.Summon, crab.Damage, crab.Skills[1], witch.Minions[0], islands)
@@ -141,6 +154,7 @@ func TestBossMigration(t *testing.T) {
 		t.Fatalf("a rerun lost a mode / arena edit: %d %q", party, mapName)
 	}
 
+	runSQL(t, db, "053_snowman_death_blast.down.sql")
 	runSQL(t, db, "052_boss_status_items.down.sql")
 	runSQL(t, db, "051_boss_arena_islands.down.sql")
 	runSQL(t, db, "050_boss_mode_v3.down.sql")
@@ -174,10 +188,27 @@ func TestBossMigration(t *testing.T) {
 	runSQL(t, db, "051_boss_arena_islands.up.sql")
 	runSQL(t, db, "052_boss_status_items.up.sql")
 	runSQL(t, db, "052_boss_status_items.up.sql")
+	runSQL(t, db, "053_snowman_death_blast.up.sql")
+	runSQL(t, db, "053_snowman_death_blast.up.sql")
 	if snap, err := gamedata.LoadFromDB(ctx, db); err != nil || !reflect.DeepEqual(snap.Bosses, gamedata.DefaultBosses()) ||
 		snap.ModeMaxItems("boss:lava_crab") != 6 {
 		t.Fatalf("down / up: %v", err)
 	}
+	// 053's down drops the snowman's factor (its death blast deals the full 15 % again), its up
+	// brings it back
+	runSQL(t, db, "053_snowman_death_blast.down.sql")
+	{
+		var has bool
+		_ = db.Pool.QueryRow(ctx, `SELECT minions->0 ? 'deathBlastDamageFactor' FROM config_bosses WHERE boss_id = 'ice_witch'`).Scan(&has)
+		if has {
+			t.Fatal("053 down kept the snowman's deathBlastDamageFactor")
+		}
+	}
+	runSQL(t, db, "053_snowman_death_blast.up.sql")
+	if snap, err := gamedata.LoadFromDB(ctx, db); err != nil || !reflect.DeepEqual(snap.Bosses, gamedata.DefaultBosses()) {
+		t.Fatalf("053 down / up: %v", err)
+	}
+	runSQL(t, db, "053_snowman_death_blast.down.sql")
 	// 052's down gives the v3 skills, HP and the global item rule back
 	runSQL(t, db, "052_boss_status_items.down.sql")
 	{
@@ -209,9 +240,11 @@ func TestBossMigration(t *testing.T) {
 	runSQL(t, db, "050_boss_mode_v3.up.sql")
 	runSQL(t, db, "050_boss_mode_v3.up.sql")
 	runSQL(t, db, "052_boss_status_items.up.sql")
+	runSQL(t, db, "053_snowman_death_blast.up.sql")
 	if snap, err := gamedata.LoadFromDB(ctx, db); err != nil || !reflect.DeepEqual(snap.Bosses, gamedata.DefaultBosses()) {
 		t.Fatalf("050 down / up: %v", err)
 	}
+	runSQL(t, db, "053_snowman_death_blast.down.sql")
 	runSQL(t, db, "052_boss_status_items.down.sql")
 	// 048's down gives the phase 1 rows back (still loadable)
 	runSQL(t, db, "050_boss_mode_v3.down.sql")
@@ -229,6 +262,7 @@ func TestBossMigration(t *testing.T) {
 	runSQL(t, db, "049_boss_placement.up.sql")
 	runSQL(t, db, "050_boss_mode_v3.up.sql")
 	runSQL(t, db, "052_boss_status_items.up.sql")
+	runSQL(t, db, "053_snowman_death_blast.up.sql")
 }
 
 // The Boss page edits every field: a valid save is stored and bumps the game data revision;
@@ -310,7 +344,8 @@ func TestBossAdminPage(t *testing.T) {
 
 	// boss v2 fields: flying + hover, the minion behavior / movement / blast numbers
 	drone := `[{"minionId":"drone","name":"Drone","characterId":"spark","hp":650,"defense":20,"damage":160,"moveEnergy":80,"bodySize":0.7,
-		"behavior":"bomber","movement":"fly","flyRange":120,"explodeDamageOf":"self","explodeDamagePct":40,"explodeOnDeath":true}]`
+		"behavior":"bomber","movement":"fly","flyRange":120,"explodeDamageOf":"self","explodeDamagePct":40,"explodeOnDeath":true,
+		"deathBlastDamageFactor":0.7}]`
 	v2 := form(func(v url.Values) {
 		v.Set("flying", "on")
 		v.Set("hover", `{"minX": 300, "maxX": 2100, "minY": 150, "maxY": 400, "minMove": 250}`)
@@ -322,7 +357,8 @@ func TestBossAdminPage(t *testing.T) {
 	snap, _ = gamedata.LoadFromDB(ctx, db)
 	saved, _ = snap.Boss("steel_robot")
 	if m := saved.Minions[0]; !saved.Flying || saved.Hover == nil || saved.Hover.MinMove != 250 || saved.Hover.MaxX != 2100 ||
-		m.Behavior != "bomber" || m.FlyRange != 120 || m.ExplodeDamageOf != "self" || m.ExplodeDamagePct != 40 || !m.ExplodeOnDeath {
+		m.Behavior != "bomber" || m.FlyRange != 120 || m.ExplodeDamageOf != "self" || m.ExplodeDamagePct != 40 || !m.ExplodeOnDeath ||
+		m.DeathBlastDamageFactor != 0.7 {
 		t.Fatalf("v2 saved %+v %+v", saved, saved.Hover)
 	}
 	if rec := get(h, "/bosses/edit?id=steel_robot"); !strings.Contains(rec.Body.String(), `minMove&#34;: 250`) {
@@ -337,6 +373,12 @@ func TestBossAdminPage(t *testing.T) {
 		"explode of":     func(v url.Values) { v.Set("minions", strings.Replace(drone, `"self"`, `"boss"`, 1)) },
 		"explode pct": func(v url.Values) {
 			v.Set("minions", strings.Replace(drone, `"explodeDamagePct":40`, `"explodeDamagePct":400`, 1))
+		},
+		"death blast factor": func(v url.Values) {
+			v.Set("minions", strings.Replace(drone, `"deathBlastDamageFactor":0.7`, `"deathBlastDamageFactor":2.5`, 1))
+		},
+		"negative death blast factor": func(v url.Values) {
+			v.Set("minions", strings.Replace(drone, `"deathBlastDamageFactor":0.7`, `"deathBlastDamageFactor":-0.5`, 1))
 		},
 	} {
 		vals := form(func(v url.Values) {

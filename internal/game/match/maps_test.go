@@ -465,7 +465,8 @@ func TestExplosionOnHardGroundStillSplashes(t *testing.T) {
 			t.Fatal("hard ground carved")
 		}
 	}
-	want := CalculateExplosionDamage(feet, at, 420, 60, target.Defense)
+	want := explosionDamageAt(blastDistance(target, at, m.gd.Physics.PlayerHitRadius, shotOriginLift(m.Terrain)), 420, 60, target.Defense,
+		m.gd.Physics.DefenseKOrDefault())
 	if len(hit) != 1 || want <= 0 || hp-target.HP != want {
 		t.Fatalf("splash on hard ground: %d hit, hp %d -> %d, want -%d", len(hit), hp, target.HP, want)
 	}

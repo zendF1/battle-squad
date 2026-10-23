@@ -404,18 +404,12 @@ func (m *Match) selfDestruct(ctx context.Context, p *BattlePlayerState) {
 	m.finishShot(ctx, shot, tl)
 }
 
-// blastEdgeDistance is how far point is from the edge of p's body (0 inside it).
-func blastEdgeDistance(p *BattlePlayerState, point Vector2, hitRadius, lift float64) float64 {
-	c := bodyCentre(p, lift)
-	return math.Max(0, math.Hypot(c.X-point.X, c.Y-point.Y)-hitRadius*bodyScale(p))
-}
-
 // minionBlast is the blast of minion src (config mc) at its position at t: an explode event
 // (radius the crater, blastRadius the damage radius), then every living unit of the party within
 // explodeRadius of it (with hitMinions also the other minions; never the boss or src) takes
-// explodeDamagePct % of its own max HP (explodeDamageOf target) or of src's (self), full at the
-// body edge 0 px away down to half at the radius, no defense, shield first (damage events with
-// cause; die). Damage to minions counts as minion damage of credit (a party shooter).
+// explodeDamagePct % (× deathBlastDamageFactor for cause death_blast) of its own max HP
+// (explodeDamageOf target) or of src's (self), full at the body edge 0 px away (blastDistance)
+// down to half at the radius, no defense, shield first (damage events with cause; die). Damage to minions counts as minion damage of credit (a party shooter).
 func (m *Match) minionBlast(src *BattlePlayerState, mc gamedata.MinionConfig, credit *BattlePlayerState, t float64, cause string,
 	hitMinions bool, tl *shotTimeline) {
 	point := src.Position
@@ -427,7 +421,7 @@ func (m *Match) minionBlast(src *BattlePlayerState, mc gamedata.MinionConfig, cr
 		if !p.IsAlive || p == src || p.Role == RoleBoss || (p.TeamID == src.TeamID && !(hitMinions && p.Role == RoleMinion)) {
 			continue
 		}
-		d := blastEdgeDistance(p, point, hitRadius, lift)
+		d := blastDistance(p, point, hitRadius, lift)
 		if d > mc.ExplodeRadius {
 			continue
 		}
@@ -435,7 +429,11 @@ func (m *Match) minionBlast(src *BattlePlayerState, mc gamedata.MinionConfig, cr
 		if mc.ExplodeDamageOf == gamedata.ExplodeOfSelf {
 			base = src.MaxHP
 		}
-		damage := int(math.Round(float64(base) * mc.ExplodeDamagePct / 100 * (1 - 0.5*d/mc.ExplodeRadius)))
+		pct := mc.ExplodeDamagePct
+		if cause == CauseDeathBlast {
+			pct *= mc.DeathBlastDamageFactor // a death blast is weaker than a detonation (the snowman's 0.5)
+		}
+		damage := int(math.Round(float64(base) * pct / 100 * (1 - 0.5*d/mc.ExplodeRadius)))
 		if damage <= 0 {
 			continue
 		}

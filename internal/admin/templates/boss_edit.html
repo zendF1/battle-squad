@@ -34,7 +34,7 @@
     behavior (shooter: đứng bắn / bomber: lao tới người gần nhất, cuối lượt di chuyển mà cách ≤ detonateRange thì tự nổ, không thì bắn / leaper: không ai trong detonateRange thì nhảy tới đứng cạnh người gần nhất, lượt sau vẫn còn người trong detonateRange thì tự nổ, không thì bắn),
     movement (none / walk / fly; trống = walk), shotDamageFactor (× damage khi bắn; 0 = bomber 0,8, shooter / leaper 1), detonateRange (70),
     walkRange (px đi tối đa mỗi lượt, 80), flyRange (px bay tối đa mỗi lượt, 90), hoverHeight (px bay trên mặt đất, 60), flySpeed (px/s, 220),
-    explodeOnDeath (chết là nổ), explodeDamageOf (target: % máu tối đa của người trúng / self: của lính), explodeDamagePct (50), explodeRadius (80), explodeCrater (20), leapRange (leaper: px nhảy tối đa, 0 = cả map), leapDetonateNextTurn (leaper: nổ ở lượt sau cú nhảy, mặc định true), shootAfterLeap (leaper: nhảy xong vẫn bắn)}.
+    explodeOnDeath (chết là nổ), explodeDamageOf (target: % máu tối đa của người trúng / self: của lính), explodeDamagePct (50), deathBlastDamageFactor (× explodeDamagePct cho vụ nổ khi chết, không áp dụng khi tự nổ; 0..2, 0 = 1), explodeRadius (80), explodeCrater (20), leapRange (leaper: px nhảy tối đa, 0 = cả map), leapDetonateNextTurn (leaper: nổ ở lượt sau cú nhảy, mặc định true), shootAfterLeap (leaper: nhảy xong vẫn bắn)}.
     Số 0 / trống = mặc định trong ngoặc</div></div>
 <div class="form-group"><label>Đợt lính (JSON)</label><textarea name="waves" rows="5" style="width:100%;font-family:monospace;font-size:12px">{{.B.WavesJSON}}</textarea>
     <div class="desc">{initial: [{minionId, count}], maxAlive}</div></div>

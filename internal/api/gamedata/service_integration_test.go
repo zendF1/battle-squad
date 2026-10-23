@@ -304,7 +304,7 @@ func TestGameDataFromDB(t *testing.T) {
 		b.ShieldedDamageFactor != 0.1 || b.DailyBonusRuns != 3 || b.Description == "" ||
 		b.Flying || b.Hover != nil ||
 		!reflect.DeepEqual(b.Minions, []BossMinion{{MinionID: "drone", Name: "Drone", HP: 650, BodySize: 0.7, Behavior: "bomber", Movement: "fly",
-			ExplodeRadius: 80, ExplodeDamagePct: 50, ExplodeDamageOf: "target", ExplodeCrater: 20, DetonateRange: 70, ShotDamageFactor: 0.8,
+			ExplodeRadius: 80, ExplodeDamagePct: 50, DeathBlastDamageFactor: 1, ExplodeDamageOf: "target", ExplodeCrater: 20, DetonateRange: 70, ShotDamageFactor: 0.8,
 			FlyRange: 270, WalkRange: 80, HoverHeight: 60, FlySpeed: 220, LeapDetonateNextTurn: true, ProjectileKind: "drone_bolt"}}) || len(b.Skills) != 2 ||
 		b.Skills[0] != (BossSkill{SkillID: "shell_barrage", Name: "Mưa đạn pháo", Description: "Hai mươi bốn quả đạn pháo dội xuống bảy phần mười chiến trường quanh cả đội.",
 			Kind: "rain", ProjectileKind: "steel_shell"}) ||
@@ -326,7 +326,8 @@ func TestGameDataFromDB(t *testing.T) {
 	if witch.MapID != "arena_ice_witch_islands" || witch.TurnLimit != 30 || witch.HP != 14000 || !witch.Flying ||
 		witch.Hover == nil || *witch.Hover != (BossHover{MinX: 400, MaxX: 2000, MinY: 320, MaxY: 430, MinMove: 200, FlySpeed: 220}) ||
 		witch.Minions[0].Behavior != "leaper" || witch.Minions[0].Movement != "none" || !witch.Minions[0].ExplodeOnDeath ||
-		witch.Minions[0].ExplodeRadius != 140 || witch.Minions[0].ExplodeDamagePct != 15 || !witch.Minions[0].LeapDetonateNextTurn ||
+		witch.Minions[0].ExplodeRadius != 140 || witch.Minions[0].ExplodeDamagePct != 15 || witch.Minions[0].DeathBlastDamageFactor != 0.5 ||
+		!witch.Minions[0].LeapDetonateNextTurn ||
 		witch.Minions[0].ShootAfterLeap || witch.Minions[0].ProjectileKind != "snowball" || witch.Summon == nil || witch.Summon.Count != 5 ||
 		witch.Skills[1].Pattern != "radial" || witch.Skills[2] != (BossSkill{SkillID: "blizzard", Name: "Bão tuyết",
 		Description: "Bốn mươi mảnh băng từ quanh phù thuỷ bay ra trút xuống khắp chiến trường; ai trúng có 50 % bị đóng băng một lượt.", Kind: "rain",

@@ -232,7 +232,7 @@ func bosses(snap *gd.Snapshot) []Boss {
 			m = m.Normalized()
 			e.Minions = append(e.Minions, BossMinion{MinionID: m.MinionID, Name: m.Name, HP: m.HP, BodySize: m.BodySize,
 				Behavior: m.Behavior, Movement: m.Movement, ExplodeOnDeath: m.ExplodeOnDeath, ExplodeRadius: m.ExplodeRadius,
-				ExplodeDamagePct: m.ExplodeDamagePct, ExplodeDamageOf: m.ExplodeDamageOf, ExplodeCrater: m.ExplodeCrater,
+				ExplodeDamagePct: m.ExplodeDamagePct, DeathBlastDamageFactor: m.DeathBlastDamageFactor, ExplodeDamageOf: m.ExplodeDamageOf, ExplodeCrater: m.ExplodeCrater,
 				DetonateRange: m.DetonateRange, ShotDamageFactor: m.ShotDamageFactor, FlyRange: m.FlyRange, WalkRange: m.WalkRange,
 				HoverHeight: m.HoverHeight, FlySpeed: m.FlySpeed, LeapRange: m.LeapRange, LeapDetonateNextTurn: m.LeapDetonates(),
 				ShootAfterLeap: m.ShootAfterLeap, ProjectileKind: m.ProjectileKind})

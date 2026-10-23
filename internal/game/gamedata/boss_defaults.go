@@ -109,7 +109,8 @@ func DefaultBosses() []BossConfig {
 			Minions: []MinionConfig{
 				{MinionID: "snowman", Name: "Người tuyết", CharacterID: "flora", HP: 900, Defense: 30, Damage: 170, MoveEnergy: 40, BodySize: 0.85, HitChance: 50,
 					Behavior: MinionLeaper, Movement: MinionMoveNone, ShotDamageFactor: 1.3, DetonateRange: 70, ExplodeOnDeath: true,
-					ExplodeDamageOf: ExplodeOfTarget, ExplodeDamagePct: 15, ExplodeRadius: 140, ExplodeCrater: 24, LeapDetonateNextTurn: &detonate, ProjectileKind: "snowball"},
+					ExplodeDamageOf: ExplodeOfTarget, ExplodeDamagePct: 15, ExplodeRadius: 140, ExplodeCrater: 24, LeapDetonateNextTurn: &detonate, ProjectileKind: "snowball",
+					DeathBlastDamageFactor: 0.5},
 			},
 			Waves:   BossWaves{Initial: []BossWaveEntry{{MinionID: "snowman", Count: 3}}, MaxAlive: 5},
 			Summon:  &BossSummon{MinionID: "snowman", Count: 5, CooldownRounds: 3, FirstRound: 2},

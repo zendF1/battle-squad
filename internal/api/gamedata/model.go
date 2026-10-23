@@ -103,14 +103,17 @@ type BossMinion struct {
 	ExplodeOnDeath   bool    `json:"explodeOnDeath"`
 	ExplodeRadius    float64 `json:"explodeRadius"`
 	ExplodeDamagePct float64 `json:"explodeDamagePct"`
-	ExplodeDamageOf  string  `json:"explodeDamageOf"`
-	ExplodeCrater    float64 `json:"explodeCrater"`
-	DetonateRange    float64 `json:"detonateRange"`
-	ShotDamageFactor float64 `json:"shotDamageFactor"`
-	FlyRange         float64 `json:"flyRange"`
-	WalkRange        float64 `json:"walkRange"`
-	HoverHeight      float64 `json:"hoverHeight"`
-	FlySpeed         float64 `json:"flySpeed"`
+	// DeathBlastDamageFactor × ExplodeDamagePct is its death blast's (explodeOnDeath); a
+	// detonation deals ExplodeDamagePct (053: the snowman 0.5, the others 1).
+	DeathBlastDamageFactor float64 `json:"deathBlastDamageFactor"`
+	ExplodeDamageOf        string  `json:"explodeDamageOf"`
+	ExplodeCrater          float64 `json:"explodeCrater"`
+	DetonateRange          float64 `json:"detonateRange"`
+	ShotDamageFactor       float64 `json:"shotDamageFactor"`
+	FlyRange               float64 `json:"flyRange"`
+	WalkRange              float64 `json:"walkRange"`
+	HoverHeight            float64 `json:"hoverHeight"`
+	FlySpeed               float64 `json:"flySpeed"`
 	// leaper (boss v3): LeapRange px per leap (0: the whole map), LeapDetonateNextTurn, ShootAfterLeap
 	LeapRange            float64 `json:"leapRange"`
 	LeapDetonateNextTurn bool    `json:"leapDetonateNextTurn"`

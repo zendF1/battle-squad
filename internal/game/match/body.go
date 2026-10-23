@@ -21,19 +21,13 @@ func bodyCentre(p *BattlePlayerState, lift float64) Vector2 {
 	return Vector2{X: p.Position.X, Y: p.Position.Y - lift*bodyScale(p)}
 }
 
-// blastDistance is how far a blast at point is from p: from its feet, as always, for a body
-// of size 1 or less; for a bigger body (a boss) the nearer of its feet and the edge of its
-// body beyond a normal one (the centre distance minus (size − 1) × hitRadius), so a blast on
-// the top of a boss is as close as a blast at a player's body.
+// blastDistance is how far a blast at point is from p's body: from the edge of the circle
+// the shells hit (hitRadius × its size around its centre, see checkSegmentCollisions), 0
+// inside it. Every unit is measured the same way, whatever its size: two bodies touching the
+// blast take the same damage, and a blast on one body reaches the body touching it.
 func blastDistance(p *BattlePlayerState, point Vector2, hitRadius, lift float64) float64 {
-	feet := math.Hypot(p.Position.X-point.X, p.Position.Y-point.Y)
-	scale := bodyScale(p)
-	if scale <= 1 {
-		return feet
-	}
 	c := bodyCentre(p, lift)
-	edge := math.Max(0, math.Hypot(c.X-point.X, c.Y-point.Y)-(scale-1)*hitRadius)
-	return math.Min(feet, edge)
+	return math.Max(0, math.Hypot(c.X-point.X, c.Y-point.Y)-hitRadius*bodyScale(p))
 }
 
 // explosionDamageAt is the damage a target distance px from an explosion takes: baseDamage

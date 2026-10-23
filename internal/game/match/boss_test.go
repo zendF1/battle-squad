@@ -433,7 +433,7 @@ func TestBossBodySize(t *testing.T) {
 	if d := blastDistance(boss, top, r, 20); d > 30 {
 		t.Fatalf("blast on the boss's head %v px away", d)
 	}
-	if d := blastDistance(p, Vector2{X: p.Position.X, Y: p.Position.Y - 30}, r, 20); d != 30 {
+	if d := blastDistance(p, Vector2{X: p.Position.X, Y: p.Position.Y - 20 - r - 30}, r, 20); math.Abs(d-30) > 1e-9 {
 		t.Fatalf("player blast distance %v", d)
 	}
 }

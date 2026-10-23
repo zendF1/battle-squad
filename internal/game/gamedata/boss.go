@@ -237,8 +237,9 @@ func (b BossConfig) SummonJSON() []byte {
 // ExplodeOnDeath when it dies, hits everyone of the other side within ExplodeRadius px (a death
 // blast also the other minions, never the boss) for ExplodeDamagePct % of the max HP of the one
 // hit (ExplodeDamageOf target) or of the minion (self), full at the centre down to half at the
-// edge, no defense, shield first, and carves an ExplodeCrater px crater. Zero values are the
-// defaults (MinionDefaults); Normalized fills them in.
+// edge (× DeathBlastDamageFactor for the death blast), no defense, shield first, and carves an
+// ExplodeCrater px crater. Zero values are the defaults (MinionDefaults); Normalized fills them
+// in.
 type MinionConfig struct {
 	MinionID    string  `json:"minionId"`
 	Name        string  `json:"name"`
@@ -263,6 +264,10 @@ type MinionConfig struct {
 	ExplodeDamagePct float64 `json:"explodeDamagePct,omitempty"` // % of the max HP (0: 50)
 	ExplodeRadius    float64 `json:"explodeRadius,omitempty"`    // px (0: 80)
 	ExplodeCrater    float64 `json:"explodeCrater,omitempty"`    // px (0: 20)
+	// DeathBlastDamageFactor scales the blast of ExplodeOnDeath (cause death_blast) only, never
+	// a detonation (0: 1; migration 053: the snowman 0.5). Stored even when 0, so a migration
+	// that seeds it while it is absent never overwrites an admin's save.
+	DeathBlastDamageFactor float64 `json:"deathBlastDamageFactor"`
 	// Leaper (boss v3): LeapRange px at most per leap (0: the whole map); LeapDetonateNextTurn
 	// (nil: true) detonates on the turn after a leap when still within detonateRange;
 	// ShootAfterLeap also shoots on the turn it leaps.
@@ -299,7 +304,7 @@ const (
 // depends on the behavior: BomberShotDamageFactor or 1).
 var MinionDefaults = MinionConfig{
 	Behavior: MinionShooter, Movement: MinionMoveWalk, DetonateRange: 70, FlyRange: 90, WalkRange: 80, HoverHeight: 60, FlySpeed: 220,
-	ExplodeDamageOf: ExplodeOfTarget, ExplodeDamagePct: 50, ExplodeRadius: 80, ExplodeCrater: 20,
+	ExplodeDamageOf: ExplodeOfTarget, ExplodeDamagePct: 50, ExplodeRadius: 80, ExplodeCrater: 20, DeathBlastDamageFactor: 1,
 }
 
 // BomberShotDamageFactor is a bomber's shot damage factor unless ShotDamageFactor is set (boss
@@ -336,6 +341,7 @@ func (m MinionConfig) Normalized() MinionConfig {
 	num(&m.ExplodeDamagePct, d.ExplodeDamagePct)
 	num(&m.ExplodeRadius, d.ExplodeRadius)
 	num(&m.ExplodeCrater, d.ExplodeCrater)
+	num(&m.DeathBlastDamageFactor, d.DeathBlastDamageFactor)
 	return m
 }
 
@@ -605,6 +611,8 @@ func ValidateBoss(b BossConfig, characters map[string]CharacterConfig, items map
 			return bad("minion %s: shotDamageFactor 0..5, detonateRange 0..500, flyRange / walkRange 0..2400, hoverHeight 0..400, flySpeed 0 or 20..3000", m.MinionID)
 		case !inRange(m.ExplodeDamagePct, 0, 100), !inRange(m.ExplodeRadius, 0, 400), !inRange(m.ExplodeCrater, 0, 200):
 			return bad("minion %s: explodeDamagePct 0..100, explodeRadius 0..400, explodeCrater 0..200", m.MinionID)
+		case !inRange(m.DeathBlastDamageFactor, 0, 2):
+			return bad("minion %s: deathBlastDamageFactor %v outside 0..2 (0 = 1)", m.MinionID, m.DeathBlastDamageFactor)
 		}
 		if characters != nil {
 			if _, ok := characters[m.CharacterID]; !ok {

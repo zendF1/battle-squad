@@ -193,7 +193,7 @@ highest value).
 | `weaponId` | string | id (`characters[].weaponId` points here) |
 | `name` | string | config name (English today; not shown in the UI) |
 | `damage` | int | base damage |
-| `explosionRadius` | int px | damage area of the blast |
+| `explosionRadius` | int px | damage area of the blast, measured to the edge of each body (the `playerHitRadius × bodySize` circle a shell hits, for players, minions and bosses alike): two bodies touching the blast take the same damage; full at 0, nothing at this distance |
 | `terrainDamage` | int | crater size points |
 | `craterRadius` | number px | the crater a normal shot carves on normal ground = `terrainDamage` × `terrain.craterPxPerTerrainDamage`, or `explosionRadius` when `terrainDamage` ≤ 0. Exact float as the server computes it (e.g. 14.399999999999999); round it for display |
 | `projectileWeight` | number | wind divisor |
@@ -450,6 +450,7 @@ Everything the Boss tab and the arena need to draw and describe a boss:
 | `explodeOnDeath` | bool | it blasts when it dies (`damage` cause `death_blast`) |
 | `explodeDamageOf` | `target` / `self` | its blast deals `explodeDamagePct` % of the max HP of each one hit (`target`) or of the minion (`self`) |
 | `explodeDamagePct`, `explodeRadius`, `explodeCrater` | %, px, px | the blast: full at the body edge, half at `explodeRadius`, no defense, shield first; the crater it carves |
+| `deathBlastDamageFactor` | number | (053) × `explodeDamagePct` for its death blast (`explodeOnDeath`, cause `death_blast`) only; its detonation (`self_destruct`) deals the full `explodeDamagePct`. Always filled in: 1 (default), the snowman 0.5 |
 
 ```json
 {
