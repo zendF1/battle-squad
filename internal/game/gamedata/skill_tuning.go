@@ -19,6 +19,7 @@ const (
 	EffectBombChain   = "bomb_chain"   // Tanko, heavy_bomb
 	EffectLaser       = "laser"        // Spark, shock_field
 	EffectBloom       = "bloom"        // Flora, healing_bloom
+	EffectNova        = "nova"         // Tide, snow_nova (054)
 )
 
 // RainTuning: a flare fired like a normal shot; Delay s after it lands, BaseCount +
@@ -94,6 +95,22 @@ type BloomTuning struct {
 	Linger    float64 `json:"linger"`
 }
 
+// NovaTuning (054): no aim, no projectile, no crater. CastTime s after the shot a snowflake
+// blast goes off at Tide's body centre; its ring travels out at WaveSpeed px/s to Radius px.
+// Every enemy unit whose body (blastDistance: to its edge) is within Radius takes (CentreBase +
+// CentrePerRank × rank) × base at the centre, falling linearly to EdgeFactor × base at the
+// radius, when the ring reaches it (CastTime + distance / WaveSpeed), and is frozen for
+// FreezeTurns.
+type NovaTuning struct {
+	Radius        float64 `json:"radius"`
+	CentreBase    float64 `json:"centreBase"`
+	CentrePerRank float64 `json:"centrePerRank"`
+	EdgeFactor    float64 `json:"edgeFactor"`
+	FreezeTurns   int     `json:"freezeTurns"`
+	WaveSpeed     float64 `json:"waveSpeed"`
+	CastTime      float64 `json:"castTime"`
+}
+
 // SeedTime is when a bloom seed lands (s since the shot).
 func (b BloomTuning) SeedTime() float64 { return b.RiseTime + b.CrossTime + b.FallTime }
 
@@ -112,6 +129,10 @@ func DefaultChainTuning() ChainTuning {
 func DefaultLaserTuning() LaserTuning {
 	return LaserTuning{HalfWidth: 10, FirstBase: 1.5, FirstPerRank: 0.1, Decay: 0.8, ChargeTime: 0.3, BeamTime: 0.6,
 		SweepSpeed: 12000, StunTurns: 1}
+}
+
+func DefaultNovaTuning() NovaTuning {
+	return NovaTuning{Radius: 500, CentreBase: 1.3, CentrePerRank: 0.1, EdgeFactor: 0.4, FreezeTurns: 1, WaveSpeed: 1400, CastTime: 0.35}
 }
 
 func DefaultBloomTuning() BloomTuning {
@@ -181,6 +202,15 @@ var SkillParamSpecs = map[string][]ParamSpec{
 		{"fallSpeed", "Tốc độ rơi tối đa (px/s)", "", 0, 20000},
 		{"linger", "Hoa nở thêm (giây)", "", 0, 10},
 	},
+	EffectNova: {
+		{"radius", "Bán kính (px)", "Địch có thân trong chừng này px tính từ tâm Tide bị trúng", 1, 3000},
+		{"centreBase", "Sát thương ở tâm cấp 0 (× gốc)", "", 0, 100},
+		{"centrePerRank", "Ở tâm thêm mỗi cấp súng (× gốc)", "", 0, 10},
+		{"edgeFactor", "Sát thương ở mép (× gốc)", "Giảm tuyến tính từ tâm tới mép", 0, 100},
+		{"freezeTurns", "Số lượt đóng băng", "", 0, 20},
+		{"waveSpeed", "Tốc độ vòng băng (px/s)", "Mỗi địch trúng lúc vòng băng tới nó", 1, 100000},
+		{"castTime", "Nổ sau (giây)", "Bông tuyết nổ chừng này giây sau khi dùng kỹ năng", 0, 5},
+	},
 }
 
 // DefaultSkillParams is the default tuning of an effect type as a params object (nil for an
@@ -195,6 +225,8 @@ func DefaultSkillParams(effectType string) map[string]float64 {
 		return TuningParams(DefaultLaserTuning())
 	case EffectBloom:
 		return TuningParams(DefaultBloomTuning())
+	case EffectNova:
+		return TuningParams(DefaultNovaTuning())
 	}
 	return nil
 }
@@ -230,6 +262,12 @@ func LaserTuningOf(s SkillConfig) LaserTuning {
 func BloomTuningOf(s SkillConfig) BloomTuning {
 	t := DefaultBloomTuning()
 	overlay(EffectBloom, s.Params, &t)
+	return t
+}
+
+func NovaTuningOf(s SkillConfig) NovaTuning {
+	t := DefaultNovaTuning()
+	overlay(EffectNova, s.Params, &t)
 	return t
 }
 
@@ -286,6 +324,8 @@ func tuningValue(effectType string) reflect.Value {
 		return reflect.ValueOf(&LaserTuning{}).Elem()
 	case EffectBloom:
 		return reflect.ValueOf(&BloomTuning{}).Elem()
+	case EffectNova:
+		return reflect.ValueOf(&NovaTuning{}).Elem()
 	}
 	return reflect.Value{}
 }

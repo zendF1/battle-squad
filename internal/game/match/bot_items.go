@@ -187,10 +187,11 @@ func (b *BotBrain) teleportShot(m *Match, bot *BattlePlayerState, weapon gamedat
 	}
 	byBucket := map[int]landing{}
 	maxPower := m.gd.Rules.Aim.PowerMax
+	tpWeapon := teleportWeapon(weapon)
 	origin := shotOrigin(m.Terrain, bot)
 	for angle := botMinAngle; angle <= botMaxAngle; angle += botCoarseAngleStep {
 		for power := botMinPower; power <= maxPower; power += botCoarsePowerStep {
-			r := SimulateProjectile(bot.PlayerID, bot.TeamID, origin, angle, power, weapon, m.State.Wind, m.Terrain, m.State.Players, 0)
+			r := SimulateProjectile(bot.PlayerID, bot.TeamID, origin, angle, power, tpWeapon, m.State.Wind, m.Terrain, m.State.Players, 0)
 			at, ok := teleportLanding(m.Terrain, r)
 			if !ok || math.Abs(at.X-bot.Position.X) < botTeleportMinShift || !b.safeLanding(m, bot, at) {
 				continue

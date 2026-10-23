@@ -75,7 +75,7 @@ func resolveMissileRain(m *Match, s *skillShot) {
 	drop := weapon
 	drop.WindInfluence = 0
 	launch := func(k int) float64 { return start + tu.Interval*float64(k) }
-	limit := newSkillCap(m.capOfBase(tu.Cap * base))
+	limit := newSkillCap(m.capOfBase(player, tu.Cap*base))
 	dropPower := rainDropPower(tu, m.gd.Physics)
 	burned := map[string]bool{}
 	left := make([]int, n)

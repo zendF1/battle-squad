@@ -137,7 +137,11 @@ func TestBossSplashMeasuresToTheBody(t *testing.T) {
 	c := bodyCentre(boss, lift)
 	at := Vector2{X: c.X - r*bodyScale(boss) - 20, Y: c.Y}
 	got := splash(t, m, p0, at, "", 40, 480)
-	want := explosionDamageAt(20, 480, 40, boss.Defense, m.gd.Physics.DefenseKOrDefault())
+	ef, effect := m.elementFactor(p0, boss) // rookie (fire) beats the robot (metal): + bossStrongPct
+	if effect != ElementStrong || ef != 1.2 {
+		t.Fatalf("rookie on the robot: element %v %q", ef, effect)
+	}
+	want := explosionDamageAt(20, 480*ef, 40, boss.Defense, m.gd.Physics.DefenseKOrDefault())
 	if math.Abs(float64(got[boss.PlayerID]-want)) > 1 {
 		t.Fatalf("blast 20 px from the boss's body edge: %d, want %d", got[boss.PlayerID], want)
 	}
@@ -158,8 +162,9 @@ func TestSnowmanDeathBlastHalfOfDetonation(t *testing.T) {
 	p0At, s1At := p0.Position, s1.Position
 	p0.Shield, p0.HP, p0.MaxHP = 0, 5000, 5000
 	d := blastDistance(p0, s1.Position, m.gd.Physics.PlayerHitRadius, lift)
-	full := int(math.Round(5000 * 15.0 / 100 * (1 - 0.5*d/140)))
-	half := int(math.Round(5000 * 15.0 * 0.5 / 100 * (1 - 0.5*d/140)))
+	ef, _ := m.elementFactor(s1, p0) // the witch's snowman (water) beats rookie (fire): + bossTakenPct
+	full := int(math.Round(5000 * 15.0 / 100 * (1 - 0.5*d/140) * ef))
+	half := int(math.Round(5000 * 15.0 * 0.5 / 100 * (1 - 0.5*d/140) * ef))
 
 	// shot dead: the death blast
 	s1.HP, s1.MaxHP = 10, 900

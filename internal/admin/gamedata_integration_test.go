@@ -205,7 +205,7 @@ func checkDefaults(t *testing.T, db *database.PostgresDB) {
 		n++
 	}
 	prows.Close()
-	if n != 4 {
+	if n != 5 { // 054: Tide's snow_nova
 		t.Fatalf("%d skills", n)
 	}
 	s, err := gamedata.LoadFromDB(ctx, db)
@@ -218,7 +218,7 @@ func checkDefaults(t *testing.T, db *database.PostgresDB) {
 			t.Fatalf("%s: %+v", d.EffectID, s.StatusRule(d.EffectID))
 		}
 	}
-	if !reflect.DeepEqual(s.RankBands(), ranked.DefaultBands) || len(s.GunKinds) != 5 || len(s.Slots) != 6 || len(s.TypeWords) != 11 {
+	if !reflect.DeepEqual(s.RankBands(), ranked.DefaultBands) || len(s.GunKinds) != 6 || len(s.Slots) != 6 || len(s.TypeWords) != 12 {
 		t.Fatalf("bands %+v, %d gun kinds, %d slots, %d type words", s.RankBands(), len(s.GunKinds), len(s.Slots), len(s.TypeWords))
 	}
 }
@@ -302,7 +302,7 @@ func TestGameDataPagesRender(t *testing.T) {
 	if body := get(h, "/texts/rank-tiers").Body.String(); !strings.Contains(body, "Bạch kim") || !strings.Contains(body, `value="1800"`) {
 		t.Fatal("rank tiers page")
 	}
-	if body := get(h, "/skills/tuning?id=heavy_bomb").Body.String(); !strings.Contains(body, "Bắn 6 quả bom") {
+	if body := get(h, "/skills/tuning?id=heavy_bomb").Body.String(); !strings.Contains(body, "Bắn 6 tảng đá bọc đất") {
 		t.Fatalf("rank 4 description missing")
 	}
 }
@@ -452,7 +452,7 @@ func TestAdminSavesBumpTheVersion(t *testing.T) {
 	}
 	if snap.Rules.Combat.CritMultiplier != 1.75 || snap.Physics.TurnTimeSeconds != 25 || gamedata.RainTuningOf(snap.Data.Skills["triple_shot"]).BaseCount != 14 ||
 		snap.Data.Skills["triple_shot"].DescriptionTemplate != "{count} tên lửa, {damagePct}%" || snap.RankBands()[1].MinRating != 950 ||
-		snap.Data.Items["medkit"].Value != 500 || snap.Data.Items["medkit"].DisplayName != "Bộ cứu thương" || len(snap.TypeWords) != 12 {
+		snap.Data.Items["medkit"].Value != 500 || snap.Data.Items["medkit"].DisplayName != "Bộ cứu thương" || len(snap.TypeWords) != 13 {
 		t.Fatalf("saved game data %+v", snap.Rules.Combat)
 	}
 

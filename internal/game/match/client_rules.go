@@ -90,6 +90,15 @@ func SkillRulesOf(gd *gamedata.Snapshot, skill gamedata.SkillConfig) SkillRules 
 			Ranks: ranks(func(r int) map[string]float64 {
 				return map[string]float64{"firstPct": pct(laserFirst(t, r)), "decayPct": pct(1 - t.Decay)}
 			})}
+	case effectNova:
+		t := gamedata.NovaTuningOf(skill)
+		return SkillRules{AimKind: AimNone, Params: gamedata.TuningParams(t),
+			Ranks: ranks(func(r int) map[string]float64 {
+				return map[string]float64{
+					"radius": t.Radius, "centrePct": pct(novaCentre(t, r)), "centrePerRankPct": pct(t.CentrePerRank),
+					"edgePct": pct(t.EdgeFactor), "freezeTurns": float64(t.FreezeTurns),
+				}
+			})}
 	case effectBloom:
 		t := gamedata.BloomTuningOf(skill)
 		params := gamedata.TuningParams(t)

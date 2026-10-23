@@ -48,7 +48,12 @@ func TestLaserHitsThroughTerrainInOrder(t *testing.T) {
 	if len(d1) != 1 || len(d2) != 1 || d1[0].Cause != "laser" || d2[0].T <= d1[0].T {
 		t.Fatalf("laser damage e1 %+v e2 %+v", d1, d2)
 	}
-	base := 620.0 * laserFirst(defLaser, 4)
+	// the elements: the enemies' (rookie: fire) beats spark's (metal), × (1 − pvpWeakPct)
+	ef, effect := m.elementFactor(m.State.Players["p1"], m.State.Players["e1"])
+	if effect != ElementWeak || d1[0].ElementEffect != ElementWeak {
+		t.Fatalf("element %v %q, event %q", ef, effect, d1[0].ElementEffect)
+	}
+	base := 620.0 * laserFirst(defLaser, 4) * ef
 	if want := int(math.Round(ReduceByDefense(base, 50))); d1[0].Amount != want {
 		t.Fatalf("first hit %d, want %d", d1[0].Amount, want)
 	}
@@ -178,11 +183,14 @@ func TestLaserOnGrassland(t *testing.T) {
 		t.Fatalf("hits e1 %+v e2 %+v", d1, d2)
 	}
 	weapon, _ := botWeapon(gamedata.Current(), spark)
+	// the elements: rookie (fire) beats spark (metal), × (1 − pvpWeakPct); tanko (earth) neutral
+	ef1, _ := m.elementFactor(spark, m.State.Players["e1"])
+	ef2, _ := m.elementFactor(spark, m.State.Players["e2"])
 	base := skillBaseDamage(spark, gamedata.Current().Data.Skills["shock_field"], weapon, gamedata.Current().PowerShotFactor()) * laserFirst(defLaser, 4)
-	if want := int(math.Round(ReduceByDefense(base, m.State.Players["e1"].Defense))); d1[0].Amount != want && !d1[0].Critical {
+	if want := int(math.Round(ReduceByDefense(base*ef1, m.State.Players["e1"].Defense))); d1[0].Amount != want && !d1[0].Critical {
 		t.Fatalf("first %d, want %d", d1[0].Amount, want)
 	}
-	if want := int(math.Round(ReduceByDefense(base*laserDecay, m.State.Players["e2"].Defense))); d2[0].Amount != want && !d2[0].Critical {
+	if want := int(math.Round(ReduceByDefense(base*laserDecay*ef2, m.State.Players["e2"].Defense))); d2[0].Amount != want && !d2[0].Critical {
 		t.Fatalf("second %d, want %d", d2[0].Amount, want)
 	}
 	t.Logf("grassland laser at %.1f°: e1 %d, e2 %d, %.2f s", angle, d1[0].Amount, d2[0].Amount, s.Duration)

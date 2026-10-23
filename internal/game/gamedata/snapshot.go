@@ -32,7 +32,10 @@ type Snapshot struct {
 	GunKinds  []GunKindConfig       // config_gun_kinds in order
 	Slots     []EquipmentSlotConfig // config_equipment_slots in order
 	TypeWords []TypeWordConfig      // config_item_type_words in order
-	Settings  map[string]string     // every game_settings row (key → value)
+	// Elements are the config_elements rows in display order (054; DefaultElements when the
+	// table is empty or from YAML).
+	Elements []ElementConfig
+	Settings map[string]string // every game_settings row (key → value)
 
 	// Version is GET /gamedata's version of this snapshot (set before it is published), "" for
 	// a snapshot no payload was built for (tests).
@@ -208,6 +211,7 @@ func NewSnapshot(data *GameData) *Snapshot {
 	}
 	s.Status = withDefaultStatus(nil)
 	s.RankTiers = rankTiersWithDefaults(nil)
+	s.Elements = DefaultElements()
 	s.index()
 	return s
 }

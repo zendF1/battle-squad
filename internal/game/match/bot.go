@@ -153,6 +153,9 @@ func (b *BotBrain) rollHit() bool {
 	return float64(b.roll()) < b.tier.HitChance*10
 }
 
+// hitChance is the share (0..1) of the bot's shots that hit (its tier's HitChance %).
+func (b *BotBrain) hitChance() float64 { return math.Max(0, math.Min(1, b.tier.HitChance/100)) }
+
 // botTurnState records what the bot already did this turn.
 type botTurnState struct {
 	usedItems []string // instant items used (medkit, wind_stopper)
@@ -448,7 +451,8 @@ func (b *BotBrain) scoreShot(m *Match, bot *BattlePlayerState, feet, origin Vect
 		if p.PlayerID != r.HitPlayerID {
 			distance = blastDistance(p, ep, m.gd.Physics.PlayerHitRadius, shotOriginLift(m.Terrain))
 		}
-		s.damage += float64(m.shieldedDamage(p, explosionDamageAt(distance, float64(weapon.Damage+bot.DamageBonus), radius, p.Defense, gamedata.DefenseK())))
+		ef, _ := m.elementFactor(bot, p)
+		s.damage += float64(m.shieldedDamage(p, explosionDamageAt(distance, float64(weapon.Damage+bot.DamageBonus)*ef, radius, p.Defense, gamedata.DefenseK())))
 		s.miss = math.Min(s.miss, dist)
 	}
 	return s

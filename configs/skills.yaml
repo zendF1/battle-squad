@@ -17,14 +17,14 @@
 
 - skillId: heavy_bomb
   characterId: tanko
-  name: Bom liên hoàn
+  name: Địa chấn liên hoàn
   cooldownTurn: 3
   effectType: bomb_chain
   projectileCount: 2
   statusEffectId: root
   damageMultiplier: 1.0
-  description: "Bắn liên tiếp bom lớn cùng một đường bay (2 quả, +1 mỗi cấp súng), đào sâu một hố; mỗi quả 60% sát thương (34% ở cấp súng 4), mỗi địch nhận tối đa 120% (+15% mỗi cấp); địch trúng bị cầm chân lượt sau."
-  descriptionTemplate: "Bắn {count} quả bom lớn liên tiếp cùng đường bay (+{countPerRank} mỗi cấp súng), đào sâu một hố; mỗi quả {eachPct}% sát thương, mỗi địch nhận tối đa {capPct}%; địch trúng bị cầm chân lượt sau."
+  description: "Bắn liên tiếp những tảng đá bọc đất cùng một đường bay (2 tảng, +1 mỗi cấp súng): mặt đất nứt toác, gai đá trồi quanh miệng hố, hố mỗi lúc một sâu; mỗi tảng 60% sát thương (34% ở cấp súng 4), mỗi địch nhận tối đa 120% (+15% mỗi cấp); địch trúng bị đất đá vùi chân, cầm chân lượt sau."
+  descriptionTemplate: "Bắn {count} tảng đá bọc đất liên tiếp cùng đường bay (+{countPerRank} mỗi cấp súng): mặt đất nứt toác, gai đá trồi quanh miệng hố, hố mỗi lúc một sâu; mỗi tảng {eachPct}% sát thương, mỗi địch nhận tối đa {capPct}%; địch trúng bị đất đá vùi chân, cầm chân lượt sau."
   # the effect type's tuning (config_skills.params; gamedata.SkillParamSpecs)
   params: {baseCount: 2, countPerRank: 1, launchGap: 0.1, totalBase: 1.8, totalPerRank: 0.15, capBase: 1.2, capPerRank: 0.15, blast: 1.3, fallSpeed: 3, hitGap: 0.08, rootTurns: 1}
 
@@ -53,3 +53,16 @@
   descriptionTemplate: "Hồi máu cả đội: Flora {selfPct}%, đồng đội {allyPct}% máu tối đa (+{perRankPct}% mỗi cấp súng); máu dư thành khiên (tối đa {shieldCapPct}% máu); giải mọi hiệu ứng xấu."
   # the effect type's tuning (config_skills.params; gamedata.SkillParamSpecs)
   params: {selfBase: 40, allyBase: 30, perRank: 5, riseTime: 0.55, crossTime: 0.2, fallTime: 0.65, skyY: -140, fallSpeed: 400, linger: 0.9}
+
+- skillId: snow_nova
+  characterId: tide
+  name: Nổ bông tuyết
+  cooldownTurn: 4
+  effectType: nova
+  projectileCount: 0
+  statusEffectId: freeze
+  damageMultiplier: 1.0
+  description: "Bông tuyết nổ ngay chỗ Tide đứng, bán kính 500px: địch ở tâm nhận 130% sát thương (+10% mỗi cấp súng), giảm dần còn 40% ở mép; mọi địch trúng, kể cả boss đang bay, bị đóng băng mất lượt sau. Đồng đội không bị ảnh hưởng."
+  descriptionTemplate: "Bông tuyết nổ ngay chỗ Tide đứng, bán kính {radius}px: địch ở tâm nhận {centrePct}% sát thương (+{centrePerRankPct}% mỗi cấp súng), giảm dần còn {edgePct}% ở mép; mọi địch trúng, kể cả boss đang bay, bị đóng băng {freezeTurns} lượt. Đồng đội không bị ảnh hưởng."
+  # the effect type's tuning (config_skills.params; gamedata.SkillParamSpecs)
+  params: {radius: 500, centreBase: 1.3, centrePerRank: 0.1, edgeFactor: 0.4, freezeTurns: 1, waveSpeed: 1400, castTime: 0.35}

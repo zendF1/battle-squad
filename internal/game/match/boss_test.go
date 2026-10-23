@@ -196,7 +196,8 @@ func TestBossShield(t *testing.T) {
 		return before - boss.HP
 	}
 	shielded := hit()
-	full := int(math.Round(reduceByDefense(600, boss.Defense, gamedata.DefenseK())))
+	ef, _ := m.elementFactor(shooter, boss) // rookie (fire) beats the robot (metal)
+	full := int(math.Round(reduceByDefense(600*ef, boss.Defense, gamedata.DefenseK())))
 	if shielded != int(math.Round(float64(full)*0.1)) || shooter.BossDamage != shielded {
 		t.Fatalf("shielded hit %d (full %d), boss damage %d", shielded, full, shooter.BossDamage)
 	}

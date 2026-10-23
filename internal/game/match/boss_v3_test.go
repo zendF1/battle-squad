@@ -274,7 +274,8 @@ func TestBossStatusChance(t *testing.T) {
 	for roll, stunned := range map[float64]bool{0.49: true, 0.5: false} {
 		m, s := beamOnP0(func() float64 { return roll }, 1)
 		p0 := m.State.Players["p0"]
-		want := int(math.Round(reduceByDefense(1.04*780, p0.Defense, k)))
+		ef, _ := m.elementFactor(m.bossPlayer(), p0) // the witch (water) beats rookie (fire)
+		want := int(math.Round(reduceByDefense(1.04*780*ef, p0.Defense, k)))
 		if HasEffect(p0, "stun") != stunned || (len(shotEventsOf(s, "status")) > 0) != stunned || p0.MaxHP-p0.HP != want {
 			t.Fatalf("roll %v: stunned %v, status events %d, lost %d want %d", roll, HasEffect(p0, "stun"),
 				len(shotEventsOf(s, "status")), p0.MaxHP-p0.HP, want)
@@ -470,7 +471,8 @@ func TestCrabShockwaveDamagesParty(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		p := m.State.Players[fmt.Sprintf("p%d", i)]
 		f := math.Max(skill.MinFactor, 1-math.Abs(p.Position.X-x0)/math.Max(x0, w-x0))
-		want := int(math.Round(reduceByDefense(skill.Damage*float64(m.boss.cfg.Damage)*f, p.Defense, k)))
+		ef, _ := m.elementFactor(crab, p) // the crab (fire) beats spark (metal)
+		want := int(math.Round(reduceByDefense(skill.Damage*float64(m.boss.cfg.Damage)*f*ef, p.Defense, k)))
 		if want <= 0 || hits[p.PlayerID] != want || p.MaxHP-p.HP != want+fell[p.PlayerID] {
 			t.Errorf("%s at %v: hit %d, lost %d, want %d (+ fall %d)", p.PlayerID, p.Position, hits[p.PlayerID], p.MaxHP-p.HP, want, fell[p.PlayerID])
 		}

@@ -153,14 +153,14 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 	// Seed characters
 	charQuery := `INSERT INTO config_characters
 		(character_id, name, role, hp, damage, mobility, defense, skill_power, terrain_damage, difficulty, weapon_id, skill_id,
-		 role_name, playstyle, gun_kind, sort_order)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		 role_name, playstyle, gun_kind, sort_order, element)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 		ON CONFLICT (character_id) DO NOTHING`
 	for _, c := range data.Characters {
 		if _, err := db.Pool.Exec(ctx, charQuery,
 			c.CharacterID, c.Name, c.Role, c.HP, c.Damage, c.Mobility,
 			c.Defense, c.SkillPower, c.TerrainDamage, c.Difficulty, c.WeaponID, c.SkillID,
-			c.RoleName, c.Playstyle, c.GunKind, c.SortOrder,
+			c.RoleName, c.Playstyle, c.GunKind, c.SortOrder, c.Element,
 		); err != nil {
 			return fmt.Errorf("insert character %s: %w", c.CharacterID, err)
 		}
@@ -169,13 +169,13 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 
 	// Seed weapons
 	weaponQuery := `INSERT INTO config_weapons
-		(weapon_id, name, damage, explosion_radius, terrain_damage, projectile_weight, wind_influence, multi_hit)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		(weapon_id, name, damage, explosion_radius, terrain_damage, projectile_weight, wind_influence, multi_hit, bounces)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (weapon_id) DO NOTHING`
 	for _, w := range data.Weapons {
 		if _, err := db.Pool.Exec(ctx, weaponQuery,
 			w.WeaponID, w.Name, w.Damage, w.ExplosionRadius, w.TerrainDamage,
-			w.ProjectileWeight, w.WindInfluence, w.MultiHit,
+			w.ProjectileWeight, w.WindInfluence, w.MultiHit, w.Bounces,
 		); err != nil {
 			return fmt.Errorf("insert weapon %s: %w", w.WeaponID, err)
 		}
@@ -512,10 +512,10 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 			return fmt.Errorf("insert normal equipment item %s: %w", it.itemID, err)
 		}
 	}
-	// Per-character guns (migrations 019 + 020): each generic weapon tier's
+	// Per-character guns (migrations 019 + 020, Tide's 055): each generic weapon tier's
 	// stats and price, named "<tier word> <gun>" (Iron Bazooka ... Dragon Bazooka).
 	characterWeapons := []struct{ characterID, gun string }{
-		{"rookie", "Bazooka"}, {"tanko", "Cannon"}, {"spark", "Shock Rifle"}, {"flora", "Seed Launcher"},
+		{"rookie", "Bazooka"}, {"tanko", "Cannon"}, {"spark", "Shock Rifle"}, {"flora", "Seed Launcher"}, {"tide", "Water Gun"},
 	}
 	for _, c := range characterWeapons {
 		for _, w := range normalWeapons {

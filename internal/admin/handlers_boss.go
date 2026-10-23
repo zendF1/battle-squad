@@ -41,11 +41,16 @@ func (s *Server) handleBossEdit(w http.ResponseWriter, r *http.Request) {
 		}
 		row = found
 	}
-	s.renderBossEdit(w, row, id == "", r.URL.Query().Get("error"))
+	s.renderBossEdit(w, r, row, id == "", r.URL.Query().Get("error"))
 }
 
-func (s *Server) renderBossEdit(w http.ResponseWriter, row BossRow, isNew bool, errMsg string) {
+func (s *Server) renderBossEdit(w http.ResponseWriter, r *http.Request, row BossRow, isNew bool, errMsg string) {
+	elements, err := s.repo.Elements(r.Context())
+	if err != nil {
+		observability.Log.Error().Err(err).Msg("failed to read elements")
+	}
 	s.render(w, "boss_edit", map[string]interface{}{
+		"Elements":   elements,
 		"ActivePage": "bosses",
 		"B":          row,
 		"IsNew":      isNew,
@@ -71,7 +76,7 @@ func (s *Server) handleBossSave(w http.ResponseWriter, r *http.Request) {
 		err = s.repo.SaveBoss(r.Context(), row.Config)
 	}
 	if err != nil {
-		s.renderBossEdit(w, row, isNew, "Lưu thất bại: "+err.Error())
+		s.renderBossEdit(w, r, row, isNew, "Lưu thất bại: "+err.Error())
 		return
 	}
 	redirectMsg(w, r, "/bosses", "flash", "Đã lưu boss "+row.Config.BossID)
@@ -99,6 +104,7 @@ func parseBossForm(r *http.Request) (BossRow, error) {
 	c.OutOfMap = r.FormValue("out_of_map")
 	c.Enabled = r.FormValue("enabled") == "on" || r.FormValue("enabled") == "true"
 	c.Flying = r.FormValue("flying") == "on" || r.FormValue("flying") == "true"
+	c.Element = strings.TrimSpace(r.FormValue("element"))
 	var errs []string
 	ints := map[string]*int{"recommended_level": &c.RecommendedLevel, "sort_order": &c.SortOrder, "hp": &c.HP, "defense": &c.Defense,
 		"damage": &c.Damage, "turn_limit": &c.TurnLimit, "daily_bonus_runs": &c.DailyBonusRuns}

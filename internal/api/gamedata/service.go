@@ -130,6 +130,7 @@ func Build(snap *gd.Snapshot) *GameData {
 			TimeStep: p.TimeStep, PathRecordStep: p.PathRecordStep, MaxFlightSec: p.MaxFlightSeconds,
 			PlayerHitRadius: p.PlayerHitRadius, CollisionStepPx: r.Physics.CollisionStepPx, ShotOriginLift: float64(r.Physics.ShotOriginLift),
 			OutOfBounds: OutOfBounds{Left: r.Physics.OutOfBoundsLeft, Right: r.Physics.OutOfBoundsRight, Below: r.Physics.OutOfBoundsBelow},
+			Bounce:      Bounce{Restitution: r.Physics.BounceRestitution, Friction: r.Physics.BounceFriction},
 		},
 		Aim: Aim{PowerMin: 0, PowerMax: r.Aim.PowerMax, AngleMin: r.Aim.AngleMin, AngleMax: r.Aim.AngleMax,
 			NoAimAngle: r.Aim.NoAimAngle, NoAimPower: r.Aim.NoAimPower},
@@ -189,6 +190,13 @@ func Build(snap *gd.Snapshot) *GameData {
 		out.GunKinds = append(out.GunKinds, GunKind{ID: g.ID, Name: g.Name})
 	}
 	out.Bosses = bosses(snap)
+	out.Elements = []Element{}
+	for _, e := range snap.Elements {
+		out.Elements = append(out.Elements, Element{ElementID: e.ElementID, Name: e.Name, Beats: e.Beats, SortOrder: e.SortOrder})
+	}
+	er := r.Elements
+	out.ElementRules = ElementRules{PvpStrongPct: er.PvpStrongPct, PvpWeakPct: er.PvpWeakPct, BossStrongPct: er.BossStrongPct,
+		BossTakenPct: er.BossTakenPct}
 	return out
 }
 
@@ -223,7 +231,7 @@ func bosses(snap *gd.Snapshot) []Boss {
 		e := Boss{BossID: b.BossID, Name: b.Name, Description: b.Description, RecommendedLevel: b.RecommendedLevel, ModeID: modeID,
 			Queue: b.Queue(), MapID: b.MapID, HP: b.HP, BodySize: b.BodySize, TurnLimit: b.TurnLimit,
 			ShieldedDamageFactor: b.ShieldedDamageFactor, Minions: []BossMinion{}, Skills: []BossSkill{}, DailyBonusRuns: b.DailyBonusRuns,
-			Flying: b.Flying}
+			Flying: b.Flying, Element: b.Element}
 		if b.Hover != nil {
 			h := b.Hover.Normalized()
 			e.Hover = &BossHover{MinX: h.MinX, MaxX: h.MaxX, MinY: h.MinY, MaxY: h.MaxY, MinMove: h.MinMove, FlySpeed: h.FlySpeed}
@@ -261,7 +269,7 @@ func weapons(snap *gd.Snapshot) []Weapon {
 	for _, w := range snap.Data.Weapons {
 		out = append(out, Weapon{WeaponID: w.WeaponID, Name: w.Name, Damage: w.Damage, ExplosionRadius: w.ExplosionRadius,
 			TerrainDamage: w.TerrainDamage, CraterRadius: match.WeaponCraterRadius(snap, w.ExplosionRadius, w.TerrainDamage),
-			ProjectileWeight: w.ProjectileWeight, WindInfluence: w.WindInfluence, MultiHit: w.MultiHit})
+			ProjectileWeight: w.ProjectileWeight, WindInfluence: w.WindInfluence, MultiHit: w.MultiHit, Bounces: w.Bounces})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].WeaponID < out[j].WeaponID })
 	return out
@@ -275,7 +283,7 @@ func characters(snap *gd.Snapshot) []Character {
 		order[c.CharacterID] = c.SortOrder
 		out = append(out, Character{CharacterID: c.CharacterID, Name: c.Name, Role: c.Role, RoleName: c.RoleName, Playstyle: c.Playstyle,
 			WeaponID: c.WeaponID, SkillID: c.SkillID, GunKind: c.GunKind, HP: c.HP, Damage: c.Damage, Mobility: c.Mobility,
-			Defense: c.Defense, SkillPower: c.SkillPower, TerrainDamage: c.TerrainDamage, Difficulty: c.Difficulty})
+			Defense: c.Defense, SkillPower: c.SkillPower, TerrainDamage: c.TerrainDamage, Difficulty: c.Difficulty, Element: c.Element})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if a, b := order[out[i].CharacterID], order[out[j].CharacterID]; a != b {

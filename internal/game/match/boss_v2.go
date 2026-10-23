@@ -433,7 +433,8 @@ func (m *Match) minionBlast(src *BattlePlayerState, mc gamedata.MinionConfig, cr
 		if cause == CauseDeathBlast {
 			pct *= mc.DeathBlastDamageFactor // a death blast is weaker than a detonation (the snowman's 0.5)
 		}
-		damage := int(math.Round(float64(base) * pct / 100 * (1 - 0.5*d/mc.ExplodeRadius)))
+		ef, effect := m.elementFactor(src, p)
+		damage := int(math.Round(float64(base) * pct / 100 * (1 - 0.5*d/mc.ExplodeRadius) * ef))
 		if damage <= 0 {
 			continue
 		}
@@ -444,7 +445,9 @@ func (m *Match) minionBlast(src *BattlePlayerState, mc gamedata.MinionConfig, cr
 		if p.Role == RoleMinion && credit != nil {
 			m.noteBossSideDamage(credit, p, damage)
 		}
-		tl.add(damageEvent(t, p, damage, shieldBefore, cause))
+		e := damageEvent(t, p, damage, shieldBefore, cause)
+		e.ElementEffect = effect
+		tl.add(e)
 		if killed {
 			src.KillCount++
 			tl.add(ShotEvent{T: t, Type: "die", PlayerID: p.PlayerID, Cause: cause})

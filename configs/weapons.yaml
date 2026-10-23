@@ -33,3 +33,13 @@
   projectileWeight: 0.9
   windInfluence: 1.0
   multiHit: 1
+
+- weaponId: water_orb
+  name: Water Orb
+  damage: 500
+  explosionRadius: 38
+  terrainDamage: 16
+  projectileWeight: 0.9
+  windInfluence: 1.0
+  multiHit: 1
+  bounces: 1

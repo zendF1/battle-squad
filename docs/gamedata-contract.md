@@ -84,7 +84,8 @@ GET /gamedata?version=13f9f9a13a6a316c (S2: exactly the game data of that versio
 `data` has these top-level keys, in this order: `version`, `physics`, `aim`, `aimAid`, `combat`,
 `terrain`, `movement`, `timings`, `skillEnergy`, `skillRanks`, `weapons`, `skills`,
 `characters`, `defaultCharacterId`, `items`, `itemRules`, `statusEffects`, `rank`, `levels`,
-`equipment`, `economy`, `matchmaking`, `modes`, `mapThemes`, `gunKinds` (S2), `bosses` (boss mode).
+`equipment`, `economy`, `matchmaking`, `modes`, `mapThemes`, `gunKinds` (S2), `bosses` (boss mode),
+`elements`, `elementRules` (054).
 
 The **Source** column says where the admin edits the value: a `game_settings` row (`rules.<group>`
 rows are JSON objects, the field is the JSON key) or a config table column. A value that is
@@ -105,6 +106,7 @@ default in parentheses.
 | `collisionStepPx` | number | px | each step is checked for hits every this many px | `rules.physics` `collisionStepPx` (4) |
 | `shotOriginLift` | number | px | a shot starts this far above the feet (the body centre; also the hit centre) | `rules.physics` `shotOriginLift` (20, the body centre) |
 | `outOfBounds` | `{left, right, below}` numbers | px | the flight ends at x < −left, x > mapWidth + right or y > mapHeight + below | `rules.physics` `outOfBoundsLeft` / `outOfBoundsRight` / `outOfBoundsBelow` (100, 100, 50) |
+| `bounce` | `{restitution, friction}` numbers 0..1 | ratio | (054) a shell of a weapon with `bounces` > 0 leaves its terrain contact with −`restitution` × its speed along the surface normal and `friction` × its speed along the surface (`weapons[].bounces`; ShotResolved `projectiles[].bounces`) | `rules.physics` `bounceRestitution` / `bounceFriction` (0.55, 0.85) |
 
 `game_settings` keys: a `physics.<name>` row is read first, then a bare `<name>` row. A
 missing or unparsable row gives the default. The parser is `gamedata.PhysicsFromSettings`, the
@@ -199,6 +201,7 @@ highest value).
 | `projectileWeight` | number | wind divisor |
 | `windInfluence` | number | wind multiplier |
 | `multiHit` | int | config value |
+| `bounces` | int | (054) how many times its shell bounces off terrain before it explodes: `water_orb` (Tide) 1, the others 0. The shell explodes at its next contact, or at once on a unit it hits (`config_weapons.bounces`) |
 
 ### 4.10 `skills[]` (config_skills, in character order)
 
@@ -208,7 +211,7 @@ highest value).
 | `characterId` | string | its character |
 | `name` | string | Vietnamese button name ("Mưa tên lửa") |
 | `description` | string | Vietnamese description **template** (see below) |
-| `effectType` | string | `missile_rain`, `bomb_chain`, `laser`, `bloom` (or a future one) |
+| `effectType` | string | `missile_rain`, `bomb_chain`, `laser`, `bloom`, `nova` (054) (or a future one) |
 | `statusEffectId` | string | the effect it puts on the enemies it hits (`statusEffects[].effectId`), `""` none |
 | `aimKind` | string | `arc`: the slingshot with its arcs. `line`: a straight line to the map edge in any direction; power is ignored, send `aim.noAimPower`. `none`: fired on tap with `aim.noAimAngle` / `aim.noAimPower`. Unknown effect types are `arc` |
 | `cooldownTurn`, `projectileCount` | int | config values (informational) |
@@ -232,6 +235,7 @@ sau."
 | `bomb_chain` | `count` bombs (2 + r), `countPerRank`, `eachPct` per bomb (round((180 + 15r) / (3 + r)): 60 49 42 38 34), `capPct` per target (120 + 15r) |
 | `laser` | `firstPct` on the first enemy (150 + 10r), `decayPct` less per next enemy (20) |
 | `bloom` | `selfPct` Flora's heal (40 + 5r), `allyPct` a teammate's (30 + 5r), `perRankPct` (5), `shieldCapPct` max shield as % of max HP (50) |
+| `nova` | `radius` px (500), `centrePct` at the centre (130 + 10r), `centrePerRankPct` (10), `edgePct` at the radius (40), `freezeTurns` (1) |
 
 **`params` per effect type.** These are the skill's `config_skills.params` (JSON object; a missing
 or invalid key keeps the effect type's default), plus `burnMaxHpPercent` (missile_rain) and
@@ -250,6 +254,10 @@ weapon's:
   (s shown), `sweepSpeed` (px/s of the beam front), `stunTurns`.
 - `bloom`: `selfBase`, `allyBase`, `perRank` (%), `riseTime`, `crossTime`, `fallTime`,
   `seedTime` (s; the heal lands then), `skyY` (px), `fallSpeed`, `linger` (s), `shieldCapPercent`.
+- `nova` (054, Tide's `snow_nova`, `aimKind` `none`): `radius` (px, to each body's edge),
+  `centreBase`, `centrePerRank` (× base at the centre), `edgeFactor` (× base at the radius; linear
+  in between), `freezeTurns`, `waveSpeed` (px/s of the frost ring), `castTime` (s: the nova event's
+  `t`; a target is hit at `castTime` + distance / `waveSpeed`).
 
 Replays come from the server timeline (ShotResolved). The client uses `params` only for the
 aim aid (laser `halfWidth`) and for fallbacks; the beam event's own `t` / `duration` win.
@@ -260,13 +268,14 @@ aim aid (laser `halfWidth`) and for fallbacks; the beam event's own `t` / `durat
 |---|---|---|
 | `characterId` | string | id |
 | `name` | string | display name ("Tanko") |
-| `role` | string | role id (`balanced`, `demolisher`, `striker`, `sustain`) |
+| `role` | string | role id (`balanced`, `demolisher`, `striker`, `sustain`, `controller`) |
 | `roleName` | string | Vietnamese role label ("Phá địa hình") |
 | `playstyle` | string | Vietnamese play style paragraph ("Lối chơi") |
 | `weaponId` | string | its starter weapon (`weapons[]`) |
 | `skillId` | string | its skill (`skills[]`) |
-| `gunKind` | string | the gun art kind (`bazooka`, `cannon`, `shock_rifle`, `seed_launcher`); `""` lets the client fall back to its generic gun |
+| `gunKind` | string | the gun art kind (`bazooka`, `cannon`, `shock_rifle`, `seed_launcher`, `water_gun`); `""` lets the client fall back to its generic gun |
 | `hp`, `damage`, `mobility`, `defense`, `skillPower`, `terrainDamage`, `difficulty` | int | config base stats. A player's own stats still come from `/player/characters` |
+| `element` | string | (054) its element id (`elements[]`): rookie `fire`, tanko `earth`, spark `metal`, flora `wood`, tide `water`; `""` none (`config_characters.element`) |
 
 `defaultCharacterId` (string): the character every player owns and plays when none is picked
 (`rules.player` `defaultCharacterId`, "rookie").
@@ -432,6 +441,7 @@ Everything the Boss tab and the arena need to draw and describe a boss:
 | `flying` | bool | (048) the boss floats: draw it in the air, no fall; it moves with `UnitFlew` |
 | `hover` | `{minX, maxX, minY, maxY, minMove, flySpeed}` or `null` | (048) the band (px, the boss's feet point) a flying boss flies to a new random point of at the start of each of its turns, at least `minMove` px away, at `flySpeed` px/s |
 | `summon` | `{minionId, count, cooldownRounds, firstRound}` or `null` | (050) its free summon: at the start of its turn from round `firstRound` on, when the previous wave is dead and more than `cooldownRounds` rounds after its last summon, `count` minions appear in a `ShotResolved` `actionMode` `summon` before its attack (also when it is stunned / frozen) |
+| `element` | string | (054) its element id (`elements[]`; its minions carry it): `steel_robot` `metal`, `lava_crab` `fire`, `ice_witch` `water`; `""` none (`config_bosses.element`). A character whose element beats it is its counter ("Khắc chế") |
 
 `minions[]` fields (048):
 
@@ -532,6 +542,31 @@ Everything the Boss tab and the arena need to draw and describe a boss:
 The skill numbers, minion stats beyond HP / body, reward tables and waves stay on the server
 (admin Bosses page). Source: `config_bosses` (and `config_game_modes` for `modeId`).
 
+### 4.19 `elements[]` and `elementRules` (054)
+
+`elements[]` (config_elements, in display order): `{elementId, name, beats, sortOrder}`, the five
+elements and the one each beats (khắc): `metal` "Kim" beats `wood`, `wood` "Mộc" beats `earth`,
+`water` "Thủy" beats `fire`, `fire` "Hỏa" beats `metal`, `earth` "Thổ" beats `water`. Element
+icons are a client mapping by `elementId`; names and the cycle come from here.
+
+`elementRules` (`rules.elements`, ints 0..100 %):
+
+| Field | Meaning (default) |
+|---|---|
+| `pvpStrongPct` | PvP (every match but boss mode): an attacker whose element beats the target's deals + this % (10) |
+| `pvpWeakPct` | PvP: an attacker whose element the target's beats deals − this % (10) |
+| `bossStrongPct` | boss mode: a character whose element beats the boss's deals the boss and its minions + this % (20) |
+| `bossTakenPct` | boss mode: the boss and its minions deal a character whose element the boss's beats + this % (10) |
+
+Every other pairing (same element, unrelated, a teammate; in boss mode a character the boss beats
+hitting it) is × 1. It applies to every attack damage from a unit to a unit (shells, skills,
+beams, rains, the nova, detonations and death blasts, the %-of-max-HP blasts included), on the raw
+damage before defense, the critical roll and shields (skill caps grow with it); never to falls,
+`out_of_map`, the turn-start burn and lava, or heals. Each ShotResolved `damage` event it changed
+carries `elementEffect` `strong` (the attacker's element beats the target's: PvP strong, boss mode
+both bonuses) or `weak` (PvP only); `MatchStarted` / `MatchStateSync` players and `summon` events
+carry `element`.
+
 ## 5. Not in this payload
 
 - Maps and brick types: `GET /maps`, `GET /maps/{id}` (the boss arenas included).
@@ -602,6 +637,28 @@ The skill numbers, minion stats beyond HP / body, reward tables and waves stay o
   `statusChance` 0.5 and 1.3 x their damage and caps (descriptions say "có 50 %"); the witch's
   HP 13000 -> 14000. Each only while still the 050 value, so reruns keep admin edits. The down
   file puts the 050 values back and drops `max_items`.
+
+## 6d. Elements and Tide (migrations 054_elements, 055_tide_guns)
+
+- 054: new table `config_elements (element_id, name, beats, sort_order)` (the five, `ON CONFLICT DO
+  NOTHING`, revision trigger; admin Texts › Elements); `config_characters.element` and
+  `config_bosses.element` (TEXT, `''` none), each added and seeded once (rookie fire, tanko earth,
+  spark metal, flora wood, tide water; the robot metal, the crab fire, the witch water);
+  `config_weapons.bounces` (INT, default 0); `game_settings` `rules.elements` (10 / 10 / 20 / 10)
+  and `rules.physics` `bounceRestitution` 0.55 / `bounceFriction` 0.85 (added while absent).
+- 054 Tide: `config_weapons` `water_orb` (500 damage, blast 38, terrain 16, weight 0.9, bounces
+  1), `config_skills` `snow_nova` (effect `nova`, freeze, cooldown 4, its params and template),
+  `config_characters` `tide` (water, controller "Khống chế", 1400 HP, 500 damage, mobility 110,
+  defense 45, skill power 70, terrain 16, difficulty 2, gun kind `water_gun`, sort 5), gun kind
+  `water_gun` "Súng nước", type word `water gun`, shop offers `unlock_tide_coin` (5000 coin) /
+  `unlock_tide_gem` (300 gem) like the other characters, tips `tip_13` (the cycle), `tip_14`
+  (Tide). Rows `ON CONFLICT DO NOTHING`, Tide's texts filled while empty.
+- 054 Tanko: `heavy_bomb` name "Bom liên hoàn" → "Địa chấn liên hoàn", its description and template
+  (boulders / earth, the same numbers and placeholders), Tanko's playstyle and `tip_02` mention it;
+  each only while still the old text.
+- 055: Tide's guns `tide_weapon_lv10` .. `lv40` (Iron .. Dragon Water Gun, the generic tiers'
+  stats and prices, as the other characters'; the admin seed has them too).
+- The down files undo each, keeping a Tide (and her guns, offers) a player owns or bought.
 
 ## 6b. DB behind it since S2 (migration 041_gamedata_rules)
 

@@ -15,20 +15,24 @@ import (
 type CharacterTexts struct {
 	RoleName, Playstyle, GunKind string
 	SortOrder                    int
+	Element                      string // 054: the element id (config_elements), "" none
 }
 
 // GetCharacterTexts returns a character's display columns.
 func (r *Repository) GetCharacterTexts(ctx context.Context, id string) (CharacterTexts, error) {
 	var t CharacterTexts
-	err := r.db.Pool.QueryRow(ctx, `SELECT role_name, playstyle, gun_kind, sort_order FROM config_characters WHERE character_id = $1`, id).
-		Scan(&t.RoleName, &t.Playstyle, &t.GunKind, &t.SortOrder)
+	err := r.db.Pool.QueryRow(ctx, `SELECT role_name, playstyle, gun_kind, sort_order, element FROM config_characters WHERE character_id = $1`, id).
+		Scan(&t.RoleName, &t.Playstyle, &t.GunKind, &t.SortOrder, &t.Element)
 	return t, err
 }
 
-// UpdateCharacterTexts sets a character's display columns.
+// UpdateCharacterTexts sets a character's display columns (an unknown element is refused).
 func (r *Repository) UpdateCharacterTexts(ctx context.Context, id string, t CharacterTexts) error {
+	if err := checkElement(ctx, r.db.Pool, t.Element); err != nil {
+		return err
+	}
 	_, err := r.db.Pool.Exec(ctx, `UPDATE config_characters SET role_name = $2, playstyle = $3, gun_kind = $4, sort_order = $5,
-		updated_at = CURRENT_TIMESTAMP WHERE character_id = $1`, id, t.RoleName, t.Playstyle, t.GunKind, t.SortOrder)
+		element = $6, updated_at = CURRENT_TIMESTAMP WHERE character_id = $1`, id, t.RoleName, t.Playstyle, t.GunKind, t.SortOrder, t.Element)
 	if err != nil {
 		return fmt.Errorf("update character texts %s: %w", id, err)
 	}

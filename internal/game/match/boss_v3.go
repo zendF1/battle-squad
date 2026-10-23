@@ -240,7 +240,8 @@ func (m *Match) beamHitsOnce(boss *BattlePlayerState, s gamedata.BossSkill, beam
 	raw := s.Damage * float64(m.boss.cfg.Damage)
 	for _, h := range hits {
 		p := h.p
-		damage := int(math.Round(reduceByDefense(raw, p.Defense, k)))
+		ef, effect := m.elementFactor(boss, p)
+		damage := int(math.Round(reduceByDefense(raw*ef, p.Defense, k)))
 		if damage <= 0 {
 			continue
 		}
@@ -248,7 +249,9 @@ func (m *Match) beamHitsOnce(boss *BattlePlayerState, s gamedata.BossSkill, beam
 		killed := hurtPlayer(p, damage)
 		boss.DamageDealt += damage
 		boss.ShotsHit++
-		tl.add(damageEvent(h.t, p, damage, shieldBefore, "laser"))
+		e := damageEvent(h.t, p, damage, shieldBefore, "laser")
+		e.ElementEffect = effect
+		tl.add(e)
 		if killed {
 			boss.KillCount++
 			tl.add(ShotEvent{T: h.t, Type: "die", PlayerID: p.PlayerID, Cause: "laser"})
@@ -394,7 +397,8 @@ func (m *Match) bossShockwave(boss *BattlePlayerState, s gamedata.BossSkill, tl 
 		d := math.Abs(p.Position.X - x0)
 		f := math.Max(minF, 1-d/maxD)
 		t := bossChargeTime + d/step*interval
-		damage := int(math.Round(reduceByDefense(base*f, p.Defense, k)))
+		ef, effect := m.elementFactor(boss, p)
+		damage := int(math.Round(reduceByDefense(base*f*ef, p.Defense, k)))
 		if damage <= 0 {
 			continue
 		}
@@ -402,7 +406,9 @@ func (m *Match) bossShockwave(boss *BattlePlayerState, s gamedata.BossSkill, tl 
 		killed := hurtPlayer(p, damage)
 		boss.DamageDealt += damage
 		boss.ShotsHit++
-		tl.add(damageEvent(t, p, damage, shieldBefore, "explosion"))
+		e := damageEvent(t, p, damage, shieldBefore, "explosion")
+		e.ElementEffect = effect
+		tl.add(e)
 		if killed {
 			boss.KillCount++
 			tl.add(ShotEvent{T: t, Type: "die", PlayerID: p.PlayerID, Cause: "explosion"})

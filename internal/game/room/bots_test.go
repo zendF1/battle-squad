@@ -94,13 +94,13 @@ func TestBotOutfitVaried(t *testing.T) {
 			}
 		}
 	}
-	// a fifth bot reuses a character once all four are taken
+	// a sixth bot reuses a character once all five (tide too) are taken
 	o := newBotOutfitter(gd, nil, seededIntn(1))
 	seen := map[string]int{}
-	for b := 0; b < 5; b++ {
+	for b := 0; b < 6; b++ {
 		seen[o.outfit(1).CharacterID]++
 	}
-	if len(seen) != 4 {
+	if len(seen) != 5 || seen["tide"] == 0 {
 		t.Fatalf("5 bots got %v", seen)
 	}
 }

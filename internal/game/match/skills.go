@@ -11,13 +11,14 @@ import (
 )
 
 // Character skills: config_skills.effect_type picks the resolver registered for it (one file
-// per skill: skill_rain.go, skill_bombchain.go, skill_laser.go, skill_bloom.go). An effect
+// per skill: skill_rain.go, skill_bombchain.go, skill_laser.go, skill_bloom.go, skill_nova.go). An effect
 // type without a resolver fires one normal projectile with the skill's damage.
 const (
 	effectMissileRain = gamedata.EffectMissileRain // Rookie, triple_shot
 	effectBombChain   = gamedata.EffectBombChain   // Tanko, heavy_bomb
 	effectLaser       = gamedata.EffectLaser       // Spark, shock_field
 	effectBloom       = gamedata.EffectBloom       // Flora, healing_bloom
+	effectNova        = gamedata.EffectNova        // Tide, snow_nova
 )
 
 // skillShot is what a skill resolver works with: the shooter, its Shoot action, the skill's

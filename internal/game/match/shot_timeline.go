@@ -147,10 +147,14 @@ func (c *skillCap) clamp(p *BattlePlayerState, damage int) int {
 	return damage
 }
 
-// capOfBase is a skillCap limit of factor × base damage, reduced by the target's defense.
-func (m *Match) capOfBase(base float64) func(p *BattlePlayerState) int {
+// capOfBase is a skillCap limit of factor × base damage of shooter's, × the element factor
+// against the target (element.go), reduced by the target's defense.
+func (m *Match) capOfBase(shooter *BattlePlayerState, base float64) func(p *BattlePlayerState) int {
 	k := m.gd.Physics.DefenseKOrDefault()
-	return func(p *BattlePlayerState) int { return int(math.Round(reduceByDefense(base, p.Defense, k))) }
+	return func(p *BattlePlayerState) int {
+		ef, _ := m.elementFactor(shooter, p)
+		return int(math.Round(reduceByDefense(base*ef, p.Defense, k)))
+	}
 }
 
 // explodeProjectile resolves r's explosion at the end of its flight: it carves the crater (a bowl) and
@@ -185,7 +189,8 @@ func (m *Match) explodeCapped(shooter *BattlePlayerState, r *ProjectileResult, b
 			distance = blastDistance(p, *r.ExplosionPoint, hitRadius, lift)
 		}
 
-		damage := explosionDamageAt(distance, baseDamage, r.ExplosionRadius, p.Defense, k)
+		ef, effect := m.elementFactor(shooter, p)
+		damage := explosionDamageAt(distance, baseDamage*ef, r.ExplosionRadius, p.Defense, k)
 		damage, critical := applyCritical(damage, shooter.CritChance, crit)
 		damage = limit.clamp(p, damage)
 		damage = m.shieldedDamage(p, damage)
@@ -204,7 +209,7 @@ func (m *Match) explodeCapped(shooter *BattlePlayerState, r *ProjectileResult, b
 		}
 
 		e := damageEvent(t, p, damage, shieldBefore, "explosion")
-		e.ProjectileID, e.Critical = r.ProjectileID, critical
+		e.ProjectileID, e.Critical, e.ElementEffect = r.ProjectileID, critical, effect
 		tl.add(e)
 		if killed {
 			tl.add(ShotEvent{T: t, Type: "die", PlayerID: p.PlayerID, Cause: "explosion"})

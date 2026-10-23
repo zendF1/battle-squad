@@ -212,6 +212,7 @@ type ConfigWeapon struct {
 	ProjectileWeight float64
 	WindInfluence   float64
 	MultiHit        int
+	Bounces         int // 054: terrain bounces before the shell explodes (the water orb 1)
 	Description     string
 }
 
@@ -219,7 +220,7 @@ type ConfigWeapon struct {
 func (r *Repository) GetWeapons(ctx context.Context) ([]ConfigWeapon, error) {
 	rows, err := r.db.Pool.Query(ctx,
 		`SELECT weapon_id, name, damage, explosion_radius, terrain_damage,
-		        projectile_weight, wind_influence, multi_hit, description
+		        projectile_weight, wind_influence, multi_hit, bounces, description
 		 FROM config_weapons ORDER BY weapon_id`)
 	if err != nil {
 		return nil, fmt.Errorf("query weapons: %w", err)
@@ -230,7 +231,7 @@ func (r *Repository) GetWeapons(ctx context.Context) ([]ConfigWeapon, error) {
 	for rows.Next() {
 		var w ConfigWeapon
 		if err := rows.Scan(&w.WeaponID, &w.Name, &w.Damage, &w.ExplosionRadius,
-			&w.TerrainDamage, &w.ProjectileWeight, &w.WindInfluence, &w.MultiHit,
+			&w.TerrainDamage, &w.ProjectileWeight, &w.WindInfluence, &w.MultiHit, &w.Bounces,
 			&w.Description); err != nil {
 			return nil, fmt.Errorf("scan weapon: %w", err)
 		}
@@ -244,10 +245,10 @@ func (r *Repository) GetWeapon(ctx context.Context, id string) (*ConfigWeapon, e
 	var w ConfigWeapon
 	err := r.db.Pool.QueryRow(ctx,
 		`SELECT weapon_id, name, damage, explosion_radius, terrain_damage,
-		        projectile_weight, wind_influence, multi_hit, description
+		        projectile_weight, wind_influence, multi_hit, bounces, description
 		 FROM config_weapons WHERE weapon_id = $1`, id).
 		Scan(&w.WeaponID, &w.Name, &w.Damage, &w.ExplosionRadius,
-			&w.TerrainDamage, &w.ProjectileWeight, &w.WindInfluence, &w.MultiHit,
+			&w.TerrainDamage, &w.ProjectileWeight, &w.WindInfluence, &w.MultiHit, &w.Bounces,
 			&w.Description)
 	if err != nil {
 		return nil, fmt.Errorf("get weapon %s: %w", id, err)
@@ -260,15 +261,15 @@ func (r *Repository) UpsertWeapon(ctx context.Context, w *ConfigWeapon) error {
 	_, err := r.db.Pool.Exec(ctx,
 		`INSERT INTO config_weapons
 		 (weapon_id, name, damage, explosion_radius, terrain_damage,
-		  projectile_weight, wind_influence, multi_hit, description, updated_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, CURRENT_TIMESTAMP)
+		  projectile_weight, wind_influence, multi_hit, bounces, description, updated_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, CURRENT_TIMESTAMP)
 		 ON CONFLICT (weapon_id) DO UPDATE SET
 		   name=EXCLUDED.name, damage=EXCLUDED.damage, explosion_radius=EXCLUDED.explosion_radius,
 		   terrain_damage=EXCLUDED.terrain_damage, projectile_weight=EXCLUDED.projectile_weight,
-		   wind_influence=EXCLUDED.wind_influence, multi_hit=EXCLUDED.multi_hit,
+		   wind_influence=EXCLUDED.wind_influence, multi_hit=EXCLUDED.multi_hit, bounces=EXCLUDED.bounces,
 		   description=EXCLUDED.description, updated_at=CURRENT_TIMESTAMP`,
 		w.WeaponID, w.Name, w.Damage, w.ExplosionRadius, w.TerrainDamage,
-		w.ProjectileWeight, w.WindInfluence, w.MultiHit, w.Description)
+		w.ProjectileWeight, w.WindInfluence, w.MultiHit, w.Bounces, w.Description)
 	if err != nil {
 		return fmt.Errorf("upsert weapon %s: %w", w.WeaponID, err)
 	}

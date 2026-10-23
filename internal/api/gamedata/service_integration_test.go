@@ -65,11 +65,17 @@ func exec(t *testing.T, db *database.PostgresDB, sql string, args ...any) {
 	}
 }
 
-// gameDataDB is a schema with every migration and the config rows the dev DB has (as the
-// admin seed inserts them, without the 040 texts), then 040 rerun as cmd/migrate does.
+// gameDataDB is a schema with every migration before 054, the config rows the dev DB has (as
+// the admin seed inserts them, without the 040 texts), then 040 rerun as cmd/migrate does and
+// the migrations from 054 on (054 adds Tide and the elements to those rows).
 func gameDataDB(t *testing.T) (*Handler, *database.PostgresDB) {
 	t.Helper()
-	db := dbtest.NewSchema(t, 0, registeredMigrations(t)...)
+	names := registeredMigrations(t)
+	at := slices.Index(names, "054_elements.up.sql")
+	if at < 0 {
+		t.Fatalf("cmd/migrate does not run 054: %v", names)
+	}
+	db := dbtest.NewSchema(t, 0, names[:at]...)
 	exec(t, db, `INSERT INTO config_weapons (weapon_id, name, damage, explosion_radius, terrain_damage, projectile_weight, wind_influence, multi_hit) VALUES
 		('basic_rocket', 'Basic Rocket', 480, 40, 20, 1.0, 1.0, 1),
 		('cannon_ball', 'Cannon Ball', 420, 60, 30, 1.5, 0.5, 1),
@@ -100,6 +106,9 @@ func gameDataDB(t *testing.T) (*Handler, *database.PostgresDB) {
 		('physics.time_step', '0.02'), ('physics.max_flight_seconds', '4.5'), ('physics.player_hit_radius', '24.0'),
 		('combat.defense_k', '600') ON CONFLICT (key) DO NOTHING`)
 	runMigration(t, db, "040_gamedata_texts.up.sql")
+	for _, n := range names[at:] {
+		runMigration(t, db, n)
+	}
 	return NewHandler(NewService(NewRepository(db))), db
 }
 
@@ -172,16 +181,34 @@ func TestGameDataFromDB(t *testing.T) {
 	for _, w := range g.Weapons {
 		weapons[w.WeaponID] = w
 	}
-	if w := weapons["cannon_ball"]; len(g.Weapons) != 4 || w.CraterRadius != 18 || w.ExplosionRadius != 60 || w.ProjectileWeight != 1.5 || w.WindInfluence != 0.5 {
+	if w := weapons["cannon_ball"]; len(g.Weapons) != 5 || w.CraterRadius != 18 || w.ExplosionRadius != 60 || w.ProjectileWeight != 1.5 || w.WindInfluence != 0.5 ||
+		w.Bounces != 0 {
 		t.Fatalf("weapons %+v", g.Weapons)
+	}
+	if w := weapons["water_orb"]; w.Bounces != 1 || w.Damage != 500 || w.ExplosionRadius != 38 || w.TerrainDamage != 16 {
+		t.Fatalf("water orb %+v", w)
 	}
 
 	var ids []string
 	for _, c := range g.Characters {
 		ids = append(ids, c.CharacterID)
 	}
-	if !reflect.DeepEqual(ids, []string{"rookie", "tanko", "spark", "flora"}) || g.DefaultCharacterID != "rookie" {
+	if !reflect.DeepEqual(ids, []string{"rookie", "tanko", "spark", "flora", "tide"}) || g.DefaultCharacterID != "rookie" {
 		t.Fatalf("characters %v, default %q", ids, g.DefaultCharacterID)
+	}
+	// 054: the elements, each character's, Tide
+	var els []string
+	for _, c := range g.Characters {
+		els = append(els, c.Element)
+	}
+	if !reflect.DeepEqual(els, []string{"fire", "earth", "metal", "wood", "water"}) || len(g.Elements) != 5 || g.Elements[2] != (Element{"water", "Thủy", "fire", 3}) ||
+		g.ElementRules != (ElementRules{PvpStrongPct: 10, PvpWeakPct: 10, BossStrongPct: 20, BossTakenPct: 10}) ||
+		g.Physics.Bounce != (Bounce{Restitution: 0.55, Friction: 0.85}) {
+		t.Fatalf("elements %v %+v %+v %+v", els, g.Elements, g.ElementRules, g.Physics.Bounce)
+	}
+	if c := g.Characters[4]; c.Name != "Tide" || c.Role != "controller" || c.RoleName != "Khống chế" || c.GunKind != "water_gun" ||
+		c.WeaponID != "water_orb" || c.SkillID != "snow_nova" || c.HP != 1400 || c.Mobility != 110 || c.Playstyle == "" {
+		t.Fatalf("tide %+v", c)
 	}
 	if c := g.Characters[1]; c.Name != "Tanko" || c.Role != "demolisher" || c.RoleName != "Phá địa hình" || c.GunKind != "cannon" ||
 		c.WeaponID != "cannon_ball" || c.SkillID != "heavy_bomb" || c.Mobility != 80 || !strings.HasPrefix(c.Playstyle, "Chuyên phá địa hình") {
@@ -202,6 +229,14 @@ func TestGameDataFromDB(t *testing.T) {
 		t.Fatalf("rain rank 0: %s", got)
 	}
 	chain := skills["heavy_bomb"]
+	if chain.Name != "Địa chấn liên hoàn" || !strings.Contains(chain.Description, "{count} tảng đá") {
+		t.Fatalf("tanko's skill %q: %s", chain.Name, chain.Description)
+	}
+	nova := skills["snow_nova"]
+	if got := fill(nova.Description, nova.Ranks[0].Values); nova.AimKind != "none" || nova.StatusEffectID != "freeze" || nova.Params["radius"] != 500 ||
+		!strings.Contains(got, "bán kính 500px") || !strings.Contains(got, "130%") || !strings.Contains(got, "40%") {
+		t.Fatalf("nova %s %+v: %s", nova.AimKind, nova.Params, got)
+	}
 	var each []float64
 	for _, r := range chain.Ranks {
 		each = append(each, r.Values["eachPct"])
@@ -280,7 +315,7 @@ func TestGameDataFromDB(t *testing.T) {
 		t.Fatalf("economy %+v", g.Economy)
 	}
 	if mm := g.Matchmaking; mm.Queue != "ranked_2v2" || mm.Slots != 4 || mm.TeamSize != 2 || mm.BotFillAfterSec != 20 || mm.MatchStartDelaySec != 3 || mm.InviteTimeoutSec != 30 ||
-		len(mm.Tips) != 12 || !strings.HasPrefix(mm.Tips[0], "Gió mạnh") {
+		len(mm.Tips) != 14 || !strings.HasPrefix(mm.Tips[0], "Gió mạnh") || !strings.HasPrefix(mm.Tips[1], "Địa chấn liên hoàn") {
 		t.Fatalf("matchmaking %+v", mm)
 	}
 	if !reflect.DeepEqual(g.Modes.Lobby, []LobbyMode{
@@ -299,7 +334,7 @@ func TestGameDataFromDB(t *testing.T) {
 	if len(g.Bosses) != 3 {
 		t.Fatalf("bosses %+v", g.Bosses)
 	}
-	if b := g.Bosses[0]; b.BossID != "steel_robot" || b.Name != "Rô-bốt Thép" || b.RecommendedLevel != 10 || b.ModeID != "boss_steel_robot" ||
+	if b := g.Bosses[0]; b.BossID != "steel_robot" || b.Name != "Rô-bốt Thép" || b.RecommendedLevel != 10 || b.ModeID != "boss_steel_robot" || b.Element != "metal" ||
 		b.Queue != "boss:steel_robot" || b.MapID != "arena_steel_robot" || b.HP != 10000 || b.BodySize != 3 || b.TurnLimit != 15 ||
 		b.ShieldedDamageFactor != 0.1 || b.DailyBonusRuns != 3 || b.Description == "" ||
 		b.Flying || b.Hover != nil ||
@@ -314,6 +349,7 @@ func TestGameDataFromDB(t *testing.T) {
 		t.Fatalf("steel_robot %+v", b)
 	}
 	if g.Bosses[1].BossID != "lava_crab" || g.Bosses[1].Minions[0].MinionID != "crab" || g.Bosses[2].BossID != "ice_witch" ||
+		g.Bosses[1].Element != "fire" || g.Bosses[2].Element != "water" ||
 		g.Bosses[2].Minions[0].MinionID != "snowman" || len(g.Bosses[2].Skills) != 3 {
 		t.Fatalf("bosses %+v", g.Bosses)
 	}
@@ -415,6 +451,7 @@ func TestGameDataMigrationDownUpAndSeed(t *testing.T) {
 	runMigration(t, db, "044_mode_select.up.sql")
 	runMigration(t, db, "046_boss_mode.up.sql")
 	runMigration(t, db, "052_boss_status_items.up.sql")
+	runMigration(t, db, "054_elements.up.sql")
 	if after, _ := fetch(t, h); !reflect.DeepEqual(after, before) {
 		t.Fatal("down / up changed the payload")
 	}

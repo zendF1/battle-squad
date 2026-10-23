@@ -55,7 +55,7 @@ func resolveBombChain(m *Match, s *skillShot) {
 	tu := gamedata.ChainTuningOf(s.Skill)
 	n := chainCount(tu, player.SkillRank)
 	each := chainEach(tu, player.SkillRank) * base
-	limit := newSkillCap(m.capOfBase(chainCap(tu, player.SkillRank) * base))
+	limit := newSkillCap(m.capOfBase(player, chainCap(tu, player.SkillRank)*base))
 	rooted := map[string]bool{}
 	origin := shotOrigin(m.Terrain, player)
 	pierce := m.drillPierce(player)

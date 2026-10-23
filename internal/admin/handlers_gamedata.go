@@ -359,6 +359,8 @@ func tuningOf(s gamedata.SkillConfig) any {
 		return gamedata.LaserTuningOf(s)
 	case gamedata.EffectBloom:
 		return gamedata.BloomTuningOf(s)
+	case gamedata.EffectNova:
+		return gamedata.NovaTuningOf(s)
 	}
 	return struct{}{}
 }
@@ -488,6 +490,12 @@ var textTables = []*textTable{
 		Order: "sort_order, category_id", CanAdd: true, CanDelete: true, Check: checkGameModes,
 		Desc: "Các mục (tab) của màn Chọn chế độ, theo thứ tự; mỗi chế độ lobby ở Game Modes thuộc một mục. Mục chưa có chế độ nào: client hiện \"Sắp ra mắt\".",
 		Cols: []textCol{{Name: "name", Label: "Tên", Kind: "text", Required: true}, {Name: "sort_order", Label: "Thứ tự", Kind: "int", Min: 0, Max: 10000}}},
+	{Path: "elements", Title: "Elements", Table: "config_elements", Key: "element_id", KeyLabel: "Element ID",
+		Order: "sort_order, element_id", Check: checkElements,
+		Desc: "Ngũ hành: tên hiển thị và hệ bị khắc (Khắc). Vòng mặc định Kim → Mộc → Thổ → Thủy → Hỏa → Kim. Hệ của nhân vật / boss sửa ở Characters / Bosses, phần trăm sát thương ở Game Rules › Ngũ hành.",
+		Cols: []textCol{{Name: "name", Label: "Tên", Kind: "text", Required: true},
+			{Name: "beats", Label: "Khắc", Kind: "select", Options: []string{gamedata.ElementMetal, gamedata.ElementWood, gamedata.ElementWater, gamedata.ElementFire, gamedata.ElementEarth}},
+			{Name: "sort_order", Label: "Thứ tự", Kind: "int", Min: 0, Max: 10000}}},
 	{Path: "tips", Title: "Tips", Table: "config_tips", Key: "tip_id", KeyLabel: "Tip ID", Order: "sort_order, tip_id", CanAdd: true, CanDelete: true,
 		Desc: "Mẹo hiển thị khi tìm trận, theo thứ tự.",
 		Cols: []textCol{{Name: "text", Label: "Nội dung", Kind: "textarea", Required: true}, {Name: "sort_order", Label: "Thứ tự", Kind: "int", Min: 0, Max: 10000}}},
@@ -591,6 +599,21 @@ func checkGameModes(ctx context.Context, tx pgx.Tx) error {
 		}
 	}
 	return rows.Err()
+}
+
+// checkElements rejects an element that beats itself or an element that is not a row.
+func checkElements(ctx context.Context, tx pgx.Tx) error {
+	var bad string
+	err := tx.QueryRow(ctx, `SELECT e.element_id FROM config_elements e
+		WHERE e.beats = e.element_id OR (e.beats <> '' AND NOT EXISTS (SELECT 1 FROM config_elements o WHERE o.element_id = e.beats))
+		LIMIT 1`).Scan(&bad)
+	if err == pgx.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return fmt.Errorf("hệ %q: khắc phải là một hệ khác trong Elements", bad)
 }
 
 // checkTypeWordGunKinds rejects a type word whose gun kind is not a config_gun_kinds row.

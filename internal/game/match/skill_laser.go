@@ -118,7 +118,8 @@ func resolveLaser(m *Match, s *skillShot) {
 	raw := laserFirst(tu, player.SkillRank) * base
 	for _, h := range m.laserHits(player, tu.HalfWidth, origin, end) {
 		p, t := h.p, laserHitTime(tu, h.s)
-		damage := int(math.Round(reduceByDefense(raw, p.Defense, k)))
+		ef, effect := m.elementFactor(player, p)
+		damage := int(math.Round(reduceByDefense(raw*ef, p.Defense, k)))
 		damage, critical := applyCritical(damage, player.CritChance, crit)
 		raw *= tu.Decay
 		damage = m.shieldedDamage(p, damage)
@@ -131,7 +132,7 @@ func resolveLaser(m *Match, s *skillShot) {
 		m.noteBossSideDamage(player, p, damage)
 		player.ShotsHit++
 		e := damageEvent(t, p, damage, shieldBefore, "laser")
-		e.Critical = critical
+		e.Critical, e.ElementEffect = critical, effect
 		tl.add(e)
 		if killed {
 			player.KillCount++

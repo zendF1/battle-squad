@@ -106,6 +106,14 @@
             <div class="desc">Hình súng của client; tên các loại ở <a href="/texts/gun-kinds">Gun Kinds</a></div>
         </div>
         <div class="form-group">
+            <label>Hệ (ngũ hành)</label>
+            <select name="element">
+                <option value="" {{if eq .Texts.Element ""}}selected{{end}}>(không hệ)</option>
+                {{range .Elements}}<option value="{{.ID}}" {{if eq .ID $.Texts.Element}}selected{{end}}>{{.Name}} ({{.ID}})</option>{{end}}
+            </select>
+            <div class="desc">Hệ của nhân vật: bắn hệ bị khắc gây thêm sát thương, bắn hệ khắc mình bị giảm (Game Rules › Ngũ hành); vòng khắc ở <a href="/texts/elements">Elements</a></div>
+        </div>
+        <div class="form-group">
             <label>Thứ tự</label>
             <input type="number" name="sort_order" value="{{.Texts.SortOrder}}" step="1" min="0" max="10000">
             <div class="desc">Thứ tự hiển thị trong danh sách nhân vật</div>
@@ -137,9 +145,10 @@
             <input type="text" name="effect_type" value="{{.Skill.EffectType}}" readonly style="background:#f0f0f0;color:#888">
             <div class="desc">
                 {{if eq .Skill.EffectType "missile_rain"}}Mưa tên lửa: pháo hiệu, tên lửa rơi quanh chỗ đáp, gây bỏng
-                {{else if eq .Skill.EffectType "bomb_chain"}}Bom liên hoàn: nhiều bom cùng đường bay đào sâu, cầm chân
+                {{else if eq .Skill.EffectType "bomb_chain"}}Địa chấn liên hoàn: nhiều tảng đá cùng đường bay đào sâu, cầm chân
                 {{else if eq .Skill.EffectType "laser"}}Tia laze: tia thẳng xuyên địa hình, choáng
                 {{else if eq .Skill.EffectType "bloom"}}Hoa hồi xuân: hồi máu cả đội theo % máu tối đa, máu dư thành khiên, giải hiệu ứng xấu
+                {{else if eq .Skill.EffectType "nova"}}Nổ bông tuyết: nổ quanh nhân vật, sát thương giảm dần theo khoảng cách, đóng băng mọi địch trong tầm
                 {{else}}Loại hiệu ứng kỹ năng{{end}}
             </div>
         </div>

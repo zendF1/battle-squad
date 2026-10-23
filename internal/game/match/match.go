@@ -161,6 +161,7 @@ func NewMatchWithData(
 		mPlayers[p.PlayerID] = p
 		turnOrder = append(turnOrder, p.PlayerID)
 	}
+	assignElements(gd, mPlayers) // each unit's element (element.go)
 
 	// Build terrain from map config, with legacy fallback
 	mapCfgForTerrain := gamedata.MapConfig{
@@ -943,6 +944,7 @@ func (m *Match) broadcastItemUsed(playerID, itemID string) {
 // shootTeleport fires the teleport projectile and moves the player to its landing
 // point once the flight animation has played, then ends the turn.
 func (m *Match) shootTeleport(ctx context.Context, player *BattlePlayerState, action ShootAction, weaponConfig gamedata.WeaponConfig) {
+	weaponConfig = teleportWeapon(weaponConfig)
 	if !canMove(m.gd, player) {
 		return // rooted: no teleport
 	}
@@ -1002,6 +1004,13 @@ func (m *Match) shootTeleport(ctx context.Context, player *BattlePlayerState, ac
 			m.endTurn(ctx)
 		}
 	})
+}
+
+// teleportWeapon is the weapon a teleport flies with: the player's, never bouncing (it lands where
+// the shell first meets the terrain).
+func teleportWeapon(w gamedata.WeaponConfig) gamedata.WeaponConfig {
+	w.Bounces = 0
+	return w
 }
 
 // airStrikeX picks the air strike column: the client's TargetX when given,

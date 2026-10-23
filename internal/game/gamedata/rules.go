@@ -38,6 +38,7 @@ type Rules struct {
 	Equipment   EquipmentRules   `json:"equipment"`
 	Economy     EconomyRules     `json:"economy"`
 	Bots        BotRules         `json:"bots"`
+	Elements    ElementRules     `json:"elements"`
 }
 
 // ShotRules (rules.physics) complete the physics.* rows: how a shell's flight is checked.
@@ -47,6 +48,11 @@ type ShotRules struct {
 	OutOfBoundsLeft  float64 `json:"outOfBoundsLeft"`  // a flight ends at x < −this,
 	OutOfBoundsRight float64 `json:"outOfBoundsRight"` // x > map width + this
 	OutOfBoundsBelow float64 `json:"outOfBoundsBelow"` // or y > map height + this
+	// A bouncing shell (weapon bounces > 0, 054: Tide's water orb) leaves its terrain contact with
+	// bounceRestitution × its speed along the surface normal (reversed) and bounceFriction × its
+	// speed along the surface.
+	BounceRestitution float64 `json:"bounceRestitution"`
+	BounceFriction    float64 `json:"bounceFriction"`
 }
 
 // AimRules (rules.aim): what a Shoot may carry.
@@ -155,12 +161,25 @@ type BotRules struct {
 	TeleportEnemyMarginPx int      `json:"teleportEnemyMarginPx"` // nor this close (horizontally) to an enemy
 }
 
+// ElementRules (rules.elements, 054): the element damage multipliers (gamedata.ElementBeats; the
+// match's elementFactor). PvP (every match but boss mode): an attacker whose element beats the
+// target's deals + PvpStrongPct %, one whose element the target's beats − PvpWeakPct %. Boss mode:
+// a party member whose element beats the boss's (its minions carry it) deals the boss side +
+// BossStrongPct %; the boss side deals a party member whose element the boss's beats + BossTakenPct %.
+type ElementRules struct {
+	PvpStrongPct  int `json:"pvpStrongPct"`
+	PvpWeakPct    int `json:"pvpWeakPct"`
+	BossStrongPct int `json:"bossStrongPct"`
+	BossTakenPct  int `json:"bossTakenPct"`
+}
+
 // DefaultRules are the rules the game played with before they moved into the DB (and what
-// 041_gamedata_rules seeds).
+// 041_gamedata_rules seeds; rules.elements 054_elements).
 func DefaultRules() *Rules {
 	return &Rules{
-		Physics: ShotRules{CollisionStepPx: 4, ShotOriginLift: 20, OutOfBoundsLeft: 100, OutOfBoundsRight: 100, OutOfBoundsBelow: 50},
-		Aim:     AimRules{PowerMax: 100, AngleMin: 0, AngleMax: 180, NoAimAngle: 90, NoAimPower: 50},
+		Physics: ShotRules{CollisionStepPx: 4, ShotOriginLift: 20, OutOfBoundsLeft: 100, OutOfBoundsRight: 100, OutOfBoundsBelow: 50,
+			BounceRestitution: 0.55, BounceFriction: 0.85},
+		Aim: AimRules{PowerMax: 100, AngleMin: 0, AngleMax: 180, NoAimAngle: 90, NoAimPower: 50},
 		AimAid: AimAidRules{
 			GuideArcLength:  map[string]float64{"bronze": 700, "silver": 650, "gold": 600, "platinum": 550, "diamond": 500, "master": 450},
 			HitToleranceMax: 20, HitToleranceMinPart: 0.2, HitToleranceFarPx: 1200, HitToleranceHighPx: 700,
@@ -184,6 +203,7 @@ func DefaultRules() *Rules {
 			DefaultItems:    []string{"medkit", "teleport"},
 			RandomItems:     []string{"power_shot", "drill_bomb", "spider_net", "freeze_bomb", "air_strike", "wind_stopper"},
 			RandomItemCount: 1, MedkitHPPercent: 35, TeleportLavaMarginPx: 40, TeleportEnemyMarginPx: 120},
+		Elements: ElementRules{PvpStrongPct: 10, PvpWeakPct: 10, BossStrongPct: 20, BossTakenPct: 10},
 	}
 }
 
@@ -226,6 +246,8 @@ var RuleGroups = []Group{
 		{"outOfBoundsLeft", "Ra ngoài bên trái (px)", "Đường bay kết thúc khi x < −giá trị này", 0, 5000},
 		{"outOfBoundsRight", "Ra ngoài bên phải (px)", "Đường bay kết thúc khi x > chiều rộng bản đồ + giá trị này", 0, 5000},
 		{"outOfBoundsBelow", "Ra ngoài phía dưới (px)", "Đường bay kết thúc khi y > chiều cao bản đồ + giá trị này", 0, 5000},
+		{"bounceRestitution", "Nảy: hệ số bật lại", "Đạn nảy (vũ khí bounces > 0) bật khỏi mặt đất với chừng này × tốc độ vuông góc mặt đất", 0, 1},
+		{"bounceFriction", "Nảy: hệ số trượt", "… và chừng này × tốc độ dọc mặt đất", 0, 1},
 	}},
 	{Key: "rules.aim", Title: "Ngắm bắn", Fields: []Field{
 		{"powerMax", "Lực bắn tối đa", "Server từ chối phát bắn mạnh hơn", 1, 1000},
@@ -301,6 +323,12 @@ var RuleGroups = []Group{
 		{"medkitHpPercent", "Hồi máu khi máu ≤ (%)", "Bot dùng hộp cứu thương khi máu còn chừng này % máu tối đa trở xuống", 1, 100},
 		{"teleportLavaMarginPx", "Dịch chuyển: cách dung nham (px)", "Bot không dịch chuyển tới chỗ cách dung nham gần hơn chừng này", 0, 2000},
 		{"teleportEnemyMarginPx", "Dịch chuyển: cách địch (px)", "Bot không dịch chuyển tới chỗ cách địch (theo chiều ngang) gần hơn chừng này", 0, 5000},
+	}},
+	{Key: "rules.elements", Title: "Ngũ hành", Desc: "Hệ của nhân vật và boss sửa ở Characters / Bosses, vòng khắc ở Elements. Áp dụng cho mọi sát thương từ đơn vị lên đơn vị (đạn, kỹ năng, tia, mưa, tự nổ, nổ khi chết), trước phòng thủ / chí mạng / khiên; không áp dụng cho rơi, ra khỏi bản đồ, bỏng, dung nham, hồi máu.", Fields: []Field{
+		{"pvpStrongPct", "PvP: bắn hệ bị khắc (+%)", "Hệ người bắn khắc hệ mục tiêu: sát thương + chừng này %", 0, 100},
+		{"pvpWeakPct", "PvP: bắn hệ khắc mình (−%)", "Hệ mục tiêu khắc hệ người bắn: sát thương − chừng này %", 0, 100},
+		{"bossStrongPct", "Boss: nhân vật khắc boss (+%)", "Nhân vật có hệ khắc hệ boss gây cho boss và lính của nó + chừng này %", 0, 100},
+		{"bossTakenPct", "Boss: boss khắc nhân vật (+%)", "Boss và lính gây cho nhân vật bị hệ boss khắc + chừng này %", 0, 100},
 	}},
 }
 

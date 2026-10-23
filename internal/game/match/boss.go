@@ -100,7 +100,7 @@ func NewBossSide(gd *gamedata.Snapshot, cfg gamedata.BossConfig) []*BattlePlayer
 		PlayerID: BossPlayerID(cfg.BossID), DisplayName: cfg.Name, TeamID: 2,
 		HP: cfg.HP, MaxHP: cfg.HP, Defense: cfg.Defense, Position: Vector2{X: bossSpawn.X, Y: bossSpawn.Y},
 		Items: []string{}, StatusEffects: []StatusEffect{}, IsAlive: true, IsBot: true,
-		Role: RoleBoss, BossID: cfg.BossID, BodySize: cfg.BodySize, Flying: cfg.Flying,
+		Role: RoleBoss, BossID: cfg.BossID, BodySize: cfg.BodySize, Flying: cfg.Flying, Element: cfg.Element,
 	}}
 	seq := 0
 	for _, w := range cfg.Waves.Initial {
@@ -132,7 +132,7 @@ func newMinion(gd *gamedata.Snapshot, cfg gamedata.BossConfig, mc gamedata.Minio
 		HP: mc.HP, MaxHP: mc.HP, Defense: mc.Defense, DamageBonus: shotDamage - weaponDamage, Position: pos,
 		MoveEnergy: energy, MaxMoveEnergy: energy, Items: []string{}, StatusEffects: []StatusEffect{},
 		IsAlive: true, IsBot: true, Role: RoleMinion, BossID: cfg.BossID, MinionID: mc.MinionID, BodySize: mc.BodySize,
-		Flying: mc.Movement == gamedata.MinionMoveFly, Behavior: mc.Behavior, Movement: mc.Movement,
+		Flying: mc.Movement == gamedata.MinionMoveFly, Behavior: mc.Behavior, Movement: mc.Movement, Element: cfg.Element,
 	}
 }
 
@@ -458,7 +458,7 @@ func (m *Match) bossRain(boss *BattlePlayerState, s gamedata.BossSkill, shot *Sh
 	weapon := gamedata.WeaponConfig{WeaponID: s.SkillID, Damage: m.boss.cfg.Damage, ExplosionRadius: int(math.Round(s.Blast)), ProjectileWeight: 1}
 	var limit *skillCap
 	if s.Cap > 0 {
-		limit = newSkillCap(m.capOfBase(s.Cap * base))
+		limit = newSkillCap(m.capOfBase(boss, s.Cap*base))
 	}
 	launch := func(k int) float64 { return bossChargeTime + bossRainInterval*float64(k) }
 	// from the boss (launchFrom boss): each shell first arcs from its ring around the boss's body
@@ -573,7 +573,8 @@ func (m *Match) bossBeam(boss *BattlePlayerState, s gamedata.BossSkill, tl *shot
 	raw := s.Damage * float64(m.boss.cfg.Damage)
 	for _, h := range m.laserHits(boss, s.HalfWidth, origin, end) {
 		p, t := h.p, bossChargeTime+math.Max(h.s, 0)/bossBeamSpeed
-		damage := int(math.Round(reduceByDefense(raw, p.Defense, k)))
+		ef, effect := m.elementFactor(boss, p)
+		damage := int(math.Round(reduceByDefense(raw*ef, p.Defense, k)))
 		if s.Decay > 0 {
 			raw *= s.Decay
 		}
@@ -584,7 +585,9 @@ func (m *Match) bossBeam(boss *BattlePlayerState, s gamedata.BossSkill, tl *shot
 		killed := hurtPlayer(p, damage)
 		boss.DamageDealt += damage
 		boss.ShotsHit++
-		tl.add(damageEvent(t, p, damage, shieldBefore, "laser"))
+		e := damageEvent(t, p, damage, shieldBefore, "laser")
+		e.ElementEffect = effect
+		tl.add(e)
 		if killed {
 			boss.KillCount++
 			tl.add(ShotEvent{T: t, Type: "die", PlayerID: p.PlayerID, Cause: "laser"})
@@ -652,7 +655,7 @@ func summonEvent(t float64, p *BattlePlayerState) ShotEvent {
 	flying := p.Flying
 	return ShotEvent{T: t, Type: "summon", PlayerID: p.PlayerID, MinionID: p.MinionID, Position: vecPtr(p.Position),
 		HP: intPtr(p.HP), MaxHP: intPtr(p.MaxHP), DisplayName: p.DisplayName, TeamID: p.TeamID, BodySize: p.BodySize,
-		Flying: &flying, Behavior: p.Behavior, Movement: p.Movement}
+		Flying: &flying, Behavior: p.Behavior, Movement: p.Movement, Element: p.Element}
 }
 
 // freeMinionSpawn is where the next minion appears: on a pillar arena a random free pillar top

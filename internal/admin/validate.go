@@ -31,6 +31,7 @@ var configRules = map[string]struct {
 	"weapons": {Required: []string{"weapon_id", "name"}, Numbers: []numRule{
 		{"damage", 0, 1000000, true, false}, {"explosion_radius", 0, 2000, true, false}, {"terrain_damage", 0, 2000, true, false},
 		{"projectile_weight", 0.01, 100, false, false}, {"wind_influence", 0, 100, false, false}, {"multi_hit", 1, 20, true, false},
+		{"bounces", 0, 5, true, true},
 	}},
 	"skills": {Required: []string{"skill_id", "character_id", "name", "effect_type"}, Numbers: []numRule{
 		{"cooldown_turn", 0, 100, true, false}, {"projectile_count", 0, 1000, true, false}, {"damage_multiplier", 0, 100, false, false},

@@ -23,10 +23,13 @@ type TitleInfo struct {
 }
 
 type BattlePlayerState struct {
-	PlayerID           string     `json:"playerId"`
-	DisplayName        string     `json:"displayName"`
-	TeamID             int        `json:"teamId"`
-	CharacterID        string     `json:"characterId"`
+	PlayerID    string `json:"playerId"`
+	DisplayName string `json:"displayName"`
+	TeamID      int    `json:"teamId"`
+	CharacterID string `json:"characterId"`
+	// Element (054) is the unit's element id (config_elements): its character's, the boss's for
+	// the boss and its minions; "" for none (omitted).
+	Element            string     `json:"element,omitempty"`
 	WeaponItemID       string     `json:"weaponItemId"`       // equipped weapon's item id, "" = none (bots); clients draw that gun
 	WeaponUpgradeLevel int        `json:"weaponUpgradeLevel"` // equipped weapon's upgrade level, 0 = none (bots); clients draw the +14 / +16 back aura
 	Title              *TitleInfo `json:"title,omitempty"`    // equipped title (active, owned); omitted for none and bots. Cosmetic
@@ -195,33 +198,47 @@ type ProjectileResult struct {
 	// LaunchDelay is when the projectile leaves (s since the shot), the time of its first path
 	// sample: path times are always seconds since the shot was fired.
 	LaunchDelay float64 `json:"launchDelay,omitempty"`
+	// Bounces (054) are where and when a bouncing shell (weapon bounces > 0: Tide's water orb)
+	// bounced off the terrain, in order; omitted for none. The path holds each bounce as two
+	// samples at its t and position: the velocity it arrived with, then the one it left with.
+	Bounces []ProjectileBounce `json:"bounces,omitempty"`
+}
+
+// ProjectileBounce is one bounce of a shell: T s since the shot, at Position.
+type ProjectileBounce struct {
+	T        float64 `json:"t"`
+	Position Vector2 `json:"position"`
 }
 
 // ShotEvent is one entry of a ShotResolved timeline. T is seconds since the shot was fired;
 // fields not relevant to Type are omitted.
 type ShotEvent struct {
 	T              float64  `json:"t"`
-	Type           string   `json:"type"` // explode, damage, heal, shield, status, cleanse, fall, die, teleport, flare, rain, beam, summon, lava
+	Type           string   `json:"type"` // explode, damage, heal, shield, status, cleanse, fall, die, teleport, flare, rain, beam, summon, lava, nova
 	PlayerID       string   `json:"playerId,omitempty"`
 	ProjectileID   string   `json:"projectileId,omitempty"`
 	Position       *Vector2 `json:"position,omitempty"`       // explode, flare, rain (the flare point)
-	Radius         float64  `json:"radius,omitempty"`         // explode; rain: half the spread of the drop columns
+	Radius         float64  `json:"radius,omitempty"`         // explode; rain: half the spread of the drop columns; nova: its reach
 	Crater         string   `json:"crater,omitempty"`         // explode: the crater's shape, always bowl (Terrain.CarveBowl; circle: Terrain.DestroyCircle, no longer sent)
 	TerrainVersion uint64   `json:"terrainVersion,omitempty"` // explode: terrain version after the crater
 	Amount         int      `json:"amount,omitempty"`         // damage (HP + shield lost), heal (HP gained), shield (shield gained)
 	HP             *int     `json:"hp,omitempty"`             // damage, heal: HP after the change
 	Shield         *int     `json:"shield,omitempty"`         // damage (when the player had a shield), shield: shield after the change
 	Critical       bool     `json:"critical,omitempty"`       // damage
-	Cause          string   `json:"cause,omitempty"`          // damage, die: explosion, laser, fall, out_of_map
-	EffectID       string   `json:"effectId,omitempty"`       // status
-	EffectIDs      []string `json:"effectIds,omitempty"`      // cleanse: the effects removed
-	Turns          int      `json:"turns,omitempty"`          // status
-	Count          int      `json:"count,omitempty"`          // rain: missiles falling
-	From           *Vector2 `json:"from,omitempty"`           // fall, teleport, beam
-	To             *Vector2 `json:"to,omitempty"`             // fall, teleport, beam
-	Duration       float64  `json:"duration,omitempty"`       // fall: seconds until landing; beam: seconds the beam shows
-	MinionID       string   `json:"minionId,omitempty"`       // summon: the minion type
-	ZoneID         string   `json:"zoneId,omitempty"`         // lava: the pool (MatchState.lavaZones)
+	// ElementEffect (054) is how the elements changed the damage: strong (the attacker's element
+	// beats the target's: PvP +pvpStrongPct, boss mode +bossStrongPct / +bossTakenPct) or weak
+	// (PvP: the target's beats the attacker's, −pvpWeakPct); omitted when neutral.
+	ElementEffect string   `json:"elementEffect,omitempty"` // damage
+	Cause         string   `json:"cause,omitempty"`         // damage, die: explosion, laser, fall, out_of_map
+	EffectID      string   `json:"effectId,omitempty"`      // status
+	EffectIDs     []string `json:"effectIds,omitempty"`     // cleanse: the effects removed
+	Turns         int      `json:"turns,omitempty"`         // status
+	Count         int      `json:"count,omitempty"`         // rain: missiles falling
+	From          *Vector2 `json:"from,omitempty"`          // fall, teleport, beam
+	To            *Vector2 `json:"to,omitempty"`            // fall, teleport, beam
+	Duration      float64  `json:"duration,omitempty"`      // fall: seconds until landing; beam: seconds the beam shows; nova: seconds its ring takes to the radius
+	MinionID      string   `json:"minionId,omitempty"`      // summon: the minion type
+	ZoneID        string   `json:"zoneId,omitempty"`        // lava: the pool (MatchState.lavaZones)
 	// explode of a minion's detonation / death blast: the blast's damage radius (radius stays
 	// the crater, as in every explode; playerId is the minion that blew up)
 	BlastRadius float64 `json:"blastRadius,omitempty"`
@@ -233,6 +250,7 @@ type ShotEvent struct {
 	Flying      *bool   `json:"flying,omitempty"`
 	Behavior    string  `json:"behavior,omitempty"`
 	Movement    string  `json:"movement,omitempty"`
+	Element     string  `json:"element,omitempty"` // summon: the minion's element (its boss's)
 }
 
 // ShotResolved is the single message describing a whole shot: every projectile's flight plus

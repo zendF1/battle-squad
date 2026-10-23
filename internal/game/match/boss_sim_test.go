@@ -24,15 +24,22 @@ import (
 
 // The boss balance runs (BOSS_SIM=<matches per boss>; with TEST_POSTGRES_DSN the bots carry the
 // guns of the migrated config_equipment_items, as the room's bot outfitter gives them): 4 bots
-// at the boss's recommended level (gold tier aim), each a distinct character with the stat
-// points of that level spread evenly, the best gun of that level and medkit + teleport, play the
-// boss to the end. It logs the win rate per boss; it never fails on it.
+// at the boss's recommended level (gold tier aim), each a distinct character (4 of the roster at
+// random; BOSS_SIM_PARTY=<id>,<id>,… fixes the party, shuffled the same way, e.g. four of the
+// element that beats the boss; BOSS_SIM_NO_ELEMENTS=1 plays without the element multipliers) with
+// the stat points of that level spread evenly, the best gun of that level and medkit + teleport,
+// play the boss to the end. It logs the win rate per boss; it never fails on it.
 func TestBossBalanceSim(t *testing.T) {
 	n, _ := strconv.Atoi(os.Getenv("BOSS_SIM"))
 	if n <= 0 {
 		t.Skip("set BOSS_SIM=<matches per boss> to run the boss balance runs")
 	}
 	loadConfigs(t)
+	if os.Getenv("BOSS_SIM_NO_ELEMENTS") != "" { // the same runs without the element multipliers
+		r := gamedata.Current().Rules.Clone()
+		r.Elements = gamedata.ElementRules{}
+		gamedata.UseForTest(t, gamedata.Current().WithRules(r))
+	}
 	weapons := simWeapons(t)
 	only := os.Getenv("BOSS_SIM_BOSS")
 	for _, cfg := range gamedata.Current().Bosses {
@@ -135,6 +142,9 @@ func simBossMatch(t *testing.T, cfg gamedata.BossConfig, weapons []simWeapon, se
 		}
 	}
 	sort.Strings(chars)
+	if party := os.Getenv("BOSS_SIM_PARTY"); party != "" {
+		chars = strings.Split(party, ",")
+	}
 	rng.Shuffle(len(chars), func(i, j int) { chars[i], chars[j] = chars[j], chars[i] })
 	prog := character.LoadProgressionConfig(gd.Settings[character.SettingsKeyProgression])
 	level := cfg.RecommendedLevel

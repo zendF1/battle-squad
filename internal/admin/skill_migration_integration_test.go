@@ -31,6 +31,14 @@ func readMigration(t *testing.T, name string) string {
 	return string(sql)
 }
 
+// addedBy054 are the config ids 054_elements adds (Tide's): older migrations never see them.
+var addedBy054 = map[string]bool{"tide": true, "water_orb": true, "snow_nova": true}
+
+// renamedBy054 are the skill name and description configs/skills.yaml had before 054_elements
+// renamed Tanko's skill (Địa chấn liên hoàn).
+var renamedBy054 = map[string][2]string{"heavy_bomb": {"Bom liên hoàn",
+	"Bắn liên tiếp bom lớn cùng một đường bay (2 quả, +1 mỗi cấp súng), đào sâu một hố; mỗi quả 60% sát thương (34% ở cấp súng 4), mỗi địch nhận tối đa 120% (+15% mỗi cấp); địch trúng bị cầm chân lượt sau."}}
+
 // Migrations 028, 030, 031 then 033 turn the old rows into configs/skills.yaml's (what the admin seed
 // inserts on a fresh database), and reruns keep later admin edits.
 func TestSkillRedesignMigrationMatchesSeed(t *testing.T) {
@@ -49,6 +57,12 @@ func TestSkillRedesignMigrationMatchesSeed(t *testing.T) {
 	_, self, _, _ := runtime.Caller(0)
 	gamedata.UseYAML(t, filepath.Join(filepath.Dir(self), "..", "..", "configs"))
 	for id, s := range gamedata.Current().Data.Skills {
+		if addedBy054[id] {
+			continue // 054_elements inserts it
+		}
+		if old, ok := renamedBy054[id]; ok { // 054 renames it: 028..033 leave the text before
+			s.Name, s.Description = old[0], old[1]
+		}
 		var name, effect, status, desc string
 		var count int
 		var mult float64

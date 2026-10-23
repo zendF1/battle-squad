@@ -64,11 +64,17 @@ func TestWeaponCraterMigrationMatchesSeed(t *testing.T) {
 		return v
 	}
 	for id, w := range gamedata.Current().Data.Weapons {
+		if addedBy054[id] {
+			continue
+		}
 		if got := terrain("config_weapons", "weapon_id", id); got != w.TerrainDamage {
 			t.Errorf("weapon %s: migrated terrain damage %d, yaml %d", id, got, w.TerrainDamage)
 		}
 	}
 	for id, c := range gamedata.Current().Data.Characters {
+		if addedBy054[id] {
+			continue
+		}
 		if got := terrain("config_characters", "character_id", id); got != c.TerrainDamage {
 			t.Errorf("character %s: migrated terrain damage %d, yaml %d", id, got, c.TerrainDamage)
 		}

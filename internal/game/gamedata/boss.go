@@ -488,6 +488,9 @@ type BossConfig struct {
 	// Summon (boss v3, config_bosses.summon): the free summon at the start of the boss's turns
 	// (nil: SummonConfig falls back to a legacy summon skill).
 	Summon *BossSummon
+	// Element (054, config_bosses.element) is the boss's element id (config_elements), "" for
+	// none; its minions carry it too.
+	Element string
 }
 
 // Minion is the boss's minion type id.

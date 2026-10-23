@@ -124,6 +124,7 @@ func (s *Server) handleConfigEdit(configType string) http.HandlerFunc {
 				{Name: "projectile_weight", Label: "Projectile Weight", Type: "number", Step: "0.1", Description: "Affects gravity pull on projectile (higher = drops faster)", Value: wp.ProjectileWeight},
 				{Name: "wind_influence", Label: "Wind Influence", Type: "number", Step: "0.1", Description: "How much wind affects the projectile (0=none, 1=full)", Value: wp.WindInfluence},
 				{Name: "multi_hit", Label: "Multi Hit", Type: "number", Step: "1", Description: "Number of projectiles fired (1=single shot)", Value: wp.MultiHit},
+				{Name: "bounces", Label: "Bounces", Type: "number", Step: "1", Description: "Số lần đạn nảy khỏi địa hình trước khi nổ (0..5; Water Orb 1). Hệ số nảy ở Game Rules › Đường bay của đạn", Value: wp.Bounces},
 				{Name: "description", Label: "Description", Type: "textarea", Description: "Weapon description", Value: wp.Description},
 			}
 
@@ -241,6 +242,7 @@ func (s *Server) handleConfigSave(configType string) http.HandlerFunc {
 				ProjectileWeight: formFloat(r, "projectile_weight"),
 				WindInfluence:    formFloat(r, "wind_influence"),
 				MultiHit:         formInt(r, "multi_hit"),
+				Bounces:          formInt(r, "bounces"),
 				Description:      r.FormValue("description"),
 			}
 			if wp.WeaponID == "" {
@@ -382,7 +384,12 @@ func (s *Server) handleCharacterDetail() http.HandlerFunc {
 				gunKinds = append(gunKinds, row["gun_kind"])
 			}
 		}
+		elements, err := s.repo.Elements(ctx)
+		if err != nil {
+			observability.Log.Error().Err(err).Msg("failed to read elements")
+		}
 		s.render(w, "character_detail", map[string]interface{}{
+			"Elements":   elements,
 			"ActivePage": "characters",
 			"Character":  char,
 			"Texts":      texts,
@@ -439,9 +446,9 @@ func (s *Server) handleCharacterDetailSave() http.HandlerFunc {
 		}
 		if err := s.repo.UpdateCharacterTexts(ctx, charID, CharacterTexts{RoleName: strings.TrimSpace(r.FormValue("role_name")),
 			Playstyle: strings.TrimSpace(r.FormValue("playstyle")), GunKind: strings.TrimSpace(r.FormValue("gun_kind")),
-			SortOrder: formInt(r, "sort_order")}); err != nil {
+			SortOrder: formInt(r, "sort_order"), Element: strings.TrimSpace(r.FormValue("element"))}); err != nil {
 			observability.Log.Error().Err(err).Msg("failed to update character texts")
-			http.Redirect(w, r, "/characters/detail?id="+charID+"&error=Failed+to+save+character", http.StatusSeeOther)
+			redirectMsg(w, r, "/characters/detail?id="+charID, "error", "Lưu thất bại: "+err.Error())
 			return
 		}
 

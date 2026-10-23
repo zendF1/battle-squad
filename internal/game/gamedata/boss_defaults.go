@@ -14,8 +14,9 @@ package gamedata
 // of the time (statusChance 0.5, rolled once per member and cast), and the status skills hit 1.3 x
 // as hard (damage and caps). HP, the skills' caps and the minion blasts are retuned with the bot
 // balance runs (TestBossBalanceSim: 4 bots at the recommended level win about half of their
-// fights): robot 10000 HP, crab 15000, witch 14000 (050: 13000). Original designs: a steel mech
-// titan with drones, a lava crab with crabs and lava, an ice witch with snowmen and frost.
+// fights): robot 10000 HP, crab 15000, witch 14000 (050: 13000). 054: the robot is metal, the crab
+// fire, the witch water (their minions too). Original designs: a steel mech titan with drones, a
+// lava crab with crabs and lava, an ice witch with snowmen and frost.
 func DefaultBosses() []BossConfig {
 	// t is {goldPer1000Damage, maxGold, winGold, expPer1000Damage, maxExp, winExp}
 	bonus := func(t [6]int) BossRewardTable {
@@ -54,6 +55,7 @@ func DefaultBosses() []BossConfig {
 			Description:      "Người khổng lồ cơ khí canh giữ xưởng sắt bỏ hoang. Nã pháo phủ kín chiến trường, quét năm tia laze ngang map và thả drone che chắn.",
 			RecommendedLevel: 10, Enabled: true, SortOrder: 1, MapID: "arena_steel_robot",
 			HP: 10000, Defense: 60, Damage: 630, BodySize: 3, TurnLimit: 15, ShieldedDamageFactor: 0.1, OutOfMap: BossOutOfMapClamp,
+			Element: ElementMetal,
 			Skills: []BossSkill{
 				{SkillID: "shell_barrage", Name: "Mưa đạn pháo", Description: "Hai mươi bốn quả đạn pháo dội xuống bảy phần mười chiến trường quanh cả đội.",
 					Kind: BossSkillRain, Weight: 3, Target: BossTargetParty, Count: 24, Spread: 840, Damage: 0.3, Blast: 75, Crater: 21, Cap: 1, ProjectileKind: "steel_shell"},
@@ -74,6 +76,7 @@ func DefaultBosses() []BossConfig {
 			Description:      "Con cua khổng lồ sống trong miệng núi lửa. Ném bom dung nham khắp map để lại vũng lửa, đập càng tạo sóng chấn động chạy dọc mặt đất.",
 			RecommendedLevel: 25, Enabled: true, SortOrder: 2, MapID: "arena_lava_crab_mound",
 			HP: 15000, Defense: 90, Damage: 720, BodySize: 3.2, TurnLimit: 15, ShieldedDamageFactor: 0.1, OutOfMap: BossOutOfMapClamp,
+			Element: ElementFire,
 			Skills: []BossSkill{
 				{SkillID: "fire_bombs", Name: "Bom dung nham", Description: "Mười quả bom lửa rơi khắp chiến trường; ai trúng có 50 % bị bỏng, mỗi chỗ nổ để lại vũng dung nham một lượt.",
 					Kind: BossSkillRain, Weight: 3, Cooldown: 1, Target: BossTargetMap, Count: 10, Damage: 0.455, Blast: 80, Crater: 27, Cap: 0.91,
@@ -95,7 +98,8 @@ func DefaultBosses() []BossConfig {
 			Description:      "Phù thuỷ của đỉnh tuyết vĩnh cửu, bay giữa các đảo băng. Hai mươi tia băng toả tròn làm choáng, bão tuyết phủ cả map đóng băng người trúng, người tuyết nhảy tới nổ tung.",
 			RecommendedLevel: 40, Enabled: true, SortOrder: 3, MapID: "arena_ice_witch_islands",
 			HP: 14000, Defense: 80, Damage: 780, BodySize: 2.8, TurnLimit: 30, ShieldedDamageFactor: 0.1, OutOfMap: BossOutOfMapClamp,
-			Flying: true, Hover: &BossHover{MinX: 400, MaxX: 2000, MinY: 320, MaxY: 430, MinMove: 200, FlySpeed: 220},
+			Element: ElementWater,
+			Flying:  true, Hover: &BossHover{MinX: 400, MaxX: 2000, MinY: 320, MaxY: 430, MinMove: 200, FlySpeed: 220},
 			Skills: []BossSkill{
 				{SkillID: "ice_spikes", Name: "Gai băng", Description: "Mười bốn gai băng rơi rộng quanh một người chơi; ai trúng có 50 % bị đóng băng một lượt.",
 					Kind: BossSkillRain, Weight: 3, Cooldown: 2, Target: BossTargetRandom, Count: 14, Spread: 360, Damage: 0.325, Blast: 65, Crater: 15, Cap: 0.91,

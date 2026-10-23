@@ -23,6 +23,10 @@
 <div class="form-group"><label>Số lượt boss tối đa</label><input type="number" name="turn_limit" value="{{$c.TurnLimit}}" step="1" min="1" max="200"><div class="desc">Hết lượt thứ này của boss mà boss chưa chết: boss thoát, đội thua (boss_escaped)</div></div>
 <div class="form-group"><label>Hệ số sát thương khi có khiên</label><input type="number" name="shielded_damage_factor" value="{{$c.ShieldedDamageFactor}}" step="0.01" min="0" max="1"><div class="desc">Còn lính sống: boss nhận damage × hệ số này (0 = miễn nhiễm)</div></div>
 <div class="form-group"><label>Rơi khỏi map</label><select name="out_of_map">{{range .OutOfMaps}}<option value="{{.}}" {{if eq . $c.OutOfMap}}selected{{end}}>{{.}}</option>{{end}}</select><div class="desc">clamp: boss đứng yên tại chỗ thay vì rơi khỏi đáy map; kill: rơi là chết (đội thắng)</div></div>
+<div class="form-group"><label>Hệ (ngũ hành)</label><select name="element">
+    <option value="" {{if eq $c.Element ""}}selected{{end}}>(không hệ)</option>
+    {{range .Elements}}<option value="{{.ID}}" {{if eq .ID $c.Element}}selected{{end}}>{{.Name}} ({{.ID}})</option>{{end}}
+    </select><div class="desc">Lính mang hệ của boss. Nhân vật có hệ khắc hệ boss gây thêm sát thương, hệ boss khắc nhân vật thì boss gây thêm (Game Rules › Ngũ hành); vòng khắc ở <a href="/texts/elements">Elements</a></div></div>
 <div class="form-group"><label>Bay</label><input type="checkbox" name="flying" {{if $c.Flying}}checked{{end}}><div class="desc">Boss bay: không bao giờ rơi, hố nổ bên dưới không làm nó rơi</div></div>
 <div class="form-group"><label>Vùng bay lượn (JSON)</label><textarea name="hover" rows="4" style="width:100%;font-family:monospace;font-size:12px">{{.B.HoverJSON}}</textarea>
     <div class="desc">Để trống: không bay lượn. {minX, maxX, minY, maxY (px, chân boss), minMove (px, mặc định 200), flySpeed (px/s, mặc định 220)}: đầu mỗi lượt boss bay tới một điểm ngẫu nhiên trong vùng, cách chỗ cũ ít nhất minMove, rồi mới dùng kỹ năng. Chỉ cho boss bay</div></div>

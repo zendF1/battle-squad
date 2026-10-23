@@ -611,12 +611,12 @@ Thành công: người mời nhận `InviteSent {playerId, expiresInSec}`, ngư�
 | `MatchEnded` | `{winningTeam, rewards, stats, mvpPlayerId}` (no-contest: `{winningTeam: 0, result: "no_contest", message, stats, mvpPlayerId: ""}`) | Trận kết thúc, xem §7 Reward System |
 | `MatchStateSync` | `MatchState` + `terrain` + `gamedataVersion` + `lastMoveSeq` + `selectedAction?` | Full sync trả lời `Reconnect` (`gamedataVersion` như `MatchStarted`). `selectedAction` (`ActionSelected` của người tới lượt, cả khi broadcast còn đang gộp) chỉ có khi họ đang chọn skill / item, để client vào lại vẫn hiện badge. `lastMoveSeq`: `seq` của `Move` cuối cùng của người gửi `Reconnect` mà match loop đã nhận trong lượt hiện tại, kể cả `Move` bị bỏ (rate limit, đang resolve, không hợp lệ); `0` nếu chưa có hoặc không phải lượt của họ; reset khi lượt mới bắt đầu. Snapshot đã phản ánh mọi `Move` có `seq <= lastMoveSeq` |
 
-**`ShotResolved`:** server tính xong toàn bộ phát bắn và state đã cập nhật trước khi gửi; client chỉ phát lại. `projectiles[]` là đường bay (`path[]` với `time`) của từng viên đạn; `time` luôn tính từ lúc bắn, nên viên phóng trễ (bom liên hoàn, tên lửa) có `path[0].time = launchDelay > 0` và client chỉ hiện nó từ lúc đó. Mỗi projectile: `{projectileId, ownerPlayerId, skillId?, kind?, launchDelay?, path[], hitPlayerId?, explosionPoint?, explosionRadius, craterRadius}`; `kind` (chỉ với skill): `flare` (pháo hiệu, đáp không nổ), `missile` (tên lửa rơi từ đỉnh map), `bomb` (bom liên hoàn), `seed` (hạt của Hoa hồi xuân, đáp lên đồng đội `hitPlayerId`, không nổ); thiếu = đạn thường. `events[]` sắp theo `t` (giây kể từ lúc bắn):
+**`ShotResolved`:** server tính xong toàn bộ phát bắn và state đã cập nhật trước khi gửi; client chỉ phát lại. `projectiles[]` là đường bay (`path[]` với `time`) của từng viên đạn; `time` luôn tính từ lúc bắn, nên viên phóng trễ (bom liên hoàn, tên lửa) có `path[0].time = launchDelay > 0` và client chỉ hiện nó từ lúc đó. Mỗi projectile: `{projectileId, ownerPlayerId, skillId?, kind?, launchDelay?, path[], hitPlayerId?, explosionPoint?, explosionRadius, craterRadius, bounces?}` (`bounces` 054: xem Đạn nảy); `kind` (chỉ với skill): `flare` (pháo hiệu, đáp không nổ), `missile` (tên lửa rơi từ đỉnh map), `bomb` (bom liên hoàn), `seed` (hạt của Hoa hồi xuân, đáp lên đồng đội `hitPlayerId`, không nổ); thiếu = đạn thường. `events[]` sắp theo `t` (giây kể từ lúc bắn):
 
 | `type` | Trường | Ghi chú |
 |--------|--------|---------|
 | `explode` | `projectileId, position, radius, crater, terrainVersion` | Khoét terrain tại `t` (cuối đường bay). `crater`: hình hố, luôn `bowl` (lòng chảo, `Terrain.CarveBowl`; mọi vụ nổ, cả bom liên hoàn từ playtest 5); `circle` (hình tròn, `Terrain.DestroyCircle`) không còn được gửi, client vẫn khoét được; thiếu = `bowl`. Không còn `floor` (trước playtest 5 bom liên hoàn giữ 48 px đáy map) |
-| `damage` | `playerId, amount, hp, cause, projectileId?, critical?, shield?` | `cause`: `explosion`, `laser`, `fall`, `out_of_map`. `amount` = máu + khiên mất; `shield` (khiên còn lại) chỉ có khi player có khiên trước cú đánh |
+| `damage` | `playerId, amount, hp, cause, projectileId?, critical?, shield?, elementEffect?` | `cause`: `explosion`, `laser`, `nova`, `fall`, `out_of_map` (boss mode thêm `self_destruct`, `death_blast`). `amount` = máu + khiên mất; `shield` (khiên còn lại) chỉ có khi player có khiên trước cú đánh. `elementEffect` (054): `strong` (hệ người đánh khắc hệ mục tiêu) / `weak` (PvP: hệ mục tiêu khắc hệ người đánh), thiếu = trung tính (Ngũ hành, §7) |
 | `heal` | `playerId, amount, hp` | `amount` = máu thực hồi (có thể 0 khi đầy máu) |
 | `shield` | `playerId, amount, shield` | Khiên nhận thêm / khiên sau đó (tối đa 50% máu tối đa) |
 | `status` | `playerId, effectId, turns` | Hiệu ứng được gắn (`burn`, `root`, `stun`, `net`, `freeze`) |
@@ -629,8 +629,11 @@ Thành công: người mời nhận `InviteSent {playerId, expiresInSec}`, ngư�
 | `summon` | `playerId, minionId, position, hp` | Chế độ boss: lính mới xuất hiện (§8a) |
 | `lava` | `zoneId, position, radius, amount, turns` | Chế độ boss: vũng dung nham (`amount` HP đầu lượt, `turns` vòng; `MatchState.lavaZones`) |
 | `beam` | `playerId, from, to, duration` | Tia laze từ `from` đến mép map `to`, hiện `duration` giây; xuyên địa hình, không khoét. `t` = thời gian nạp ở nòng (0,3 s); đầu tia quét ra 12000 px/s, mỗi địch trúng (`damage` cause `laser`) lúc đầu tia tới thân nó |
+| `nova` | `playerId, position, radius, duration` | (054) Nổ bông tuyết của Tide: tâm `position` (tâm thân Tide), vòng băng lan tới `radius` px trong `duration` giây (`waveSpeed`); `t` = `castTime` (0,35 s). Mỗi địch trong tầm: `damage` cause `nova` rồi `status` `freeze` lúc vòng băng tới thân nó (`t + khoảng cách / waveSpeed`) |
 
 Client thiếu field mới (hoặc server cũ) vẫn chạy: field vắng = mặc định (`kind` rỗng = đạn thường, `launchDelay` 0, `shield` không đổi, `floor` 0 = khoét cả hình tròn).
+
+**Đạn nảy (054, `projectiles[].bounces`):** đạn của vũ khí có `bounces` > 0 (Quả cầu nước của Tide: 1) chạm địa hình lần đầu thì nảy thay vì nổ: `bounces: [{t, position}]` (điểm chạm, pixel trống cuối cùng trước địa hình), vận tốc tách theo pháp tuyến mặt đất (ước lượng từ các pixel đặc quanh điểm chạm) và dọc mặt đất: rời đi với −0,55 × phần pháp tuyến và 0,85 × phần dọc (`rules.physics` `bounceRestitution` / `bounceFriction`). `path[]` có điểm nảy **hai lần** cùng `time` và `position`: lần đầu với vận tốc lúc tới, lần sau với vận tốc lúc rời, nên client nội suy cung gia tốc đều giữa hai mẫu vẽ đúng cả hai đoạn (đoạn dài 0 giữa hai mẫu bị bỏ qua). Chạm lần sau (địa hình hoặc người) thì nổ như thường; trúng thẳng người trước khi nảy thì nổ ngay. Không nảy ở đáy map (sàn ảo); dịch chuyển (teleport) bắn bằng súng nảy không nảy.
 
 `duration` là lúc animation cuối cùng kết thúc; server kết thúc lượt sau `duration + 1.2s`.
 
@@ -987,7 +990,7 @@ Skill theo **nhân vật** (`config_characters.skill_id`), dùng bằng `Shoot {
 
 **base** = (damage vũ khí + `damageBonus`) × power_shot 1,5 × `damage_multiplier` (1,0; ≤ 0 tính là 1) × (1 + `skillPowerBonus`/100).
 
-| Skill | Rookie — Mưa tên lửa (`triple_shot`, `missile_rain`) | Tanko — Bom liên hoàn (`heavy_bomb`, `bomb_chain`) | Spark — Tia laze (`shock_field`, `laser`) | Flora — Hoa hồi xuân (`healing_bloom`, `bloom`) |
+| Skill | Rookie — Mưa tên lửa (`triple_shot`, `missile_rain`) | Tanko — Địa chấn liên hoàn (trước 054: Bom liên hoàn; `heavy_bomb`, `bomb_chain`) | Spark — Tia laze (`shock_field`, `laser`) | Flora — Hoa hồi xuân (`healing_bloom`, `bloom`) |
 |---|---|---|---|---|
 | Bắn | Pháo hiệu như phát thường (gió, trọng lực); đáp: khói đỏ, không damage / hố; bay khỏi map → mất skill | 2 + cấp bom lớn (playtest 6: bớt 1 quả, mỗi quả giữ sát thương cũ: (1,8 + 0,15 × cấp) / (3 + cấp) × base) cùng đường bay đạn thường (cùng gốc, góc, lực, gió; không lái), cách ≥ 0,1 s; bom sau bay qua hố của bom trước và nổ ở chỗ đường bay đó chạm địa hình / người chơi: mỗi quả khoét lòng chảo của vũ khí; không mục tiêu thì đào một giếng (~40 px mỗi quả với `cannon_ball`); trúng thân thì nổ ở tâm thân, hố không chạm đất dưới chân: cầu vồng (dốc) và bắn thẳng ở 600 px đều trúng mục tiêu tới trần (bắn thẳng: quả đầu nổ cạnh chân, mục tiêu rơi vào hố, quả sau trúng thân) | Nạp 0,3 s rồi tia thẳng từ tâm thân theo góc ngắm tới mép map, xuyên địa hình (không giảm damage); bỏ qua lực | Không ngắm; các hạt cùng bay thẳng lên trên Flora ra khỏi đỉnh map (y −140, 0,55 s), sang trên đầu đồng đội ngoài màn hình (0,2 s) rồi rơi thẳng xuống thân (0,65 s): đáp và hồi lúc 1,4 s, mọi đồng đội còn sống (cả Flora); replay kéo thêm 0,9 s cho hiệu ứng nở hoa |
 | Số lượng | 0,5 s sau khi đáp: 12 + 4×cấp tên lửa rơi thẳng (không gió, bắn xuống 1500 px/s `rainDropSpeed`, ~0,37 s tới đất) từ đỉnh map, cách 0,05 s (cấp 4: 28 quả trong ~1,8 s, cả skill ~3,0 s; trước 032 ~3,9 s), rải ± (90 + 15×cấp) px quanh điểm đáp, dày ở giữa (độ lệch = khoảng × \|v\|², nửa số quả trong ± 1/4 khoảng; seed theo trận + lượt); giải theo thứ tự chạm đất. Pháo hiệu trúng mục tiêu: ~1,4 × base (cấp 0) tới mức trần (cấp 4, ~1,8 × base sau defense của Tanko), địch cách 100 px dính ~0,55 × base ở cấp 4 | 3 / 4 / 5 / 6 / 7 | 1 tia | 1 hạt / đồng đội |
@@ -996,6 +999,22 @@ Skill theo **nhân vật** (`config_characters.skill_id`), dùng bằng `Shoot {
 | Bot | Ngắm như phát thường tốt nhất (trượt theo hit chance) | Phát dốc nhất (lệch ≤ 30° so với thẳng đứng, bay ≤ `MaxFlightSeconds` − 1 s = 3,5 s) gây ≥ 80% damage của phát tốt nhất, không có thì phát tốt nhất; trong các lực tốt như nhau ở một góc, lực mà đường bay (bỏ qua người chơi) chạm đất gần chân địch nhất (`shaftMiss`: giếng đào ngay dưới mục tiêu); trượt theo hit chance | Góc trúng nhiều địch nhất (ưu tiên 2) | Khi máu mình < 60%, đồng đội < 50% hoặc đồng đội dính hiệu ứng xấu |
 
 Đơn giản hoá: bom liên hoàn và tên lửa được giải tuần tự lúc server nhận phát bắn, vị trí rơi cập nhật ngay; tên lửa có thể trúng mục tiêu khi client còn đang vẽ nó rơi. Bom liên hoàn thì không: mọi cú rơi trong chuỗi chạy nhanh ×3 so với rơi tự do (quãng rơi và damage rơi giữ nguyên) và một quả bom chỉ nổ khi mọi cú rơi trước đã chạm đất + 0,08 s (nếu cần, quả sau phóng trễ hơn 0,1 s; ~9% khoảng cách bị kéo dài khi quét các góc bắn trên grassland_valley, phát cầu vồng của bot thì phần lớn). Đường bay vẫn giới hạn `MaxFlightSeconds` (4,5 s; trước 032: 6 s): bắn cầu vồng quá cao (quả đầu bay từ ~4,0 s, trước 032 ~5,2 s; chỉ người chơi bắn tay; bot chỉ lob khi ≤ 3,5 s) thì bom sâu nhất có thể hết giờ bay và biến mất (khoảng cách 0,1 s không đổi điều này: giới hạn tính theo đường bay của từng quả). Nguồn bắn của bom liên hoàn giữ nguyên dù người bắn rơi vào hố của mình. `projectile_count` / `status_effect_id` trong `config_skills` chỉ để hiển thị.
+
+### Ngũ hành, Tide, Địa chấn liên hoàn (migration 054 / 055)
+
+**Hệ** (`config_elements`, `gamedata/elements.go`): Kim `metal`, Mộc `wood`, Thủy `water`, Hỏa `fire`, Thổ `earth`; vòng khắc Kim → Mộc → Thổ → Thủy → Hỏa → Kim (`beats`). Nhân vật (`config_characters.element`): Rookie Hỏa, Tanko Thổ, Spark Kim, Flora Mộc, Tide Thủy. Boss (`config_bosses.element`): Rô-bốt Thép Kim, Cua Dung Nham Hỏa, Phù Thuỷ Băng Thủy; lính mang hệ của boss. `BattlePlayerState.element` (MatchStarted / MatchStateSync) và event `summon` có `element`.
+
+**Hệ số** (`rules.elements`, admin Game Rules › Ngũ hành, 0..100 %; `match/element.go` `elementFactor`):
+- PvP (mọi trận không phải boss, kể cả bot): hệ người đánh khắc hệ mục tiêu × (1 + 10 %) `strong`; hệ mục tiêu khắc hệ người đánh × (1 − 10 %) `weak`; còn lại × 1.
+- Boss: nhân vật đánh boss / lính mà hệ nhân vật khắc hệ boss × (1 + 20 %); boss / lính đánh nhân vật mà hệ boss khắc × (1 + 10 %) (cả hai `strong`); không bao giờ giảm.
+- Cùng đội, cùng hệ, không hệ: × 1.
+- Áp lên mọi sát thương từ đơn vị lên đơn vị: đạn, kỹ năng (mưa tên lửa, bom liên hoàn, tia laze, nổ bông tuyết), tia / mưa / sóng chấn động của boss, tự nổ và nổ khi chết của lính (cả loại % máu tối đa). Nhân vào sát thương thô, cùng chỗ với power_shot / skill power, **trước** phòng thủ, chí mạng, khiên lính của boss và khiên; trần sát thương của kỹ năng (`capOfBase`) cũng nhân theo. Không áp cho rơi, `out_of_map`, bỏng / dung nham đầu lượt, hồi máu. Bot tính cả hệ khi chọn phát bắn.
+
+**Tide** (`tide`, Thủy, `controller` "Khống chế"; 1400 HP, damage 500, mobility 110, defense 45, skill power 70, terrain 16, difficulty 2; gun kind `water_gun`; có như các nhân vật khác: shop `unlock_tide_coin` 5000 coin / `unlock_tide_gem` 300 gem, súng `tide_weapon_lv10..40` Iron .. Dragon Water Gun, bot chọn được). Vũ khí `water_orb` (500, nổ 38 px, terrain 16 → hố 9,6 px, nặng 0,9, gió 1,0, `bounces` 1): nảy một lần rồi nổ (xem Đạn nảy).
+
+**Nổ bông tuyết** (`snow_nova`, effect `nova`, `match/skill_nova.go`, params `gamedata.NovaTuning`): không ngắm (`aimKind` `none`), không đạn, không hố, không rơi. Sau `castTime` 0,35 s nổ tại tâm thân Tide; mọi địch (người, lính, boss, kể cả đang bay) có thân trong `radius` 500 px (`blastDistance`: tới mép thân) nhận (`centreBase` 1,3 + `centrePerRank` 0,1 × cấp) × base ở tâm, giảm tuyến tính còn `edgeFactor` 0,4 × base ở mép, × hệ, rồi phòng thủ / chí mạng / khiên lính boss; lúc vòng băng (`waveSpeed` 1400 px/s) tới (`castTime + d / waveSpeed`): `damage` cause `nova`, còn sống thì `freeze` `freezeTurns` 1 lượt. Tide, đồng đội không bị gì. Bot: dùng khi ≥ 2 địch trong tầm, hoặc 1 địch mà sát thương dự kiến của nova > sát thương phát bắn tốt nhất × tỉ lệ trúng.
+
+**Địa chấn liên hoàn** (Tanko, `heavy_bomb`): đổi tên và mô tả (tảng đá bọc đất, đất nứt, gai đá, đất đá vùi chân), cơ chế và số liệu giữ nguyên (`bomb_chain`, `root`). 054 chỉ đổi khi vẫn là chữ cũ.
 
 ### Reward System
 
@@ -1216,7 +1235,7 @@ Không có item khiên (bloom là skill), nên luật "khiên khi máu thấp v�
 
 ---
 
-## 8a. Chế độ Boss (migration 045 / 046, v2: 047 / 048 / 049, v3: 050 / 051, sau v3: 052 / 053)
+## 8a. Chế độ Boss (migration 045 / 046, v2: 047 / 048 / 049, v3: 050 / 051, sau v3: 052 / 053, hệ: 054)
 
 Đội tối đa 4 người (người thật + bot đồng đội, team 1) đánh một boss và lính của nó (team 2). Mỗi boss là một dòng `config_bosses` (admin trang **Bosses**), có chế độ lobby riêng trong mục Boss của màn Chọn chế độ (`config_game_modes` kind `lobby`, category `boss`, icon `boss`, `party_size` 4, queue `boss:<bossId>`) và dòng match cùng id với queue (`boss:steel_robot` "Rô-bốt Thép": lịch sử / kết quả hiện tên boss). Code: `internal/game/gamedata/boss.go` (config, kiểm tra), `match/boss.go` (trận), `match/reward_boss.go` (thưởng), `matchmaker/plan_boss.go` (ghép), `room/boss.go` (tạo trận), `internal/api/boss` (`GET /boss/runs`), `mapgen/arenas.go` (arena).
 
@@ -1367,8 +1386,8 @@ Rô-bốt Thép, bảng bonus: 100 + 60 / 1000 damage (tối đa 1.500) + 400 th
 | Method | Path | Mô tả |
 |--------|------|-------|
 | GET | `/` | Dashboard (active rooms, total players) |
-| GET/POST | `/characters/*` | CRUD nhân vật |
-| GET/POST | `/weapons/*` | CRUD vũ khí |
+| GET/POST | `/characters/*` | CRUD nhân vật (trang chi tiết: hệ ngũ hành, 054) |
+| GET/POST | `/weapons/*` | CRUD vũ khí (`bounces` 0..5, 054) |
 | GET/POST | `/skills/*` | CRUD skills |
 | GET/POST | `/items/*` | CRUD items |
 | GET/POST | `/maps/*` | CRUD maps |
@@ -1376,7 +1395,7 @@ Rô-bốt Thép, bảng bonus: 100 + 60 / 1000 damage (tối đa 1.500) + 400 th
 | GET/POST | `/gamedata`, `/gamedata/reload` | Version game data (admin, từng server game / api, lỗi reload), payload `/gamedata`; "Tải lại cấu hình" tăng revision + báo mọi server |
 | GET/POST | `/rules` | Game Rules: các dòng số (physics, lượt, di chuyển, rơi, trang bị) và mọi nhóm `rules.*`, kiểm tra kiểu / khoảng / bắt buộc |
 | GET/POST | `/skills/tuning` | Mẫu mô tả + thông số kỹ năng (`config_skills.params`), xem trước số và mô tả theo cấp súng |
-| GET/POST | `/texts/{table}` | Sửa tại chỗ: status-effects (tên, marker, banner, xấu / mất lượt / chặn di chuyển), rank-tiers (tên, khoảng điểm, kiểm tra bands), equipment-tiers, equipment-slots, gun-kinds, type-words, game-modes (category, icon, queue `ranked_2v2` / `casual_2v2` / `boss:<id>` của boss đang bật, số người 1..2 / 1..4 với boss, xếp hạng, bật; `checkGameModes`), mode-categories, tips |
+| GET/POST | `/texts/{table}` | Sửa tại chỗ: status-effects (tên, marker, banner, xấu / mất lượt / chặn di chuyển), rank-tiers (tên, khoảng điểm, kiểm tra bands), equipment-tiers, equipment-slots, elements (054: tên hệ, hệ bị khắc; không thêm / xoá, kiểm tra không tự khắc), gun-kinds, type-words, game-modes (category, icon, queue `ranked_2v2` / `casual_2v2` / `boss:<id>` của boss đang bật, số người 1..2 / 1..4 với boss, xếp hạng, bật; `checkGameModes`), mode-categories, tips |
 | GET/POST | `/bosses`, `/bosses/edit`, `/bosses/save`, `/bosses/delete` | Boss: sửa mọi trường của `config_bosses` (JSON là textarea, kiểm tra `gamedata.ValidateBoss`), xoá khi không chế độ nào dùng (§8a) |
 | GET/POST | `/shop/*` | CRUD shop offers |
 | GET/POST | `/players` | Player list, ban/unban |

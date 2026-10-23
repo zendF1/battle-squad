@@ -38,6 +38,8 @@ type CharacterConfig struct {
 	Playstyle string `yaml:"playstyle,omitempty"`
 	GunKind   string `yaml:"gunKind,omitempty"`
 	SortOrder int    `yaml:"sortOrder,omitempty"`
+	// Element (054) is the character's element id (config_elements), "" for none.
+	Element string `yaml:"element,omitempty"`
 }
 
 type WeaponConfig struct {
@@ -49,6 +51,9 @@ type WeaponConfig struct {
 	ProjectileWeight float64 `yaml:"projectileWeight"`
 	WindInfluence    float64 `yaml:"windInfluence"`
 	MultiHit         int     `yaml:"multiHit"`
+	// Bounces (054) is how many times the shell bounces off terrain before it explodes (Tide's
+	// water orb 1; 0 for every other weapon): rules.physics bounceRestitution / bounceFriction.
+	Bounces int `yaml:"bounces,omitempty"`
 }
 
 type SkillConfig struct {
@@ -401,11 +406,12 @@ func LoadFromDB(ctx context.Context, db *database.PostgresDB) (*Snapshot, error)
 	}
 
 	if err := each("config_characters", `SELECT character_id, name, role, hp, damage, mobility, defense, skill_power,
-		terrain_damage, difficulty, weapon_id, skill_id, role_name, playstyle, gun_kind, sort_order FROM config_characters`,
+		terrain_damage, difficulty, weapon_id, skill_id, role_name, playstyle, gun_kind, sort_order, element FROM config_characters`,
 		func(rows pgx.Rows) error {
 			var c CharacterConfig
 			if err := rows.Scan(&c.CharacterID, &c.Name, &c.Role, &c.HP, &c.Damage, &c.Mobility, &c.Defense, &c.SkillPower,
-				&c.TerrainDamage, &c.Difficulty, &c.WeaponID, &c.SkillID, &c.RoleName, &c.Playstyle, &c.GunKind, &c.SortOrder); err != nil {
+				&c.TerrainDamage, &c.Difficulty, &c.WeaponID, &c.SkillID, &c.RoleName, &c.Playstyle, &c.GunKind, &c.SortOrder,
+				&c.Element); err != nil {
 				return err
 			}
 			gData.Characters[c.CharacterID] = c
@@ -415,10 +421,10 @@ func LoadFromDB(ctx context.Context, db *database.PostgresDB) (*Snapshot, error)
 	}
 
 	if err := each("config_weapons", `SELECT weapon_id, name, damage, explosion_radius, terrain_damage, projectile_weight,
-		wind_influence, multi_hit FROM config_weapons`, func(rows pgx.Rows) error {
+		wind_influence, multi_hit, bounces FROM config_weapons`, func(rows pgx.Rows) error {
 		var w WeaponConfig
 		if err := rows.Scan(&w.WeaponID, &w.Name, &w.Damage, &w.ExplosionRadius, &w.TerrainDamage, &w.ProjectileWeight,
-			&w.WindInfluence, &w.MultiHit); err != nil {
+			&w.WindInfluence, &w.MultiHit, &w.Bounces); err != nil {
 			return err
 		}
 		gData.Weapons[w.WeaponID] = w
@@ -569,12 +575,12 @@ func LoadFromDB(ctx context.Context, db *database.PostgresDB) (*Snapshot, error)
 
 	if err := each("config_bosses", `SELECT boss_id, name, description, recommended_level, enabled, sort_order, map_id,
 		hp, defense, damage, body_size, turn_limit, shielded_damage_factor, out_of_map, skills, minions, waves, rewards,
-		daily_bonus_runs, flying, hover, summon FROM config_bosses ORDER BY sort_order, boss_id`, func(rows pgx.Rows) error {
+		daily_bonus_runs, flying, hover, summon, element FROM config_bosses ORDER BY sort_order, boss_id`, func(rows pgx.Rows) error {
 		var b BossConfig
 		var skills, minions, waves, rewards, hover, summon []byte
 		if err := rows.Scan(&b.BossID, &b.Name, &b.Description, &b.RecommendedLevel, &b.Enabled, &b.SortOrder, &b.MapID,
 			&b.HP, &b.Defense, &b.Damage, &b.BodySize, &b.TurnLimit, &b.ShieldedDamageFactor, &b.OutOfMap,
-			&skills, &minions, &waves, &rewards, &b.DailyBonusRuns, &b.Flying, &hover, &summon); err != nil {
+			&skills, &minions, &waves, &rewards, &b.DailyBonusRuns, &b.Flying, &hover, &summon, &b.Element); err != nil {
 			return err
 		}
 		// A boss the match cannot run is dropped (and logged), like an invalid map
@@ -638,6 +644,21 @@ func LoadFromDB(ctx context.Context, db *database.PostgresDB) (*Snapshot, error)
 			return nil
 		}); err != nil {
 		return nil, err
+	}
+
+	if err := each("config_elements", `SELECT element_id, name, beats, sort_order FROM config_elements ORDER BY sort_order, element_id`,
+		func(rows pgx.Rows) error {
+			var e ElementConfig
+			if err := rows.Scan(&e.ElementID, &e.Name, &e.Beats, &e.SortOrder); err != nil {
+				return err
+			}
+			s.Elements = append(s.Elements, e)
+			return nil
+		}); err != nil {
+		return nil, err
+	}
+	if len(s.Elements) == 0 {
+		s.Elements = DefaultElements()
 	}
 
 	switch {

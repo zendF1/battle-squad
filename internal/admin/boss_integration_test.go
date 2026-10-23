@@ -190,6 +190,7 @@ func TestBossMigration(t *testing.T) {
 	runSQL(t, db, "052_boss_status_items.up.sql")
 	runSQL(t, db, "053_snowman_death_blast.up.sql")
 	runSQL(t, db, "053_snowman_death_blast.up.sql")
+	runSQL(t, db, "054_elements.up.sql") // the recreated config_bosses gets its element column and the bosses' elements again
 	if snap, err := gamedata.LoadFromDB(ctx, db); err != nil || !reflect.DeepEqual(snap.Bosses, gamedata.DefaultBosses()) ||
 		snap.ModeMaxItems("boss:lava_crab") != 6 {
 		t.Fatalf("down / up: %v", err)

@@ -34,6 +34,31 @@ type GameData struct {
 	GunKinds []GunKind `json:"gunKinds"`
 	// Bosses (boss mode, migration 046): the enabled bosses in display order.
 	Bosses []Boss `json:"bosses"`
+	// Elements (054): the five elements in display order and the element each beats;
+	// ElementRules their damage multipliers (characters[].element, bosses[].element).
+	Elements     []Element    `json:"elements"`
+	ElementRules ElementRules `json:"elementRules"`
+}
+
+// Element is a config_elements row: ElementID (metal, wood, water, fire, earth), its Vietnamese
+// Name (Kim, Mộc, Thủy, Hỏa, Thổ) and the element it Beats (khắc).
+type Element struct {
+	ElementID string `json:"elementId"`
+	Name      string `json:"name"`
+	Beats     string `json:"beats"`
+	SortOrder int    `json:"sortOrder"`
+}
+
+// ElementRules (rules.elements, percent 0..100): PvP an attacker whose element beats the
+// target's deals + PvpStrongPct %, one whose element the target's beats − PvpWeakPct %; boss
+// mode a character whose element beats the boss's deals the boss and its minions + BossStrongPct
+// %, the boss side deals a character its element beats + BossTakenPct %. The damage events say
+// which applied (ShotResolved events[].elementEffect strong / weak).
+type ElementRules struct {
+	PvpStrongPct  int `json:"pvpStrongPct"`
+	PvpWeakPct    int `json:"pvpWeakPct"`
+	BossStrongPct int `json:"bossStrongPct"`
+	BossTakenPct  int `json:"bossTakenPct"`
 }
 
 // Boss is an enabled config_bosses row as the client draws and describes it: ModeID is the
@@ -63,6 +88,8 @@ type Boss struct {
 	Flying               bool         `json:"flying"`
 	Hover                *BossHover   `json:"hover"`
 	Summon               *BossSummon  `json:"summon"`
+	// Element (054) is the boss's element id ("" none); its minions carry it too.
+	Element string `json:"element"`
 }
 
 // BossSummon is a boss's free summon: Count minions of MinionID at the start of its turn from
@@ -157,6 +184,15 @@ type Physics struct {
 	CollisionStepPx float64     `json:"collisionStepPx"`
 	ShotOriginLift  float64     `json:"shotOriginLift"`
 	OutOfBounds     OutOfBounds `json:"outOfBounds"`
+	// Bounce (054): a shell of a weapon with bounces > 0 leaves a terrain contact with
+	// −Restitution × its speed along the surface normal and Friction × its speed along it.
+	Bounce Bounce `json:"bounce"`
+}
+
+// Bounce is rules.physics bounceRestitution / bounceFriction (ratios 0..1).
+type Bounce struct {
+	Restitution float64 `json:"restitution"`
+	Friction    float64 `json:"friction"`
 }
 
 // OutOfBounds: a flight ends at x < −Left, x > map width + Right or y > map height + Below.
@@ -262,6 +298,9 @@ type Weapon struct {
 	ProjectileWeight float64 `json:"projectileWeight"`
 	WindInfluence    float64 `json:"windInfluence"`
 	MultiHit         int     `json:"multiHit"`
+	// Bounces (054) is how many times its shell bounces off terrain before it explodes (the
+	// water orb 1, the others 0); ShotResolved projectiles[].bounces reports each.
+	Bounces int `json:"bounces"`
 }
 
 // Skill is a config_skills row with its rules: Description is a template whose {key}
@@ -303,6 +342,8 @@ type Character struct {
 	SkillPower    int    `json:"skillPower"`
 	TerrainDamage int    `json:"terrainDamage"`
 	Difficulty    int    `json:"difficulty"`
+	// Element (054) is the character's element id (elements[]), "" none.
+	Element string `json:"element"`
 }
 
 // Item is a config_items row. Instant items are used with UseItem and act at once; the others

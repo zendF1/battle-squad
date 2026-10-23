@@ -62,8 +62,8 @@ func TestRankedRosterOneHuman(t *testing.T) {
 		`{"playerId":"p1","displayName":"Smoke","characterId":"spark","isBot":false,"level":40,"rating":1050,"tier":"silver","division":3,"titleId":"first_blood"},` +
 		`{"playerId":"bot_0001","displayName":"Bot 0001","characterId":"spark","isBot":true,"level":40,"rating":1050,"tier":"silver","division":3,"titleId":""}]},` +
 		`{"teamId":2,"players":[` +
-		`{"playerId":"bot_0002","displayName":"Bot 0002","characterId":"rookie","isBot":true,"level":40,"rating":1050,"tier":"silver","division":3,"titleId":""},` +
-		`{"playerId":"bot_0003","displayName":"Bot 0003","characterId":"tanko","isBot":true,"level":40,"rating":1050,"tier":"silver","division":3,"titleId":""}]}]}`
+		`{"playerId":"bot_0002","displayName":"Bot 0002","characterId":"tanko","isBot":true,"level":40,"rating":1050,"tier":"silver","division":3,"titleId":""},` +
+		`{"playerId":"bot_0003","displayName":"Bot 0003","characterId":"rookie","isBot":true,"level":40,"rating":1050,"tier":"silver","division":3,"titleId":""}]}]}`
 	if string(raw) != want {
 		t.Fatalf("MatchFound\n got %s\nwant %s", raw, want)
 	}

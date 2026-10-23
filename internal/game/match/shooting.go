@@ -92,6 +92,7 @@ func SimulateProjectile(
 	hitPlayerID := ""
 	var explosionPoint *Vector2
 	drill := &drillState{remaining: pierceDistance}
+	bouncesLeft := weapon.Bounces
 	lastRecordedTime := -recordStep // force first record
 
 	for t < maxFlight {
@@ -118,6 +119,21 @@ func SimulateProjectile(
 		hit, hitPos, hitPlayer := checkSegmentCollisions(
 			prevPos, position, ownerID, ownerTeamID, terrain, players, drill, hitRadius, lift, sr.CollisionStepPx,
 		)
+
+		// A bouncing shell's terrain contact (not the floor under the map): it leaves the
+		// surface (bounce) and flies on; a unit hit always explodes
+		if hit && hitPlayer == "" && bouncesLeft > 0 && hitPos.Y < float64(terrain.Height)-0.5 {
+			bouncesLeft--
+			tb := bounceTime(prevPos, position, hitPos, t, timeStep)
+			at := bounceContact(terrain, prevPos, hitPos)
+			out := bounceVelocity(velocity, surfaceNormal(terrain, hitPos, velocity), sr.BounceRestitution, sr.BounceFriction)
+			result.Path = append(result.Path,
+				ProjectileStep{Position: at, Velocity: velocity, Time: tb},
+				ProjectileStep{Position: at, Velocity: out, Time: tb})
+			result.Bounces = append(result.Bounces, ProjectileBounce{T: tb, Position: at})
+			position, velocity, t, lastRecordedTime = at, out, tb, tb
+			continue
+		}
 
 		if hit {
 			if hitPlayer != "" {
@@ -153,6 +169,80 @@ func SimulateProjectile(
 	result.ExplosionPoint = explosionPoint
 
 	return result
+}
+
+// Bounces (054, weapon bounces > 0: Tide's water orb). A shell's first terrain contacts (up to
+// its weapon's bounces, never the floor under the map) bounce it instead of exploding it: its
+// velocity splits along the surface normal (surfaceNormal) and the surface, leaving with
+// −bounceRestitution × the normal part and bounceFriction × the surface part (rules.physics). The
+// path records the bounce twice at its time and point (the contact point, the last free pixel
+// before the terrain): with the velocity it arrived with, then the one it leaves with, so a client
+// replaying the samples (a constant-acceleration arc between two) flies both legs exactly. The
+// next contact (terrain or a unit), or any unit hit before it, explodes as usual.
+
+// bounceTime is when the step from prev (time t − step) to curr (time t) met the terrain at hit.
+func bounceTime(prev, curr, hit Vector2, t, step float64) float64 {
+	seg := math.Hypot(curr.X-prev.X, curr.Y-prev.Y)
+	if seg <= 0 {
+		return t
+	}
+	f := math.Min(1, math.Hypot(hit.X-prev.X, hit.Y-prev.Y)/seg)
+	return t - step + f*step
+}
+
+// bounceContact is the last free point before hit on the way from prev: hit backed off toward
+// prev 1 px at a time until it is out of the terrain (prev itself when the whole way is solid).
+func bounceContact(t *Terrain, prev, hit Vector2) Vector2 {
+	dx, dy := prev.X-hit.X, prev.Y-hit.Y
+	d := math.Hypot(dx, dy)
+	if d <= 0 {
+		return prev
+	}
+	ux, uy := dx/d, dy/d
+	for s := 1.0; s < d; s++ {
+		p := Vector2{X: hit.X + ux*s, Y: hit.Y + uy*s}
+		if !t.IsSolid(p.X, p.Y) {
+			return p
+		}
+	}
+	return prev
+}
+
+// surfaceNormal is the unit normal of the terrain at p, pointing out of it: away from the solid
+// pixels within bounceNormalRadius of p. Where that cannot tell (none or solid all around, or
+// the estimate faces along v), it is −v.
+func surfaceNormal(t *Terrain, p, v Vector2) Vector2 {
+	const bounceNormalRadius = 6
+	sx, sy := 0.0, 0.0
+	for dy := -bounceNormalRadius; dy <= bounceNormalRadius; dy++ {
+		for dx := -bounceNormalRadius; dx <= bounceNormalRadius; dx++ {
+			if dx*dx+dy*dy > bounceNormalRadius*bounceNormalRadius || (dx == 0 && dy == 0) {
+				continue
+			}
+			if t.IsSolid(p.X+float64(dx), p.Y+float64(dy)) {
+				sx += float64(dx)
+				sy += float64(dy)
+			}
+		}
+	}
+	n := math.Hypot(sx, sy)
+	speed := math.Hypot(v.X, v.Y)
+	if n < 1e-9 || (speed > 0 && (-sx*v.X-sy*v.Y)/n > 0) {
+		if speed <= 0 {
+			return Vector2{X: 0, Y: -1}
+		}
+		return Vector2{X: -v.X / speed, Y: -v.Y / speed}
+	}
+	return Vector2{X: -sx / n, Y: -sy / n}
+}
+
+// bounceVelocity is v after a bounce off a surface of normal n: the part along n reversed ×
+// restitution, the part along the surface × friction.
+func bounceVelocity(v, n Vector2, restitution, friction float64) Vector2 {
+	vn := v.X*n.X + v.Y*n.Y
+	nx, ny := vn*n.X, vn*n.Y
+	tx, ty := v.X-nx, v.Y-ny
+	return Vector2{X: tx*friction - nx*restitution, Y: ty*friction - ny*restitution}
 }
 
 // drillState tracks a drilling projectile's pass through the first terrain block it meets.
