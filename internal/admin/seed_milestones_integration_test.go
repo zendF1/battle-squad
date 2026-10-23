@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"battle-squad/internal/shared/database/dbtest"
+	"battle-squad/internal/shared/migrate"
 )
 
 var milestoneSeedMigrations = []string{"001_init_schema.up.sql", "003_add_match_event_logs.up.sql", "010_equipment_system.up.sql",
@@ -16,10 +17,10 @@ func TestSeedMilestonesMatchesMigration(t *testing.T) {
 	if _, err := seeded.Pool.Exec(context.Background(), `DELETE FROM missions WHERE type = 'milestone'`); err != nil {
 		t.Fatal(err)
 	}
-	if err := SeedMilestones(context.Background(), seeded); err != nil {
+	if err := migrate.SeedMilestones(context.Background(), seeded.Pool); err != nil {
 		t.Fatal(err)
 	}
-	if err := SeedMilestones(context.Background(), seeded); err != nil { // rerun
+	if err := migrate.SeedMilestones(context.Background(), seeded.Pool); err != nil { // rerun
 		t.Fatal(err)
 	}
 	migrated := dbtest.NewSchema(t, 0, milestoneSeedMigrations...)
@@ -36,7 +37,7 @@ func TestSeedMilestonesAttachesTitles(t *testing.T) {
 	ctx := context.Background()
 	old := dbtest.NewSchema(t, 0, "001_init_schema.up.sql", "003_add_match_event_logs.up.sql", "010_equipment_system.up.sql", "026_milestones.up.sql")
 	for i := 0; i < 2; i++ {
-		if err := SeedMilestones(ctx, old); err != nil {
+		if err := migrate.SeedMilestones(ctx, old.Pool); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -55,7 +56,7 @@ func TestSeedTitlesMatchesMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < 2; i++ {
-		if err := SeedTitles(ctx, seeded); err != nil {
+		if err := migrate.SeedTitles(ctx, seeded.Pool); err != nil {
 			t.Fatal(err)
 		}
 	}

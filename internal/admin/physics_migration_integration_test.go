@@ -7,6 +7,7 @@ import (
 
 	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/shared/database/dbtest"
+	"battle-squad/internal/shared/migrate"
 )
 
 // The admin seed's physics rows are gamedata.DefaultPhysics() (what the match uses when a row
@@ -23,7 +24,7 @@ func TestSeedPhysicsMatchesDefaults(t *testing.T) {
 		"physics.max_flight_seconds":          d.MaxFlightSeconds,
 	}
 	seen := 0
-	for _, s := range defaultSettings {
+	for _, s := range migrate.DefaultSettings {
 		w, ok := want[s.Key]
 		if !ok {
 			continue
@@ -65,7 +66,7 @@ func TestFasterShellsMigrationMatchesSeed(t *testing.T) {
 		return v
 	}
 	seed := map[string]string{}
-	for _, s := range defaultSettings {
+	for _, s := range migrate.DefaultSettings {
 		seed[s.Key] = s.Value
 	}
 	for _, k := range []string{"physics.gravity", "physics.projectile_speed_multiplier", "physics.wind_scale", "physics.max_flight_seconds"} {

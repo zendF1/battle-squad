@@ -5,6 +5,7 @@ package dbtest
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,9 +13,20 @@ import (
 	"time"
 
 	"battle-squad/internal/shared/database"
+	"battle-squad/migrations"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// Migrations are every up migration cmd/migrate applies (migrations.FS), in filename order.
+func Migrations(t *testing.T) []string {
+	t.Helper()
+	names, err := fs.Glob(migrations.FS, "*.up.sql")
+	if err != nil || len(names) == 0 {
+		t.Fatalf("migrations: %v", err)
+	}
+	return names // fs.Glob sorts
+}
 
 // NewSchema applies the named migrations (e.g. "001_init_schema.up.sql") into a
 // fresh schema, dropped when the test ends. maxConns <= 0 keeps the pgx default.

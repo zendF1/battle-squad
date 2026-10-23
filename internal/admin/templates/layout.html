@@ -95,6 +95,7 @@ input[type=checkbox] { width: auto; }
     <a href="/players" class="{{if eq .ActivePage "players"}}active{{end}}">Players</a>
     <div class="nav-group">System</div>
     <a href="/devtools" class="{{if eq .ActivePage "devtools"}}active{{end}}">Dev Tools</a>
+    <form method="POST" action="/logout" style="padding: 15px 20px;"><button type="submit" class="btn btn-sm">Sign out</button></form>
 </div>
 <div class="content">
 {{with .GD}}<div class="gd-bar">

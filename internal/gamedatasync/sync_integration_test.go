@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"battle-squad/internal/admin"
 	apigamedata "battle-squad/internal/api/gamedata"
 	"battle-squad/internal/game/gamedata"
 	"battle-squad/internal/game/match"
@@ -20,33 +19,21 @@ import (
 	"battle-squad/internal/gamedatasync"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/database/dbtest"
+	"battle-squad/internal/shared/migrate"
 	"battle-squad/internal/shared/ranked"
 
 	"github.com/go-chi/chi/v5"
 )
 
 func migrations(t *testing.T) []string {
-	t.Helper()
-	_, self, _, _ := runtime.Caller(0)
-	src, err := os.ReadFile(filepath.Join(filepath.Dir(self), "..", "..", "cmd", "migrate", "main.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var names []string
-	for _, line := range strings.Split(string(src), "\n") {
-		if i := strings.Index(line, `filepath.Join("migrations", "`); i >= 0 {
-			rest := line[i+len(`filepath.Join("migrations", "`):]
-			names = append(names, rest[:strings.Index(rest, `"`)])
-		}
-	}
-	return names
+	return dbtest.Migrations(t)
 }
 
 func seeded(t *testing.T) *database.PostgresDB {
 	t.Helper()
 	db := dbtest.NewSchema(t, 0, migrations(t)...)
 	_, self, _, _ := runtime.Caller(0)
-	if err := admin.SeedAll(context.Background(), db, filepath.Join(filepath.Dir(self), "..", "..", "configs")); err != nil {
+	if _, err := migrate.SeedAll(context.Background(), db.Pool, os.DirFS(filepath.Join(filepath.Dir(self), "..", "..", "configs"))); err != nil {
 		t.Fatal(err)
 	}
 	return db

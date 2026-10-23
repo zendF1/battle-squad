@@ -1,17 +1,42 @@
-package admin
+package migrate
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"strings"
 
 	"battle-squad/internal/api/milestone"
 	"battle-squad/internal/api/title"
 	"battle-squad/internal/game/gamedata"
-	"battle-squad/internal/shared/database"
-	"battle-squad/internal/shared/observability"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+// Execer is what the seed writes through: a pgx.Tx, or a pool in tests.
+type Execer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// Beginner opens the seed's transaction: a *pgxpool.Pool or *pgxpool.Conn.
+type Beginner interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
+// counting adds up the rows every Exec changed.
+type counting struct {
+	Execer
+	rows int64
+}
+
+func (c *counting) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	tag, err := c.Execer.Exec(ctx, sql, args...)
+	c.rows += tag.RowsAffected()
+	return tag, err
+}
 
 type settingDef struct {
 	Key         string
@@ -21,7 +46,8 @@ type settingDef struct {
 	Category    string
 }
 
-var defaultSettings = []settingDef{
+// DefaultSettings are the scalar game_settings rows the seed inserts.
+var DefaultSettings = []settingDef{
 	{"physics.gravity", "445", "number", "Lực hấp dẫn kéo đạn xuống. Tăng = đạn rơi nhanh, tầm bắn ngắn", "physics"},
 	{"physics.projectile_speed_multiplier", "9.6", "number", "Hệ số tốc độ đạn = power × giá trị này. Tăng = đạn bay xa hơn", "physics"},
 	{"physics.wind_scale", "67", "number", "Hệ số ảnh hưởng gió lên đạn. Tăng = gió đẩy đạn lệch nhiều hơn", "physics"},
@@ -45,21 +71,50 @@ var defaultSettings = []settingDef{
 	{"equipment.weapon_upgrade_cost_multiplier", "3", "number", "Vũ khí cần upgrade_cost × hệ số này sức mạnh đá (>= 1)", "equipment"},
 }
 
-// SeedAll seeds both game_settings and config tables from YAML files.
-func SeedAll(ctx context.Context, db *database.PostgresDB, configDir string) error {
-	if err := SeedSettings(ctx, db); err != nil {
+// SeedAll inserts the missing reference game data rows (game_settings, the config tables from
+// the YAML in configs, equipment, titles, milestones) in one transaction and returns how many
+// it inserted. Every insert is ON CONFLICT DO NOTHING, so admin edits are never overwritten.
+// When nothing was missing the transaction rolls back: the config tables' statement triggers
+// then leave gamedata_revision alone, and a rerun changes nothing.
+func SeedAll(ctx context.Context, db Beginner, configs fs.FS) (int64, error) {
+	return seed(ctx, db, configs, false)
+}
+
+// SeedMissing is how many rows SeedAll would insert (it rolls back).
+func SeedMissing(ctx context.Context, db Beginner, configs fs.FS) (int64, error) {
+	return seed(ctx, db, configs, true)
+}
+
+func seed(ctx context.Context, db Beginner, configs fs.FS, dryRun bool) (int64, error) {
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+	c := &counting{Execer: tx}
+	if err := seedAll(ctx, c, configs); err != nil {
+		return 0, err
+	}
+	if c.rows == 0 || dryRun {
+		return c.rows, nil
+	}
+	return c.rows, tx.Commit(ctx)
+}
+
+func seedAll(ctx context.Context, q Execer, configs fs.FS) error {
+	if err := SeedSettings(ctx, q); err != nil {
 		return fmt.Errorf("seed settings: %w", err)
 	}
-	if err := SeedConfigFromYAML(ctx, db, configDir); err != nil {
+	if err := SeedConfigFromYAML(ctx, q, configs); err != nil {
 		return fmt.Errorf("seed config from YAML: %w", err)
 	}
-	if err := SeedEquipmentConfig(ctx, db); err != nil {
+	if err := SeedEquipmentConfig(ctx, q); err != nil {
 		return fmt.Errorf("seed equipment config: %w", err)
 	}
-	if err := SeedTitles(ctx, db); err != nil {
+	if err := SeedTitles(ctx, q); err != nil {
 		return fmt.Errorf("seed titles: %w", err)
 	}
-	if err := SeedMilestones(ctx, db); err != nil {
+	if err := SeedMilestones(ctx, q); err != nil {
 		return fmt.Errorf("seed milestones: %w", err)
 	}
 	return nil
@@ -67,22 +122,21 @@ func SeedAll(ctx context.Context, db *database.PostgresDB, configDir string) err
 
 // SeedTitles inserts the default titles (title.Defaults, as migrations/027) into
 // config_titles. ON CONFLICT DO NOTHING keeps edited rows.
-func SeedTitles(ctx context.Context, db *database.PostgresDB) error {
+func SeedTitles(ctx context.Context, db Execer) error {
 	query := `INSERT INTO config_titles (title_id, name, rarity, sort_order, description) VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (title_id) DO NOTHING`
 	for _, d := range title.Defaults {
-		if _, err := db.Pool.Exec(ctx, query, d.ID, d.Name, d.Rarity, d.SortOrder, d.Description); err != nil {
+		if _, err := db.Exec(ctx, query, d.ID, d.Name, d.Rarity, d.SortOrder, d.Description); err != nil {
 			return fmt.Errorf("insert title %s: %w", d.ID, err)
 		}
 	}
-	observability.Log.Info().Int("count", len(title.Defaults)).Msg("seeded titles")
 	return nil
 }
 
 // SeedMilestones inserts the default milestones (milestone.Defaults, as migrations/026) into
 // missions with type 'milestone'. ON CONFLICT DO NOTHING keeps edited rows; a row seeded
 // before titles gets its title item (milestone.TitleRewards) appended, as migrations/027.
-func SeedMilestones(ctx context.Context, db *database.PostgresDB) error {
+func SeedMilestones(ctx context.Context, db Execer) error {
 	query := `INSERT INTO missions (mission_id, type, track, target, required_value, sort_order, reward_coin, reward_gem, reward_items, description)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
 		ON CONFLICT (mission_id) DO NOTHING`
@@ -95,7 +149,7 @@ func SeedMilestones(ctx context.Context, db *database.PostgresDB) error {
 		if err != nil {
 			return err
 		}
-		if _, err := db.Pool.Exec(ctx, query, d.ID, milestone.MissionType, d.Track, d.Target, d.Required, d.SortOrder,
+		if _, err := db.Exec(ctx, query, d.ID, milestone.MissionType, d.Track, d.Target, d.Required, d.SortOrder,
 			d.Coin, d.Gem, string(raw), d.Description); err != nil {
 			return fmt.Errorf("insert milestone %s: %w", d.ID, err)
 		}
@@ -109,42 +163,40 @@ func SeedMilestones(ctx context.Context, db *database.PostgresDB) error {
 		if err != nil {
 			return err
 		}
-		if _, err := db.Pool.Exec(ctx, appendTitle, id, string(raw)); err != nil {
+		if _, err := db.Exec(ctx, appendTitle, id, string(raw)); err != nil {
 			return fmt.Errorf("attach title %s to milestone %s: %w", titleID, id, err)
 		}
 	}
-	observability.Log.Info().Int("count", len(milestone.Defaults)).Msg("seeded milestones")
 	return nil
 }
 
 // SeedSettings inserts default physics/match/movement settings into game_settings.
 // Uses ON CONFLICT DO NOTHING so re-running is safe.
-func SeedSettings(ctx context.Context, db *database.PostgresDB) error {
+func SeedSettings(ctx context.Context, db Execer) error {
 	query := `INSERT INTO game_settings (key, value, value_type, description, category)
 		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (key) DO NOTHING`
 
-	for _, s := range defaultSettings {
-		if _, err := db.Pool.Exec(ctx, query, s.Key, s.Value, s.ValueType, s.Description, s.Category); err != nil {
+	for _, s := range DefaultSettings {
+		if _, err := db.Exec(ctx, query, s.Key, s.Value, s.ValueType, s.Description, s.Category); err != nil {
 			return fmt.Errorf("insert setting %s: %w", s.Key, err)
 		}
 	}
 	// The rules rows (as migrations/041): every group with its defaults
 	rules := gamedata.DefaultRules()
 	for _, g := range gamedata.RuleGroups {
-		if _, err := db.Pool.Exec(ctx, query, g.Key, g.Encode(rules), "json", g.Title, "rules"); err != nil {
+		if _, err := db.Exec(ctx, query, g.Key, g.Encode(rules), "json", g.Title, "rules"); err != nil {
 			return fmt.Errorf("insert setting %s: %w", g.Key, err)
 		}
 	}
 
-	observability.Log.Info().Int("count", len(defaultSettings)+len(gamedata.RuleGroups)).Msg("seeded game_settings")
 	return nil
 }
 
-// SeedConfigFromYAML loads YAML config files via gamedata.LoadGameData and inserts
+// SeedConfigFromYAML loads the YAML files in configs (gamedata.LoadYAMLFS) and inserts
 // the data into config_* tables. Uses ON CONFLICT DO NOTHING so re-running is safe.
-func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir string) error {
-	snap, err := gamedata.LoadYAML(configDir)
+func SeedConfigFromYAML(ctx context.Context, db Execer, configs fs.FS) error {
+	snap, err := gamedata.LoadYAMLFS(configs)
 	if err != nil {
 		return fmt.Errorf("load game data: %w", err)
 	}
@@ -157,7 +209,7 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 		ON CONFLICT (character_id) DO NOTHING`
 	for _, c := range data.Characters {
-		if _, err := db.Pool.Exec(ctx, charQuery,
+		if _, err := db.Exec(ctx, charQuery,
 			c.CharacterID, c.Name, c.Role, c.HP, c.Damage, c.Mobility,
 			c.Defense, c.SkillPower, c.TerrainDamage, c.Difficulty, c.WeaponID, c.SkillID,
 			c.RoleName, c.Playstyle, c.GunKind, c.SortOrder, c.Element,
@@ -165,7 +217,6 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 			return fmt.Errorf("insert character %s: %w", c.CharacterID, err)
 		}
 	}
-	observability.Log.Info().Int("count", len(data.Characters)).Msg("seeded config_characters")
 
 	// Seed weapons
 	weaponQuery := `INSERT INTO config_weapons
@@ -173,14 +224,13 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (weapon_id) DO NOTHING`
 	for _, w := range data.Weapons {
-		if _, err := db.Pool.Exec(ctx, weaponQuery,
+		if _, err := db.Exec(ctx, weaponQuery,
 			w.WeaponID, w.Name, w.Damage, w.ExplosionRadius, w.TerrainDamage,
 			w.ProjectileWeight, w.WindInfluence, w.MultiHit, w.Bounces,
 		); err != nil {
 			return fmt.Errorf("insert weapon %s: %w", w.WeaponID, err)
 		}
 	}
-	observability.Log.Info().Int("count", len(data.Weapons)).Msg("seeded config_weapons")
 
 	// Seed skills
 	skillQuery := `INSERT INTO config_skills
@@ -200,14 +250,13 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 		if err != nil {
 			return err
 		}
-		if _, err := db.Pool.Exec(ctx, skillQuery,
+		if _, err := db.Exec(ctx, skillQuery,
 			s.SkillID, s.CharacterID, s.Name, s.CooldownTurn, s.EffectType,
 			s.ProjectileCount, s.StatusEffectID, s.DamageMultiplier, s.Description, s.DescriptionTemplate, string(rawParams),
 		); err != nil {
 			return fmt.Errorf("insert skill %s: %w", s.SkillID, err)
 		}
 	}
-	observability.Log.Info().Int("count", len(data.Skills)).Msg("seeded config_skills")
 
 	// Seed items
 	itemQuery := `INSERT INTO config_items
@@ -215,18 +264,19 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (item_id) DO NOTHING`
 	for _, i := range data.Items {
-		if _, err := db.Pool.Exec(ctx, itemQuery,
+		if _, err := db.Exec(ctx, itemQuery,
 			i.ItemID, i.Name, i.Type, i.TargetType, i.Value,
 			i.MaxUsePerMatch, i.Cooldown, i.DisplayName, i.SortOrder,
 		); err != nil {
 			return fmt.Errorf("insert item %s: %w", i.ItemID, err)
 		}
 	}
-	observability.Log.Info().Int("count", len(data.Items)).Msg("seeded config_items")
 
 	// Seed brick types (v2 — SERIAL PK, auto-increment)
 	var brickCount int
-	db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM config_brick_types`).Scan(&brickCount)
+	if err := db.QueryRow(ctx, `SELECT COUNT(*) FROM config_brick_types`).Scan(&brickCount); err != nil {
+		return fmt.Errorf("count brick types: %w", err)
+	}
 	if brickCount == 0 {
 		brickQuery := `INSERT INTO config_brick_types (name, image_id, destructible, color)
 			VALUES ($1, $2, $3, $4)`
@@ -242,11 +292,10 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 			{"Fragile", true, "#DEB887"},
 		}
 		for _, b := range defaultBricks {
-			if _, err := db.Pool.Exec(ctx, brickQuery, b.Name, "", b.Destructible, b.Color); err != nil {
+			if _, err := db.Exec(ctx, brickQuery, b.Name, "", b.Destructible, b.Color); err != nil {
 				return fmt.Errorf("insert brick type %s: %w", b.Name, err)
 			}
 		}
-		observability.Log.Info().Int("count", len(defaultBricks)).Msg("seeded config_brick_types")
 	}
 
 	// Seed maps (JSONB fields need marshaling)
@@ -288,14 +337,13 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 		if minRankTier == "" {
 			minRankTier = "bronze"
 		}
-		if _, err := db.Pool.Exec(ctx, mapQuery,
+		if _, err := db.Exec(ctx, mapQuery,
 			m.MapID, m.Name, m.Width, m.Height, windRange, terrainLayers, spawnPoints,
 			gridWidth, gridHeight, cellSize, tiles, minRankTier, m.ThemeOrDefault(), m.Description,
 		); err != nil {
 			return fmt.Errorf("insert map %s: %w", m.MapID, err)
 		}
 	}
-	observability.Log.Info().Int("count", len(data.Maps)).Msg("seeded config_maps")
 
 	return nil
 }
@@ -303,7 +351,7 @@ func SeedConfigFromYAML(ctx context.Context, db *database.PostgresDB, configDir 
 // SeedEquipmentConfig inserts default equipment configuration rows into
 // config_upgrade_rates, config_stones, config_gems, and config_set_bonuses.
 // Uses ON CONFLICT DO NOTHING so re-running is safe.
-func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
+func SeedEquipmentConfig(ctx context.Context, db Execer) error {
 	// ── Upgrade rates ─────────────────────────────────────────────────────────
 	type upgradeRate struct {
 		fromLevel   int
@@ -336,11 +384,10 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (from_level, to_level) DO NOTHING`
 	for _, r := range upgradeRates {
-		if _, err := db.Pool.Exec(ctx, upgradeRateQuery, r.fromLevel, r.toLevel, r.upgradeCost, r.maxPercent, r.failResetTo, r.carefulGem, r.carefulPct); err != nil {
+		if _, err := db.Exec(ctx, upgradeRateQuery, r.fromLevel, r.toLevel, r.upgradeCost, r.maxPercent, r.failResetTo, r.carefulGem, r.carefulPct); err != nil {
 			return fmt.Errorf("insert upgrade rate %d->%d: %w", r.fromLevel, r.toLevel, err)
 		}
 	}
-	observability.Log.Info().Int("count", len(upgradeRates)).Msg("seeded config_upgrade_rates")
 
 	// ── Stone configs ──────────────────────────────────────────────────────────
 	type stoneConfig struct {
@@ -368,11 +415,10 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (stone_level) DO NOTHING`
 	for _, s := range stones {
-		if _, err := db.Pool.Exec(ctx, stoneQuery, s.stoneLevel, s.power, s.priceCoin, s.priceGem, s.source); err != nil {
+		if _, err := db.Exec(ctx, stoneQuery, s.stoneLevel, s.power, s.priceCoin, s.priceGem, s.source); err != nil {
 			return fmt.Errorf("insert stone level %d: %w", s.stoneLevel, err)
 		}
 	}
-	observability.Log.Info().Int("count", len(stones)).Msg("seeded config_stones")
 
 	// ── Gem configs ────────────────────────────────────────────────────────────
 	type gemConfig struct {
@@ -403,11 +449,10 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 		VALUES ($1, $2, $3)
 		ON CONFLICT (gem_type, gem_level) DO NOTHING`
 	for _, g := range gems {
-		if _, err := db.Pool.Exec(ctx, gemQuery, g.gemType, g.gemLevel, g.statValue); err != nil {
+		if _, err := db.Exec(ctx, gemQuery, g.gemType, g.gemLevel, g.statValue); err != nil {
 			return fmt.Errorf("insert gem %s level %d: %w", g.gemType, g.gemLevel, err)
 		}
 	}
-	observability.Log.Info().Int("count", len(gems)).Msg("seeded config_gems")
 
 	// ── Set bonuses ────────────────────────────────────────────────────────────
 	type setBonus struct {
@@ -440,11 +485,10 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (tier, pieces_required) DO NOTHING`
 	for _, b := range setBonuses {
-		if _, err := db.Pool.Exec(ctx, setBonusQuery, b.tier, b.piecesRequired, b.bonusHP, b.bonusDmg, b.bonusDef, b.bonusCrit); err != nil {
+		if _, err := db.Exec(ctx, setBonusQuery, b.tier, b.piecesRequired, b.bonusHP, b.bonusDmg, b.bonusDef, b.bonusCrit); err != nil {
 			return fmt.Errorf("insert set bonus %s %dpc: %w", b.tier, b.piecesRequired, err)
 		}
 	}
-	observability.Log.Info().Int("count", len(setBonuses)).Msg("seeded config_set_bonuses")
 
 	// ── Normal equipment items ─────────────────────────────────────────────────
 	// Same rows as migrations/016 + 019 + 020. Required levels 10/20/30/40 (the id
@@ -504,7 +548,7 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 		if it.slot == "weapon" {
 			normalWeapons = append(normalWeapons, it)
 		}
-		if _, err := db.Pool.Exec(ctx, equipItemQuery,
+		if _, err := db.Exec(ctx, equipItemQuery,
 			it.itemID, it.name, it.slot, it.level, nil,
 			it.statHP, it.statDamage, it.statDefense, it.statCrit, it.statMoveEnergy,
 			it.priceCoin, it.slot != "weapon",
@@ -521,7 +565,7 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 		for _, w := range normalWeapons {
 			itemID := fmt.Sprintf("%s_weapon_lv%d", c.characterID, w.level)
 			tierWord := strings.Fields(w.name)[0] // Iron, Steel, Mithril, Dragon
-			if _, err := db.Pool.Exec(ctx, equipItemQuery,
+			if _, err := db.Exec(ctx, equipItemQuery,
 				itemID, tierWord+" "+c.gun, "weapon", w.level, c.characterID,
 				w.statHP, w.statDamage, w.statDefense, w.statCrit, w.statMoveEnergy,
 				w.priceCoin, true,
@@ -530,7 +574,6 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 			}
 		}
 	}
-	observability.Log.Info().Int("count", len(normalItems)+len(characterWeapons)*len(normalWeapons)).Msg("seeded normal config_equipment_items")
 
 	// ── Crafted equipment items ────────────────────────────────────────────────
 	// Multipliers: silver=1.3×Lv10, gold=1.3×Lv30, titan=1.5×Lv40, diamond=2.0×Lv40
@@ -585,14 +628,13 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 		VALUES ($1, $2, $3, 'crafted', $4, $5, NULL, 2, $6, $7, $8, $9, $10, 0, 0)
 		ON CONFLICT (item_id) DO NOTHING`
 	for _, it := range craftedItems {
-		if _, err := db.Pool.Exec(ctx, craftedItemQuery,
+		if _, err := db.Exec(ctx, craftedItemQuery,
 			it.itemID, it.name, it.slot, it.tier, it.level,
 			it.statHP, it.statDamage, it.statDefense, it.statCrit, it.statMoveEnergy,
 		); err != nil {
 			return fmt.Errorf("insert crafted equipment item %s: %w", it.itemID, err)
 		}
 	}
-	observability.Log.Info().Int("count", len(craftedItems)).Msg("seeded crafted config_equipment_items")
 
 	// ── Materials ──────────────────────────────────────────────────────────────
 	type material struct {
@@ -632,11 +674,10 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (material_id) DO NOTHING`
 	for _, m := range materials {
-		if _, err := db.Pool.Exec(ctx, materialQuery, m.materialID, m.name, m.source, m.tier, m.priceGem); err != nil {
+		if _, err := db.Exec(ctx, materialQuery, m.materialID, m.name, m.source, m.tier, m.priceGem); err != nil {
 			return fmt.Errorf("insert material %s: %w", m.materialID, err)
 		}
 	}
-	observability.Log.Info().Int("count", len(materials)).Msg("seeded config_materials")
 
 	// ── Crafting recipes ───────────────────────────────────────────────────────
 	type matQty struct {
@@ -711,11 +752,10 @@ func SeedEquipmentConfig(ctx context.Context, db *database.PostgresDB) error {
 		if err != nil {
 			return fmt.Errorf("marshal materials for recipe %s: %w", r.recipeID, err)
 		}
-		if _, err := db.Pool.Exec(ctx, recipeQuery, r.recipeID, r.resultItemID, matsJSON); err != nil {
+		if _, err := db.Exec(ctx, recipeQuery, r.recipeID, r.resultItemID, matsJSON); err != nil {
 			return fmt.Errorf("insert crafting recipe %s: %w", r.recipeID, err)
 		}
 	}
-	observability.Log.Info().Int("count", len(recipes)).Msg("seeded config_crafting_recipes")
 
 	return nil
 }

@@ -7,8 +7,6 @@ import (
 	"math"
 	"math/rand"
 	"os"
-	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -97,18 +95,7 @@ func simWeapons(t *testing.T) []simWeapon {
 		t.Log("no TEST_POSTGRES_DSN: the bots play with their basic guns")
 		return nil
 	}
-	_, self, _, _ := runtime.Caller(0)
-	src, err := os.ReadFile(filepath.Join(filepath.Dir(self), "..", "..", "..", "cmd", "migrate", "main.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var names []string
-	for _, line := range strings.Split(string(src), "\n") {
-		if i := strings.Index(line, `filepath.Join("migrations", "`); i >= 0 {
-			rest := line[i+len(`filepath.Join("migrations", "`):]
-			names = append(names, rest[:strings.Index(rest, `"`)])
-		}
-	}
+	names := dbtest.Migrations(t)
 	db := dbtest.NewSchema(t, 0, names...)
 	rows, err := db.Pool.Query(context.Background(), `
 		SELECT item_id, category, COALESCE(tier, ''), COALESCE(character_id, ''), required_level,

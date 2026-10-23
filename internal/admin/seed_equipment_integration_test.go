@@ -6,6 +6,7 @@ import (
 
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/database/dbtest"
+	"battle-squad/internal/shared/migrate"
 )
 
 // SeedEquipmentConfig and migrations/016 + 019 + 020 + 025 + 055 must seed the same equipment
@@ -14,7 +15,7 @@ func TestSeedEquipmentConfigMatchesMigration(t *testing.T) {
 	ctx := context.Background()
 	seeded := dbtest.NewSchema(t, 0, "001_init_schema.up.sql", "004_admin_config_tables.up.sql", "010_equipment_system.up.sql",
 		"025_careful_upgrade.up.sql")
-	if err := SeedEquipmentConfig(ctx, seeded); err != nil {
+	if err := migrate.SeedEquipmentConfig(ctx, seeded.Pool); err != nil {
 		t.Fatal(err)
 	}
 	migrated := dbtest.NewSchema(t, 0, "001_init_schema.up.sql", "004_admin_config_tables.up.sql", "010_equipment_system.up.sql",

@@ -26,21 +26,10 @@ func migrationsDir() string {
 	return filepath.Join(filepath.Dir(self), "..", "..", "..", "migrations")
 }
 
-// registeredMigrations are the files cmd/migrate runs, in its order.
+// registeredMigrations are the files cmd/migrate runs (migrations.FS), in its order.
 func registeredMigrations(t *testing.T) []string {
 	t.Helper()
-	_, self, _, _ := runtime.Caller(0)
-	src, err := os.ReadFile(filepath.Join(filepath.Dir(self), "..", "..", "..", "cmd", "migrate", "main.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var names []string
-	for _, line := range strings.Split(string(src), "\n") {
-		if i := strings.Index(line, `filepath.Join("migrations", "`); i >= 0 {
-			rest := line[i+len(`filepath.Join("migrations", "`):]
-			names = append(names, rest[:strings.Index(rest, `"`)])
-		}
-	}
+	names := dbtest.Migrations(t)
 	if !slices.Contains(names, "041_gamedata_rules.up.sql") || !slices.Contains(names, "042_party_invite.up.sql") {
 		t.Fatalf("cmd/migrate does not run 041 and 042: %v", names)
 	}

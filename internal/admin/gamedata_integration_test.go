@@ -20,25 +20,14 @@ import (
 	"battle-squad/internal/gamedatasync"
 	"battle-squad/internal/shared/database"
 	"battle-squad/internal/shared/database/dbtest"
+	"battle-squad/internal/shared/migrate"
 	"battle-squad/internal/shared/ranked"
 )
 
-// registered are the migration files cmd/migrate runs, in its order.
+// registered are the migration files cmd/migrate runs (migrations.FS), in its order.
 func registered(t *testing.T) []string {
 	t.Helper()
-	_, self, _, _ := runtime.Caller(0)
-	src, err := os.ReadFile(filepath.Join(filepath.Dir(self), "..", "..", "cmd", "migrate", "main.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var names []string
-	for _, line := range strings.Split(string(src), "\n") {
-		if i := strings.Index(line, `filepath.Join("migrations", "`); i >= 0 {
-			rest := line[i+len(`filepath.Join("migrations", "`):]
-			names = append(names, rest[:strings.Index(rest, `"`)])
-		}
-	}
-	return names
+	return dbtest.Migrations(t)
 }
 
 func runSQL(t *testing.T, db *database.PostgresDB, file string) {
@@ -69,7 +58,7 @@ func configsDir() string {
 func seededDB(t *testing.T) *database.PostgresDB {
 	t.Helper()
 	db := dbtest.NewSchema(t, 0, registered(t)...)
-	if err := SeedAll(context.Background(), db, configsDir()); err != nil {
+	if _, err := migrate.SeedAll(context.Background(), db.Pool, os.DirFS(configsDir())); err != nil {
 		t.Fatal(err)
 	}
 	return db
@@ -114,7 +103,7 @@ func TestGameDataRulesMigration(t *testing.T) {
 	for _, n := range names[at:] { // 041 and the migrations after it (043 adds rules.bots)
 		runSQL(t, db, n)
 	}
-	if err := SeedConfigFromYAML(ctx, db, configsDir()); err != nil { // the other config rows (the skills exist)
+	if err := migrate.SeedConfigFromYAML(ctx, db.Pool, os.DirFS(configsDir())); err != nil { // the other config rows (the skills exist)
 		t.Fatal(err)
 	}
 	checkDefaults(t, db)

@@ -28,6 +28,8 @@ type Server struct {
 	configDir string
 	// notifyChannel is where saves announce a game data change (gamedatasync.Channel).
 	notifyChannel string
+	// production requires a login on every page, even before the first admin exists
+	production bool
 }
 
 // NewServer creates a new admin Server with parsed templates and repository.
@@ -57,12 +59,18 @@ var tmplFuncMap = template.FuncMap{
 // Routes returns the chi router with all admin dashboard routes.
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
+	// Every page but /login and /static needs a signed-in admin (see auth.go)
+	r.Use(s.requireLogin)
 	// Every save that changes the game data notifies the servers to reload it
 	r.Use(s.notifyOnChange)
 
 	// Serve static JS/CSS files
 	staticContent, _ := fs.Sub(staticFS, "static")
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticContent))))
+
+	r.Get("/login", s.handleLoginPage)
+	r.Post("/login", s.handleLogin)
+	r.Post("/logout", s.handleLogout)
 
 	r.Get("/", s.handleDashboard)
 

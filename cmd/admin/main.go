@@ -40,10 +40,7 @@ func main() {
 	}
 	defer redis.Close()
 
-	// 4. Seed config on startup (idempotent)
-	if err := admin.SeedAll(context.Background(), db, "configs"); err != nil {
-		log.Warn().Err(err).Msg("seed config on startup failed (non-fatal)")
-	}
+	// 4. The reference game data is cmd/migrate's seed step (run it before the servers)
 
 	// The game data the dashboard validates against and shows in its header (reloaded on every
 	// save like the game and API servers)
@@ -64,7 +61,8 @@ func main() {
 	}
 
 	// 6. Create server
-	srv := admin.NewServer(db, redis, "configs")
+	srv := admin.NewServer(db, redis, "configs").Production(config.IsProduction(cfg.Env))
+	srv.WarnIfNoAdmin(ctx)
 
 	httpServer := &http.Server{
 		Addr:         ":" + port,

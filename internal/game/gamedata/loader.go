@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"math"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -32,7 +32,7 @@ type CharacterConfig struct {
 	Difficulty    int    `yaml:"difficulty"`
 	WeaponID      string `yaml:"weaponId"`
 	SkillID       string `yaml:"skillId"`
-	// Display only (admin seed → config_characters; GET /gamedata reads the table): the
+	// Display only (cmd/migrate seed → config_characters; GET /gamedata reads the table): the
 	// Vietnamese role label and play style, the gun art kind, the list order.
 	RoleName  string `yaml:"roleName,omitempty"`
 	Playstyle string `yaml:"playstyle,omitempty"`
@@ -82,7 +82,7 @@ type ItemConfig struct {
 	Value          float64 `yaml:"value"`
 	MaxUsePerMatch int     `yaml:"maxUsePerMatch"`
 	Cooldown       int     `yaml:"cooldown"`
-	DisplayName    string  `yaml:"displayName,omitempty"` // the Vietnamese name (admin seed; GET /gamedata)
+	DisplayName    string  `yaml:"displayName,omitempty"` // the Vietnamese name (cmd/migrate seed; GET /gamedata)
 	SortOrder      int     `yaml:"sortOrder,omitempty"`
 }
 
@@ -272,9 +272,18 @@ func (s ScalarSetting) Check(text string) (float64, error) {
 }
 
 // LoadYAML reads the game data from the YAML files in configDir (the fallback when the DB
-// cannot be read, and the admin seed's source): the configs with the default physics, rules,
+// cannot be read, and the cmd/migrate seed's source): the configs with the default physics, rules,
 // status effects and rank bands.
 func LoadYAML(configDir string) (*Snapshot, error) {
+	s, err := LoadYAMLFS(os.DirFS(configDir))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", configDir, err)
+	}
+	return s, nil
+}
+
+// LoadYAMLFS is LoadYAML over the YAML files at the root of fsys (configs.FS embeds them).
+func LoadYAMLFS(fsys fs.FS) (*Snapshot, error) {
 	gData := &GameData{
 		Characters: make(map[string]CharacterConfig),
 		Weapons:    make(map[string]WeaponConfig),
@@ -284,28 +293,28 @@ func LoadYAML(configDir string) (*Snapshot, error) {
 	}
 
 	var chars []CharacterConfig
-	if err := loadYAMLFile(filepath.Join(configDir, "characters.yaml"), &chars); err != nil {
+	if err := loadYAMLFile(fsys, "characters.yaml", &chars); err != nil {
 		return nil, err
 	}
 	for _, c := range chars {
 		gData.Characters[c.CharacterID] = c
 	}
 	var weapons []WeaponConfig
-	if err := loadYAMLFile(filepath.Join(configDir, "weapons.yaml"), &weapons); err != nil {
+	if err := loadYAMLFile(fsys, "weapons.yaml", &weapons); err != nil {
 		return nil, err
 	}
 	for _, w := range weapons {
 		gData.Weapons[w.WeaponID] = w
 	}
 	var skills []SkillConfig
-	if err := loadYAMLFile(filepath.Join(configDir, "skills.yaml"), &skills); err != nil {
+	if err := loadYAMLFile(fsys, "skills.yaml", &skills); err != nil {
 		return nil, err
 	}
 	for _, s := range skills {
 		gData.Skills[s.SkillID] = s
 	}
 	var items []ItemConfig
-	if err := loadYAMLFile(filepath.Join(configDir, "items.yaml"), &items); err != nil {
+	if err := loadYAMLFile(fsys, "items.yaml", &items); err != nil {
 		return nil, err
 	}
 	for _, i := range items {
@@ -315,17 +324,16 @@ func LoadYAML(configDir string) (*Snapshot, error) {
 	// Maps and, when bricks.yaml exists, the brick types their tiles use (the YAML mirror of
 	// config_brick_types; without it every brick is a destructible square)
 	var maps []MapConfig
-	if err := loadYAMLFile(filepath.Join(configDir, "maps.yaml"), &maps); err != nil {
+	if err := loadYAMLFile(fsys, "maps.yaml", &maps); err != nil {
 		return nil, err
 	}
 	for _, m := range maps {
 		gData.Maps[m.MapID] = m
 	}
 	bricks := map[int]BrickTypeConfig{}
-	bricksPath := filepath.Join(configDir, "bricks.yaml")
-	if _, err := os.Stat(bricksPath); err == nil {
+	if _, err := fs.Stat(fsys, "bricks.yaml"); err == nil {
 		var list []BrickTypeConfig
-		if err := loadYAMLFile(bricksPath, &list); err != nil {
+		if err := loadYAMLFile(fsys, "bricks.yaml", &list); err != nil {
 			return nil, err
 		}
 		for _, b := range list {
@@ -343,8 +351,8 @@ func LoadYAML(configDir string) (*Snapshot, error) {
 	return s, nil
 }
 
-func loadYAMLFile(path string, target interface{}) error {
-	data, err := os.ReadFile(path)
+func loadYAMLFile(fsys fs.FS, path string, target interface{}) error {
+	data, err := fs.ReadFile(fsys, path)
 	if err != nil {
 		return fmt.Errorf("failed to read game config file %s: %w", path, err)
 	}
@@ -775,7 +783,7 @@ func PhysicsFromSettings(settings map[string]string) *PhysicsConfig {
 	return p
 }
 
-// physicsSetting is the game_settings row physics.<name> (the key the admin seed and the
+// physicsSetting is the game_settings row physics.<name> (the key the cmd/migrate seed and the
 // migrations use), or a bare <name> row when there is none.
 func physicsSetting(settings map[string]string, name string) (string, bool) {
 	if v, ok := settings["physics."+name]; ok {

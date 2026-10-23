@@ -1,10 +1,11 @@
 package admin
 
 import (
-	"context"
 	"fmt"
 	"net/http"
+	"os"
 
+	"battle-squad/internal/shared/migrate"
 	"battle-squad/internal/shared/observability"
 )
 
@@ -42,7 +43,7 @@ func (s *Server) handleResetData(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSeedConfig(w http.ResponseWriter, r *http.Request) {
-	if err := SeedAll(context.Background(), s.db, s.configDir); err != nil {
+	if _, err := migrate.SeedAll(r.Context(), s.db.Pool, os.DirFS(s.configDir)); err != nil {
 		observability.Log.Error().Err(err).Msg("failed to seed config")
 		http.Redirect(w, r, "/devtools?error=Failed+to+seed+config:+"+err.Error(), http.StatusSeeOther)
 		return
