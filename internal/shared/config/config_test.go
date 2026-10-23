@@ -27,3 +27,21 @@ func TestDevFlagsIgnoredInProduction(t *testing.T) {
 		})
 	}
 }
+
+// Production refuses the development JWT secret and short ones; development accepts them.
+func TestCheckProduction(t *testing.T) {
+	for _, tc := range []struct {
+		env, secret string
+		ok          bool
+	}{
+		{"development", DevJWTSecret, true},
+		{"production", DevJWTSecret, false},
+		{"prod", "short", false},
+		{"production", "0123456789abcdef0123456789abcdef", true},
+	} {
+		c := &Config{Env: tc.env, JWTSecret: tc.secret}
+		if err := c.CheckProduction(); (err == nil) != tc.ok {
+			t.Errorf("%s %q: %v", tc.env, tc.secret, err)
+		}
+	}
+}

@@ -84,6 +84,9 @@ func main() {
 	observability.InitLogger(cfg.Env)
 	log := observability.Log
 	log.Info().Msg("starting Game Server...")
+	if err := cfg.CheckProduction(); err != nil {
+		log.Fatal().Err(err).Msg("unsafe production config")
+	}
 
 	// 3. Init DB & Redis connections (moved before game data loading for DB config support)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

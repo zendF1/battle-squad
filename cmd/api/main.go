@@ -53,6 +53,9 @@ func main() {
 	observability.InitLogger(cfg.Env)
 	log := observability.Log
 	log.Info().Msg("starting API Server...")
+	if err := cfg.CheckProduction(); err != nil {
+		log.Fatal().Err(err).Msg("unsafe production config")
+	}
 
 	// 3. Init DB & Redis connections
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

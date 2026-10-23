@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -55,7 +56,7 @@ func LoadConfig() *Config {
 	redisPoolSize := getEnvInt("REDIS_POOL_SIZE", 100)
 	redisMinIdle := getEnvInt("REDIS_MIN_IDLE", 20)
 
-	jwtSecret := getEnv("JWT_SECRET", "super-secret-battle-squad-key-2026")
+	jwtSecret := getEnv("JWT_SECRET", DevJWTSecret)
 	appVersion := getEnv("APP_VERSION", "1.0.0")
 
 	protocolVersionStr := getEnv("PROTOCOL_VERSION", "1")
@@ -88,6 +89,21 @@ func LoadConfig() *Config {
 		IAPMockEnabled:  iapMockEnabled,
 		DevUnlockAll:    devUnlockAll,
 	}
+}
+
+// DevJWTSecret is the JWT_SECRET default, for local development only.
+const DevJWTSecret = "super-secret-battle-squad-key-2026"
+
+// CheckProduction refuses settings that are unsafe in production (cmd/api and cmd/game call it):
+// the development JWT secret, or one shorter than 32 characters.
+func (c *Config) CheckProduction() error {
+	if !IsProduction(c.Env) {
+		return nil
+	}
+	if c.JWTSecret == DevJWTSecret || len(c.JWTSecret) < 32 {
+		return fmt.Errorf("APP_ENV=%s needs its own JWT_SECRET of at least 32 characters (e.g. openssl rand -hex 32)", c.Env)
+	}
+	return nil
 }
 
 // IsProduction reports whether an APP_ENV value names production, in any case
